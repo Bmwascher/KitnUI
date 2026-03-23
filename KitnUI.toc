@@ -1,0 +1,49 @@
+## Title: |cffFF008CKitn|r|cffffffffUI|r
+## Notes: ElvUI profile installer for KitnUI.
+## Author: Bitebtw
+## Version: @project-version@
+## Interface: 120000, 120001
+## RequiredDeps: ElvUI
+## OptionalDeps: Details, Plater, BigWigs, WarpDeplete, MRT, Ayije_CDM, KitnEssentials
+## SavedVariables: KitnUIElvDB
+## IconTexture: Interface\Icons\INV_Misc_Gift_05
+## Category-enUS: |cffFF008CKitn|rUI
+## X-Curse-Project-ID:
+## X-Wago-ID:
+
+## X-ElvUI-Version: 1.0
+## X-Details-Version: 1.0
+## X-Plater-Version: 1.0
+## X-BigWigs-Version: 1.0
+## X-WarpDeplete-Version: 1.0
+## X-MRT-Version: 1.0
+## X-EditMode-Version: 1.0
+## X-AyijeCDM-Version: 1.0
+## X-KitnEssentials-Version: 1.0
+## X-BlizzardCDM-Version: 1.0
+
+Core.lua
+
+# Profile Data - ElvUI
+Data\AddOns\ElvUI\Dark.lua
+Data\AddOns\ElvUI\Color.lua
+Data\AddOns\ElvUI\HealerDark.lua
+Data\AddOns\ElvUI\HealerColor.lua
+Data\AddOns\ElvUI\Private.lua
+Data\AddOns\ElvUI\Global.lua
+
+# Profile Data - AddOns
+Data\AddOns\Details.lua
+Data\AddOns\Plater.lua
+Data\AddOns\BigWigs.lua
+Data\AddOns\WarpDeplete.lua
+Data\AddOns\MRT.lua
+Data\AddOns\EditMode.lua
+Data\AddOns\AyijeCDM.lua
+Data\AddOns\KitnEssentials.lua
+
+# Profile Data - Classes
+Data\Classes\BlizzardCDM.lua
+
+Setup.lua
+Installer.lua

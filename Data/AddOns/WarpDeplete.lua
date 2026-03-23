@@ -1,0 +1,43 @@
+local _, ns = ...
+ns.data = ns.data or {}
+
+-- WarpDeplete (profile table from WarpDepleteDB.profiles)
+ns.data.WarpDeplete = {
+    alignBossClear = "end",
+    bar1FontSize = 14,
+    bar1Texture = "KitnUI",
+    bar1TextureColor = "ff7d7d7d",
+    bar2FontSize = 14,
+    bar2Texture = "KitnUI",
+    bar2TextureColor = "ff7d7d7d",
+    bar3FontSize = 14,
+    bar3Texture = "KitnUI",
+    bar3TextureColor = "ff7d7d7d",
+    barPadding = 1,
+    barWidth = 260,
+    deathsColor = "ffee313f",
+    deathsFontSize = 14,
+    forcesFontSize = 14,
+    forcesGlowColor = "ffe7e7e7",
+    forcesGlowFrequency = 0.10000000000000001,
+    forcesGlowLineCount = 11,
+    forcesOverlayTexture = "KitnUI",
+    forcesOverlayTextureColor = "ffe7e7e7",
+    forcesTexture = "KitnUI",
+    forcesTextureColor = "ff7381ff",
+    frameScale = 1.15,
+    frameX = 16.186555862426761,
+    frameY = 197.9027404785156,
+    keyColor = "ffffffff",
+    keyDetailsColor = "ffffffff",
+    keyDetailsFontSize = 14,
+    keyFontSize = 14,
+    objectivesFontSize = 14,
+    objectivesOffset = 1,
+    showPrideGlow = false,
+    timerFontSize = 30,
+    timerRunningColor = "ffffffff",
+    timerSuccessColor = "ff00ff28",
+    verticalOffset = 1,
+}
+
