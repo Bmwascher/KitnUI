@@ -11,7 +11,7 @@ local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 -- If the data is already a table, returns it as-is
 -- Handles raw strings like "!E1!..." or wrapped "{!E1!...}"
 local function DecodeElvUIData(data)
-    if type(data) == "table" then return data end
+    if type(data) == "table" then return CopyTable(data) end
     if type(data) ~= "string" or strtrim(data) == "" then return nil end
 
     local D = E:GetModule("Distributor")
@@ -472,12 +472,32 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
             return
         end
 
-        -- TODO: implement KitnEssentials import logic
-        CompleteSetup(addonKey)
+        if not IsAddOnLoaded("KitnEssentials") then
+            print(ns.title .. ": KitnEssentials is not loaded.")
+            return
+        end
+
+        local API = _G.KitnEssentialsAPI
+        if not API or not API.ImportProfile then
+            print(ns.title .. ": KitnEssentials API not available.")
+            return
+        end
+
+        local success, nameOrErr = API:ImportProfile(ns.data[addonKey], ns.profileName)
+        if success then
+            API:SetProfile(ns.profileName)
+            CompleteSetup(addonKey)
+        else
+            print(ns.title .. ": KitnEssentials import failed - " .. (nameOrErr or "unknown error"))
+        end
         return
     end
 
-    -- TODO: implement KitnEssentials profile load logic
+    -- Load: activate existing profile
+    local API = _G.KitnEssentialsAPI
+    if API and API.SetProfile then
+        API:SetProfile(ns.profileName)
+    end
 end
 
 ------------------------------------------------------------

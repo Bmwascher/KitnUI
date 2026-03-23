@@ -20,7 +20,7 @@ KitnUI walks you through configuring ElvUI and popular addons with a step-by-ste
 |---|---|
 | ElvUI | Dark / Color / Healer Dark / Healer Color + Private & Global |
 | Blizzard Edit Mode | HUD layout |
-| Details! Damage Meter | Meter layout & appearance |
+| Details! Damage Meter | Custom meter layout & appearance |
 | Plater Nameplates | Nameplate styling |
 | BigWigs / LittleWigs | Boss timer bars |
 | WarpDeplete | M+ timer |

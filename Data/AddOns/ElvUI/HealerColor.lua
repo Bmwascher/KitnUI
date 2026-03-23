@@ -3,7 +3,6 @@ ns.data = ns.data or {}
 
 -- ElvUI healer class color profile
 ns.data.ElvUIHealerClassColor = {
-{
     ["ElvUI_Anchor"] = {
         ["focusCastEnabled"] = false,
         ["focusParent"] = "ElvUF_Target",
@@ -1725,4 +1724,4 @@ ns.data.ElvUIHealerClassColor = {
             },
         },
     },
-}}
+}

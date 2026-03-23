@@ -3,7 +3,6 @@ ns.data = ns.data or {}
 
 -- ElvUI healer dark profile
 ns.data.ElvUIHealer = {
-{
     ["ElvUI_Anchor"] = {
         ["focusCastEnabled"] = false,
         ["focusParent"] = "ElvUF_Target",
@@ -1724,4 +1723,4 @@ ns.data.ElvUIHealer = {
             },
         },
     },
-}}
+}

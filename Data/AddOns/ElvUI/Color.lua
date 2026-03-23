@@ -3,7 +3,6 @@ ns.data = ns.data or {}
 
 -- ElvUI class color profile
 ns.data.ElvUIClassColor = {
-{
     ["ElvUI_Anchor"] = {
         ["focusCastEnabled"] = false,
         ["focusParent"] = "ElvUF_Target",
@@ -1636,4 +1635,4 @@ ns.data.ElvUIClassColor = {
             },
         },
     },
-}}
+}

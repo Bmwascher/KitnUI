@@ -3,7 +3,6 @@ ns.data = ns.data or {}
 
 -- ElvUI dark (default) profile
 ns.data.ElvUI = {
-    {
     ["ElvUI_Anchor"] = {
         ["focusCastEnabled"] = false,
         ["focusParent"] = "ElvUF_Target",
@@ -1635,4 +1634,4 @@ ns.data.ElvUI = {
             },
         },
     },
-}}
+}

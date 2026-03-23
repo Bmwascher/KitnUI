@@ -3,7 +3,6 @@ ns.data = ns.data or {}
 
 -- ElvUI private settings (shared across all profile variants)
 ns.data.ElvUIPrivate = {
-{
     ["bags"] = {
         ["enable"] = false,
     },
@@ -31,4 +30,4 @@ ns.data.ElvUIPrivate = {
         },
         ["parchmentRemoverEnable"] = true,
     },
-}}
+}

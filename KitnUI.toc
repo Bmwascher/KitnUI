@@ -11,15 +11,15 @@
 ## X-Curse-Project-ID: 1493282
 ## X-Wago-ID: rNkyB8Ka
 
-## X-ElvUI-Version: 1.0
+## X-ElvUI-Version: 1.1
 ## X-Details-Version: 1.0
-## X-Plater-Version: 1.0
+## X-Plater-Version: 1.1
 ## X-BigWigs-Version: 1.0
 ## X-WarpDeplete-Version: 1.0
 ## X-MRT-Version: 1.0
 ## X-EditMode-Version: 1.0
-## X-AyijeCDM-Version: 1.0
-## X-KitnEssentials-Version: 1.0
+## X-AyijeCDM-Version: 1.1
+## X-KitnEssentials-Version: 1.1
 ## X-BlizzardCDM-Version: 1.0
 
 Core.lua
