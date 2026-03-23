@@ -8,8 +8,8 @@
 ## SavedVariables: KitnUIElvDB
 ## IconTexture: Interface\Icons\INV_Misc_Gift_05
 ## Category-enUS: |cffFF008CKitn|rUI
-## X-Curse-Project-ID:
-## X-Wago-ID:
+## X-Curse-Project-ID: 1493282
+## X-Wago-ID: rNkyB8Ka
 
 ## X-ElvUI-Version: 1.0
 ## X-Details-Version: 1.0
