@@ -137,6 +137,7 @@ local addonSteps = {
     { key = "Blizzard_EditMode", display = "Edit Mode",           checkAddon = "Blizzard_EditMode", alwaysAvailable = true },
     { key = "Ayije_CDM",       display = "Ayije CDM",            checkAddon = "Ayije_CDM",        alwaysAvailable = false,  showWhenMissing = true },
     { key = "KitnEssentials",  display = "KitnEssentials",       checkAddon = "KitnEssentials",   alwaysAvailable = false,  showWhenMissing = true },
+    { key = "BuffReminders",   display = "BuffReminders",        checkAddon = "BuffReminders",    alwaysAvailable = false,  showWhenMissing = true },
     { key = "BlizzardCDM",     display = "Blizzard CDM",         checkAddon = nil,                alwaysAvailable = true },
 }
 
@@ -454,7 +455,7 @@ end
 local function WelcomeUpdatePage()
     PluginInstallFrame.SubTitle:SetFormattedText(ns.Color("KitnUI") .. " Profile Update")
     PluginInstallFrame.Desc1:SetText(
-        "The following addon profiles have been updated and need to be reimported.\n\n" ..
+        "New or updated addon profiles are available to import.\n\n" ..
         ns.Red("WARNING") .. ": Each step will overwrite your current settings for that addon."
     )
     PluginInstallFrame.Desc2:SetText("Click " .. ns.Green("Next") .. " to begin, or " .. ns.Red("Skip") .. " to close without updating.")

@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.3
+
+### New Addon & Improvements
+
+- Added BuffReminders profile import and loading support
+- Detect newly available addon profiles in update flow (not just outdated ones)
+- Update popup and chat messages now distinguish "Updated" vs "New" addons
+- Fixed double-v prefix in version update popup text
+- Dev-mode fallback for update popup when running from source
+- BuffReminders shown in install list even when not loaded
+
+## v1.0.2
+
+### Bug Fix
+
+- Fixed ElvUI private profileKey to always use base profile name
+
 ## v1.0.1
 
 ### Bug Fixes & Data Updates

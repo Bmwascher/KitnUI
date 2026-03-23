@@ -501,6 +501,45 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
 end
 
 ------------------------------------------------------------
+-- BuffReminders
+------------------------------------------------------------
+
+setupFunctions["BuffReminders"] = function(addonKey, import)
+    if import then
+        if not HasData(addonKey) then
+            print(ns.title .. ": No BuffReminders data found.")
+            return
+        end
+
+        if not IsAddOnLoaded("BuffReminders") then
+            print(ns.title .. ": BuffReminders is not loaded.")
+            return
+        end
+
+        local BR = _G.BuffReminders
+        if not BR or not BR.Import then
+            print(ns.title .. ": BuffReminders API not available.")
+            return
+        end
+
+        local success, err = BR:Import(ns.data[addonKey], ns.profileName)
+        if success then
+            BR:SetProfile(ns.profileName)
+            CompleteSetup(addonKey)
+        else
+            print(ns.title .. ": BuffReminders import failed - " .. (err or "unknown error"))
+        end
+        return
+    end
+
+    -- Load: activate existing profile
+    local BR = _G.BuffReminders
+    if BR and BR.SetProfile then
+        BR:SetProfile(ns.profileName)
+    end
+end
+
+------------------------------------------------------------
 -- Blizzard Cooldown Manager (per-spec)
 ------------------------------------------------------------
 

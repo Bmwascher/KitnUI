@@ -4,7 +4,7 @@
 ## Version: @project-version@
 ## Interface: 120000, 120001
 ## RequiredDeps: ElvUI
-## OptionalDeps: Details, Plater, BigWigs, WarpDeplete, MRT, Ayije_CDM, KitnEssentials
+## OptionalDeps: Details, Plater, BigWigs, WarpDeplete, MRT, Ayije_CDM, KitnEssentials, BuffReminders
 ## SavedVariables: KitnUIElvDB
 ## IconTexture: Interface\Icons\INV_Misc_Gift_05
 ## Category-enUS: |cffFF008CKitn|rUI
@@ -20,6 +20,7 @@
 ## X-EditMode-Version: 1.0
 ## X-AyijeCDM-Version: 1.1
 ## X-KitnEssentials-Version: 1.1
+## X-BuffReminders-Version: 1.0
 ## X-BlizzardCDM-Version: 1.0
 
 Core.lua
@@ -41,6 +42,7 @@ Data\AddOns\MRT.lua
 Data\AddOns\EditMode.lua
 Data\AddOns\AyijeCDM.lua
 Data\AddOns\KitnEssentials.lua
+Data\AddOns\BuffReminders.lua
 
 # Profile Data - Classes
 Data\Classes\BlizzardCDM.lua

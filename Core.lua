@@ -49,6 +49,7 @@ local addonVersionHeaders = {
     Blizzard_EditMode = "X-EditMode-Version",
     Ayije_CDM       = "X-AyijeCDM-Version",
     KitnEssentials  = "X-KitnEssentials-Version",
+    BuffReminders   = "X-BuffReminders-Version",
     BlizzardCDM     = "X-BlizzardCDM-Version",
 }
 
@@ -59,20 +60,37 @@ function ns.GetAddonDataVersion(addonKey)
     return C_AddOns.GetAddOnMetadata(addonName, header)
 end
 
--- Check which addons have outdated profiles since last install
+-- Check which addons have outdated or newly available profiles since last install
 function ns.GetOutdatedAddons()
     local outdated = {}
-    if not ns.db or not ns.db.addonVersions then return outdated end
+    if not ns.db then return outdated end
 
     for addonKey, header in pairs(addonVersionHeaders) do
-        local installed = ns.db.addonVersions[addonKey]
+        local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
         local current = C_AddOns.GetAddOnMetadata(addonName, header)
+        local hasProfile = ns.db.profiles and ns.db.profiles[addonKey]
+
         if installed and current and installed ~= current then
+            -- Existing addon with updated data
             outdated[#outdated + 1] = {
                 key = addonKey,
                 oldVersion = installed,
                 newVersion = current,
+                isNew = false,
             }
+        elseif not hasProfile and current then
+            -- New addon with data available but never imported
+            local hasData = ns.data[addonKey]
+            if hasData then
+                local empty = (type(hasData) == "string" and strtrim(hasData) == "") or (type(hasData) == "table" and not next(hasData))
+                if not empty then
+                    outdated[#outdated + 1] = {
+                        key = addonKey,
+                        newVersion = current,
+                        isNew = true,
+                    }
+                end
+            end
         end
     end
     return outdated
@@ -612,15 +630,26 @@ function KitnUI:Initialize()
         OpenInstaller()
 
     -- Version update: prompt to re-install (check both overall version and per-addon versions)
-    elseif hasProfiles and ns.db.installedVersion and ns.version and ns.db.installedVersion ~= ns.version then
+    -- Dev-mode: always show popup when version is unresolved (@project-version@)
+    elseif hasProfiles and ns.db.installedVersion and ns.version
+        and (ns.db.installedVersion ~= ns.version or ns.version == "@" .. "project-version" .. "@") then
         local outdated = ns.GetOutdatedAddons()
-        local updateText = ns.title .. " has been updated (v" .. ns.db.installedVersion .. " -> v" .. ns.version .. ")."
+        local updateText = ns.title .. " has been updated (" .. ns.db.installedVersion .. " -> " .. ns.version .. ")."
         if #outdated > 0 then
-            local names = {}
+            local updated, new = {}, {}
             for _, info in ipairs(outdated) do
-                names[#names + 1] = info.key
+                if info.isNew then
+                    new[#new + 1] = info.key
+                else
+                    updated[#updated + 1] = info.key
+                end
             end
-            updateText = updateText .. "\n\nUpdated profiles: " .. ns.Color(table.concat(names, ", "))
+            if #updated > 0 then
+                updateText = updateText .. "\n\nUpdated: " .. ns.Color(table.concat(updated, ", "))
+            end
+            if #new > 0 then
+                updateText = updateText .. "\n\nNew: " .. ns.Green(table.concat(new, ", "))
+            end
         end
         updateText = updateText .. "\n\nOpen the installer to apply changes?"
 
@@ -665,11 +694,20 @@ function KitnUI:Initialize()
     C_Timer.After(2, function()
         local outdated = ns.GetOutdatedAddons()
         if #outdated > 0 then
-            local names = {}
+            local updated, new = {}, {}
             for _, info in ipairs(outdated) do
-                names[#names + 1] = ns.Color(info.key) .. " (v" .. info.oldVersion .. " -> v" .. info.newVersion .. ")"
+                if info.isNew then
+                    new[#new + 1] = ns.Green(info.key)
+                else
+                    updated[#updated + 1] = ns.Color(info.key) .. " (v" .. info.oldVersion .. " -> v" .. info.newVersion .. ")"
+                end
             end
-            print(ns.title .. ": " .. ns.Red("Outdated profiles: ") .. table.concat(names, ", "))
+            if #updated > 0 then
+                print(ns.title .. ": " .. ns.Red("Outdated: ") .. table.concat(updated, ", "))
+            end
+            if #new > 0 then
+                print(ns.title .. ": " .. ns.Green("New: ") .. table.concat(new, ", "))
+            end
             print(ns.title .. ": Run |cffFF008C/kitn update|r to update them.")
         else
             print(ns.title .. ": Type |cffFF008C/kitn install|r to open the installer.")
