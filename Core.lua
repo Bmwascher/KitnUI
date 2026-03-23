@@ -632,7 +632,8 @@ function KitnUI:Initialize()
     -- Version update: prompt to re-install (check both overall version and per-addon versions)
     -- Dev-mode: always show popup when version is unresolved (@project-version@)
     elseif hasProfiles and ns.db.installedVersion and ns.version
-        and (ns.db.installedVersion ~= ns.version or ns.version == "@" .. "project-version" .. "@") then
+        and (ns.db.installedVersion ~= ns.version or ns.version == "@" .. "project-version" .. "@")
+        and ns.db.dismissedVersion ~= ns.version then
         local outdated = ns.GetOutdatedAddons()
         local updateText = ns.title .. " has been updated (" .. ns.db.installedVersion .. " -> " .. ns.version .. ")."
         if #outdated > 0 then
@@ -668,6 +669,9 @@ function KitnUI:Initialize()
                 else
                     OpenInstaller()
                 end
+            end,
+            OnCancel = function()
+                ns.db.dismissedVersion = ns.version
             end,
             timeout = 0,
             whileDead = true,

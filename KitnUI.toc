@@ -19,7 +19,7 @@
 ## X-MRT-Version: 1.0
 ## X-EditMode-Version: 1.0
 ## X-AyijeCDM-Version: 1.1
-## X-KitnEssentials-Version: 1.1
+## X-KitnEssentials-Version: 1.2
 ## X-BuffReminders-Version: 1.0
 ## X-BlizzardCDM-Version: 1.0
 

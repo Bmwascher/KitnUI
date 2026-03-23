@@ -478,18 +478,34 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
         end
 
         local API = _G.KitnEssentialsAPI
-        if not API or not API.ImportProfile then
+        if not API or not API.DecodeProfileString then
             print(ns.title .. ": KitnEssentials API not available.")
             return
         end
 
-        local success, nameOrErr = API:ImportProfile(ns.data[addonKey], ns.profileName)
-        if success then
-            API:SetProfile(ns.profileName)
-            CompleteSetup(addonKey)
-        else
-            print(ns.title .. ": KitnEssentials import failed - " .. (nameOrErr or "unknown error"))
+        -- Decode the string, then write directly to the SavedVariable to avoid duplication
+        local profileData = API:DecodeProfileString(ns.data[addonKey])
+        if not profileData or not next(profileData) then
+            print(ns.title .. ": KitnEssentials decode failed.")
+            return
         end
+
+        KitnEssentialsDB = KitnEssentialsDB or {}
+        KitnEssentialsDB.profiles = KitnEssentialsDB.profiles or {}
+        KitnEssentialsDB.profiles[ns.profileName] = profileData
+
+        -- Set profileKey for this character
+        local charKey = UnitName("player") .. " - " .. GetRealmName()
+        KitnEssentialsDB.profileKeys = KitnEssentialsDB.profileKeys or {}
+        KitnEssentialsDB.profileKeys[charKey] = ns.profileName
+
+        -- Activate the profile via AceDB
+        local KE_addon = _G.KitnEssentials
+        if KE_addon and KE_addon.db then
+            KE_addon.db:SetProfile(ns.profileName)
+        end
+
+        CompleteSetup(addonKey)
         return
     end
 

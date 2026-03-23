@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.4
+
+### Bug Fixes
+
+- Fixed KitnEssentials import creating duplicate profiles on reinstall
+- KitnEssentials now decodes and writes directly to SavedVariable (nuke-and-replace)
+- Update popup "Later" button now suppresses popup until next version update
+- Updated KitnEssentials profile data
+
 ## v1.0.3
 
 ### New Addon & Improvements
