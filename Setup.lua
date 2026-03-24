@@ -4,6 +4,40 @@ local E = ns.E
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 
 ------------------------------------------------------------
+-- Details auto-run script (persisted via PLAYER_LOGOUT)
+------------------------------------------------------------
+
+local DETAILS_ZONE_SCRIPT = [[local function setup(id, segType, attr, subAttr, titleOverride)
+    local i = Details:GetInstance(id)
+    i:SetSegmentType(segType, true)
+    i:SetDisplay(nil, attr, subAttr)
+    if titleOverride then i.menu_attribute_string:SetText(titleOverride) end
+end
+
+if (Details.zone_type == "party") then
+    setup(1, 1, DETAILS_ATTRIBUTE_DAMAGE, 1)
+    setup(2, 0, DETAILS_ATTRIBUTE_DAMAGE, 1, "Damage Overall")
+    setup(3, 1, DETAILS_ATTRIBUTE_MISC, 5)
+end
+if (Details.zone_type == "raid" or Details.zone_type == "none") then
+    setup(1, 1, DETAILS_ATTRIBUTE_DAMAGE, 1)
+    setup(2, 1, DETAILS_ATTRIBUTE_HEAL, 1)
+    setup(3, 1, DETAILS_ATTRIBUTE_MISC, 5)
+end]]
+
+-- Frame that re-writes our auto-run script to _detalhes_global on logout,
+-- after Details has saved its own CodeTable. Fires every logout/reload
+-- as long as the flag is set in our saved vars.
+local detailsLogoutFrame = CreateFrame("Frame")
+detailsLogoutFrame:RegisterEvent("PLAYER_LOGOUT")
+detailsLogoutFrame:SetScript("OnEvent", function()
+    if ns.db and ns.db.detailsRunCode and _detalhes_global then
+        _detalhes_global["run_code"] = _detalhes_global["run_code"] or {}
+        _detalhes_global["run_code"]["on_zonechanged"] = DETAILS_ZONE_SCRIPT
+    end
+end)
+
+------------------------------------------------------------
 -- ElvUI profile decoder (handles compressed export strings)
 ------------------------------------------------------------
 
@@ -42,9 +76,9 @@ function ns.SetupAddon(addonKey, import, ...)
     local fn = setupFunctions[addonKey]
     if not fn then
         print(ns.title .. ": No setup function for " .. addonKey)
-        return
+        return false
     end
-    fn(addonKey, import, ...)
+    return fn(addonKey, import, ...)
 end
 
 -- Maps variant data keys to their base addon key for tracking
@@ -194,7 +228,14 @@ setupFunctions["Details"] = function(addonKey, import)
         end
 
         Details:EraseProfile(ns.profileName)
-        Details:ImportProfile(ns.data[addonKey], ns.profileName, false, false, true)
+        -- Args: (string, name, bImportAutoRunCode, bIsFromImportPrompt, overwriteExisting)
+        -- Both auto-run flags must be true for run_code scripts to be imported from the profile string.
+        Details:ImportProfile(ns.data[addonKey], ns.profileName, true, true, true)
+
+        -- Flag for PLAYER_LOGOUT handler to persist auto-run scripts.
+        -- Details stores run_code globally (not per-profile) and overwrites _detalhes_global.run_code
+        -- on logout with its internal CodeTable. Our logout handler fires after to re-inject the script.
+        ns.db.detailsRunCode = true
 
         CompleteSetup(addonKey)
         return
@@ -329,6 +370,12 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
             end
         end
 
+        -- Check layout limit (Blizzard allows max 5 custom layouts)
+        if #layouts.layouts >= 5 then
+            print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
+            return false
+        end
+
         local info = C_EditMode.ConvertStringToLayoutInfo(ns.data[addonKey])
         info.layoutName = ns.profileName
         info.layoutType = Enum.EditModeLayoutType.Account
@@ -340,7 +387,7 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
         C_EditMode.SetActiveLayout(newIndex)
 
         CompleteSetup(addonKey)
-        return
+        return true
     end
 
     -- Load existing profile
@@ -582,28 +629,47 @@ setupFunctions["BlizzardCDM"] = function(addonKey, import, specIndex)
         end
 
         -- Remove existing layout with our profile name if present
+        local specName = select(2, GetSpecializationInfoForClassID(classId, specIndex)) or ("Spec" .. specIndex)
+        local layoutName = "KUI - " .. specName
+        local removedExisting = false
         local _, layouts = lm:EnumerateLayouts()
         if layouts then
-            local specName = select(2, GetSpecializationInfoForClassID(classId, specIndex)) or ("Spec" .. specIndex)
-            local layoutName = "KUI - " .. specName
             for layoutID, layout in pairs(layouts) do
                 if layout and layout.layoutName == layoutName then
                     lm:RemoveLayout(layoutID)
+                    removedExisting = true
                     break
                 end
             end
+        end
+
+        -- Count layouts after removal to check for room
+        local layoutCount = 0
+        local _, currentLayouts = lm:EnumerateLayouts()
+        if currentLayouts then
+            for _ in pairs(currentLayouts) do layoutCount = layoutCount + 1 end
+        end
+
+        -- If we didn't free a slot and layouts are at or above the limit, bail out.
+        -- Blizzard CDM allows ~10 layouts; AreLayoutsFullyMaxed is unreliable for off-specs.
+        if not removedExisting and lm.AreLayoutsFullyMaxed and lm:AreLayoutsFullyMaxed() then
+            print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
+            return false
         end
 
         local layoutIDs = lm:CreateLayoutsFromSerializedData(specString)
         if layoutIDs and layoutIDs[1] then
             local importedID = layoutIDs[1]
 
-            -- Rename the imported layout
-            local _, importedLayouts = lm:EnumerateLayouts()
-            if importedLayouts and importedLayouts[importedID] then
-                local specName = select(2, GetSpecializationInfoForClassID(classId, specIndex)) or ("Spec" .. specIndex)
-                importedLayouts[importedID].layoutName = "KUI - " .. specName
+            -- Verify the layout was actually created
+            local _, postLayouts = lm:EnumerateLayouts()
+            if not postLayouts or not postLayouts[importedID] then
+                print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
+                return false
             end
+
+            -- Rename the imported layout
+            postLayouts[importedID].layoutName = layoutName
 
             lm:SaveLayouts()
 
@@ -616,6 +682,14 @@ setupFunctions["BlizzardCDM"] = function(addonKey, import, specIndex)
                     lm:SetActiveLayoutByID(importedID)
                 end
                 lm:SaveLayouts()
+
+                -- Deferred re-activation for safety (matches AUI)
+                C_Timer.After(0, function()
+                    if not InCombatLockdown() and lm.SetActiveLayoutByID then
+                        lm:SetActiveLayoutByID(importedID)
+                        lm:SaveLayouts()
+                    end
+                end)
             end
 
             -- Track per-spec install state
@@ -627,9 +701,10 @@ setupFunctions["BlizzardCDM"] = function(addonKey, import, specIndex)
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
             ns.db.perChar[charKey].loaded = true
+            return true
         else
             print(ns.title .. ": Failed to import CDM layout.")
         end
-        return
+        return false
     end
 end

@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.5
+
+### Import Improvements & Bug Fixes
+
+- Fixed Details ImportProfile arguments to properly import auto-run scripts
+- Added Details on_zonechanged auto-run script (auto-switches display in dungeons vs raids)
+- Updated Details profile data
+- Added Edit Mode layout limit check (max 5 custom layouts)
+- Added Blizzard CDM max layout check and deferred activation
+- Edit Mode and Blizzard CDM now show red error toast when layout limit is reached
+- Import success toasts now use colored addon name styling
+- SetupAddon returns success/failure for Edit Mode and Blizzard CDM
+
 ## v1.0.4
 
 ### Bug Fixes
