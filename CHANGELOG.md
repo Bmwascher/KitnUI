@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.6
+
+### Bug Fix & Data Updates
+
+- Fixed ElvUI private profile (Parchment Remover) not applying by setting profileKey before SetProfile
+- Updated KitnEssentials profile data (new modules)
+- Updated BuffReminders profile data
+
 ## v1.0.5
 
 ### Import Improvements & Bug Fixes

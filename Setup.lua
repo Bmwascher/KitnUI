@@ -197,13 +197,13 @@ setupFunctions["ElvUI"] = function(addonKey, import, useColor)
         activeProfile = ns.profileName
     end
 
-    -- Set the active profile
-    E.data:SetProfile(activeProfile)
-
-    -- Set private profile key for this character (always base profile — private settings are shared)
+    -- Set private profile key for this character BEFORE SetProfile (so ElvUI loads the correct private profile)
     local charKey = UnitName("player") .. " - " .. GetRealmName()
     ElvPrivateDB["profileKeys"] = ElvPrivateDB["profileKeys"] or {}
     ElvPrivateDB["profileKeys"][charKey] = ns.profileName
+
+    -- Set the active profile (private key must already be in place)
+    E.data:SetProfile(activeProfile)
 
     -- Set DualSpec profiles (auto-switch healer profile per spec)
     local className = UnitClass("player")
