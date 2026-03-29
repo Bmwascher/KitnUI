@@ -1,3 +1,5 @@
 *.png
 .claude/
+.luacheckrc
+CLAUDE.md
 README_CF.md

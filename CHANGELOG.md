@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.7
+
+### Bug Fix & Data Updates
+
+- Fixed MRT profile font and texture paths (single backslashes → double backslashes)
+- Updated KitnEssentials profile data
+- Removed redundant "v" prefix from version display in help text
+- Added .luacheckrc and CLAUDE.md to .gitignore
+
 ## v1.0.6
 
 ### Bug Fix & Data Updates

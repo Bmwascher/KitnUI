@@ -534,7 +534,7 @@ SlashCmdList["KITN"] = function(msg)
     if cmd then
         cmd()
     elseif msg == "" then
-        print(ns.title .. " v" .. (ns.version or "?"))
+        print(ns.title .. " " .. (ns.version or "?"))
         print("  /kitn install  - Open the installer to import profiles")
         print("   |cffff8800Warning: This will overwrite personal customizations|r")
         print("  /kitn update   - Reimport only profiles that have been updated")
