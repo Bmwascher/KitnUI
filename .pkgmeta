@@ -5,4 +5,11 @@ changelog-title: KitnUI
 ignore:
   - "*.png"
   - .pkgmeta
+  - .claude
+  - .github
+  - .gitattributes
+  - .gitignore
   - CHANGELOG.md
+  - README.md
+  - References
+  - .wow-api-reference

@@ -57,7 +57,7 @@ local function DecodeElvUIData(data)
         cleanData = cleanData:sub(2, -2)
     end
 
-    local profileType, profileKey, profileData = D:Decode(cleanData)
+    local _profileType, _profileKey, profileData = D:Decode(cleanData)
     if profileData then
         return profileData
     end
@@ -131,53 +131,55 @@ setupFunctions["ElvUI"] = function(addonKey, import, useColor)
             return
         end
 
-        -- Decode all profile variants (handles both compressed strings and raw tables)
-        local elvData = DecodeElvUIData(ns.data.ElvUI)
-        if not elvData then
+        -- Import only the 2 profiles matching the selected theme (DPS + Healer)
+        ElvDB["profiles"] = ElvDB["profiles"] or {}
+
+        local dpsKey, healerKey, dpsData, healerData
+        if useColor then
+            dpsKey = ns.profileName .. " Colored"
+            healerKey = ns.profileName .. " Healer Colored"
+            dpsData = HasData("ElvUIClassColor") and DecodeElvUIData(ns.data.ElvUIClassColor)
+            healerData = HasData("ElvUIHealerClassColor") and DecodeElvUIData(ns.data.ElvUIHealerClassColor)
+        else
+            dpsKey = ns.profileName
+            healerKey = ns.profileName .. " Healer"
+            dpsData = DecodeElvUIData(ns.data.ElvUI)
+            healerData = HasData("ElvUIHealer") and DecodeElvUIData(ns.data.ElvUIHealer)
+        end
+
+        if not dpsData then
             print(ns.title .. ": Failed to decode ElvUI profile data.")
             return
         end
+        ElvDB["profiles"][dpsKey] = dpsData
+        if healerData then ElvDB["profiles"][healerKey] = healerData end
 
-        -- Write all profile variants into ElvDB
-        ElvDB["profiles"] = ElvDB["profiles"] or {}
-        ElvDB["profiles"][ns.profileName] = elvData
-
-        if HasData("ElvUIClassColor") then
-            local d = DecodeElvUIData(ns.data.ElvUIClassColor)
-            if d then ElvDB["profiles"][ns.profileName .. " Colored"] = d end
-        end
-        if HasData("ElvUIHealer") then
-            local d = DecodeElvUIData(ns.data.ElvUIHealer)
-            if d then ElvDB["profiles"][ns.profileName .. " Healer"] = d end
-        end
-        if HasData("ElvUIHealerClassColor") then
-            local d = DecodeElvUIData(ns.data.ElvUIHealerClassColor)
-            if d then ElvDB["profiles"][ns.profileName .. " Healer Colored"] = d end
-        end
-
-        -- Write private profiles into ElvPrivateDB
+        -- Write single private profile (all variants share it via profileKey)
         ElvPrivateDB["profiles"] = ElvPrivateDB["profiles"] or {}
         if HasData("ElvUIPrivate") then
             local privData = DecodeElvUIData(ns.data.ElvUIPrivate)
             if privData then
-                ElvPrivateDB["profiles"][ns.profileName] = CopyTable(privData)
-                ElvPrivateDB["profiles"][ns.profileName .. " Colored"] = CopyTable(privData)
-                ElvPrivateDB["profiles"][ns.profileName .. " Healer"] = CopyTable(privData)
-                ElvPrivateDB["profiles"][ns.profileName .. " Healer Colored"] = CopyTable(privData)
+                ElvPrivateDB["profiles"][ns.profileName] = privData
             end
         end
 
-        -- Write global settings (e.g. custom datatext panels, aura indicators)
+        -- Merge global settings into ElvDB.global (deep merge preserves keys not in export)
         if HasData("ElvUIGlobal") then
             local globalData = DecodeElvUIData(ns.data.ElvUIGlobal)
             if globalData then
-                if globalData.datatexts and globalData.datatexts.customPanels then
-                    E.global.datatexts = E.global.datatexts or {}
-                    E.global.datatexts.customPanels = CopyTable(globalData.datatexts.customPanels)
-                end
-                if globalData.unitframe and globalData.unitframe.aurawatch then
-                    E.global.unitframe = E.global.unitframe or {}
-                    E.global.unitframe.aurawatch = CopyTable(globalData.unitframe.aurawatch)
+                if not ElvDB.global then ElvDB.global = {} end
+                E:CopyTable(ElvDB.global, globalData)
+            end
+        end
+
+        -- Import aura filters via ElvUI's Distributor API
+        if HasData("ElvUIFilters") then
+            local D = E:GetModule("Distributor")
+            if D then
+                local filterString = strtrim(ns.data.ElvUIFilters)
+                local profileType, profileKey, profileData = D:Decode(filterString)
+                if profileData then
+                    D:SetImportedProfile(profileType, profileKey, profileData, true)
                 end
             end
         end
@@ -197,22 +199,37 @@ setupFunctions["ElvUI"] = function(addonKey, import, useColor)
         activeProfile = ns.profileName
     end
 
-    -- Set private profile key for this character BEFORE SetProfile (so ElvUI loads the correct private profile)
+    -- Set profile keys so ElvUI loads the correct profiles on reload
     local charKey = UnitName("player") .. " - " .. GetRealmName()
+    ElvDB["profileKeys"] = ElvDB["profileKeys"] or {}
+    ElvDB["profileKeys"][charKey] = activeProfile
     ElvPrivateDB["profileKeys"] = ElvPrivateDB["profileKeys"] or {}
     ElvPrivateDB["profileKeys"][charKey] = ns.profileName
 
-    -- Set the active profile (private key must already be in place)
-    E.data:SetProfile(activeProfile)
+    -- Suppress reload popups triggered by SV writes and filter imports (handled by our own reload)
+    StaticPopup_Hide("CONFIG_RL")
+    StaticPopup_Hide("ELVUI_CONFIG_IMPORT_RELOAD")
 
     -- Set DualSpec profiles (auto-switch healer profile per spec)
     local className = UnitClass("player")
-    if ElvDB["namespaces"] and ElvDB["namespaces"]["LibDualSpec-1.0"] then
-        ElvDB["namespaces"]["LibDualSpec-1.0"]["char"] = ElvDB["namespaces"]["LibDualSpec-1.0"]["char"] or {}
-        ElvDB["namespaces"]["LibDualSpec-1.0"]["char"][charKey] = ns.GetDualSpecConfig(className, useColor)
+    ElvDB["namespaces"] = ElvDB["namespaces"] or {}
+    ElvDB["namespaces"]["LibDualSpec-1.0"] = ElvDB["namespaces"]["LibDualSpec-1.0"] or {}
+    ElvDB["namespaces"]["LibDualSpec-1.0"]["char"] = ElvDB["namespaces"]["LibDualSpec-1.0"]["char"] or {}
+    ElvDB["namespaces"]["LibDualSpec-1.0"]["char"][charKey] = ns.GetDualSpecConfig(className, useColor)
+
+    -- Force hideVoiceButtons on all profile variants (doesn't persist through export)
+    for _, pName in ipairs({
+        ns.profileName, ns.profileName .. " Colored",
+        ns.profileName .. " Healer", ns.profileName .. " Healer Colored",
+    }) do
+        if ElvDB["profiles"] and ElvDB["profiles"][pName] then
+            ElvDB["profiles"][pName]["chat"] = ElvDB["profiles"][pName]["chat"] or {}
+            ElvDB["profiles"][pName]["chat"]["hideVoiceButtons"] = true
+        end
     end
 
     -- Ensure nameplates stay disabled
+    E.private["nameplates"] = E.private["nameplates"] or {}
     E.private["nameplates"]["enable"] = false
 end
 
@@ -251,17 +268,33 @@ end
 
 setupFunctions["Plater"] = function(addonKey, import)
     if import then
-        if not ns.data.PlaterDB then
+        if not HasData("Plater") then
             print(ns.title .. ": No Plater data found.")
             return
         end
 
-        -- Replace entire PlaterDB (includes profiles, plate_config, global settings, scripts, etc.)
-        PlaterDB = ns.data.PlaterDB
+        local profileString = ns.data.Plater
+        if not Plater or not Plater.DecompressData then
+            print(ns.title .. ": Plater not loaded.")
+            return
+        end
+
+        -- Decompress the profile export string into a table
+        local profileData = Plater.DecompressData(profileString, "print")
+        if not profileData then
+            print(ns.title .. ": Failed to decompress Plater profile.")
+            return
+        end
+
+        -- Write only our profile (preserves user's other profiles and data)
+        PlaterDB = PlaterDB or {}
+        PlaterDB["profiles"] = PlaterDB["profiles"] or {}
+        PlaterDB["profiles"][ns.profileName] = profileData
 
         -- Set profile key for this character
+        local charKey = UnitName("player") .. " - " .. GetRealmName()
         PlaterDB["profileKeys"] = PlaterDB["profileKeys"] or {}
-        PlaterDB["profileKeys"][UnitName("player") .. " - " .. GetRealmName()] = ns.profileName
+        PlaterDB["profileKeys"][charKey] = ns.profileName
 
         CompleteSetup(addonKey)
         return
@@ -321,6 +354,9 @@ end
 
 ------------------------------------------------------------
 -- MRT / Method Raid Tools
+-- Retained alongside NSRT as a fallback; not wired into the installer
+-- flow (see Installer.lua addonSteps). Kept so re-enabling is a one-line
+-- change if NSRT adoption is reversed.
 ------------------------------------------------------------
 
 setupFunctions["MRT"] = function(addonKey, import)
@@ -348,6 +384,65 @@ setupFunctions["MRT"] = function(addonKey, import)
     local realmKey = GetRealmName():gsub(" ", "")
     local charKey = UnitName("player") .. "-" .. realmKey
     VMRT.ProfileKeys[charKey] = ns.profileName
+end
+
+------------------------------------------------------------
+-- Northern Sky Raid Tools
+-- Decodes NSRT's export string (AceSerializer-3.0 + LibDeflate) and
+-- writes each module's data directly into the account-wide NSRT global,
+-- matching what NSRT's own ImportFromTable does. NSRT has no profile
+-- system, so there is nothing to activate on load.
+------------------------------------------------------------
+
+local function DecodeNSRTString(exportString)
+    local LibDeflate = LibStub and LibStub("LibDeflate", true)
+    local Serialize = LibStub and LibStub("AceSerializer-3.0", true)
+    if not LibDeflate or not Serialize then
+        return nil, "LibDeflate or AceSerializer-3.0 not available (is NSRT loaded?)"
+    end
+
+    local decoded = LibDeflate:DecodeForPrint(exportString)
+    local decompressed = decoded and LibDeflate:DecompressDeflate(decoded)
+    if not decompressed then
+        return nil, "failed to decompress NSRT string"
+    end
+
+    local success, data = Serialize:Deserialize(decompressed)
+    if not success or type(data) ~= "table" then
+        return nil, "failed to deserialize NSRT data"
+    end
+    return data
+end
+
+setupFunctions["NSRT"] = function(addonKey, import)
+    if import then
+        if not HasData(addonKey) then
+            print(ns.title .. ": No NSRT data found.")
+            return
+        end
+        if not IsAddOnLoaded("NorthernSkyRaidTools") then
+            print(ns.title .. ": NorthernSkyRaidTools is not loaded.")
+            return
+        end
+
+        local decoded, err = DecodeNSRTString(ns.data[addonKey])
+        if not decoded then
+            print(ns.title .. ": NSRT decode failed - " .. (err or "unknown error"))
+            return
+        end
+
+        NSRT = NSRT or {}
+        for k, v in pairs(decoded) do
+            if type(v) == "table" and v.enabled and v.data ~= nil then
+                NSRT[k] = v.data
+            end
+        end
+
+        CompleteSetup(addonKey)
+        return
+    end
+
+    -- Load is a no-op: NSRT is account-wide with no per-character profile.
 end
 
 ------------------------------------------------------------
@@ -424,10 +519,10 @@ local function GetAyijeCDMSpecProfiles(className)
 
     local specOptions = {
         ["Death Knight"]  = { base, base, base, ["enabled"] = true },
-        ["Demon Hunter"]  = { cast, base, cast, ["enabled"] = true },
+        ["Demon Hunter"]  = { cast, cast, cast, ["enabled"] = true },
         ["Druid"]         = { cast, base, base, heal, ["enabled"] = true },
         ["Evoker"]        = { cast, healDual, cast, ["enabled"] = true },
-        ["Hunter"]        = { base, base, base, ["enabled"] = true },
+        ["Hunter"]        = { base, cast, base, ["enabled"] = true },
         ["Mage"]          = { cast, cast, cast, ["enabled"] = true },
         ["Monk"]          = { base, heal, base, ["enabled"] = true },
         ["Paladin"]       = { healDual, base, base, ["enabled"] = true },
@@ -440,7 +535,7 @@ local function GetAyijeCDMSpecProfiles(className)
     return specOptions[className]
 end
 
-setupFunctions["Ayije_CDM"] = function(addonKey, import)
+setupFunctions["Ayije_CDM"] = function(_addonKey, import)
     if import then
         -- Load the Options addon to get the full ImportProfile
         if not C_AddOns.IsAddOnLoaded("Ayije_CDM_Options") then
@@ -603,10 +698,170 @@ setupFunctions["BuffReminders"] = function(addonKey, import)
 end
 
 ------------------------------------------------------------
+-- Baganator
+-- Writes a named KitnUI profile into BAGANATOR_CONFIG.Profiles and sets it
+-- as the active profile for this character. Only runs on explicit install
+-- or load action — never on PLAYER_LOGIN — so user changes within the
+-- profile persist across reloads (unlike AUI's approach).
+--
+-- Category groups are decoded from a JSON export string (Baganator's
+-- Customise > Categories > Export) and merged into the profile. Array
+-- fields are converted to the hashmap form Baganator stores internally.
+------------------------------------------------------------
+
+local function DecodeBaganatorCategories(jsonString)
+    if not C_EncodingUtil or not C_EncodingUtil.DeserializeJSON then
+        return nil, "C_EncodingUtil.DeserializeJSON not available"
+    end
+
+    local success, import = pcall(C_EncodingUtil.DeserializeJSON, jsonString)
+    if not success or type(import) ~= "table" or type(import.categories) ~= "table" then
+        return nil, "invalid Baganator export"
+    end
+
+    local out = {
+        custom_categories = {},
+        category_sections = {},
+        category_modifications = {},
+        category_hidden = {},
+        category_display_order = {},
+        -- Sentinels that stop Baganator from reimporting its stock defaults
+        -- over our data on first boot (Initialize.lua:145). 999 stays above
+        -- any DefaultImportVersion Baganator will realistically ship.
+        category_default_import = 999,
+        -- Our data is written in the post-migration format; skip the
+        -- MigrateFormat loop (Initialize.lua:3-77).
+        category_migration = 5,
+    }
+
+    for _, c in ipairs(import.categories) do
+        local source = c.source or c.name
+        out.custom_categories[source] = {
+            name = c.name,
+            search = c.search or "",
+        }
+    end
+
+    for _, m in ipairs(import.modifications or {}) do
+        if m.source then
+            local mod = {}
+            if type(m.priority) == "number" then mod.priority = m.priority end
+            if m.showGroupPrefix ~= nil then mod.showGroupPrefix = m.showGroupPrefix end
+            if m.group then mod.group = m.group end
+            if m.color then mod.color = m.color end
+            if type(m.items) == "table" then
+                mod.addedItems = mod.addedItems or {}
+                for _, itemID in ipairs(m.items) do
+                    mod.addedItems["i:" .. tostring(itemID)] = true
+                end
+            end
+            if type(m.pets) == "table" then
+                mod.addedItems = mod.addedItems or {}
+                for _, petID in ipairs(m.pets) do
+                    mod.addedItems["p:" .. tostring(petID)] = true
+                end
+            end
+            if type(m.hideIn) == "table" then
+                local h = {}
+                for _, key in ipairs(m.hideIn) do
+                    h[key] = true
+                end
+                mod.hideIn = h
+            end
+            out.category_modifications[m.source] = mod
+        end
+    end
+
+    -- Every custom category needs a modifications entry with a priority,
+    -- matching Baganator's own import behaviour.
+    for source in pairs(out.custom_categories) do
+        out.category_modifications[source] = out.category_modifications[source] or { priority = 0 }
+        if out.category_modifications[source].priority == nil then
+            out.category_modifications[source].priority = 0
+        end
+    end
+
+    -- C_EncodingUtil.DeserializeJSON converts numeric-string object keys
+    -- (e.g. "1") into Lua numbers. Baganator looks up sections via the string
+    -- form (derived from display_order entries like "_1"), so coerce keys
+    -- back to strings here.
+    if type(import.sections) == "table" then
+        for id, s in pairs(import.sections) do
+            if type(s) == "table" and type(s.name) == "string" then
+                local entry = { name = s.name }
+                if s.color then entry.color = s.color end
+                out.category_sections[tostring(id)] = entry
+            end
+        end
+    end
+
+    if type(import.hidden) == "table" then
+        for _, source in ipairs(import.hidden) do
+            out.category_hidden[source] = true
+        end
+    end
+
+    if type(import.order) == "table" then
+        for i, entry in ipairs(import.order) do
+            out.category_display_order[i] = entry
+        end
+    end
+
+    return out
+end
+
+setupFunctions["Baganator"] = function(addonKey, import)
+    if import then
+        if not HasData(addonKey) then
+            print(ns.title .. ": No Baganator data found.")
+            return
+        end
+
+        BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
+        BAGANATOR_CONFIG.Profiles = BAGANATOR_CONFIG.Profiles or {}
+
+        local src = ns.data[addonKey]
+        local profile = {}
+
+        -- Copy non-JSON fields (view modes, seen_welcome, etc.) into the profile.
+        for k, v in pairs(src) do
+            if k ~= "categoriesJSON" then
+                profile[k] = type(v) == "table" and CopyTable(v) or v
+            end
+        end
+
+        -- Decode category groups and merge into the profile.
+        if type(src.categoriesJSON) == "string" and strtrim(src.categoriesJSON) ~= "" then
+            local decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
+            if decoded then
+                for k, v in pairs(decoded) do
+                    profile[k] = v
+                end
+            else
+                print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
+            end
+        end
+
+        BAGANATOR_CONFIG.Profiles[ns.profileName] = profile
+
+        -- Activate the KitnUI profile for this character (per-char SavedVar)
+        BAGANATOR_CURRENT_PROFILE = ns.profileName
+
+        CompleteSetup(addonKey)
+        return
+    end
+
+    -- Load: activate the existing KitnUI profile for this character
+    if BAGANATOR_CONFIG and BAGANATOR_CONFIG.Profiles and BAGANATOR_CONFIG.Profiles[ns.profileName] then
+        BAGANATOR_CURRENT_PROFILE = ns.profileName
+    end
+end
+
+------------------------------------------------------------
 -- Blizzard Cooldown Manager (per-spec)
 ------------------------------------------------------------
 
-setupFunctions["BlizzardCDM"] = function(addonKey, import, specIndex)
+setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
     if import then
         local _, _, classId = UnitClass("player")
         local classData = ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]

@@ -1,6 +1,6 @@
 local addonName, ns = ...
 
-local E, L, V, P, G = unpack(ElvUI)
+local E, _L, _V, _P, _G = unpack(ElvUI)
 local EP = LibStub("LibElvUIPlugin-1.0")
 local KitnUI = E:NewModule("KitnUI", "AceHook-3.0", "AceEvent-3.0", "AceTimer-3.0")
 
@@ -46,10 +46,12 @@ local addonVersionHeaders = {
     BigWigs         = "X-BigWigs-Version",
     WarpDeplete     = "X-WarpDeplete-Version",
     MRT             = "X-MRT-Version",
+    NSRT            = "X-NSRT-Version",
     Blizzard_EditMode = "X-EditMode-Version",
     Ayije_CDM       = "X-AyijeCDM-Version",
     KitnEssentials  = "X-KitnEssentials-Version",
     BuffReminders   = "X-BuffReminders-Version",
+    Baganator       = "X-Baganator-Version",
     BlizzardCDM     = "X-BlizzardCDM-Version",
 }
 
@@ -105,6 +107,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = "X-header version" at time of import
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
+    devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
 
 local function GetCharKey()
@@ -302,7 +305,7 @@ function ns:FinishInstallation()
 
     -- LibDBIcon addons: Hide() sets db.hide = true (idempotent)
     if LDBIcon then
-        for _, broker in ipairs({ "Details", "BigWigs", "Plater" }) do
+        for _, broker in ipairs({ "Details", "BigWigs", "Plater", "NSRT" }) do
             if LDBIcon:IsRegistered(broker) then
                 LDBIcon:Hide(broker)
             end
@@ -339,6 +342,12 @@ function ns:FinishInstallation()
     if IsAddOnLoaded("MRT") then
         if VMRT and VMRT.Addon then VMRT.Addon.IconMiniMapHide = true end
         if MRT and MRT.MiniMapIcon then MRT.MiniMapIcon:Hide() end
+    end
+
+    -- Activate Plater profile before reload to trigger CVar restoration
+    if IsAddOnLoaded("Plater") and Plater and Plater.db
+        and PlaterDB and PlaterDB.profiles and PlaterDB.profiles[ns.profileName] then
+        Plater.db:SetProfile(ns.profileName)
     end
 
     ReloadUI()
@@ -405,7 +414,10 @@ OpenInstaller = function(profileLoadMode, updateKeys, cdmMode)
         return
     end
 
-    ShutDownDetails()
+    -- Only shut down Details windows for install/update (not load or CDM-only)
+    if not profileLoadMode and not cdmMode then
+        ShutDownDetails()
+    end
     ns.SnapshotProfiles()
 
     kitnInstallerActive = true
@@ -418,6 +430,13 @@ OpenInstaller = function(profileLoadMode, updateKeys, cdmMode)
         hooksecurefunc(PI, "SetPage", function()
             if kitnInstallerActive then
                 ResizeInstallerFrame()
+            end
+        end)
+        -- SetupReset fires BEFORE each page function, so hiding here
+        -- lets the CDM page re-show the button in its own function
+        hooksecurefunc(PI, "SetupReset", function()
+            if ns.cdmAllButton then
+                ns.cdmAllButton:Hide()
             end
         end)
         hooksecurefunc(PI, "CloseInstall", function()
@@ -474,6 +493,15 @@ KitnCommands["cdm"] = function()
     OpenInstaller(false, nil, true)
 end
 
+KitnCommands["dev"] = function()
+    ns.db.devMode = not ns.db.devMode
+    if ns.db.devMode then
+        print(ns.title .. ": Dev mode " .. ns.Green("enabled") .. ". Update popup will show on every login.")
+    else
+        print(ns.title .. ": Dev mode " .. ns.Red("disabled") .. ".")
+    end
+end
+
 KitnCommands["reset"] = function()
     KitnUIElvDB = nil
     ReloadUI()
@@ -495,11 +523,12 @@ end
 KitnCommands["version"] = function()
     print(string.format("|cffffffffKitnUI version %s|r", ns.version or "?"))
 
-    local order = { "ElvUI", "Details", "Plater", "BigWigs", "WarpDeplete", "MRT", "Blizzard_EditMode", "Ayije_CDM", "KitnEssentials", "BlizzardCDM" }
+    local order = { "ElvUI", "Details", "Plater", "BigWigs", "WarpDeplete", "NSRT", "Blizzard_EditMode", "Ayije_CDM", "KitnEssentials", "BuffReminders", "Baganator", "BlizzardCDM" }
     local names = {
         ElvUI = "ElvUI", Details = "Details", Plater = "Plater", BigWigs = "BigWigs",
-        WarpDeplete = "WarpDeplete", MRT = "MRT", Blizzard_EditMode = "Edit Mode",
-        Ayije_CDM = "Ayije CDM", KitnEssentials = "KitnEssentials", BlizzardCDM = "Blizzard CDM",
+        WarpDeplete = "WarpDeplete", NSRT = "Northern Sky Raid Tools", Blizzard_EditMode = "Edit Mode",
+        Ayije_CDM = "Ayije CDM", KitnEssentials = "KitnEssentials", BuffReminders = "BuffReminders",
+        Baganator = "Baganator", BlizzardCDM = "Blizzard CDM",
     }
     for _, key in ipairs(order) do
         local current = ns.GetAddonDataVersion(key)
@@ -623,7 +652,6 @@ function KitnUI:Initialize()
     end
 
     local hasProfiles = ns.db.profiles and next(ns.db.profiles)
-    local charKey = GetCharKey()
 
     -- First run: launch the installer
     if not hasProfiles and not ns.db.installedVersion then
@@ -632,7 +660,7 @@ function KitnUI:Initialize()
     -- Version update: prompt to re-install (check both overall version and per-addon versions)
     -- Dev-mode: always show popup when version is unresolved (@project-version@)
     elseif hasProfiles and ns.db.installedVersion and ns.version
-        and (ns.db.installedVersion ~= ns.version or ns.version == "@" .. "project-version" .. "@")
+        and (ns.db.installedVersion ~= ns.version or ns.db.devMode)
         and ns.db.dismissedVersion ~= ns.version then
         local outdated = ns.GetOutdatedAddons()
         local updateText = ns.title .. " has been updated (" .. ns.db.installedVersion .. " -> " .. ns.version .. ")."

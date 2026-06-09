@@ -1,5 +1,8 @@
 *.png
 .claude/
 .luacheckrc
+.wow-api-reference/
 CLAUDE.md
 README_CF.md
+REFERENCES.md
+References/

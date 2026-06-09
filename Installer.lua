@@ -2,6 +2,7 @@ local _, ns = ...
 
 local E = ns.E
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+local cdmAllButton  -- persistent "Import All Specs" button for CDM page
 
 -- Color helpers (ns.Color, ns.Green, ns.Red, ns.ClassColor) defined in Core.lua
 
@@ -137,11 +138,12 @@ local addonSteps = {
     { key = "Plater",          display = "Plater Nameplates",     checkAddon = "Plater",           alwaysAvailable = false,  showWhenMissing = true },
     { key = "BigWigs",         display = "BigWigs",               checkAddon = "BigWigs",          alwaysAvailable = false,  showWhenMissing = true },
     { key = "WarpDeplete",     display = "WarpDeplete",           checkAddon = "WarpDeplete",      alwaysAvailable = false,  showWhenMissing = true },
-    { key = "MRT",             display = "Method Raid Tools",     checkAddon = "MRT",              alwaysAvailable = false,  showWhenMissing = false },
+    { key = "NSRT",            display = "Northern Sky Raid Tools", checkAddon = "NorthernSkyRaidTools", alwaysAvailable = false,  showWhenMissing = true },
     { key = "Blizzard_EditMode", display = "Edit Mode",           checkAddon = "Blizzard_EditMode", alwaysAvailable = true },
     { key = "Ayije_CDM",       display = "Ayije CDM",            checkAddon = "Ayije_CDM",        alwaysAvailable = false,  showWhenMissing = true },
     { key = "KitnEssentials",  display = "KitnEssentials",       checkAddon = "KitnEssentials",   alwaysAvailable = false,  showWhenMissing = true },
     { key = "BuffReminders",   display = "BuffReminders",        checkAddon = "BuffReminders",    alwaysAvailable = false,  showWhenMissing = true },
+    { key = "Baganator",       display = "Baganator",            checkAddon = "Baganator",        alwaysAvailable = false,  showWhenMissing = true },
     { key = "BlizzardCDM",     display = "Blizzard CDM",         checkAddon = nil,                alwaysAvailable = true },
 }
 
@@ -358,7 +360,19 @@ local function KitnEssentialsPage()
     PluginInstallFrame.Option1:SetText("Install")
 end
 
--- Blizzard CDM page (per-spec buttons)
+-- Helper: build CDM status text for all specs
+local function BuildCDMStatusText(classId, numSpecs)
+    local parts = {}
+    for i = 1, numSpecs do
+        local _, specName = GetSpecializationInfoForClassID(classId, i)
+        if specName then
+            parts[#parts + 1] = specName .. ": " .. GetCDMSpecStatus(i)
+        end
+    end
+    return table.concat(parts, " | ")
+end
+
+-- Blizzard CDM page (per-spec buttons + Import All)
 local function BlizzardCDMPage()
     PluginInstallFrame.SubTitle:SetFormattedText("Blizzard Cooldown Manager")
 
@@ -381,17 +395,46 @@ local function BlizzardCDMPage()
     end
 
     PluginInstallFrame.Desc1:SetText("Import cooldown layouts for each spec.")
-
-    -- Build status text
-    local statusParts = {}
-    for i = 1, numSpecs do
-        local _, specName = GetSpecializationInfoForClassID(classId, i)
-        if specName then
-            statusParts[#statusParts + 1] = specName .. ": " .. GetCDMSpecStatus(i)
-        end
-    end
-    PluginInstallFrame.Desc2:SetText(table.concat(statusParts, " | "))
+    PluginInstallFrame.Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
     PluginInstallFrame.Desc3:SetText(GetVersionLine("BlizzardCDM"))
+
+    -- Create or reuse the "Import All Specs" button
+    if not cdmAllButton then
+        cdmAllButton = CreateFrame("Button", "KitnUICDMAllButton", PluginInstallFrame, "UIPanelButtonTemplate")
+        cdmAllButton:SetSize(160, 30)
+        cdmAllButton:SetPoint("BOTTOM", PluginInstallFrame, "BOTTOM", 0, 80)
+        cdmAllButton:SetFrameLevel(PluginInstallFrame:GetFrameLevel() + 10)
+        local S = E:GetModule("Skins")
+        if S and S.HandleButton then S:HandleButton(cdmAllButton) end
+        ns.cdmAllButton = cdmAllButton  -- expose for Core.lua SetPage hook
+    end
+    local allBtn = cdmAllButton
+
+    allBtn:SetText("Import All Specs")
+    allBtn:SetScript("OnClick", function()
+        ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
+            local imported, failed = 0, 0
+            for i = 1, numSpecs do
+                local specData = classData[i]
+                if specData and strtrim(specData) ~= "" then
+                    local success = ns.SetupAddon("BlizzardCDM", true, i)
+                    if success then
+                        imported = imported + 1
+                    else
+                        failed = failed + 1
+                    end
+                end
+            end
+            PluginInstallFrame.Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
+            if failed > 0 then
+                ShowInstallToast(imported .. " imported, " .. failed .. " failed (layout limit?)", 1, 0.8, 0.2)
+            else
+                SuccessToast("All specs", "layouts imported!")
+            end
+            PlayInstallSound()
+        end)
+    end)
+    allBtn:Show()
 
     -- Show spec buttons using Option1-4 (ElvUI PluginInstaller supports up to 4)
     for i = 1, math.min(numSpecs, 4) do
@@ -411,16 +454,8 @@ local function BlizzardCDMPage()
                 optionBtn:SetScript("OnClick", function()
                     ConfirmImport("BlizzardCDM", "Blizzard CDM", function()
                         local success = ns.SetupAddon("BlizzardCDM", true, i)
-                        -- Refresh status
-                        local parts = {}
-                        for j = 1, numSpecs do
-                            local _, sn = GetSpecializationInfoForClassID(classId, j)
-                            if sn then
-                                parts[#parts + 1] = sn .. ": " .. GetCDMSpecStatus(j)
-                            end
-                        end
+                        PluginInstallFrame.Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
                         if success then
-                            PluginInstallFrame.Desc2:SetText(table.concat(parts, " | "))
                             SuccessToast(specName or "CDM", "layout imported!")
                             PlayInstallSound()
                         else
@@ -535,7 +570,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
             Name = ns.Color("KitnUI") .. " Blizzard CDM",
             tutorialImage = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI",
             tutorialImageSize = { 180, 180 },
-            tutorialImagePoint = { 0, 10 },
+            tutorialImagePoint = { 0, 30 },
             Pages = pages,
             StepTitles = stepTitles,
             StepTitlesColor = { 1, 1, 1 },
@@ -621,7 +656,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
             or (ns.Color("KitnUI") .. " Installation"),
         tutorialImage = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI",
         tutorialImageSize = { 180, 180 },
-        tutorialImagePoint = { 0, 10 },
+        tutorialImagePoint = { 0, 30 },
         Pages = pages,
         StepTitles = stepTitles,
         StepTitlesColor = { 1, 1, 1 },

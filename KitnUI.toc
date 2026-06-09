@@ -2,9 +2,9 @@
 ## Notes: ElvUI profile installer for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## Interface: 120000, 120001
+## Interface: 120001, 120005
 ## RequiredDeps: ElvUI
-## OptionalDeps: Details, Plater, BigWigs, WarpDeplete, MRT, Ayije_CDM, KitnEssentials, BuffReminders
+## OptionalDeps: Details, Plater, BigWigs, WarpDeplete, NorthernSkyRaidTools, Ayije_CDM, KitnEssentials, BuffReminders, Baganator
 ## SavedVariables: KitnUIElvDB
 ## IconTexture: Interface\Icons\INV_Misc_Gift_05
 ## Category-enUS: |cffFF008CKitn|rUI
@@ -15,12 +15,14 @@
 ## X-Details-Version: 1.1
 ## X-Plater-Version: 1.1
 ## X-BigWigs-Version: 1.0
-## X-WarpDeplete-Version: 1.0
+## X-WarpDeplete-Version: 1.1
 ## X-MRT-Version: 1.1
+## X-NSRT-Version: 1.0
 ## X-EditMode-Version: 1.0
 ## X-AyijeCDM-Version: 1.1
 ## X-KitnEssentials-Version: 1.4
 ## X-BuffReminders-Version: 1.1
+## X-Baganator-Version: 1.3
 ## X-BlizzardCDM-Version: 1.0
 
 Core.lua
@@ -32,6 +34,7 @@ Data\AddOns\ElvUI\HealerDark.lua
 Data\AddOns\ElvUI\HealerColor.lua
 Data\AddOns\ElvUI\Private.lua
 Data\AddOns\ElvUI\Global.lua
+Data\AddOns\ElvUI\Filters.lua
 
 # Profile Data - AddOns
 Data\AddOns\Details.lua
@@ -39,10 +42,12 @@ Data\AddOns\Plater.lua
 Data\AddOns\BigWigs.lua
 Data\AddOns\WarpDeplete.lua
 Data\AddOns\MRT.lua
+Data\AddOns\NSRT.lua
 Data\AddOns\EditMode.lua
 Data\AddOns\AyijeCDM.lua
 Data\AddOns\KitnEssentials.lua
 Data\AddOns\BuffReminders.lua
+Data\AddOns\Baganator.lua
 
 # Profile Data - Classes
 Data\Classes\BlizzardCDM.lua

@@ -24,7 +24,7 @@ KitnUI walks you through configuring ElvUI and popular addons with a step-by-ste
 | Plater Nameplates | Nameplate styling |
 | BigWigs / LittleWigs | Boss timer bars |
 | WarpDeplete | M+ timer |
-| Method Raid Tools | Raid tools configuration |
+| Northern Sky Raid Tools | Raid tools configuration |
 | Ayije CDM | Cooldown manager layouts |
 | BuffReminders | Buff reminder configuration |
 | Blizzard CDM | Per-spec cooldown layouts |

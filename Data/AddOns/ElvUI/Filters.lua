@@ -1,0 +1,7 @@
+local _, ns = ...
+ns.data = ns.data or {}
+
+-- ElvUI aura filters (unitframe aura indicators, buff/debuff filter lists)
+-- Export from: /ec > Profiles > Export Filters (or check under Filters section)
+-- Paste the !E1! string below (replace the empty string)
+ns.data.ElvUIFilters = [[!E1!nJv7Ujkqu0NOnz(EG(p7w3TMw1gHUP7FMeQIvszbdGP19PFVdGvb)AGsnBmXWGW9CMZCU37mQWkxLZQOGS5jE)XxpWBvI38GWm)Ku9WRdJN(AyqAMEq6s)Wq9ThrTKwmP(E(rEph6RUw5SmjiojiBTAecE0mVPV6UiXpDrC4m9TYk)KJWBEztxOF9h6DFVBgmshtoLlO5We8x)XZNN6NPgzRd1AaaNm)3ZwL4pBW04iLZ7BEGVHvotJbmIFlQx00fXjaPh76oE4Kb)8wiAZcsxg6T2fEDnlxV5fXk9xegZY2yuRflJjHgjUWgJmfiJJ8PNEeecr4xyqHzkLq0GwjG1yWY4GiWm4o(HMH1bzEfcar9Hjd674QnvmSGASaSHhpLBHpjRQm1wVZGCtfyLlmvNmghwroomnsjkOIuc2BZxkkrTBxpgHP2DRwaURMrJY1fBg1IzQzORYgKD7CVv(aiCo32ByV86SeKKHqBRDpt9SMO2sJLMwNzqTOcM1fagcIy8SPsKkf)pkBlWeBJRF0nwga(()A8D9NK3OvibjZucyOIDG8NAkidYzlsv24rU(WgZwnlpqnOZONKI1vPqA112NtjgLOsjcPPO(j2IavYiKCGQO033)h5cDi8kWfpRPLZl5FNuqXJYF021VDkV7fT(rylFqA)UD8GWfm7dsa)YQOSFNF78lpBLl(zwg2jwpvEzv1479h5cM(TsgW(4OW1olIFByqAAq0lfvQOqlDu1nyqpDv0M5tnOGkKGGqfDw3fxmRfUIAUnbJYmEdP7kanzkwftyYqk269XY2Bz0BEIoTKpclHA)aFUeiHaZVGvRl72iSz89ScI2uvQkq6yBHLfnm3jPTPIcYIiR2U3i9XW6N77G5CBg(YTkuaQnhZj1ML1SWNAtuh1Y2M1X8E43m5Xb3OBHJXKCV8bRLXKmj30(7z5BO3WhURuw44Xc1EDmnypRnbstk5sH2)uZQ6)fCQs4yTCPSTBMFBZ3pXPykQvBbhI5Yzb2C8HHJhDN2mZ4iPOThNR7ubm2wGXQ6fIohSnrcmIfCSK)FrYbMWewM(NU8vYKnFuxDv5FJ4)o]]

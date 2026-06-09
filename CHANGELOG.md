@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.8
+
+### New Addon Support
+
+- Added Baganator profile import (category view, welcome popup dismissal)
+- Creates a named "KitnUI" profile in BAGANATOR_CONFIG — user changes persist across reloads (avoids AUI's reset-on-reload behavior)
+- Added Baganator and BuffReminders to `/kitn version` output (BuffReminders was missing)
+
 ## v1.0.7
 
 ### Bug Fix & Data Updates
