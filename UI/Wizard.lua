@@ -13,6 +13,9 @@ ns.Wizard = ns.Wizard or {}
 local W = ns.Wizard
 
 local PANEL_BG = { 0.05, 0.07, 0.09 }
+-- KitnUI brand accent (|cffFF008C) used for highlights instead of EllesmereUI's
+-- own accent, so the installer reads as KitnUI's rather than EUI's purple.
+local KITN_PINK = { 1, 0, 0.549 }
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
 -- border-hover(13-16), text(17-20), text-hover(21-24). Values match EUI's own buttons.
@@ -61,8 +64,7 @@ function W:Build()
     f.SubTitle = EllesmereUI.MakeFont(f, 20, "", 1, 1, 1)
     f.SubTitle:SetAlpha(0.95)
     f.SubTitle:SetPoint("TOP", 0, -24)
-    local ar, ag, ab = EllesmereUI.GetAccentColor()
-    local underline = EllesmereUI.SolidTex(f, "ARTWORK", ar, ag, ab, 0.9)
+    local underline = EllesmereUI.SolidTex(f, "ARTWORK", KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.95)
     underline:SetSize(220, 2)
     underline:SetPoint("TOP", f.SubTitle, "BOTTOM", 0, -6)
 
@@ -146,7 +148,6 @@ end
 local function updateRail()
     local f = W.frame
     local titles = W.stepTitles or {}
-    local ar, ag, ab = EllesmereUI.GetAccentColor()
     for i = 1, math.max(#titles, #f.stepLabels) do
         local lbl = f.stepLabels[i]
         if not lbl then
@@ -160,7 +161,7 @@ local function updateRail()
         if title then
             lbl:SetText(title)
             if i == W.page then
-                lbl:SetTextColor(ar, ag, ab)
+                lbl:SetTextColor(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3])
                 lbl:SetAlpha(1)
             else
                 lbl:SetTextColor(1, 1, 1)
