@@ -93,10 +93,11 @@ function W:Build()
         b:Hide()
         f["Option" .. i] = b
     end
-    f.Option1:SetPoint("BOTTOM", f, "BOTTOM", -240, 26)
-    f.Option2:SetPoint("BOTTOM", f, "BOTTOM", -80, 26)
-    f.Option3:SetPoint("BOTTOM", f, "BOTTOM", 80, 26)
-    f.Option4:SetPoint("BOTTOM", f, "BOTTOM", 240, 26)
+    -- Option row sits above the Next/Back nav row so they never overlap.
+    f.Option1:SetPoint("BOTTOM", f, "BOTTOM", -240, 70)
+    f.Option2:SetPoint("BOTTOM", f, "BOTTOM", -80, 70)
+    f.Option3:SetPoint("BOTTOM", f, "BOTTOM", 80, 70)
+    f.Option4:SetPoint("BOTTOM", f, "BOTTOM", 240, 70)
 
     -- Step rail (left)
     f.stepRail = CreateFrame("Frame", nil, f)
@@ -139,6 +140,12 @@ function W:SetOption(i, text, onClick)
     if b._lbl then b._lbl:SetText(text) end
     b._onClick = onClick
     b:Show()
+end
+
+-- Style an external button (e.g. the CDM "Import All Specs") with KitnUI's look.
+function W:StyleButton(btn, text, fontSize, onClick)
+    if not (EllesmereUI and EllesmereUI.MakeStyledButton) then return end
+    return EllesmereUI.MakeStyledButton(btn, text, fontSize or 13, BTN_COLOURS, onClick)
 end
 
 ------------------------------------------------------------
@@ -192,6 +199,7 @@ function W:SetPage(n)
     if not (W.pages and W.pages[n]) then return end
     W.page = n
     W:HideOptions()
+    if W.ResetExtras then W.ResetExtras() end
     W.frame.Desc1:SetText("")
     W.frame.Desc2:SetText("")
     W.frame.Desc3:SetText("")
@@ -207,29 +215,4 @@ end
 
 function W:Hide()
     if W.frame then W.frame:Hide() end
-end
-
-------------------------------------------------------------
--- TEMPORARY smoke-test command (removed in Task 3.2). Renders a 2-page wizard
--- so the EllesmereUI skinning can be verified before real pages exist.
-------------------------------------------------------------
-
-KitnCommands = KitnCommands or {}
-KitnCommands["wiz"] = function()
-    W:Queue({
-        Name = (ns.Color and ns.Color("KitnUI")) or "KitnUI",
-        StepTitles = { "Test", "Second" },
-        Pages = {
-            function()
-                W.frame.SubTitle:SetText("KitnUI Wizard Test")
-                W.frame.Desc1:SetText("If you can read this inside an EllesmereUI-styled frame, the skinning works.")
-                W.frame.Desc2:SetText("Dark fill, 1px pixel-perfect border, accent underline, native font.")
-                W:SetOption(1, "An Option", function() print("KitnUI: option clicked") end)
-            end,
-            function()
-                W.frame.SubTitle:SetText("Page Two")
-                W.frame.Desc1:SetText("Next / Back paging and the step rail work.")
-            end,
-        },
-    })
 end
