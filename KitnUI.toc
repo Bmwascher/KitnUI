@@ -22,6 +22,8 @@
 
 Core.lua
 
+Setup.lua
+
 # Profile Data - Companions
 Data\AddOns\Plater.lua
 Data\AddOns\BigWigs.lua
@@ -34,7 +36,6 @@ Data\AddOns\BuffReminders.lua
 Data\Classes\BlizzardCDM.lua
 
 # Added in later phases as their files are created:
-#   Setup.lua                    (Task 2.1)
 #   UI\Wizard.lua                (Task 3.1)
 #   Installer.lua                (Task 3.2)
 #   Data\AddOns\EllesmereUI.lua  (Task 2.4)
