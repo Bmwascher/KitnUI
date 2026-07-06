@@ -462,7 +462,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             postLayouts[importedID].layoutName = layoutName
             lm:SaveLayouts()
 
-            local currentSpec = GetSpecialization()
+            local currentSpec = C_SpecializationInfo.GetSpecialization()
             if currentSpec == specIndex then
                 if lm.SetActiveLayoutByID then
                     lm:SetActiveLayoutByID(importedID)
