@@ -24,6 +24,9 @@ Core.lua
 
 Setup.lua
 
+# Profile Data - EllesmereUI
+Data\AddOns\EllesmereUI.lua
+
 # Profile Data - Companions
 Data\AddOns\Plater.lua
 Data\AddOns\BigWigs.lua
@@ -38,4 +41,3 @@ Data\Classes\BlizzardCDM.lua
 # Added in later phases as their files are created:
 #   UI\Wizard.lua                (Task 3.1)
 #   Installer.lua                (Task 3.2)
-#   Data\AddOns\EllesmereUI.lua  (Task 2.4)
