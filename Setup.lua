@@ -131,17 +131,16 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
     return true
 end
 
--- Forced settings that don't travel in an export. Poke the profile blob (NOT the
--- vestigial *DB globals) and let RefreshAllAddons apply it. Gated so it no-ops
--- until the exact fields are confirmed in-game (Task 4.1) and against the fixture.
+-- Account-global overrides that do NOT travel in a profile export. Per-module
+-- media ("sm:<name>") and settings DO ride inside the !EUI_ payload (verified
+-- against EllesmereUI_Profiles.lua), so they need no poking here. ppUIScale is
+-- the one relevant global: EllesmereUIDB.ppUIScale (verified EllesmereUI.lua
+-- 1817/1836, account-global). Set ns.EUI_UISCALE only if KitnUI wants a specific
+-- scale; otherwise this no-ops.
 function ns.ApplyEUIOverrides(profileName)
     if not (EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[profileName]) then return end
 
-    -- UIScale is account-global, not per-profile.
     if ns.EUI_UISCALE then EllesmereUIDB.ppUIScale = ns.EUI_UISCALE end
-
-    -- Media keys ("sm:<name>") and other per-module overrides are set here once
-    -- their exact field paths are confirmed in-game (Task 4.1).
 end
 
 ------------------------------------------------------------
@@ -495,20 +494,32 @@ end
 
 ------------------------------------------------------------
 -- Finish installation
--- Ownership: the standalone tools win, so disable the overlapping EUI modules.
--- ns.DisableEUIModule is confirmed in-game (Task 4.1); guarded so it no-ops
--- against the fixture.
+-- Ownership: the standalone tools win, so disable the overlapping EllesmereUI
+-- modules. Each EUI "module" is a SEPARATE addon folder; EUI's own toggle uses
+-- C_AddOns.DisableAddOn + ReloadUI (verified EllesmereUI.lua:6682). Module on/off
+-- is Blizzard's per-character addon state -- not a SavedVariable and not carried
+-- in the !EUI_ export -- so it can only be set post-import, and takes effect on
+-- the ReloadUI below.
 ------------------------------------------------------------
+
+-- Disable one EllesmereUI module addon by folder name. Idempotent and safe:
+-- no-ops if C_AddOns is unavailable or the module isn't installed.
+function ns.DisableEUIModule(folder)
+    if not (C_AddOns and C_AddOns.DisableAddOn) then return end
+    if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist(folder) then return end
+    C_AddOns.DisableAddOn(folder)
+end
 
 function ns.FinishInstallation()
     ns.db.installedVersion = ns.version
     ns:SetCharLoaded()
 
-    if ns.DisableEUIModule then
-        if IsAddOnLoaded("Plater") then ns.DisableEUIModule("EllesmereUINameplates") end
-        if IsAddOnLoaded("BuffReminders") then ns.DisableEUIModule("EllesmereUIAuraBuffReminders") end
-        ns.DisableEUIModule("EllesmereUICooldownManager")
-    end
+    -- Disable EUI's built-ins that the standalone tools replace. Nameplates and
+    -- AuraBuffReminders only when their replacement addon is present; the
+    -- CooldownManager always (BlizzardCDM is the intended cooldown UI).
+    if IsAddOnLoaded("Plater") then ns.DisableEUIModule("EllesmereUINameplates") end
+    if IsAddOnLoaded("BuffReminders") then ns.DisableEUIModule("EllesmereUIAuraBuffReminders") end
+    ns.DisableEUIModule("EllesmereUICooldownManager")
 
     -- Hide companion minimap icons (ported from Legacy/Core.lua FinishInstallation)
     local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
