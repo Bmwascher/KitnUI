@@ -26,6 +26,8 @@ Setup.lua
 
 UI\Wizard.lua
 
+Installer.lua
+
 # Profile Data - EllesmereUI
 Data\AddOns\EllesmereUI.lua
 
@@ -39,6 +41,3 @@ Data\AddOns\BuffReminders.lua
 
 # Profile Data - Classes
 Data\Classes\BlizzardCDM.lua
-
-# Added in later phases as their files are created:
-#   Installer.lua                (Task 3.2)
