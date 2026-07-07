@@ -1,4 +1,9 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  BigWigs.lua                                                 ║
+-- ║  Purpose: Profile data: BigWigs profile export string.       ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
 -- BigWigs (export table from BigWigs profile)

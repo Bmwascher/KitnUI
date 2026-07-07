@@ -1,10 +1,17 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  Setup.lua                                                   ║
+-- ║  Purpose: Per-addon profile setup + import dispatch. Writes  ║
+-- ║           each addon's SavedVariables and activates the      ║
+-- ║           matching profile per spec.                         ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Setup dispatcher
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local setupFunctions = {}
 
@@ -50,12 +57,12 @@ local function HasData(addonKey)
     return true
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- EllesmereUI (core import + per-spec healer/DPS swap)
 -- Public API used (all guarded): EllesmereUI.ImportProfile(str, name) ->
 -- ok, err[, "spec_locked"] (auto-activates); EllesmereUI.SetProfile(name);
 -- EllesmereUI.AssignProfileToSpec(name, specID); EllesmereUI.RefreshAllAddons().
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- Maps each spec index to its KitnUI EUI profile name. Healer specs get the
 -- Healer variant; pure-DPS classes return nil (all specs use the base profile).
@@ -150,9 +157,9 @@ function ns.ApplyEUIOverrides(profileName)
     if ns.EUI_UISCALE then EllesmereUIDB.ppUIScale = ns.EUI_UISCALE end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Plater Nameplates
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 setupFunctions["Plater"] = function(addonKey, import)
     if import then
@@ -191,9 +198,9 @@ setupFunctions["Plater"] = function(addonKey, import)
     Plater.db:SetProfile(ns.profileName)
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- BigWigs
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 setupFunctions["BigWigs"] = function(addonKey, import)
     if import then
@@ -215,12 +222,12 @@ setupFunctions["BigWigs"] = function(addonKey, import)
     db:SetProfile(ns.profileName)
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Northern Sky Raid Tools
 -- Decodes NSRT's export string (AceSerializer-3.0 + LibDeflate) and writes each
 -- module's data directly into the account-wide NSRT global. NSRT has no profile
 -- system, so there is nothing to activate on load.
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function DecodeNSRTString(exportString)
     local LibDeflate = LibStub and LibStub("LibDeflate", true)
@@ -273,9 +280,9 @@ setupFunctions["NSRT"] = function(addonKey, import)
     -- Load is a no-op: NSRT is account-wide with no per-character profile.
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Blizzard Edit Mode
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     if import then
@@ -320,9 +327,9 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- KitnEssentials
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 setupFunctions["KitnEssentials"] = function(addonKey, import)
     if import then
@@ -371,9 +378,9 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- BuffReminders
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 setupFunctions["BuffReminders"] = function(addonKey, import)
     if import then
@@ -409,9 +416,9 @@ setupFunctions["BuffReminders"] = function(addonKey, import)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Blizzard Cooldown Manager (per-spec)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
     if import then
@@ -499,7 +506,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Finish installation
 -- Ownership: the standalone tools win, so disable the overlapping EllesmereUI
 -- modules. Each EUI "module" is a SEPARATE addon folder; EUI's own toggle uses
@@ -507,7 +514,7 @@ end
 -- is Blizzard's per-character addon state -- not a SavedVariable and not carried
 -- in the !EUI_ export -- so it can only be set post-import, and takes effect on
 -- the ReloadUI below.
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- Disable one EllesmereUI module addon by folder name. Idempotent and safe:
 -- no-ops if C_AddOns is unavailable or the module isn't installed.

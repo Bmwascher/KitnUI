@@ -1,4 +1,10 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  NSRT.lua                                                    ║
+-- ║  Purpose: Profile data: Northern Sky Raid Tools export       ║
+-- ║           string.                                            ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
 -- Northern Sky Raid Tools export string (from NSRT's UI: Export String).

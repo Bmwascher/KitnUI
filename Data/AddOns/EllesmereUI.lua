@@ -1,4 +1,10 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  EllesmereUI.lua                                             ║
+-- ║  Purpose: Profile data: EllesmereUI import strings (Dark /   ║
+-- ║           Class Color, plus Healer variants).                ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 
 -- EllesmereUI profile data (v3 !EUI_ export strings).
 --

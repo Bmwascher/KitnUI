@@ -1,4 +1,11 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  Installer.lua                                               ║
+-- ║  Purpose: Installer wizard pages + flow. Builds the page and ║
+-- ║           step list per mode (install/load/update/cdm) and   ║
+-- ║           drives the imports.                                ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 
@@ -24,9 +31,9 @@ end
 -- Inline green ready-check texture (the Expressway font has no check glyph).
 local CHECK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t"
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Install chime + toast notification
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function PlayInstallSound()
     PlaySound(SOUNDKIT.UI_QUEST_ROLLING_FORWARD_01, "Master")
@@ -65,9 +72,9 @@ local function SuccessToast(name, action)
     ShowInstallToast("|cffFF008C" .. name .. "|r " .. action)
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Per-addon overwrite confirmation (EllesmereUI's styled popup)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- Profiles that existed BEFORE this session opened; only these trigger overwrite
 -- warnings, so imports made during the current session don't re-prompt.
@@ -96,9 +103,9 @@ local function ConfirmImport(addonKey, displayName, callback)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Status helpers
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function GetImportStatus(addonKey)
     if ns.db and ns.db.profiles and ns.db.profiles[addonKey] then
@@ -166,9 +173,9 @@ local function BuildCDMStatusText(classId, numSpecs)
     return table.concat(parts, " | ")
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Addon step list (order = installer page order)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local addonSteps = {
     { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Healer specs auto-swap to the Healer variant." },
@@ -186,9 +193,9 @@ local function stepDesc(addonKey)
     return ""
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Install-mode pages
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function WelcomePage()
     local f = WF()
@@ -288,9 +295,9 @@ local function EditModePage()
     SetVariant(WF().Option1, "primary")
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Blizzard CDM page (per-spec option buttons + persistent "Import All Specs")
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local cdmAllButton
 local function BlizzardCDMPage()
@@ -516,9 +523,9 @@ local function FinishPage()
     ns.Wizard:CenterOption1()
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Load-mode pages (activate existing profiles, no reimport)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function WelcomeLoadPage()
     local f = WF()
@@ -602,9 +609,9 @@ local function FinishLoadPage()
     ns.Wizard:CenterOption1()
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Update-mode pages
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function WelcomeUpdatePage()
     local f = WF()
@@ -625,9 +632,9 @@ local function FinishUpdatePage()
     ns.Wizard:CenterOption1()
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- CDM-only mode intro
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function WelcomeCDMPage()
     local f = WF()
@@ -638,9 +645,9 @@ local function WelcomeCDMPage()
     f.Desc2:SetText("To import another class later, run " .. ns.Color("/kitn cdm") .. " on that character.")
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Build installer data for ns.Wizard:Queue()
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     local pages, stepTitles, stepKeys = {}, {}, {}
@@ -723,9 +730,9 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     }
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Open the installer (called from Core boot + /kitn slash commands)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     if InCombatLockdown() then

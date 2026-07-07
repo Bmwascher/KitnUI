@@ -1,13 +1,20 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  Wizard.lua                                                  ║
+-- ║  Purpose: Installer wizard shell: the EllesmereUI-skinned    ║
+-- ║           frame, sidebar step rail, progress bar, buttons,   ║
+-- ║           and the paging engine.                             ║
+-- ╚══════════════════════════════════════════════════════════════╝
 
-------------------------------------------------------------
+local _, ns = ... ---@type string, KitnUINS
+
+---------------------------------------------------------------------------------
 -- KitnUI installer wizard, skinned with EllesmereUI's public (ungated) builders:
 --   EllesmereUI.SolidTex / MakeBorder / MakeFont / MakeStyledButton /
 --   GetAccentColor / PanelPP.
 -- Exposes a v1-PluginInstaller-compatible surface so Installer.lua page
 -- functions render onto ns.Wizard.frame (SubTitle/Desc1..3/Option1..4) and
 -- drive paging via Queue/SetPage/SetOption.
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 ns.Wizard = ns.Wizard or {}
 local W = ns.Wizard
@@ -84,9 +91,9 @@ local function skin(frame)
     return base
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Build the root frame once (idempotent).
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function W:Build()
     if W.frame then return W.frame end
@@ -250,9 +257,9 @@ function W:Build()
     return f
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Per-page option helpers used by Installer.lua page functions.
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function W:HideOptions()
     if not W.frame then return end
@@ -397,9 +404,9 @@ function W:SetButtonVariant(btn, variant)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Left step rail (accent highlights the active step).
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function updateRail()
     local f = W.frame
@@ -485,9 +492,9 @@ local function updateRail()
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Paging engine (Queue mirrors the v1 PluginInstaller data shape).
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function W:Queue(data)
     W:Build()

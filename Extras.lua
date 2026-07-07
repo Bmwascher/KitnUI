@@ -1,9 +1,16 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  Extras.lua                                                  ║
+-- ║  Purpose: Extras actions: optional QoL one-offs (clean       ║
+-- ║           icons, chat setup, optimize) used by the Extras    ║
+-- ║           page. All idempotent and defensively guarded.      ║
+-- ╚══════════════════════════════════════════════════════════════╝
 
-------------------------------------------------------------
+local _, ns = ... ---@type string, KitnUINS
+
+---------------------------------------------------------------------------------
 -- Extras: optional, repeatable QoL actions used by the Extras
 -- installer page. All idempotent and defensively guarded.
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- Hide the minimap buttons of companion addons (extracted from FinishInstallation
 -- so the Extras "Clean Icons" button and Finish share one implementation).

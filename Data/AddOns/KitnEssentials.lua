@@ -1,4 +1,10 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  KitnEssentials.lua                                          ║
+-- ║  Purpose: Profile data: KitnEssentials profile export        ║
+-- ║           string.                                            ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
 -- KitnEssentials

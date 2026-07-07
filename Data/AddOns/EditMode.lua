@@ -1,4 +1,9 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  EditMode.lua                                                ║
+-- ║  Purpose: Profile data: Blizzard Edit Mode layout string.    ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
 -- Blizzard Edit Mode (layout string from C_EditMode.ConvertLayoutInfoToString)

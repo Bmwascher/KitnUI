@@ -1,10 +1,17 @@
-local addonName, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  Core.lua                                                    ║
+-- ║  Purpose: Addon bootstrap: SavedVariables + defaults, media/ ║
+-- ║           LSM registration, colour helpers, /kitn slash      ║
+-- ║           commands, and the login boot flow.                 ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local addonName, ns = ... ---@type string, KitnUINS
 
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Media paths + LibSharedMedia registration
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local FONT_PATH = "Interface\\AddOns\\KitnUI\\Media\\Fonts\\Expressway.TTF"
 local BAR_TEXTURE_PATH = "Interface\\AddOns\\KitnUI\\Media\\Statusbars\\KitnUI_Bar"
@@ -16,9 +23,9 @@ if LSM then
     LSM:Register("statusbar", "KitnUI", BAR_TEXTURE_PATH)
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Shared namespace references
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 ns.title = "|cffFF008CKitn|r|cffffffffUI|r"
 -- TEST: all addon profiles (EllesmereUI + companions) import under this name so
@@ -34,9 +41,9 @@ function ns.EUIReady()
     return _G.EllesmereUI and EllesmereUI.ImportProfile and true or false
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Per-addon version tracking (X-headers in TOC)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local addonVersionHeaders = {
     EllesmereUI       = "X-EllesmereUI-Version",
@@ -90,9 +97,9 @@ function ns.GetOutdatedAddons()
     return outdated
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Saved variable defaults
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local defaults = {
     profiles = {},          -- [addonKey] = true when imported
@@ -107,9 +114,9 @@ local function GetCharKey()
     return UnitName("player") .. "-" .. GetRealmName()
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Color helpers (also used by Setup.lua / Installer.lua via ns)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function ns.Color(text)
     return string.format("|cffFF008C%s|r", text)
@@ -141,9 +148,9 @@ function ns.ClassColor(text)
     return string.format("|cff%s%s|r", string.sub(hex, 3), text)
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Utility + per-character load state
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 function ns:IsAddOnAvailable(addon)
     if not C_AddOns.DoesAddOnExist(addon) then return false end
@@ -161,9 +168,9 @@ function ns:SetCharLoaded()
     self.db.perChar[key].loaded = true
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Confirmation popup for /kitn install when already installed
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function ConfirmOverwriteInstall(fn)
     if ns.db and ns.db.perChar[GetCharKey()] then
@@ -182,9 +189,9 @@ local function ConfirmOverwriteInstall(fn)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- Slash commands (ns.OpenInstaller is assigned by Installer.lua)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 KitnCommands = KitnCommands or {}
 
@@ -293,9 +300,9 @@ SlashCmdList["KITN"] = function(msg)
     end
 end
 
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- SavedVariables init + boot (PLAYER_LOGIN)
-------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 local function InitDB()
     if not KitnUIDB then KitnUIDB = CopyTable(defaults) end

@@ -1,4 +1,10 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  BuffReminders.lua                                           ║
+-- ║  Purpose: Profile data: BuffReminders profile export         ║
+-- ║           string.                                            ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
 -- BuffReminders (export string from BuffReminders > Export)

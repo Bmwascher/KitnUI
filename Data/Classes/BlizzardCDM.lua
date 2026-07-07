@@ -1,4 +1,10 @@
-local _, ns = ...
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  BlizzardCDM.lua                                             ║
+-- ║  Purpose: Profile data: per-class Blizzard CDM layout        ║
+-- ║           strings, keyed by class ID.                        ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
 -- Blizzard Cooldown Manager (per-class, per-spec layout strings)
