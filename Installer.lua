@@ -5,6 +5,12 @@ local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 -- Shorthand for the wizard's shared frame (SubTitle / Desc1..3 / Option1..4).
 local function WF() return ns.Wizard.frame end
 
+-- Apply a button emphasis variant if the shell supports it (added in the visual
+-- pass); a safe no-op until W:SetButtonVariant exists.
+local function SetVariant(btn, variant)
+    if btn and ns.Wizard.SetButtonVariant then ns.Wizard:SetButtonVariant(btn, variant) end
+end
+
 ------------------------------------------------------------
 -- Install chime + toast notification
 ------------------------------------------------------------
@@ -323,6 +329,47 @@ local function BlizzardCDMPage()
     end
 end
 
+local function ExtrasPage()
+    local f = WF()
+    f.SubTitle:SetText("Extras")
+    f.Desc1:SetText("Optional cleanup and quality-of-life tweaks. None are required; they just complete the KitnUI look and feel. Run any of them as many times as you like.")
+    f.Desc2:SetText("")
+    f.Desc3:SetText("")
+
+    local slot = 1
+    -- Chat Setup: full chat reconfigure (position, font, timestamps, named tabs).
+    ns.Wizard:SetOption(slot, "Chat Setup", function()
+        if ns.RunChatSetup() then
+            SuccessToast("Chat", "configured!")
+            PlayInstallSound()
+        end
+    end)
+    SetVariant(WF()["Option" .. slot], "selectable")
+    slot = slot + 1
+
+    -- Optimize Settings: hook KitnEssentials' OptimizeAll (only when it's present).
+    if IsAddOnLoaded("KitnEssentials") then
+        ns.Wizard:SetOption(slot, "Optimize Settings", function()
+            if ns.RunOptimize() then
+                SuccessToast("Settings", "optimized!")
+                PlayInstallSound()
+            else
+                ShowInstallToast("KitnEssentials not available", 1, 0.8, 0.2)
+            end
+        end)
+        SetVariant(WF()["Option" .. slot], "selectable")
+        slot = slot + 1
+    end
+
+    -- Clean Icons: hide companion minimap buttons.
+    ns.Wizard:SetOption(slot, "Clean Icons", function()
+        ns.CleanMinimapIcons()
+        SuccessToast("Minimap icons", "cleaned!")
+        PlayInstallSound()
+    end)
+    SetVariant(WF()["Option" .. slot], "selectable")
+end
+
 local function FinishPage()
     local f = WF()
     f.SubTitle:SetText("Installation Complete")
@@ -488,6 +535,12 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
                 tinsert(stepTitles, step.display)
             end
         end
+    end
+
+    -- Extras (install mode only)
+    if not profileLoadMode and not updateKeys then
+        tinsert(pages, ExtrasPage)
+        tinsert(stepTitles, "Extras")
     end
 
     -- Finish (always last)
