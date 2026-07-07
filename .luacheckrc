@@ -1,0 +1,128 @@
+-- Luacheck configuration for KitnUI (ElvUI profile installer)
+std = "lua51"
+max_line_length = false
+self = false  -- suppress W212 for unused self in colon-call methods
+ignore = {"21./_.*"}  -- suppress unused warnings for _prefixed variables
+exclude_files = {
+    "Libs/**",
+    ".wow-api-reference/**",
+    "References/**",
+    "Legacy/**",  -- dormant v1 ElvUI installer; kept for reference, not linted
+    "dev/Annotations/**",  -- ---@meta LS type stubs, not real code
+}
+
+-- Globals this addon sets
+globals = {
+    "KitnUIElvDB",  -- legacy v1 SavedVariable (left intact for rollback)
+    "KitnUIDB",     -- v2 SavedVariable
+
+    -- Cross-addon shared globals (other Kitn addons register into these)
+    "KitnCommands",
+
+    -- Slash command registration (required by WoW)
+    "SLASH_KITN1", "SLASH_KITN2", "SLASH_KITN3",
+
+    -- Addon SavedVariables we write to during profile import
+    "EllesmereUIDB",
+    "ElvDB", "ElvPrivateDB",
+    "PlaterDB",
+    "KitnEssentialsDB",
+    "BAGANATOR_CONFIG", "BAGANATOR_CURRENT_PROFILE",
+
+    -- Third-party globals we mutate during profile import
+    "NSRT",
+    "VMRT",
+    "Ayije_CDMDB",
+    "WarpDepleteDB",
+    "StaticPopupDialogs",
+    "BW_FEAT_SHARE",
+
+    -- Third-party globals we write fields on (minimap hide, popup suppress, etc.)
+    "SlashCmdList",
+    "Details",
+    "BigWigsIconDB",
+    "PlaterDBChr",
+    "_detalhes_global",
+}
+
+-- WoW API globals this addon reads
+read_globals = {
+    -- Core Lua extensions in WoW
+    "strsplit", "strjoin", "strtrim", "strlower", "format",
+    "tinsert", "tremove", "wipe", "CopyTable", "tContains",
+    "select", "math",
+
+    -- Frame and UI
+    "CreateFrame", "UIParent", "Settings", "CreateColor",
+    "PluginInstallFrame", "UISpecialFrames",
+    "UIFrameFadeIn", "UIFrameFadeOut",
+    "hooksecurefunc",
+
+    -- Static popups
+    "StaticPopup_Show", "StaticPopup_Hide",
+
+    -- Chat frame (used for programmatic slash commands + Extras chat setup)
+    "DEFAULT_CHAT_FRAME", "ChatEdit_SendText",
+    "FCF_SavePositionAndDimensions", "FCF_SetWindowName",
+
+    -- Sound
+    "PlaySound", "SOUNDKIT",
+
+    -- Unit functions
+    "UnitName", "UnitClass",
+    "GetClassColor",
+    "GetRealmName",
+
+    -- Spec functions
+    "C_SpecializationInfo",
+    "GetSpecialization", "GetSpecializationInfo",
+    "GetSpecializationInfoForClassID", "GetNumSpecializationsForClassID",
+
+    -- Combat lockdown
+    "InCombatLockdown",
+
+    -- Keyboard modifiers (Extras clean-icons copy popup)
+    "IsControlKeyDown",
+
+    -- CVar
+    "SetCVar", "C_CVar",
+
+    -- Addon management
+    "C_AddOns",
+    "IsAddOnLoaded",
+
+    -- Edit Mode
+    "C_EditMode", "Enum",
+
+    -- Cooldown Manager
+    "CooldownViewerSettings",
+
+    -- Timer
+    "C_Timer",
+
+    -- Encoding (JSON serialize/deserialize, 12.0)
+    "C_EncodingUtil",
+
+    -- Libraries
+    "LibStub",
+
+    -- EllesmereUI (required dependency); ElvUI kept for the excluded Legacy tree
+    "EllesmereUI",
+    "ElvUI",
+
+    -- Optional addon globals (read-only access for detection)
+    "Plater",
+    "BigWigsLoader",
+    "BigWigsAPI", "BigWigs3DB",
+    "WarpDeplete",
+    "MRT", "MRT_DB",
+    "Ayije_CDM",
+
+    -- Cross-addon globals (read from other Kitn addons)
+    "KitnHelpLines",
+    "KitnEssentials", "KitnEssentialsAPI",
+    "BuffReminders",
+
+    -- Misc
+    "ReloadUI", "print",
+}

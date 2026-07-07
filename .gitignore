@@ -9,8 +9,8 @@
 CLAUDE.md
 AGENTS.md
 
-# Machine-local tooling: lint / LS config, editor settings, Blizzard UI symlink
-.luacheckrc
+# Editor settings & language-server config (machine-local). .luacheckrc is
+# tracked (shared lint config, like KitnEssentials); .wowluarc.json is not.
 .wowluarc.json
 .vscode/
 .idea/
