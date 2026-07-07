@@ -3,7 +3,6 @@ package-as: KitnUI
 changelog-title: KitnUI
 
 ignore:
-  - "*.png"
   - .pkgmeta
   - .claude
   - .github

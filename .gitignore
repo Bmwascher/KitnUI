@@ -1,6 +1,6 @@
 # KitnUI — local-only files. Everything else is tracked; the shipped player zip
-# is shaped by .pkgmeta (which strips README/CHANGELOG/.github/etc.), not this
-# file. Keep agent config, machine-local tooling, and art masters out of git.
+# is shaped by .pkgmeta (which strips dev/, Legacy/, README/CHANGELOG/.github/…),
+# not this file. Non-shipped masters + planning docs live under dev/docs/.
 
 # Claude Code / Codex workspace (config, skills, project instructions)
 .claude/
@@ -19,13 +19,9 @@ AGENTS.md
 References/
 REFERENCES.md
 
-# CurseForge readme (maintained + published separately from the GitHub README)
-README_CF.md
-
-# Art masters — the shipped art is .tga; keep .png/.psd/.xcf sources local
-*.png
-*.psd
-*.xcf
+# Local-only dev docs: CurseForge readme, art masters, planning + Superpowers
+# artifacts. Tracked dev tooling (dev/Annotations/, dev/README.md) stays in git.
+dev/docs/
 
 # OS / editor cruft
 .DS_Store
