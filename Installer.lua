@@ -86,11 +86,11 @@ local function GetImportStatus(addonKey)
         local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
         local current = ns.GetAddonDataVersion(addonKey)
         if installed and current and installed ~= current then
-            return ns.Red("Outdated") .. " (v" .. installed .. " -> v" .. current .. ")"
+            return ns.Red("Out of date") .. " (v" .. installed .. " -> v" .. current .. ")"
         end
-        return ns.Green("Imported")
+        return ns.Green("\226\156\147 Imported")
     else
-        return ns.Red("Not Imported")
+        return ns.Amber("Not Imported")
     end
 end
 
@@ -136,15 +136,20 @@ end
 ------------------------------------------------------------
 
 local addonSteps = {
-    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",           alwaysAvailable = true },
-    { key = "Plater",            display = "Plater Nameplates",       checkAddon = "Plater",                alwaysAvailable = false },
-    { key = "BuffReminders",     display = "BuffReminders",           checkAddon = "BuffReminders",         alwaysAvailable = false },
-    { key = "BigWigs",           display = "BigWigs",                 checkAddon = "BigWigs",               alwaysAvailable = false },
-    { key = "NSRT",              display = "Northern Sky Raid Tools", checkAddon = "NorthernSkyRaidTools",  alwaysAvailable = false },
-    { key = "KitnEssentials",    display = "KitnEssentials",          checkAddon = "KitnEssentials",        alwaysAvailable = false },
-    { key = "Blizzard_EditMode", display = "Edit Mode",               checkAddon = "Blizzard_EditMode",     alwaysAvailable = true },
-    { key = "BlizzardCDM",       display = "Blizzard CDM",            checkAddon = nil,                     alwaysAvailable = true },
+    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Healer specs auto-swap to the Healer variant." },
+    { key = "Plater",            display = "Plater Nameplates",       checkAddon = "Plater",               alwaysAvailable = false, desc = "Curated Plater nameplates tuned to match the KitnUI look." },
+    { key = "BuffReminders",     display = "BuffReminders",           checkAddon = "BuffReminders",        alwaysAvailable = false, desc = "Flags missing raid buffs, food, and flasks right on your HUD so you never pull under-prepped." },
+    { key = "BigWigs",           display = "BigWigs",                 checkAddon = "BigWigs",              alwaysAvailable = false, desc = "Boss timers and warnings, positioned and styled for KitnUI." },
+    { key = "NSRT",              display = "Northern Sky Raid Tools", checkAddon = "NorthernSkyRaidTools", alwaysAvailable = false, desc = "Northern Sky raid tooling: assignments, timers, and note sync." },
+    { key = "KitnEssentials",    display = "KitnEssentials",          checkAddon = "KitnEssentials",       alwaysAvailable = false, desc = "Kitn's own quality-of-life addon: cooldowns, dungeon tools, and cleanups." },
+    { key = "Blizzard_EditMode", display = "Edit Mode",               checkAddon = "Blizzard_EditMode",    alwaysAvailable = true,  desc = "The KitnUI HUD layout (frame positions) for Blizzard Edit Mode." },
+    { key = "BlizzardCDM",       display = "Blizzard CDM",            checkAddon = nil,                    alwaysAvailable = true,  desc = "Per-spec Cooldown Manager layouts for your class." },
 }
+
+local function stepDesc(addonKey)
+    for _, s in ipairs(addonSteps) do if s.key == addonKey then return s.desc end end
+    return ""
+end
 
 ------------------------------------------------------------
 -- Install-mode pages
@@ -165,7 +170,7 @@ end
 local function EllesmereUIPage()
     local f = WF()
     f.SubTitle:SetText("EllesmereUI Profile")
-    f.Desc1:SetText("Select the EllesmereUI look. Healer specs auto-swap to the Healer variant.\nThis configures your unit frames, action bars, nameplates, and more.")
+    f.Desc1:SetText(stepDesc("EllesmereUI"))
     ShowStatusAndVersion("EllesmereUI")
     ns.Wizard:SetOption(1, "Normal", function()
         ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
@@ -189,7 +194,7 @@ local function SimpleInstallPage(addonKey, displayName)
     return function()
         local f = WF()
         f.SubTitle:SetText(displayName)
-        f.Desc1:SetText("Click below to import the " .. ns.Color(displayName) .. " profile.")
+        f.Desc1:SetText(stepDesc(addonKey))
         ShowStatusAndVersion(addonKey)
         ns.Wizard:SetOption(1, "Install", function()
             ConfirmImport(addonKey, displayName, function()
@@ -205,8 +210,8 @@ end
 local function EditModePage()
     local f = WF()
     f.SubTitle:SetText("Blizzard Edit Mode")
-    f.Desc1:SetText("Import the " .. ns.Color("KitnUI") .. " Edit Mode layout for your HUD positioning.\n" ..
-        ns.Red("After importing, set the layout on your other specializations too."))
+    f.Desc1:SetText(stepDesc("Blizzard_EditMode") .. "\n" ..
+        ns.Amber("After importing, set the layout on your other specs too."))
     ShowStatusAndVersion("Blizzard_EditMode")
     ns.Wizard:SetOption(1, "Install", function()
         ConfirmImport("Blizzard_EditMode", "Edit Mode", function()
@@ -250,7 +255,7 @@ local function BlizzardCDMPage()
         return
     end
 
-    f.Desc1:SetText("Import cooldown layouts for each spec.")
+    f.Desc1:SetText(stepDesc("BlizzardCDM"))
     f.Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
     f.Desc3:SetText(GetVersionLine("BlizzardCDM"))
 

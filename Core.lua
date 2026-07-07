@@ -21,7 +21,10 @@ end
 ------------------------------------------------------------
 
 ns.title = "|cffFF008CKitn|r|cffffffffUI|r"
-ns.profileName = "KitnUI"
+-- TEST: all addon profiles (EllesmereUI + companions) import under this name so
+-- testing doesn't overwrite your real "KitnUI" profiles. Revert to "KitnUI"
+-- before shipping.
+ns.profileName = "KitnUI - EUI Test"
 ns.version = C_AddOns.GetAddOnMetadata(addonName, "Version")
 ns.data = ns.data or {}
 ns.db = nil
@@ -112,11 +115,15 @@ function ns.Color(text)
 end
 
 function ns.Green(text)
-    return string.format("|cff00ff00%s|r", text)
+    return string.format("|cff6DBF9C%s|r", text)
 end
 
 function ns.Red(text)
-    return string.format("|cffff0000%s|r", text)
+    return string.format("|cffFF5555%s|r", text)
+end
+
+function ns.Amber(text)
+    return string.format("|cffE6B24C%s|r", text)
 end
 
 function ns.ClassColor(text)
