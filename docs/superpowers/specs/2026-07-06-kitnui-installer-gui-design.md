@@ -31,6 +31,9 @@ progress, branding, and status affordances a professional installer has.
 - Primary-action handoff (Install → Next) and post-install feedback.
 - Nav: `Back` / `Next` only (Skip removed).
 - **Load All** button on the load-mode welcome page.
+- **Extras page** (new): optional, repeatable QoL actions — Chat Setup (full
+  chat reconfigure), Optimize Settings (hooks KitnEssentials), Clean Icons
+  (minimap cleanup) — after the addon steps, before Finish.
 - Layer the background so real art can drop in later without a rework (§7).
 
 **Out of scope (deliberately deferred)**
@@ -205,12 +208,34 @@ on installed addons, so N is dynamic).
 
 ### Modes (unchanged flow, restyled shell)
 `ns:GetInstallerData` still assembles pages for four modes:
-- **Install** — Welcome → addon steps → Finish. Skip removed.
+- **Install** — Welcome → addon steps → **Extras** → Finish. Skip removed.
 - **Load** — activate already-imported profiles. **Load All** button on the
   load-mode welcome page (one click activates every imported profile, then
   Finish); step-by-step still available.
 - **Update** — reimport outdated profiles (out-of-date shows **red**).
 - **CDM-only** — intro → CDM page → Finish.
+
+### Extras page (new)
+
+An optional QoL page inserted before **Finish** in the install flow — a menu of
+repeatable actions, none required. Modeled on AtrocityUI's Extras page.
+- **Title / description:** "Extras" — "Optional cleanup and quality-of-life
+  tweaks. None are required; they just complete the KitnUI look and feel. Run any
+  of them as many times as you like."
+- **Buttons** — content-area, **selectable** style, repeatable; each toasts on
+  success; `Next` stays available to continue. Each is idempotent:
+  1. **Chat Setup** — `ns.RunChatSetup()`: full chat reconfigure — rename/ensure
+     tabs (General + a Combat Log tab), reposition + size the main chat frame to
+     KitnUI's standard, set chat font + size, enable timestamps + class colors.
+     Net-new KitnUI code (KitnEssentials has no chat feature to hook).
+  2. **Optimize Settings** — `ns.RunOptimize()`: calls
+     `KitnEssentials:GetModule("Optimize", true):OptimizeAll()` (KE applies
+     FPS/CVar tweaks, persists to `KitnEssentialsOptimizeDB`, and owns its own
+     reload prompt). **Hidden when KitnEssentials isn't installed.**
+  3. **Clean Icons** — `ns.CleanMinimapIcons()`: hide BigWigs / Plater / NSRT
+     minimap buttons. Extract the existing logic out of `ns.FinishInstallation`
+     into this reusable function; Finish calls it too. Repeatable.
+- The page adapts to available buttons (Optimize is dropped without KE).
 
 ## 7. Layered background (future art drop-in)
 
@@ -250,6 +275,10 @@ Keep the existing shell-vs-pages split — it works and is well-bounded.
   - Status helpers emit the new **color semantics** (green/amber/red) and drive
     the **primary handoff** (flip primary to Next + button→Re-import on success).
   - **Load All** on `WelcomeLoadPage`.
+  - Add the **Extras page** (`ExtrasPage`) + `ns.RunChatSetup()` (new),
+    `ns.RunOptimize()` (KE `OptimizeAll` hook, guarded on KE present), and
+    `ns.CleanMinimapIcons()` (extracted from `FinishInstallation`, shared by both
+    Finish and the Clean Icons button).
   - Existing `Queue`/`SetPage`/`Option`/status plumbing stays.
 
 Builders reused from EllesmereUI (all ungated, on the global table): `SolidTex`,
