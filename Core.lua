@@ -114,8 +114,10 @@ function ns.Color(text)
     return string.format("|cffFF008C%s|r", text)
 end
 
+-- Matches the green of the ReadyCheck-Ready checkmark texture used in the wizard,
+-- so "available" / "Imported" text reads as the same green as the checks.
 function ns.Green(text)
-    return string.format("|cff6DBF9C%s|r", text)
+    return string.format("|cff4CC94C%s|r", text)
 end
 
 function ns.Red(text)
@@ -124,6 +126,12 @@ end
 
 function ns.Amber(text)
     return string.format("|cffE6B24C%s|r", text)
+end
+
+-- Soft cyan used for version numbers so they read as distinct from the pink brand
+-- accent and the green/amber/red status colors.
+function ns.Ver(text)
+    return string.format("|cff7FD6E0%s|r", text)
 end
 
 function ns.ClassColor(text)

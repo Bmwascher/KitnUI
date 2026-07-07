@@ -11,6 +11,19 @@ local function SetVariant(btn, variant)
     if btn and ns.Wizard.SetButtonVariant then ns.Wizard:SetButtonVariant(btn, variant) end
 end
 
+-- After a successful page action, hand primary emphasis from the action button to
+-- Next and mark the action button "done".
+local function HandoffToNext(actionBtn, doneText)
+    if actionBtn then
+        if doneText and actionBtn._lbl then actionBtn._lbl:SetText(doneText) end
+        SetVariant(actionBtn, "done")
+    end
+    SetVariant(WF().Next, "primary")
+end
+
+-- Inline green ready-check texture (the Expressway font has no check glyph).
+local CHECK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t"
+
 ------------------------------------------------------------
 -- Install chime + toast notification
 ------------------------------------------------------------
@@ -92,9 +105,9 @@ local function GetImportStatus(addonKey)
         local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
         local current = ns.GetAddonDataVersion(addonKey)
         if installed and current and installed ~= current then
-            return ns.Red("Out of date") .. " (v" .. installed .. " -> v" .. current .. ")"
+            return ns.Red("Out of date") .. " (" .. installed .. " -> " .. current .. ")"
         end
-        return ns.Green("\226\156\147 Imported")
+        return CHECK .. " " .. ns.Green("Imported")
     else
         return ns.Amber("Not Imported")
     end
@@ -102,7 +115,13 @@ end
 
 local function GetVersionLine(addonKey)
     local current = ns.GetAddonDataVersion(addonKey)
-    return current and ("Version: " .. ns.Color(current)) or ""
+    return current and ("Version: " .. ns.Ver(current)) or ""
+end
+
+-- Real profile lookup: the sidebar shows a completed check only for addons that
+-- are actually imported, not merely stepped past.
+function ns.IsAddonImported(addonKey)
+    return (ns.db and ns.db.profiles and ns.db.profiles[addonKey]) ~= nil
 end
 
 local function ShowStatusAndVersion(addonKey)
@@ -164,13 +183,11 @@ end
 local function WelcomePage()
     local f = WF()
     f.SubTitle:SetText("Welcome to " .. ns.Color("KitnUI"))
-    f.Desc1:SetText(
-        ns.Red("WARNING") .. ": This will overwrite settings for each addon you choose to import.\n" ..
-        "Exit now to keep your current settings. Only the addons you click will be changed."
-    )
-    f.Desc2:SetText(ns.Color("Some changes may not apply until you finish the installation.") .. "\n\n" ..
-        "To reinstall at any time, run " .. ns.Color("/kitn install"))
-    ns.Wizard:SetOption(1, "Skip", function() ns.FinishInstallation() end)
+    f.Desc1:SetText("A complete, curated interface \226\128\148 unit frames, action bars, nameplates, "
+        .. "boss timers, and cooldowns, all tuned to work together out of the box.")
+    f.Desc2:SetText("\n" .. ns.Red("WARNING") .. ": importing overwrites each addon's current settings. "
+        .. "Only the addons you click are changed \226\128\148 exit now to keep everything as it is.")
+    f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
 end
 
 local function EllesmereUIPage()
@@ -184,6 +201,7 @@ local function EllesmereUIPage()
             ShowStatusAndVersion("EllesmereUI")
             SuccessToast("EllesmereUI", "profile imported!")
             PlayInstallSound()
+            HandoffToNext(WF().Option1, CHECK .. " Imported")
         end)
     end)
     ns.Wizard:SetOption(2, ns.ClassColor("Class Color"), function()
@@ -192,8 +210,11 @@ local function EllesmereUIPage()
             ShowStatusAndVersion("EllesmereUI")
             SuccessToast("EllesmereUI Class Color", "profile imported!")
             PlayInstallSound()
+            HandoffToNext(WF().Option2, CHECK .. " Imported")
         end)
     end)
+    SetVariant(WF().Option1, "selectable")
+    SetVariant(WF().Option2, "selectable")
 end
 
 local function SimpleInstallPage(addonKey, displayName)
@@ -208,8 +229,10 @@ local function SimpleInstallPage(addonKey, displayName)
                 ShowStatusAndVersion(addonKey)
                 SuccessToast(displayName, "imported!")
                 PlayInstallSound()
+                HandoffToNext(WF().Option1, CHECK .. " Re-import")
             end)
         end)
+        SetVariant(WF().Option1, "primary")
     end
 end
 
@@ -226,12 +249,14 @@ local function EditModePage()
                 ShowStatusAndVersion("Blizzard_EditMode")
                 SuccessToast("Edit Mode", "imported!")
                 PlayInstallSound()
+                HandoffToNext(WF().Option1, CHECK .. " Re-import")
             else
                 WF().Desc2:SetText(ns.Red("Layout limit reached (5). Delete a layout and try again."))
                 ShowInstallToast("Layout limit reached!", 1, 0.2, 0.2)
             end
         end)
     end)
+    SetVariant(WF().Option1, "primary")
 end
 
 ------------------------------------------------------------
@@ -268,11 +293,11 @@ local function BlizzardCDMPage()
     -- Persistent "Import All Specs" button, above the option row.
     if not cdmAllButton then
         cdmAllButton = CreateFrame("Button", "KitnUICDMAllButton", f)
-        cdmAllButton:SetSize(170, 28)
-        cdmAllButton:SetPoint("BOTTOM", f, "BOTTOM", 0, 110)
+        cdmAllButton:SetSize(170, 30)
         ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 13, function()
             if cdmAllButton._onClick then cdmAllButton._onClick() end
         end)
+        SetVariant(cdmAllButton, "selectable")
     end
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
@@ -294,6 +319,7 @@ local function BlizzardCDMPage()
                 SuccessToast("All specs", "layouts imported!")
             end
             PlayInstallSound()
+            SetVariant(WF().Next, "primary")
         end)
     end
     cdmAllButton:Show()
@@ -315,6 +341,7 @@ local function BlizzardCDMPage()
                     if success then
                         SuccessToast(specName or "CDM", "layout imported!")
                         PlayInstallSound()
+                        SetVariant(WF().Next, "primary")
                     else
                         WF().Desc2:SetText(ns.Red("Layout limit reached. Delete a layout and try again."))
                         ShowInstallToast("Layout limit reached!", 1, 0.2, 0.2)
@@ -325,6 +352,18 @@ local function BlizzardCDMPage()
             ns.Wizard:SetOption(i, label, function()
                 print(ns.title .. ": No data for " .. (specName or "this spec") .. ".")
             end)
+        end
+    end
+
+    -- Fit the spec buttons to one row, center "Import All Specs" above them, and mark
+    -- the shown buttons as selectable peers.
+    local shown = math.min(numSpecs, 4)
+    local w = ns.Wizard:FitOptions(shown)
+    cdmAllButton:ClearAllPoints()
+    cdmAllButton:SetPoint("BOTTOM", WF().Option1, "TOP", (shown - 1) * (w + 10) / 2, 14)
+    for i = 1, shown do
+        if WF()["Option" .. i] and WF()["Option" .. i]:IsShown() then
+            SetVariant(WF()["Option" .. i], "selectable")
         end
     end
 end
@@ -363,8 +402,7 @@ local function ExtrasPage()
 
     -- Clean Icons: hide companion minimap buttons.
     ns.Wizard:SetOption(slot, "Clean Icons", function()
-        ns.CleanMinimapIcons()
-        SuccessToast("Minimap icons", "cleaned!")
+        ns.RunCleanIcons()  -- shows its own popup; no toast (it overlapped the popup)
         PlayInstallSound()
     end)
     SetVariant(WF()["Option" .. slot], "selectable")
@@ -376,6 +414,7 @@ local function FinishPage()
     f.Desc1:SetText("You're all set! Click " .. ns.Green("Finish") .. " to reload your UI and apply all changes.")
     f.Desc2:SetText("You can re-run this installer anytime with " .. ns.Color("/kitn install"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
+    ns.Wizard:CenterOption1()
 end
 
 ------------------------------------------------------------
@@ -453,6 +492,7 @@ local function FinishLoadPage()
     f.Desc1:SetText("You're all set! Click " .. ns.Green("Finish") .. " to reload your UI and apply all changes.")
     f.Desc2:SetText("You can load profiles again with " .. ns.Color("/kitn load"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
+    ns.Wizard:CenterOption1()
 end
 
 ------------------------------------------------------------
@@ -464,8 +504,7 @@ local function WelcomeUpdatePage()
     f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Update")
     f.Desc1:SetText("New or updated addon profiles are available.\n\n" ..
         ns.Red("WARNING") .. ": Each step overwrites your current settings for that addon.")
-    f.Desc2:SetText("Click " .. ns.Green("Next") .. " to begin, or " .. ns.Red("Skip") .. " to close.")
-    ns.Wizard:SetOption(1, "Skip", function() ns.FinishInstallation() end)
+    f.Desc2:SetText("Click " .. ns.Green("Next") .. " to begin.")
 end
 
 local function FinishUpdatePage()
@@ -474,6 +513,7 @@ local function FinishUpdatePage()
     f.Desc1:SetText("All updated profiles have been reimported! Click " .. ns.Green("Finish") .. " to reload.")
     f.Desc2:SetText("You can check for updates anytime with " .. ns.Color("/kitn update"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
+    ns.Wizard:CenterOption1()
 end
 
 ------------------------------------------------------------
@@ -493,14 +533,14 @@ end
 ------------------------------------------------------------
 
 function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
-    local pages, stepTitles = {}, {}
+    local pages, stepTitles, stepKeys = {}, {}, {}
 
     -- CDM-only mode: intro + CDM page + finish
     if cdmMode then
-        tinsert(pages, WelcomeCDMPage); tinsert(stepTitles, "Introduction")
-        tinsert(pages, BlizzardCDMPage); tinsert(stepTitles, "Blizzard CDM")
-        tinsert(pages, FinishPage); tinsert(stepTitles, "Finish")
-        return { Name = ns.Color("KitnUI") .. " Blizzard CDM", Pages = pages, StepTitles = stepTitles }
+        tinsert(pages, WelcomeCDMPage); tinsert(stepTitles, "Introduction"); tinsert(stepKeys, false)
+        tinsert(pages, BlizzardCDMPage); tinsert(stepTitles, "Blizzard CDM"); tinsert(stepKeys, "BlizzardCDM")
+        tinsert(pages, FinishPage); tinsert(stepTitles, "Finish"); tinsert(stepKeys, false)
+        return { Name = ns.Color("KitnUI") .. " Blizzard CDM", Pages = pages, StepTitles = stepTitles, StepKeys = stepKeys }
     end
 
     -- Welcome (always first)
@@ -511,7 +551,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     else
         tinsert(pages, WelcomePage)
     end
-    tinsert(stepTitles, "Welcome")
+    tinsert(stepTitles, "Welcome"); tinsert(stepKeys, false)
 
     -- Addon pages
     for _, step in ipairs(addonSteps) do
@@ -525,7 +565,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
                 else
                     tinsert(pages, SimpleLoadPage(step.key, step.display))
                 end
-                tinsert(stepTitles, step.display)
+                tinsert(stepTitles, step.short or step.display); tinsert(stepKeys, step.key)
             end
         elseif not (updateKeys and not updateKeys[step.key]) then
             local available = step.alwaysAvailable
@@ -542,7 +582,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
                 else
                     tinsert(pages, SimpleInstallPage(step.key, step.display))
                 end
-                tinsert(stepTitles, step.display)
+                tinsert(stepTitles, step.short or step.display); tinsert(stepKeys, step.key)
             end
         end
     end
@@ -550,7 +590,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     -- Extras (install mode only)
     if not profileLoadMode and not updateKeys then
         tinsert(pages, ExtrasPage)
-        tinsert(stepTitles, "Extras")
+        tinsert(stepTitles, "Extras"); tinsert(stepKeys, false)
     end
 
     -- Finish (always last)
@@ -561,7 +601,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     else
         tinsert(pages, FinishPage)
     end
-    tinsert(stepTitles, "Finish")
+    tinsert(stepTitles, "Finish"); tinsert(stepKeys, false)
 
     return {
         Name = profileLoadMode and (ns.Color("KitnUI") .. " Profile Loader")
@@ -569,6 +609,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
             or (ns.Color("KitnUI") .. " Installation"),
         Pages = pages,
         StepTitles = stepTitles,
+        StepKeys = stepKeys,
     }
 end
 

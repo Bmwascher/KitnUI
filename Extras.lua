@@ -22,6 +22,43 @@ function ns.CleanMinimapIcons()
     end
 end
 
+-- "Clean Icons": hide the companion minimap buttons AND surface a copyable link to
+-- the replacement icon-texture pack (mirrors AtrocityUI's Clean Icons extra).
+local CLEAN_ICONS_URL = "https://github.com/AcidWeb/Clean-Icons-Mechagnome-Edition/releases"
+
+StaticPopupDialogs["KITNUI_CLEANICONS_URL"] = {
+    text = "|cffFF008CKitn|r|cffffffffUI:|r Clean Icons\n\nCopy the link (Ctrl+C) and install it like any addon to replace the default icon borders:",
+    button1 = "Close",
+    hasEditBox = true,
+    editBoxWidth = 260,
+    OnShow = function(self)
+        local eb = self.editBox or (self.GetEditBox and self:GetEditBox())
+        if not eb then return end
+        eb:SetText(CLEAN_ICONS_URL)
+        eb:SetCursorPosition(0)
+        eb:HighlightText()
+        eb:SetFocus()
+        -- best-effort: close shortly after the user copies with Ctrl+C
+        eb:SetScript("OnKeyDown", function(box, key)
+            if key == "C" and IsControlKeyDown() then
+                C_Timer.After(0, function() if box:GetParent() then box:GetParent():Hide() end end)
+            end
+        end)
+    end,
+    EditBoxOnEnterPressed = function(self) self:GetParent():Hide() end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+function ns.RunCleanIcons()
+    ns.CleanMinimapIcons()
+    StaticPopup_Show("KITNUI_CLEANICONS_URL")
+    return true
+end
+
 -- Run KitnEssentials' system optimization. Returns false if KitnEssentials isn't
 -- present; KE prints its own summary and owns its own reload prompt.
 function ns.RunOptimize()
