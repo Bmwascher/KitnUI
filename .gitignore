@@ -8,8 +8,9 @@
 CLAUDE.md
 AGENTS.md
 
-# Machine-local tooling: lint config, editor settings, Blizzard UI source symlink
+# Machine-local tooling: lint / LS config, editor settings, Blizzard UI symlink
 .luacheckrc
+.wowluarc.json
 .vscode/
 .idea/
 .wow-api-reference

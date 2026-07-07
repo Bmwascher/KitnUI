@@ -1,0 +1,85 @@
+---@meta
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  Annotations/KitnUI.lua — type-only definitions                ║
+-- ║                                                                ║
+-- ║  Loaded by wowlua-ls for editor autocomplete + nil-checking.   ║
+-- ║  NOT loaded by WoW (not in the .toc). NOT shipped (stripped    ║
+-- ║  from the zip by .pkgmeta's '- dev' entry; the folder IS       ║
+-- ║  tracked in git). A living seed — extend, don't replace.       ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+-- The private addon namespace: the second value of `local _, ns = ...` in
+-- every KitnUI file. Fields are attached across Core/Setup/Installer/Extras/
+-- Wizard; add to this class as the LS flags a missing field.
+
+---@class KitnUINS
+---@field title string          # coloured "KitnUI:" print prefix
+---@field profileName string    # profile name written into each addon's SV
+---@field version string        # addon version (TOC metadata, "2.0" fallback)
+---@field FONT string           # Expressway font path
+---@field data table<string, any>   # per-addon profile payloads (Data/*.lua)
+---@field db KitnUIDB               # SavedVariables (KitnUIDB)
+---@field Wizard KitnUIWizard       # installer wizard singleton
+---@field installerIsLoadMode boolean
+---@field sessionExtras table<string, boolean>|nil
+---@field Color fun(text: string): string
+---@field Green fun(text: string): string
+---@field Red fun(text: string): string
+---@field Amber fun(text: string): string
+---@field Ver fun(text: string): string
+---@field ClassColor fun(text: string): string
+---@field EUIReady fun(): boolean
+---@field GetAddonDataVersion fun(addonKey: string): string?
+---@field GetOutdatedAddons fun(): table[]
+---@field IsAddonImported fun(addonKey: string): boolean
+---@field SetupAddon fun(addonKey: string, import: boolean?, ...: any): boolean
+---@field OpenInstaller fun(profileLoadMode: boolean?, updateKeys: table?, cdmMode: boolean?)
+---@field GetInstallerData fun(self: KitnUINS, profileLoadMode: boolean?, updateKeys: table?, cdmMode: boolean?): table
+---@field SnapshotProfiles fun()
+---@field ApplyEUIOverrides fun(profileName: string)
+---@field DisableEUIModule fun(folder: string)
+---@field FinishInstallation fun()
+---@field CleanMinimapIcons fun()
+---@field RunCleanIcons fun(): boolean
+---@field RunOptimize fun(): boolean
+---@field RunChatSetup fun(): boolean
+---@field IsAddOnAvailable fun(self: KitnUINS, addon: string): boolean
+---@field IsCharLoaded fun(self: KitnUINS): boolean
+---@field SetCharLoaded fun(self: KitnUINS)
+local KitnUINS
+
+-- SavedVariables shape (KitnUIDB). Written by Core.lua/Setup.lua on import.
+
+---@class KitnUIDB
+---@field profiles table<string, boolean|table>  # [addonKey] = true (CDM = per-spec table)
+---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
+---@field variants table<string, string>         # [addonKey] = chosen variant ("dark"/"color")
+---@field installedVersion string?
+---@field perChar table<string, table>
+---@field devMode boolean
+---@field dismissedVersion string?
+local KitnUIDB
+
+-- Installer wizard singleton (UI/Wizard.lua). Only the surface Installer.lua
+-- calls is typed here; the frame + textures are Blizzard types.
+
+---@class KitnUIWizard
+---@field frame table
+---@field page integer
+---@field stepKeys table
+---@field Build fun(self: KitnUIWizard): table?
+---@field Queue fun(self: KitnUIWizard, data: table)
+---@field SetPage fun(self: KitnUIWizard, n: integer)
+---@field Show fun(self: KitnUIWizard)
+---@field Hide fun(self: KitnUIWizard)
+---@field SetOption fun(self: KitnUIWizard, i: integer, text: string, onClick: function)
+---@field HideOptions fun(self: KitnUIWizard)
+---@field FitOptions fun(self: KitnUIWizard, count: integer): number
+---@field CenterOption1 fun(self: KitnUIWizard)
+---@field StyleButton fun(self: KitnUIWizard, btn: table, text: string, fontSize: number?, onClick: function): any, any, any
+---@field SetButtonVariant fun(self: KitnUIWizard, btn: table, variant: string)
+---@field ShowStatusHeader fun(self: KitnUIWizard, text: string?)
+---@field HideStatusHeader fun(self: KitnUIWizard)
+---@field SetTitleIcon fun(self: KitnUIWizard, show: boolean?)
+---@field SetOptionHint fun(self: KitnUIWizard, text: string)
+local KitnUIWizard

@@ -13,3 +13,5 @@ ignore:
   - README.md
   - References
   - .wow-api-reference
+  - dev  # dev tooling (annotation stubs, etc.) — tracked in git, never shipped
+  - Legacy  # dormant v1 ElvUI installer
