@@ -4,7 +4,8 @@
 
 # Claude Code / Codex workspace (config, skills, project instructions)
 .claude/
-.superpowers/
+.codex/
+.agents/
 CLAUDE.md
 AGENTS.md
 
