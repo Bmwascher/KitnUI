@@ -1,8 +1,29 @@
+# Media sources — shipped art is .tga; keep .png/.psd/.xcf masters local
 *.png
+*.psd
+*.xcf
+
+# Local tooling & agent config (family conventions live one dir up)
 .claude/
+.superpowers/
 .luacheckrc
 .wow-api-reference
 CLAUDE.md
-README_CF.md
+AGENTS.md
 REFERENCES.md
 References/
+
+# CurseForge readme (maintained + published separately)
+README_CF.md
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*.bak
+*.tmp
+*~
+.vscode/
+.idea/
