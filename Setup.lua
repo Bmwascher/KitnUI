@@ -112,6 +112,13 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
         CompleteSetup(addonKey)
     end
 
+    -- Remember which variant is live so the installer can mark the active choice.
+    -- Set on both import and load, since either path activates a specific variant.
+    if ns.db then
+        ns.db.variants = ns.db.variants or {}
+        ns.db.variants.EllesmereUI = useColor and "color" or "dark"
+    end
+
     -- The last import auto-activated its profile; force the DPS profile as default.
     if EllesmereUI.SetProfile then EllesmereUI.SetProfile(dpsName) end
 

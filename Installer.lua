@@ -105,7 +105,7 @@ local function GetImportStatus(addonKey)
         local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
         local current = ns.GetAddonDataVersion(addonKey)
         if installed and current and installed ~= current then
-            return ns.Red("Out of date") .. " (" .. installed .. " -> " .. current .. ")"
+            return ns.Amber("Update available")
         end
         return CHECK .. " " .. ns.Green("Imported")
     else
@@ -113,9 +113,17 @@ local function GetImportStatus(addonKey)
     end
 end
 
+-- Version line: the current profile version (cyan). When an older profile is
+-- installed, append the installed version in a muted "(was X)" tag so the delta
+-- lives here instead of cluttering the status word above.
 local function GetVersionLine(addonKey)
     local current = ns.GetAddonDataVersion(addonKey)
-    return current and ("Version: " .. ns.Ver(current)) or ""
+    if not current then return "" end
+    local installed = ns.db and ns.db.addonVersions and ns.db.addonVersions[addonKey]
+    if installed and installed ~= current then
+        return "Version: " .. ns.Ver(current) .. "  |cff9d9d9d(was " .. installed .. ")|r"
+    end
+    return "Version: " .. ns.Ver(current)
 end
 
 -- Real profile lookup: the sidebar shows a completed check only for addons that
@@ -125,11 +133,13 @@ function ns.IsAddonImported(addonKey)
 end
 
 local function ShowStatusAndVersion(addonKey)
+    if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("PROFILE STATUS") end
     WF().Desc2:SetText("Status: " .. GetImportStatus(addonKey))
     WF().Desc3:SetText(GetVersionLine(addonKey))
 end
 
 local function ShowLoadStatusAndVersion(addonKey)
+    if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("PROFILE STATUS") end
     WF().Desc2:SetText("Status: Ready to load")
     WF().Desc3:SetText(GetVersionLine(addonKey))
 end
@@ -183,11 +193,28 @@ end
 local function WelcomePage()
     local f = WF()
     f.SubTitle:SetText("Welcome to " .. ns.Color("KitnUI"))
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("A complete, curated interface \226\128\148 unit frames, action bars, nameplates, "
         .. "boss timers, and cooldowns, all tuned to work together out of the box.")
     f.Desc2:SetText("\n" .. ns.Red("WARNING") .. ": importing overwrites each addon's current settings. "
         .. "Only the addons you click are changed \226\128\148 exit now to keep everything as it is.")
     f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
+end
+
+-- Reflect which EllesmereUI variant is live: the active one gets the "selected"
+-- emphasis + a check; the other stays a plain selectable peer. Re-run after each
+-- import so the marking follows the click.
+local function MarkEllesmereVariants()
+    local imported = ns.db and ns.db.profiles and ns.db.profiles["EllesmereUI"]
+    local active = imported and ns.db.variants and ns.db.variants.EllesmereUI
+    SetVariant(WF().Option1, active == "dark" and "selected" or "selectable")
+    SetVariant(WF().Option2, active == "color" and "selected" or "selectable")
+    if WF().Option1._lbl then
+        WF().Option1._lbl:SetText((active == "dark" and (CHECK .. " ") or "") .. "Dark Mode")
+    end
+    if WF().Option2._lbl then
+        WF().Option2._lbl:SetText((active == "color" and (CHECK .. " ") or "") .. ns.ClassColor("Class Color"))
+    end
 end
 
 local function EllesmereUIPage()
@@ -201,7 +228,8 @@ local function EllesmereUIPage()
             ShowStatusAndVersion("EllesmereUI")
             SuccessToast("EllesmereUI Dark Mode", "profile imported!")
             PlayInstallSound()
-            HandoffToNext(WF().Option1, CHECK .. " Imported")
+            MarkEllesmereVariants()
+            SetVariant(WF().Next, "primary")
         end)
     end)
     ns.Wizard:SetOption(2, ns.ClassColor("Class Color"), function()
@@ -210,11 +238,12 @@ local function EllesmereUIPage()
             ShowStatusAndVersion("EllesmereUI")
             SuccessToast("EllesmereUI Class Color", "profile imported!")
             PlayInstallSound()
-            HandoffToNext(WF().Option2, CHECK .. " Imported")
+            MarkEllesmereVariants()
+            SetVariant(WF().Next, "primary")
         end)
     end)
-    SetVariant(WF().Option1, "selectable")
-    SetVariant(WF().Option2, "selectable")
+    ns.Wizard:SetOptionHint("Choose a color mode:")
+    MarkEllesmereVariants()
 end
 
 local function SimpleInstallPage(addonKey, displayName)
@@ -287,6 +316,7 @@ local function BlizzardCDMPage()
     end
 
     f.Desc1:SetText(stepDesc("BlizzardCDM"))
+    if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("PROFILE STATUS") end
     f.Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
     f.Desc3:SetText(GetVersionLine("BlizzardCDM"))
 
@@ -379,6 +409,7 @@ local function ExtrasPage()
     -- Chat Setup: full chat reconfigure (position, font, timestamps, named tabs).
     ns.Wizard:SetOption(slot, "Chat Setup", function()
         if ns.RunChatSetup() then
+            if ns.sessionExtras then ns.sessionExtras.chat = true end
             SuccessToast("Chat", "configured!")
             PlayInstallSound()
         end
@@ -390,6 +421,7 @@ local function ExtrasPage()
     if IsAddOnLoaded("KitnEssentials") then
         ns.Wizard:SetOption(slot, "Optimize Settings", function()
             if ns.RunOptimize() then
+                if ns.sessionExtras then ns.sessionExtras.optimize = true end
                 SuccessToast("Settings", "optimized!")
                 PlayInstallSound()
             else
@@ -402,17 +434,84 @@ local function ExtrasPage()
 
     -- Clean Icons: hide companion minimap buttons.
     ns.Wizard:SetOption(slot, "Clean Icons", function()
+        if ns.sessionExtras then ns.sessionExtras.cleanIcons = true end
         ns.RunCleanIcons()  -- shows its own popup; no toast (it overlapped the popup)
         PlayInstallSound()
     end)
     SetVariant(WF()["Option" .. slot], "selectable")
 end
 
+-- Finish-recap labels + display order (BlizzardCDM's value is a per-spec table).
+local recapNames = {
+    EllesmereUI = "EllesmereUI", Plater = "Plater", BigWigs = "BigWigs",
+    NSRT = "Northern Sky Raid Tools", Blizzard_EditMode = "Edit Mode",
+    KitnEssentials = "KitnEssentials", BuffReminders = "BuffReminders",
+    BlizzardCDM = "Blizzard CDM",
+}
+local recapOrder = { "EllesmereUI", "Plater", "BuffReminders", "BigWigs", "NSRT", "KitnEssentials", "Blizzard_EditMode", "BlizzardCDM" }
+
+local function IsProfileImported(key)
+    local v = ns.db and ns.db.profiles and ns.db.profiles[key]
+    return v and (type(v) ~= "table" or next(v)) and true or false
+end
+
+local function BuildImportedList()
+    local list = {}
+    for _, key in ipairs(recapOrder) do
+        if IsProfileImported(key) then
+            list[#list + 1] = recapNames[key] or key
+        end
+    end
+    return list
+end
+
+-- Addons that had a page this session but weren't imported. A missing addon was
+-- never offered (no step), so it isn't counted as skipped.
+local function BuildSkippedList()
+    local wasStep = {}
+    local keys = ns.Wizard and ns.Wizard.stepKeys
+    if keys then
+        for _, key in ipairs(keys) do if key then wasStep[key] = true end end
+    end
+    local list = {}
+    for _, key in ipairs(recapOrder) do
+        if wasStep[key] and not IsProfileImported(key) then
+            list[#list + 1] = recapNames[key] or key
+        end
+    end
+    return list
+end
+
 local function FinishPage()
     local f = WF()
     f.SubTitle:SetText("Installation Complete")
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("You're all set! Click " .. ns.Green("Finish") .. " to reload your UI and apply all changes.")
-    f.Desc2:SetText("You can re-run this installer anytime with " .. ns.Color("/kitn install"))
+
+    -- Full-install recap. sessionExtras is non-nil only in the plain install flow;
+    -- CDM-only mode reuses this page but skips the summary.
+    if ns.sessionExtras then
+        if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("INSTALL SUMMARY") end
+        local imported, skipped = BuildImportedList(), BuildSkippedList()
+        local lines = {}
+        if #imported > 0 then
+            lines[#lines + 1] = CHECK .. " " .. ns.Green("Imported (" .. #imported .. "):") ..
+                "  |cffcfcfcf" .. table.concat(imported, ", ") .. "|r"
+        end
+        if #skipped > 0 then
+            lines[#lines + 1] = ns.Amber("Skipped (" .. #skipped .. "):") ..
+                "  |cff9d9d9d" .. table.concat(skipped, ", ") .. "|r"
+        end
+        f.Desc2:SetText(table.concat(lines, "\n"))
+
+        local ex = {}
+        if ns.sessionExtras.chat then ex[#ex + 1] = "Chat Setup" end
+        if ns.sessionExtras.optimize then ex[#ex + 1] = "Optimize" end
+        if ns.sessionExtras.cleanIcons then ex[#ex + 1] = "Clean Icons" end
+        f.Desc3:SetText("Extras run: " ..
+            (#ex > 0 and ("|cffcfcfcf" .. table.concat(ex, ", ") .. "|r") or "|cff9d9d9dnone|r"))
+    end
+
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
     ns.Wizard:CenterOption1()
 end
@@ -424,6 +523,7 @@ end
 local function WelcomeLoadPage()
     local f = WF()
     f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Loader")
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nIt will not reimport anything - just apply existing profiles.")
     f.Desc2:SetText("Click " .. ns.Green("Finish") .. " at the end to reload and apply changes.")
     ns.Wizard:SetOption(1, "Load All", function()
@@ -449,13 +549,19 @@ local function EllesmereUILoadPage()
         WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
         SuccessToast("EllesmereUI Dark Mode", "profile loaded!")
         PlayInstallSound()
+        MarkEllesmereVariants()
+        SetVariant(WF().Next, "primary")
     end)
     ns.Wizard:SetOption(2, ns.ClassColor("Class Color"), function()
         ns.SetupAddon("EllesmereUI", false, true)
         WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
         SuccessToast("EllesmereUI Class Color", "profile loaded!")
         PlayInstallSound()
+        MarkEllesmereVariants()
+        SetVariant(WF().Next, "primary")
     end)
+    ns.Wizard:SetOptionHint("Choose a color mode:")
+    MarkEllesmereVariants()
 end
 
 local function SimpleLoadPage(addonKey, displayName)
@@ -489,6 +595,7 @@ end
 local function FinishLoadPage()
     local f = WF()
     f.SubTitle:SetText("Profile Loading Complete")
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("You're all set! Click " .. ns.Green("Finish") .. " to reload your UI and apply all changes.")
     f.Desc2:SetText("You can load profiles again with " .. ns.Color("/kitn load"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
@@ -502,6 +609,7 @@ end
 local function WelcomeUpdatePage()
     local f = WF()
     f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Update")
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("New or updated addon profiles are available.\n\n" ..
         ns.Red("WARNING") .. ": Each step overwrites your current settings for that addon.")
     f.Desc2:SetText("Click " .. ns.Green("Next") .. " to begin.")
@@ -510,6 +618,7 @@ end
 local function FinishUpdatePage()
     local f = WF()
     f.SubTitle:SetText("Update Complete")
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("All updated profiles have been reimported! Click " .. ns.Green("Finish") .. " to reload.")
     f.Desc2:SetText("You can check for updates anytime with " .. ns.Color("/kitn update"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
@@ -523,6 +632,7 @@ end
 local function WelcomeCDMPage()
     local f = WF()
     f.SubTitle:SetText("Blizzard Cooldown Manager")
+    ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("Import Blizzard Cooldown Manager layouts for your current class.\n\n" ..
         "Blizzard only allows importing layouts for the class you are currently logged into.")
     f.Desc2:SetText("To import another class later, run " .. ns.Color("/kitn cdm") .. " on that character.")
@@ -628,6 +738,9 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     end
     ns.SnapshotProfiles()
     ns.installerIsLoadMode = profileLoadMode or false
+    -- Track Extras clicks for the Finish recap; only the plain install flow has an
+    -- Extras page, so nil in load/update/cdm mode (which skip the recap).
+    ns.sessionExtras = (not profileLoadMode and not updateKeys and not cdmMode) and {} or nil
     ns.Wizard:Queue(ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode))
 end
 

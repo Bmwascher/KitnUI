@@ -27,6 +27,7 @@ local KITN_PINK = { 1, 0, 0.549 }
 local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.tga"
 local ART_CROP = { 0.065, 0.940, 0.099, 0.916 }  -- left, right, top, bottom (0..1)
 local PANEL_W, PANEL_H = 760, 560                 -- 1.357:1, matches the cropped panel
+local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI.tga"  -- KitnUI cat logo (512x512)
 
 -- Layout: the baked art already draws the sidebar column, logo, header band and
 -- close box, so overlays are positioned INTO those regions rather than redrawn.
@@ -106,16 +107,26 @@ function W:Build()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     skin(f)
 
+    -- Esc closes the wizard (standard modal behavior); named frame required.
+    tinsert(UISpecialFrames, "KitnUIWizard")
+
     -- Title: left-aligned in the content column, inside the baked header band.
     f.SubTitle = EllesmereUI.MakeFont(f, 24, "", 1, 1, 1)
     f.SubTitle:SetAlpha(0.98)
     f.SubTitle:SetPoint("TOPLEFT", CONTENT_X, -30)
     f.SubTitle:SetJustifyH("LEFT")
 
+    -- Optional brand icon in the header band, left of the title. Hidden unless a
+    -- page opts in via W:SetTitleIcon (KitnUI/Welcome/Finish pages).
+    f.titleIcon = f:CreateTexture(nil, "ARTWORK")
+    f.titleIcon:SetSize(34, 34)
+    f.titleIcon:SetPoint("TOPLEFT", CONTENT_X, -25)
+    f.titleIcon:Hide()
+
     -- Content text (page functions write these), left-aligned in the content column.
     local contentW = PANEL_W - CONTENT_X - 40
     f.Desc1 = EllesmereUI.MakeFont(f, 16, "", 1, 1, 1, 0.92)
-    f.Desc1:SetPoint("TOPLEFT", CONTENT_X, -104)
+    f.Desc1:SetPoint("TOPLEFT", CONTENT_X, -116)  -- clears the faint baked rule @ frameY_top~103
     f.Desc1:SetWidth(contentW)
     f.Desc1:SetJustifyH("LEFT")
     f.Desc1:SetSpacing(3)
@@ -129,6 +140,17 @@ function W:Build()
     f.Desc3:SetWidth(contentW)
     f.Desc3:SetJustifyH("LEFT")
     f.Desc3:SetSpacing(3)
+
+    -- "Profile status" separator: a thin rule + small caption that addon pages show
+    -- above the Status/Version block (via W:ShowStatusHeader) to set it apart from the
+    -- description. Hidden by default; other pages leave it off (W:HideStatusHeader).
+    f.detailRule = f:CreateTexture(nil, "ARTWORK")
+    f.detailRule:SetColorTexture(1, 1, 1, 0.12)
+    f.detailRule:SetHeight(1)
+    f.detailRule:Hide()
+    f.detailHeader = EllesmereUI.MakeFont(f, 11, "", 1, 1, 1, 0.5)  -- muted caption (pink read too hot here)
+    f.detailHeader:SetJustifyH("LEFT")
+    f.detailHeader:Hide()
 
     -- Option/action buttons. Label lives in _lbl; bg/border in _bg/_brd (for
     -- SetButtonVariant); click routes through _onClick.
@@ -147,6 +169,12 @@ function W:Build()
     f.Option2:SetPoint("LEFT", f.Option1, "RIGHT", 10, 0)
     f.Option3:SetPoint("LEFT", f.Option2, "RIGHT", 10, 0)
     f.Option4:SetPoint("LEFT", f.Option3, "RIGHT", 10, 0)
+
+    -- Small hint above the action row for pages presenting a mutually-exclusive
+    -- choice (e.g. EllesmereUI color mode); hidden unless a page sets it.
+    f.optionHint = EllesmereUI.MakeFont(f, 12, "", 1, 1, 1, 0.5)
+    f.optionHint:SetJustifyH("LEFT")
+    f.optionHint:Hide()
 
     -- Step rail overlaid on the baked sidebar column (below the baked logo block).
     f.stepRail = CreateFrame("Frame", nil, f)
@@ -173,7 +201,7 @@ function W:Build()
     -- successful page action via the installer's handoff).
     f.Next = CreateFrame("Button", nil, f)
     f.Next:SetSize(140, 30)
-    f.Next:SetPoint("BOTTOMRIGHT", -40, 4)  -- footer, below the baked divider (y38)
+    f.Next:SetPoint("BOTTOMRIGHT", -20, 4)  -- nudged so its visual (bordered) edge lines up with the bar
     f.Next._bg, f.Next._brd, f.Next._lbl =
         EllesmereUI.MakeStyledButton(f.Next, "Next", 14, BTN_COLOURS, function() W:SetPage((W.page or 1) + 1) end)
     f.Back = CreateFrame("Button", nil, f)
@@ -203,7 +231,7 @@ function W:Build()
     local progTrack = CreateFrame("Frame", nil, f)
     progTrack:SetHeight(6)
     progTrack:SetPoint("BOTTOMLEFT", CONTENT_X, 50)   -- just above the baked divider
-    progTrack:SetPoint("BOTTOMRIGHT", -30, 50)
+    progTrack:SetPoint("BOTTOMRIGHT", -22, 50)        -- 22px each side = centered in content area
     local trackBg = progTrack:CreateTexture(nil, "BACKGROUND")
     trackBg:SetColorTexture(1, 1, 1, 0.10)
     trackBg:SetAllPoints()
@@ -236,6 +264,65 @@ function W:HideOptions()
     -- reset the row's left anchor (a centered single-button page may have moved it)
     W.frame.Option1:ClearAllPoints()
     W.frame.Option1:SetPoint("BOTTOMLEFT", W.frame, "BOTTOMLEFT", CONTENT_X, 88)
+    W.frame.optionHint:Hide()
+end
+
+-- KitnUI brand icon in the header band, left of the title. show = display it and
+-- shift the title right to make room; false/nil = hide + restore the default anchor.
+function W:SetTitleIcon(show)
+    if not W.frame then return end
+    local f = W.frame
+    if show then
+        f.titleIcon:SetTexture(TITLE_ICON)
+        if f.titleIcon:GetTexture() then
+            f.titleIcon:Show()
+            f.SubTitle:ClearAllPoints()
+            f.SubTitle:SetPoint("TOPLEFT", CONTENT_X + 42, -30)
+            return
+        end
+    end
+    f.titleIcon:Hide()
+    f.SubTitle:ClearAllPoints()
+    f.SubTitle:SetPoint("TOPLEFT", CONTENT_X, -30)
+end
+
+-- Small muted hint just above the action row (e.g. "Choose a color mode").
+-- Cleared each page by HideOptions.
+function W:SetOptionHint(text)
+    if not W.frame then return end
+    local h = W.frame.optionHint
+    h:ClearAllPoints()
+    h:SetPoint("BOTTOMLEFT", W.frame.Option1, "TOPLEFT", 0, 8)
+    h:SetText(text)
+    h:Show()
+end
+
+-- Show the "profile status" separator (thin rule + caption) above the status/
+-- version block and re-anchor Desc2 below it. Addon pages call this; every page
+-- starts with it hidden (SetPage resets via HideStatusHeader). Safe to call twice.
+function W:ShowStatusHeader(text)
+    if not W.frame then return end
+    local f = W.frame
+    f.detailRule:ClearAllPoints()
+    f.detailRule:SetPoint("TOPLEFT", f.Desc1, "BOTTOMLEFT", 0, -16)
+    f.detailRule:SetPoint("TOPRIGHT", f.Desc1, "BOTTOMRIGHT", 0, -16)
+    f.detailRule:Show()
+    f.detailHeader:ClearAllPoints()
+    f.detailHeader:SetPoint("TOPLEFT", f.detailRule, "BOTTOMLEFT", 0, -9)
+    f.detailHeader:SetText(text or "PROFILE STATUS")
+    f.detailHeader:Show()
+    f.Desc2:ClearAllPoints()
+    f.Desc2:SetPoint("TOPLEFT", f.detailHeader, "BOTTOMLEFT", 0, -7)
+end
+
+-- Hide the separator and restore Desc2's default anchor (directly under Desc1).
+function W:HideStatusHeader()
+    if not W.frame then return end
+    local f = W.frame
+    f.detailRule:Hide()
+    f.detailHeader:Hide()
+    f.Desc2:ClearAllPoints()
+    f.Desc2:SetPoint("TOPLEFT", f.Desc1, "BOTTOMLEFT", 0, -14)
 end
 
 -- Center the single action button in the content column (used by the Finish pages).
@@ -295,6 +382,10 @@ function W:SetButtonVariant(btn, variant)
         btn._bg:SetColorTexture(0, 0, 0, 0.40)  -- dark fill so class colors stay legible
         setBrd(P[1], P[2], P[3], 0.55)
         if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 0.95) end
+    elseif variant == "selected" then
+        btn._bg:SetColorTexture(P[1], P[2], P[3], 0.22)  -- pink wash marks the active choice
+        setBrd(P[1], P[2], P[3], 1)                       -- full pink border
+        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 1) end
     elseif variant == "done" then
         btn._bg:SetColorTexture(1, 1, 1, 0.04)
         setBrd(STEP_DONE[1], STEP_DONE[2], STEP_DONE[3], 0.5)
@@ -316,10 +407,22 @@ local function updateRail()
     for i = 1, math.max(#titles, #f.stepLabels) do
         local row = f.stepLabels[i]
         if not row then
-            row = CreateFrame("Frame", nil, f.stepRail)
+            -- Button so the step is clickable: jump straight to its page (handy for
+            -- reinstalling a single profile). Row i always maps to page i.
+            row = CreateFrame("Button", nil, f.stepRail)
             row:SetPoint("TOPLEFT", 0, -(i - 1) * 29)
             row:SetPoint("TOPRIGHT", 0, -(i - 1) * 29)
             row:SetHeight(27)
+            -- pink row wash marks the current step (background, under everything)
+            row.activeBg = row:CreateTexture(nil, "BACKGROUND")
+            row.activeBg:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.10)
+            row.activeBg:SetAllPoints()
+            row.activeBg:Hide()
+            -- faint white wash on hover (only when not the current step)
+            row.hover = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+            row.hover:SetColorTexture(1, 1, 1, 0.06)
+            row.hover:SetAllPoints()
+            row.hover:Hide()
             -- pink left bar marks the current step
             row.bar = row:CreateTexture(nil, "ARTWORK")
             row.bar:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 1)
@@ -334,6 +437,9 @@ local function updateRail()
             row.label = EllesmereUI.MakeFont(row, 13, "", 1, 1, 1)
             row.label:SetPoint("LEFT", 22, 0)
             row.label:SetJustifyH("LEFT")
+            row:SetScript("OnEnter", function(self) if not self._isCurrent then self.hover:Show() end end)
+            row:SetScript("OnLeave", function(self) self.hover:Hide() end)
+            row:SetScript("OnClick", function() W:SetPage(i) end)
             f.stepLabels[i] = row
         end
         local title = titles[i]
@@ -360,9 +466,12 @@ local function updateRail()
             else
                 isDone = (i < (W.page or 1))
             end
+            row._isCurrent = isCurrent
             row.bar:SetShown(isCurrent)
+            row.activeBg:SetShown(isCurrent)
             row.chk:SetShown(isDone)
             if isCurrent then
+                row.hover:Hide()  -- current row never shows the hover wash
                 row.label:SetTextColor(1, 1, 1, 1)      -- bright white; the pink bar marks "current"
             elseif isDone then
                 row.label:SetTextColor(1, 1, 1, 0.75)
@@ -396,6 +505,8 @@ function W:SetPage(n)
     W.page = n
     W:HideOptions()
     if W.ResetExtras then W.ResetExtras() end
+    W:HideStatusHeader()
+    W:SetTitleIcon(false)
     W.frame.Desc1:SetText("")
     W.frame.Desc2:SetText("")
     W.frame.Desc3:SetText("")
