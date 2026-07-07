@@ -1,0 +1,33 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job id `luacheck` is the status-check name release.yml gates packaging on
+  # (`needs: [luacheck]`) — don't rename it or add a `name:` override without
+  # updating release.yml too.
+  luacheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Runs upstream luacheck (Lua 5.1, in Docker) against the repo using the
+      # checked-in .luacheckrc — same config as the local luacheck.exe and the
+      # edit-time / pre-push hooks. The wrapper is SHA-pinned, but the action
+      # pulls ghcr.io/bigwigsmods/luacheck:latest at run time, so the lint
+      # ENGINE tracks upstream luacheck regardless of this pin.
+      - name: Run luacheck
+        uses: BigWigsMods/luacheck@9545d4baa7c8d5c2d8dce6591788450680c2485b # main, 2026-06-20
+        with:
+          args: -q
+          annotate: warning
+          job_summary: true
