@@ -16,20 +16,10 @@ AGENTS.md
 .idea/
 .wow-api-reference
 
-# Third-party reference addons + their index (local-only by convention)
+# Third-party reference addon sources (local-only; index in dev/docs/REFERENCES.md)
 References/
-REFERENCES.md
 
-# Local-only dev docs: CurseForge readme, art masters, planning + Superpowers
-# artifacts. Tracked dev tooling (dev/Annotations/, dev/README.md) stays in git.
+# Local-only dev docs: CurseForge readme, art masters, the References index, and
+# planning / Superpowers artifacts. Tracked dev tooling (dev/Annotations/,
+# dev/README.md) stays in git.
 dev/docs/
-
-# OS / editor cruft
-.DS_Store
-Thumbs.db
-desktop.ini
-*.swp
-*.swo
-*.bak
-*.tmp
-*~
