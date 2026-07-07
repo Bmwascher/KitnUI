@@ -1,16 +1,20 @@
 package-as: KitnUI
 
-changelog-title: KitnUI
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
 
+# Only tracked files need listing here — gitignored paths (References/,
+# dev/docs/, .claude/, .wow-api-reference, editor configs) never reach the
+# packager's clone. Tracked dev-tree files (incl. dev/Annotations/) are
+# stripped solely by the `- dev` entry below.
 ignore:
   - .pkgmeta
-  - .claude
   - .github
   - .gitattributes
   - .gitignore
+  - .luacheckrc
+  - dev
+  - Legacy  # dormant v1 ElvUI installer
   - CHANGELOG.md
   - README.md
-  - References
-  - .wow-api-reference
-  - dev  # dev tooling (annotation stubs, etc.) — tracked in git, never shipped
-  - Legacy  # dormant v1 ElvUI installer
