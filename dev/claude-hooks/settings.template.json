@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/luacheck-postedit.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 30,
+            "statusMessage": "luacheck"
+          }
+        ]
+      }
+    ]
+  }
+}
