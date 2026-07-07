@@ -1,20 +1,30 @@
-# Media sources — shipped art is .tga; keep .png/.psd/.xcf masters local
+# KitnUI — local-only files. Everything else is tracked; the shipped player zip
+# is shaped by .pkgmeta (which strips README/CHANGELOG/.github/etc.), not this
+# file. Keep agent config, machine-local tooling, and art masters out of git.
+
+# Claude Code / Codex workspace (config, skills, project instructions)
+.claude/
+.superpowers/
+CLAUDE.md
+AGENTS.md
+
+# Machine-local tooling: lint config, editor settings, Blizzard UI source symlink
+.luacheckrc
+.vscode/
+.idea/
+.wow-api-reference
+
+# Third-party reference addons + their index (local-only by convention)
+References/
+REFERENCES.md
+
+# CurseForge readme (maintained + published separately from the GitHub README)
+README_CF.md
+
+# Art masters — the shipped art is .tga; keep .png/.psd/.xcf sources local
 *.png
 *.psd
 *.xcf
-
-# Local tooling & agent config (family conventions live one dir up)
-.claude/
-.superpowers/
-.luacheckrc
-.wow-api-reference
-CLAUDE.md
-AGENTS.md
-REFERENCES.md
-References/
-
-# CurseForge readme (maintained + published separately)
-README_CF.md
 
 # OS / editor cruft
 .DS_Store
@@ -25,5 +35,3 @@ desktop.ini
 *.bak
 *.tmp
 *~
-.vscode/
-.idea/

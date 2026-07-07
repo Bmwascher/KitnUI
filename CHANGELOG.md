@@ -1,20 +1,21 @@
-# Changelog
+# [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
 ## v2.0.0
 
 ### EllesmereUI Rework
+- **NEW:** KitnUI now installs **EllesmereUI** profiles instead of ElvUI — EllesmereUI is the required dependency and the base UI it imports (**Dark Mode** / **Class Color**, with healer specs auto-swapping to a dedicated healer layout)
+- **NEW:** Rebuilt the installer as a single-window, EllesmereUI-skinned wizard on custom KitnUI background art, replacing the old page-by-page flow
+- Trimmed the companion set to Plater, BuffReminders, BigWigs, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode, and per-spec Blizzard CDM (dropped Details, WarpDeplete, MRT, Ayije CDM, Baganator)
 
-KitnUI now installs **EllesmereUI** profiles instead of ElvUI, with a rebuilt installer.
+### Installer
+- **NEW:** Clickable step sidebar with real per-profile import state (green check = actually imported) and a highlighted current step — click any step to jump straight to it and (re)install a single profile
+- **NEW:** Active-variant indicator marks which EllesmereUI color mode is currently live
+- **NEW:** Extras page — optional one-click chat setup, KitnEssentials settings optimization, and companion minimap-icon cleanup
+- **NEW:** Finish summary recaps which profiles were imported, which were skipped, and which extras were run
+- Traffic-light status (Imported / Update available / Not Imported) backed by date-based profile versioning
+- Esc closes the installer; the `/kitn` command set is unchanged
 
-- **New base UI: EllesmereUI** — replaces ElvUI as the required dependency and the profile KitnUI installs: **Dark Mode** / **Class Color**, with healer specs auto-swapping to a dedicated healer layout
-- **Rebuilt installer wizard** — a single-window, EllesmereUI-skinned flow on custom KitnUI background art, replacing the old page-by-page installer
-- **Clickable step sidebar** — real per-profile import state (green check = actually imported), a highlighted current step, and click any step to jump straight to it and (re)install one profile
-- **Active-variant indicator** — the EllesmereUI page marks which color mode is currently live
-- **Extras page** — optional one-click cleanups: full chat setup, KitnEssentials settings optimization, and companion minimap-icon cleanup
-- **Finish summary** — a recap of which profiles were imported, which were skipped, and which extras were run
-- **Trimmed companion set** — Plater, BuffReminders, BigWigs, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode, and per-spec Blizzard CDM (dropped Details, WarpDeplete, MRT, Ayije CDM, Baganator)
-- **Traffic-light status** — Imported / Update available / Not Imported, backed by date-based profile versioning
-- Esc closes the installer; the `/kitn` command set is unchanged (`install`, `update`, `load`, `cdm`, `version`, `reset`)
+---
 
 ## v1.0.8
 
