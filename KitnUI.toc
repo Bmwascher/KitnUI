@@ -11,14 +11,14 @@
 ## X-Curse-Project-ID: 1493282
 ## X-Wago-ID: rNkyB8Ka
 
-## X-EllesmereUI-Version: 2.0
-## X-Plater-Version: 1.1
-## X-BigWigs-Version: 1.0
-## X-NSRT-Version: 1.0
-## X-EditMode-Version: 1.0
-## X-KitnEssentials-Version: 1.4
-## X-BuffReminders-Version: 1.1
-## X-BlizzardCDM-Version: 1.0
+## X-EllesmereUI-Version: 2026.07.07
+## X-Plater-Version: 2026.07.07
+## X-BigWigs-Version: 2026.07.07
+## X-NSRT-Version: 2026.07.07
+## X-EditMode-Version: 2026.07.07
+## X-KitnEssentials-Version: 2026.07.07
+## X-BuffReminders-Version: 2026.07.07
+## X-BlizzardCDM-Version: 2026.07.07
 
 Core.lua
 
