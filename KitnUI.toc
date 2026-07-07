@@ -28,6 +28,8 @@ UI\Wizard.lua
 
 Installer.lua
 
+Extras.lua
+
 # Profile Data - EllesmereUI
 Data\AddOns\EllesmereUI.lua
 

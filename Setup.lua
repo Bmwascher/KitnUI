@@ -521,15 +521,8 @@ function ns.FinishInstallation()
     if IsAddOnLoaded("BuffReminders") then ns.DisableEUIModule("EllesmereUIAuraBuffReminders") end
     ns.DisableEUIModule("EllesmereUICooldownManager")
 
-    -- Hide companion minimap icons (ported from Legacy/Core.lua FinishInstallation)
-    local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
-    if LDBIcon then
-        for _, broker in ipairs({ "BigWigs", "Plater", "NSRT" }) do
-            if LDBIcon:IsRegistered(broker) then LDBIcon:Hide(broker) end
-        end
-    end
-    if IsAddOnLoaded("BigWigs") and type(BigWigsIconDB) == "table" then BigWigsIconDB.hide = true end
-    if IsAddOnLoaded("Plater") and PlaterDBChr and PlaterDBChr.minimap then PlaterDBChr.minimap.hide = true end
+    -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
+    ns.CleanMinimapIcons()
 
     ReloadUI()
 end
