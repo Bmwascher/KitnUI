@@ -20,26 +20,7 @@
 ## X-BuffReminders-Version: 2026.07.07
 ## X-BlizzardCDM-Version: 2026.07.07
 
-Core.lua
-
-Setup.lua
-
-UI\Wizard.lua
-
-Installer.lua
-
-Extras.lua
-
-# Profile Data - EllesmereUI
-Data\AddOns\EllesmereUI.lua
-
-# Profile Data - Companions
-Data\AddOns\Plater.lua
-Data\AddOns\BigWigs.lua
-Data\AddOns\NSRT.lua
-Data\AddOns\EditMode.lua
-Data\AddOns\KitnEssentials.lua
-Data\AddOns\BuffReminders.lua
-
-# Profile Data - Classes
-Data\Classes\BlizzardCDM.lua
+# Load model: per-directory XML manifests (matching KitnEssentials). Each .xml
+# <Script>-lists its .lua in load order; edit the manifest, not this list.
+Installer\Installer.xml
+Data\Data.xml

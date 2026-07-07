@@ -1,0 +1,11 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <!-- Load order matters: bootstrap + import engine, then the wizard shell
+         (defines ns.Wizard), then the pages that use it, then the Extras actions. -->
+    <Script file="Core.lua" />
+    <Script file="Setup.lua" />
+    <Script file="Wizard.lua" />
+    <Script file="Installer.lua" />
+    <Script file="Extras.lua" />
+</Ui>
