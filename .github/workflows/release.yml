@@ -5,12 +5,25 @@ on:
     tags:
       - 'v*'
 
+# Packaging is gated on the same luacheck job that guards every push: a v* tag
+# on a red commit must not ship to CurseForge/Wago. Tag pushes don't trigger
+# lint.yml (tags aren't branches), so the gate is duplicated here.
 jobs:
+  luacheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: BigWigsMods/luacheck@9545d4baa7c8d5c2d8dce6591788450680c2485b # main, 2026-06-20
+        with:
+          args: -q
+
   release:
+    needs: [luacheck]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
