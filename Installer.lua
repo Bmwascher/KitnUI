@@ -387,7 +387,17 @@ local function WelcomeLoadPage()
     f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Loader")
     f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nIt will not reimport anything - just apply existing profiles.")
     f.Desc2:SetText("Click " .. ns.Green("Finish") .. " at the end to reload and apply changes.")
-    ns.Wizard:SetOption(1, "Skip", function() ns.FinishInstallation() end)
+    ns.Wizard:SetOption(1, "Load All", function()
+        for _, step in ipairs(addonSteps) do
+            if ns.db and ns.db.profiles and ns.db.profiles[step.key] and step.key ~= "BlizzardCDM" then
+                ns.SetupAddon(step.key)  -- load mode: activate existing profile, no reimport
+            end
+        end
+        SuccessToast("All profiles", "loaded!")
+        PlayInstallSound()
+        SetVariant(WF().Next, "primary")
+    end)
+    SetVariant(WF().Option1, "primary")
 end
 
 local function EllesmereUILoadPage()
