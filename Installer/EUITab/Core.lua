@@ -251,6 +251,12 @@ local function OnProfileDeleted(name)
     for _, section in pairs(root) do
         section[name] = nil
     end
+
+    -- Deleting the ACTIVE profile repoints every db to Default without going
+    -- through SwitchProfile, ApplyProfileData or OnSpecSwitchComplete, so this
+    -- handler is the only place that learns about it. Safe to queue before the
+    -- repoint happens: EUIQueueReapply defers by 0.1 seconds.
+    ns.EUIQueueReapply()
 end
 
 -- KitnUI's two halves of state live in two different files: the switch states
