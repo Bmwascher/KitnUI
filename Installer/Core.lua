@@ -299,6 +299,7 @@ SlashCmdList["KITN"] = function(msg)
         print("  /kitn update   - Reimport only profiles that have been updated")
         print("  /kitn load     - Apply installed profiles to this character")
         print("  /kitn cdm      - Import Blizzard CDM layouts for your current class")
+        print("  /kitn options  - Open the KitnUI tab in EllesmereUI's config panel")
         print("  /kitn reset    - Reset installer state (does not remove addon profiles)")
         print("  /kitn version  - Show addon version")
         if KitnHelpLines then
