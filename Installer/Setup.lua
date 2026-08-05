@@ -59,8 +59,10 @@ end
 
 ---------------------------------------------------------------------------------
 -- EllesmereUI (core import + per-spec healer/DPS swap)
--- Public API used (all guarded): EllesmereUI.ImportProfile(str, name) ->
--- ok, err[, "spec_locked"] (auto-activates); EllesmereUI.SetProfile(name);
+-- Public API used (all guarded): EllesmereUI.ImportProfileSilent(opts), opts =
+-- {importString, profileName, disableAddons} -> ok, err[, "spec_locked"]. A
+-- spec_locked result does NOT activate the profile, so the SetProfile(name)
+-- call below is still required. Also used: EllesmereUI.SetProfile(name);
 -- EllesmereUI.AssignProfileToSpec(name, specID); EllesmereUI.RefreshAllAddons().
 ---------------------------------------------------------------------------------
 
