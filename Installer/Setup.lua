@@ -93,25 +93,48 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
     local healerKey  = useColor and "EllesmereUIHealerColored" or "EllesmereUIHealer"
 
     if import then
+        if not EllesmereUI.ImportProfileSilent then
+            print(ns.title .. ": Your EllesmereUI is too old to import profiles. Please update EllesmereUI.")
+            return false
+        end
+
         -- DPS profile (fall back to the base export if a colored variant isn't authored yet)
         local importDpsKey = HasData(dpsKey) and dpsKey or "EllesmereUI"
         if not HasData(importDpsKey) then
             print(ns.title .. ": No EllesmereUI profile data found.")
             return false
         end
-        local ok, err = EllesmereUI.ImportProfile(ns.data[importDpsKey], dpsName)
+
+        -- Defaults are load-bearing and deliberately not passed:
+        --   cleanSlate      (true)  deletes an existing same-name profile first,
+        --                           purging the name-keyed CDM spell store, spec
+        --                           assignments and sync targets an overwrite
+        --                           would otherwise inherit.
+        --   autoAssignSpecs (false) strips the exporter's spec assignments, which
+        --                           would otherwise be written into account-wide
+        --                           EllesmereUIDB.specProfiles on every user.
+        --                           Our own AssignProfileToSpec loop below is only
+        --                           safe because this stays false.
+        --   applyUIScale    (true)  applies the UI scale baked into the string.
+        local modules = ns.GetEUIModuleSet()
+        local ok, err = EllesmereUI.ImportProfileSilent({
+            importString  = ns.data[importDpsKey],
+            profileName   = dpsName,
+            disableAddons = modules,
+        })
         if not ok then
             print(ns.title .. ": EllesmereUI import failed - " .. (err or "unknown error"))
             return false
         end
-        ns.ApplyEUIOverrides(dpsName)
 
         -- Healer profile (optional; its presence enables per-spec auto-swap)
         if HasData(healerKey) then
-            local hok, herr = EllesmereUI.ImportProfile(ns.data[healerKey], healerName)
-            if hok then
-                ns.ApplyEUIOverrides(healerName)
-            else
+            local hok, herr = EllesmereUI.ImportProfileSilent({
+                importString  = ns.data[healerKey],
+                profileName   = healerName,
+                disableAddons = modules,
+            })
+            if not hok then
                 print(ns.title .. ": EllesmereUI healer import failed - " .. (herr or "unknown error"))
             end
         end
@@ -143,18 +166,6 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
 
     if EllesmereUI.RefreshAllAddons then EllesmereUI.RefreshAllAddons() end
     return true
-end
-
--- Account-global overrides that do NOT travel in a profile export. Per-module
--- media ("sm:<name>") and settings DO ride inside the !EUI_ payload (verified
--- against EllesmereUI_Profiles.lua), so they need no poking here. ppUIScale is
--- the one relevant global: EllesmereUIDB.ppUIScale (verified EllesmereUI.lua
--- 1817/1836, account-global). Set ns.EUI_UISCALE only if KitnUI wants a specific
--- scale; otherwise this no-ops.
-function ns.ApplyEUIOverrides(profileName)
-    if not (EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[profileName]) then return end
-
-    if ns.EUI_UISCALE then EllesmereUIDB.ppUIScale = ns.EUI_UISCALE end
 end
 
 ---------------------------------------------------------------------------------
