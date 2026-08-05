@@ -31,6 +31,13 @@
 ---@field EUIReady fun(): boolean
 ---@field EUIProfile fun(folder: string): table|nil
 ---@field EUISettings fun(): table
+---@field EUI_ABSENT string
+---@field EUISnap fun(section: string, key: string): table|nil
+---@field EUIPeekSnap fun(section: string, key: string): table|nil
+---@field EUISnapGlobal fun(key: string): table|nil
+---@field EUIPeekSnapGlobal fun(key: string): table|nil
+---@field EUIOverride fun(tbl: table, saved: table, key: string, value: any)
+---@field EUIRestore fun(tbl: table, saved: table, key: string)
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean

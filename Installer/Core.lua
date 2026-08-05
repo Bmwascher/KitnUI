@@ -118,6 +118,8 @@ local defaults = {
     variants = {},          -- [addonKey] = chosen variant string (e.g. EllesmereUI "dark"/"color")
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
+    euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
+    euiSnapGlobal = {},     -- [key] = { prev = <old value> } for EllesmereUIDB root keys
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
 
@@ -323,6 +325,8 @@ local function InitDB()
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.variants = ns.db.variants or {}
     ns.db.perChar = ns.db.perChar or {}
+    ns.db.euiSnap = ns.db.euiSnap or {}
+    ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}
 end
 
 local boot = CreateFrame("Frame")

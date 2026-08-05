@@ -90,6 +90,113 @@ function ns.EUISettings()
 end
 
 ---------------------------------------------------------------------------------
+-- Snapshot store
+---------------------------------------------------------------------------------
+
+-- A key that did not exist is not the same as a key set to nil: absent means
+-- "use the module's own default", and that state has to be restorable. nil
+-- cannot be stored in a table to mean it, so a sentinel carries it.
+ns.EUI_ABSENT = "__kitnui_absent__"
+
+-- Snapshots live in KitnUI's own SavedVariable, never in the EllesmereUI
+-- profile. A snapshot describes what THIS machine had before KitnUI touched it,
+-- which is meaningless inside an exported look.
+local function SnapRoot()
+    if not ns.db then return nil end
+    ns.db.euiSnap = ns.db.euiSnap or {}
+    return ns.db.euiSnap
+end
+
+-- Keyed by profile because a value from one profile says nothing about another.
+local function ActiveProfileName()
+    if _G.EllesmereUI and EllesmereUI.GetActiveProfileName then
+        local ok, name = pcall(EllesmereUI.GetActiveProfileName)
+        if ok and type(name) == "string" then return name end
+    end
+    return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
+end
+
+-- Use this on the ON path only. It builds tables on the way down.
+function ns.EUISnap(section, key)
+    local root = SnapRoot()
+    if not root then return nil end
+    local profile = ActiveProfileName()
+    root[section] = root[section] or {}
+    root[section][profile] = root[section][profile] or {}
+    root[section][profile][key] = root[section][profile][key] or {}
+    return root[section][profile][key]
+end
+
+-- Use this on the OFF path. Asking "did we override this?" with EUISnap would
+-- seed an empty record in every profile a user merely visits, which bloats the
+-- saved variables of someone who never turned the switch on.
+function ns.EUIPeekSnap(section, key)
+    local root = SnapRoot()
+    if not root then return nil end
+    local sect = root[section]
+    local profile = sect and sect[ActiveProfileName()]
+    return profile and profile[key] or nil
+end
+
+-- Record once, then write. The record-once guard matters on re-apply: without
+-- it, re-applying after a profile switch would snapshot KitnUI's own forced
+-- value over the user's original and make the switch unrestorable.
+--
+-- STANDING RULE for every page built on this store, including the ones a later
+-- plan adds: no two controls may hold down the same EllesmereUI key. The second
+-- one to record would capture the first one's forced value as the original, and
+-- whichever is switched off last would restore the wrong thing. If two controls
+-- genuinely need the same key, they have to become one control.
+function ns.EUIOverride(tbl, saved, key, value)
+    if not (tbl and saved and key) then return end
+    if saved.prev == nil then
+        local current = tbl[key]
+        if current == nil then current = ns.EUI_ABSENT end
+        saved.prev = current
+    end
+    tbl[key] = value
+end
+
+-- Some EllesmereUI values live on the EllesmereUIDB ROOT rather than inside a
+-- profile, so they are account-wide. Profile-keying their snapshots would misfile
+-- one global under whichever profile happened to be active, and the record would
+-- then be invisible from every other profile: the off path would find nothing to
+-- restore, and turning the switch on again would snapshot KitnUI's own forced
+-- value as if it were the user's. These two helpers are the same store without
+-- the profile dimension.
+local function SnapGlobalRoot()
+    if not ns.db then return nil end
+    ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}
+    return ns.db.euiSnapGlobal
+end
+
+function ns.EUISnapGlobal(key)
+    local root = SnapGlobalRoot()
+    if not root then return nil end
+    root[key] = root[key] or {}
+    return root[key]
+end
+
+function ns.EUIPeekSnapGlobal(key)
+    local root = ns.db and ns.db.euiSnapGlobal
+    return root and root[key] or nil
+end
+
+-- Clearing saved.prev is what marks the value as no longer held down. The
+-- snapshot's existence IS the "currently forcing this" flag, so nothing is
+-- tracked twice.
+function ns.EUIRestore(tbl, saved, key)
+    if not (tbl and saved and key) then return end
+    if saved.prev == nil then return end
+    if saved.prev == ns.EUI_ABSENT then
+        tbl[key] = nil
+    else
+        tbl[key] = saved.prev
+    end
+    saved.prev = nil
+end
+
+---------------------------------------------------------------------------------
 -- Registration
 ---------------------------------------------------------------------------------
 
