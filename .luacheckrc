@@ -57,6 +57,7 @@ read_globals = {
     "PluginInstallFrame", "UISpecialFrames",
     "UIFrameFadeIn", "UIFrameFadeOut",
     "hooksecurefunc",
+    "STANDARD_TEXT_FONT",
 
     -- Static popups
     "StaticPopup_Show", "StaticPopup_Hide",

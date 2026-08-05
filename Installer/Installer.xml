@@ -9,5 +9,5 @@
     <Script file="Wizard.lua" />
     <Script file="Installer.lua" />
     <Script file="Extras.lua" />
-    <Script file="EUITab.lua" />
+    <Include file="EUITab\EUITab.xml" />
 </Ui>
