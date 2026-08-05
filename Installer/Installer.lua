@@ -229,25 +229,28 @@ local function EllesmereUIPage()
     f.SubTitle:SetText("EllesmereUI Profile")
     f.Desc1:SetText(stepDesc("EllesmereUI"))
     ShowStatusAndVersion("EllesmereUI")
-    ns.Wizard:SetOption(1, "Dark Mode", function()
+    -- Both variants run the same flow; only the colour flag and the toast label
+    -- differ. Bail out before the success feedback when the import fails, so a
+    -- failure can't announce itself as a success.
+    local function importVariant(useColor, label)
         ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
-            ns.SetupAddon("EllesmereUI", true, false)
+            if not ns.SetupAddon("EllesmereUI", true, useColor) then
+                ShowInstallToast("EllesmereUI import failed", 1, 0.2, 0.2)
+                return
+            end
             ShowStatusAndVersion("EllesmereUI")
-            SuccessToast("EllesmereUI Dark Mode", "profile imported!")
+            SuccessToast(label, "profile imported!")
             PlayInstallSound()
             MarkEllesmereVariants()
             SetVariant(WF().Next, "primary")
         end)
+    end
+
+    ns.Wizard:SetOption(1, "Dark Mode", function()
+        importVariant(false, "EllesmereUI Dark Mode")
     end)
     ns.Wizard:SetOption(2, ns.ClassColor("Class Color"), function()
-        ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
-            ns.SetupAddon("EllesmereUI", true, true)
-            ShowStatusAndVersion("EllesmereUI")
-            SuccessToast("EllesmereUI Class Color", "profile imported!")
-            PlayInstallSound()
-            MarkEllesmereVariants()
-            SetVariant(WF().Next, "primary")
-        end)
+        importVariant(true, "EllesmereUI Class Color")
     end)
     ns.Wizard:SetOptionHint("Choose a color mode:")
     MarkEllesmereVariants()
@@ -287,8 +290,13 @@ local function EditModePage()
                 PlayInstallSound()
                 HandoffToNext(WF().Option1, CHECK .. " Re-import")
             else
-                WF().Desc2:SetText(ns.Red("Layout limit reached (5). Delete a layout and try again."))
-                ShowInstallToast("Layout limit reached!", 1, 0.2, 0.2)
+                -- The setup function already printed the specific reason to chat.
+                -- Keep this generic: a false return also means an EllesmereUI too
+                -- old for the layout importer, combat, an Edit Mode that has not
+                -- populated yet, or a malformed layout string. Naming only the
+                -- layout cap here mislabels all of them.
+                WF().Desc2:SetText(ns.Red("Edit Mode import failed. See chat for the reason."))
+                ShowInstallToast("Edit Mode import failed", 1, 0.2, 0.2)
             end
         end)
     end)
