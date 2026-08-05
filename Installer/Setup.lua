@@ -301,37 +301,52 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No Edit Mode data found. Add your layout string to Data.lua.")
-            return
-        end
-
-        local layouts = C_EditMode.GetLayouts()
-
-        for i = #layouts.layouts, 1, -1 do
-            if layouts.layouts[i].layoutName == ns.profileName then
-                tremove(layouts.layouts, i)
-            end
-        end
-
-        if #layouts.layouts >= 5 then
-            print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
             return false
         end
 
-        local info = C_EditMode.ConvertStringToLayoutInfo(ns.data[addonKey])
-        info.layoutName = ns.profileName
-        info.layoutType = Enum.EditModeLayoutType.Account
+        if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then
+            print(ns.title .. ": Your EllesmereUI is too old to import Edit Mode layouts. Please update EllesmereUI.")
+            return false
+        end
 
-        tinsert(layouts.layouts, info)
-        C_EditMode.SaveLayouts(layouts)
+        -- Cap check has to happen here: ApplyPresetEditMode returns a bare false
+        -- and can't tell us the 5-layout limit was the reason. It de-dupes our
+        -- own layout internally, so an existing KitnUI layout is a replacement,
+        -- not an additional one, and must not count against the cap.
+        local layouts = C_EditMode and C_EditMode.GetLayouts and C_EditMode.GetLayouts()
+        if layouts and layouts.layouts then
+            local hasOurs = false
+            for _, layout in ipairs(layouts.layouts) do
+                if layout.layoutName == ns.profileName then
+                    hasOurs = true
+                    break
+                end
+            end
+            if #layouts.layouts >= 5 and not hasOurs then
+                print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
+                return false
+            end
+        end
 
-        local newIndex = Enum.EditModePresetLayoutsMeta.NumValues + #layouts.layouts
-        C_EditMode.SetActiveLayout(newIndex)
+        -- EllesmereUI's importer. It reconciles the layout with this client's
+        -- Edit Mode schema (without which newer per-system options are absent
+        -- and never appear in Edit Mode), waits for EditModeManagerFrame's
+        -- account settings, guards combat, forces the Account layout type, and
+        -- de-dupes earlier copies of the same name.
+        if not EllesmereUI.ApplyPresetEditMode(ns.data[addonKey], ns.profileName) then
+            print(ns.title .. ": Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
+            return false
+        end
 
         CompleteSetup(addonKey)
         return true
     end
 
+    -- Load: activate the existing layout on this character. The index is the
+    -- preset count plus the layout's position in the saved list.
+    if not (C_EditMode and C_EditMode.GetLayouts) then return end
     local layouts = C_EditMode.GetLayouts()
+    if not (layouts and layouts.layouts) then return end
     for i, v in ipairs(layouts.layouts) do
         if v.layoutName == ns.profileName then
             C_EditMode.SetActiveLayout(Enum.EditModePresetLayoutsMeta.NumValues + i)
