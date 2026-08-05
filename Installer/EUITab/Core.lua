@@ -18,6 +18,78 @@ ns.EUIPages = ns.EUIPages or {}
 ns.EUIPageOrder = { "General", "Top Bar" }
 
 ---------------------------------------------------------------------------------
+-- EllesmereUI database access
+---------------------------------------------------------------------------------
+
+-- Cache the db OBJECT, never db.profile: a profile switch re-points .profile in
+-- place, so a cached profile table silently becomes the old profile's data.
+local dbCache = {}
+
+-- EllesmereUI.Lite.GetAddon(folder, true).db is nil for EllesmereUIUnitFrames
+-- and EllesmereUIMythicTimer, which keep their db file-local, and GetAddon
+-- returns nil outright for EllesmereUIDamageMeters and EllesmereUIQuestTracker,
+-- which never register an addon object at all. The registry scan is therefore
+-- required, not a fallback of last resort.
+function ns.EUIProfile(folder)
+    local L = _G.EllesmereUI and EllesmereUI.Lite
+    if not (L and folder) then return nil end
+
+    local cached = dbCache[folder]
+    if cached and cached.profile then return cached.profile end
+
+    if L.GetAddon then
+        local ok, addon = pcall(L.GetAddon, folder, true)
+        if ok and addon and addon.db and addon.db.profile then
+            dbCache[folder] = addon.db
+            return addon.db.profile
+        end
+    end
+
+    local reg = L._dbRegistry
+    if type(reg) == "table" then
+        for i = 1, #reg do
+            local entry = reg[i]
+            if entry and entry.folder == folder and entry.profile then
+                dbCache[folder] = entry
+                return entry.profile
+            end
+        end
+    end
+
+    return nil
+end
+
+-- KitnUI's own switch states live inside the EllesmereUI profile, so they
+-- export, import and switch along with it for free.
+--
+-- The saved-variable name must NOT be "KitnUIDB". NewDB wipes _G[svName] in
+-- place, and KitnUIDB is the installer's real SavedVariable declared in the
+-- TOC, so passing it would destroy the installer's state. "KitnUIEUIDB" yields
+-- the folder key "KitnUIEUI", which does not match KitnUI's addon folder. That
+-- is harmless: the key is only ever a table key, and the sidebar keys off
+-- ns.EUI_MODULE_KEY instead.
+local settingsDB
+local settingsFallback
+
+function ns.EUISettings()
+    if settingsDB and settingsDB.profile then return settingsDB.profile end
+
+    local L = _G.EllesmereUI and EllesmereUI.Lite
+    if L and L.NewDB and not settingsFallback then
+        local ok, db = pcall(L.NewDB, "KitnUIEUIDB", { profile = {} })
+        if ok and db and db.profile then
+            settingsDB = db
+            return db.profile
+        end
+    end
+
+    -- A tab that cannot store settings must still render. In-memory means the
+    -- switches work for the session and forget on logout, which beats erroring.
+    settingsFallback = settingsFallback or {}
+    return settingsFallback
+end
+
+---------------------------------------------------------------------------------
 -- Registration
 ---------------------------------------------------------------------------------
 

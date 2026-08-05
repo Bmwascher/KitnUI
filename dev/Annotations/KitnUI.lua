@@ -29,6 +29,8 @@
 ---@field Ver fun(text: string): string
 ---@field ClassColor fun(text: string): string
 ---@field EUIReady fun(): boolean
+---@field EUIProfile fun(folder: string): table|nil
+---@field EUISettings fun(): table
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean
