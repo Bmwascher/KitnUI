@@ -38,6 +38,9 @@
 ---@field EUIPeekSnapGlobal fun(key: string): table|nil
 ---@field EUIOverride fun(tbl: table, saved: table, key: string, value: any)
 ---@field EUIRestore fun(tbl: table, saved: table, key: string)
+---@field EUIRegisterReapply fun(fn: function)
+---@field EUIQueueReapply fun()
+---@field EUIResetAll fun(): boolean|nil
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean

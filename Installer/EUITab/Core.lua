@@ -197,6 +197,116 @@ function ns.EUIRestore(tbl, saved, key)
 end
 
 ---------------------------------------------------------------------------------
+-- Profile lifecycle
+---------------------------------------------------------------------------------
+
+local reapplyFns = {}
+
+-- Each page file registers exactly one function that re-asserts everything that
+-- page forces into EllesmereUI.
+function ns.EUIRegisterReapply(fn)
+    if type(fn) == "function" then
+        reapplyFns[#reapplyFns + 1] = fn
+    end
+end
+
+local reapplyPending = false
+
+-- Debounced by design, not for tidiness. EllesmereUI.RefreshAllAddons runs off
+-- the back of a profile switch and would overwrite anything written
+-- synchronously, so the re-apply has to land after it.
+function ns.EUIQueueReapply()
+    if reapplyPending then return end
+    reapplyPending = true
+    C_Timer.After(0.1, function()
+        reapplyPending = false
+        -- pcall'd per member: one failing module must not strand the rest.
+        for _, fn in ipairs(reapplyFns) do
+            pcall(fn)
+        end
+    end)
+end
+
+-- Snapshots are keyed by profile name, so a rename orphans them and whatever
+-- KitnUI forced into that profile becomes unrestorable.
+local function OnProfileRenamed(oldName, newName)
+    if type(oldName) ~= "string" or type(newName) ~= "string" then return end
+    local root = ns.db and ns.db.euiSnap
+    if not root then return end
+    for _, section in pairs(root) do
+        -- Never clobber: an existing newName record is real data.
+        if section[oldName] and not section[newName] then
+            section[newName] = section[oldName]
+        end
+        section[oldName] = nil
+    end
+end
+
+-- Without this, a new profile that reuses a deleted profile's name inherits its
+-- snapshots and restores values it never had.
+local function OnProfileDeleted(name)
+    if type(name) ~= "string" then return end
+    local root = ns.db and ns.db.euiSnap
+    if not root then return end
+    for _, section in pairs(root) do
+        section[name] = nil
+    end
+end
+
+-- KitnUI's two halves of state live in two different files: the switch states
+-- ride the EllesmereUI profile, and the snapshots live in KitnUIDB. Anything
+-- that destroys one without the other leaves EllesmereUI holding forced values
+-- that nothing remembers the originals of, and the next re-apply would then
+-- record KitnUI's own forced value as if it were the user's, permanently.
+--
+-- So the reset path turns every switch off first and lets each module's own
+-- re-apply put the originals back while the snapshots are still there.
+--
+-- Three things this has to cover beyond the active profile:
+--   * Lulu Mode's module disable and Edit Mode layout are not in the re-apply
+--     registry, because reversing them needs a reload. Reset reloads anyway.
+--   * Switch states in OTHER EllesmereUI profiles ride those profiles and would
+--     outlive their snapshots, so a later visit to one would record KitnUI's own
+--     forced value as the user's original. They cannot be restored from here
+--     without switching to each profile, but they CAN be cleared, which leaves
+--     the forced value in place with nothing claiming it and nothing to
+--     mis-record. That is the honest trade.
+--   * Everything runs synchronously, because the caller nils KitnUIDB straight
+--     after and a debounced pass would fire into the wreckage.
+--
+-- Returns false and does nothing in combat. The Lulu teardown reverses an Edit
+-- Mode layout, and ApplyPresetEditMode refuses in combat, so a reset typed
+-- mid-fight would reload with the Lulu layout still active and the switch
+-- already cleared.
+function ns.EUIResetAll()
+    if InCombatLockdown() then
+        print(ns.title .. ": Cannot reset during combat. Try again after this fight.")
+        return false
+    end
+
+    if ns.LuluTearDown then pcall(ns.LuluTearDown) end
+
+    local settings = ns.EUISettings()
+    for key in pairs(settings) do
+        settings[key] = nil
+    end
+
+    for _, fn in ipairs(reapplyFns) do
+        pcall(fn)
+    end
+
+    -- Every other profile's switch block, dropped whole.
+    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+    if type(profiles) == "table" then
+        for _, profile in pairs(profiles) do
+            if type(profile) == "table" and type(profile.addons) == "table" then
+                profile.addons.KitnUIEUI = nil
+            end
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Registration
 ---------------------------------------------------------------------------------
 
@@ -278,6 +388,23 @@ boot:SetScript("OnEvent", function(self)
     if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
 
     InjectSidebar()
+
+    -- Each guarded on the exact function it hooks: EllesmereUI dropping any one
+    -- of these must cost that behaviour, not the tab.
+    local EUI = _G.EllesmereUI
+    if EUI.SwitchProfile        then hooksecurefunc(EUI, "SwitchProfile",        ns.EUIQueueReapply) end
+    if EUI.OnSpecSwitchComplete then hooksecurefunc(EUI, "OnSpecSwitchComplete", ns.EUIQueueReapply) end
+    if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     ns.EUIQueueReapply) end
+    if EUI.OnProfileRenamed     then hooksecurefunc(EUI, "OnProfileRenamed",     OnProfileRenamed)   end
+    if EUI.OnProfileDeleted     then hooksecurefunc(EUI, "OnProfileDeleted",     OnProfileDeleted)   end
+
+    -- One re-apply at login. Without it the only repair triggers are a profile
+    -- switch, a spec switch and a profile apply, so a player who re-enables an
+    -- EllesmereUI module that a switch was holding down would wait indefinitely
+    -- with the forced value stuck and the switch reading off. The record-once
+    -- guard makes this idempotent, and the debounce sequences it after
+    -- EllesmereUI's own login work.
+    ns.EUIQueueReapply()
 
     RegisterModule({
         title       = "KitnUI",

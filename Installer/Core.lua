@@ -236,6 +236,11 @@ KitnCommands["dev"] = function()
 end
 
 KitnCommands["reset"] = function()
+    -- Put back everything the config tab is holding down before the snapshots
+    -- go, otherwise they and the switch states die out of step. It refuses in
+    -- combat, and a refusal must abort the whole reset rather than proceeding to
+    -- wipe the saved variables the restore still needs.
+    if ns.EUIResetAll and ns.EUIResetAll() == false then return end
     KitnUIDB = nil
     ReloadUI()
 end
