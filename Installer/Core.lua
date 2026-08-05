@@ -41,6 +41,17 @@ function ns.EUIReady()
     return _G.EllesmereUI and EllesmereUI.ImportProfile and true or false
 end
 
+-- Tell EllesmereUI that KitnUI owns the first-run experience, so EUI's own
+-- first-install picker stays silent while our wizard runs. This is runtime
+-- state on the EllesmereUI table, not a SavedVariable, so it has to be set
+-- every session. File scope is early enough on both counts: RequiredDeps
+-- guarantees EllesmereUI is loaded before this file runs, and EUI does not
+-- check the flag until PLAYER_LOGIN plus half a second. Guarded, so an older
+-- EllesmereUI simply keeps its own picker.
+if _G.EllesmereUI and EllesmereUI.RegisterExternalInstaller then
+    EllesmereUI.RegisterExternalInstaller("KitnUI")
+end
+
 ---------------------------------------------------------------------------------
 -- Per-addon version tracking (X-headers in TOC)
 ---------------------------------------------------------------------------------
