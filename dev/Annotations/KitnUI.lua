@@ -36,8 +36,8 @@
 ---@field OpenInstaller fun(profileLoadMode: boolean?, updateKeys: table?, cdmMode: boolean?)
 ---@field GetInstallerData fun(self: KitnUINS, profileLoadMode: boolean?, updateKeys: table?, cdmMode: boolean?): table
 ---@field SnapshotProfiles fun()
----@field ApplyEUIOverrides fun(profileName: string)
----@field DisableEUIModule fun(folder: string)
+---@field GetEUIModuleSet fun(): string[]
+---@field ApplyEUIModuleSet fun()
 ---@field FinishInstallation fun()
 ---@field CleanMinimapIcons fun()
 ---@field RunCleanIcons fun(): boolean

@@ -507,33 +507,62 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
 end
 
 ---------------------------------------------------------------------------------
--- Finish installation
--- Ownership: the standalone tools win, so disable the overlapping EllesmereUI
--- modules. Each EUI "module" is a SEPARATE addon folder; EUI's own toggle uses
--- C_AddOns.DisableAddOn + ReloadUI (verified EllesmereUI.lua:6682). Module on/off
--- is Blizzard's per-character addon state -- not a SavedVariable and not carried
--- in the !EUI_ export -- so it can only be set post-import, and takes effect on
--- the ReloadUI below.
+-- EllesmereUI module set
+-- Ownership: the standalone tools win, so the overlapping EllesmereUI modules
+-- are turned off. Each EUI "module" is a SEPARATE addon folder; module on/off
+-- is Blizzard's per-character addon state, not a SavedVariable, and it is not
+-- carried in the !EUI_ export, so it can only be set post-import and takes
+-- effect on the next ReloadUI.
 ---------------------------------------------------------------------------------
 
--- Disable one EllesmereUI module addon by folder name. Idempotent and safe:
--- no-ops if C_AddOns is unavailable or the module isn't installed.
-function ns.DisableEUIModule(folder)
-    if not (C_AddOns and C_AddOns.DisableAddOn) then return end
-    if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist(folder) then return end
-    C_AddOns.DisableAddOn(folder)
+-- Built at call time because two of the three depend on whether the replacement
+-- addon is actually loaded. Used in two places, and both are needed:
+--   * as ImportProfileSilent's disableAddons, where EllesmereUI ALSO strips
+--     those modules out of the payload and filters cross-module layout anchors
+--   * directly at Finish, because disableAddons only fires on an import. An alt
+--     running /kitn load never imports, and addon enable state is per character,
+--     so the alt would otherwise keep the modules on.
+function ns.GetEUIModuleSet()
+    local set = { "EllesmereUICooldownManager" }
+    if IsAddOnLoaded("Plater") then
+        set[#set + 1] = "EllesmereUINameplates"
+    end
+    if IsAddOnLoaded("BuffReminders") then
+        set[#set + 1] = "EllesmereUIAuraBuffReminders"
+    end
+    return set
 end
+
+-- A folder we can't see isn't installed, so there is nothing to disable. When
+-- DoesAddOnExist is unavailable, assume it is present and let DisableAddOn
+-- no-op on its own.
+local function euiModuleInstalled(folder)
+    if not C_AddOns.DoesAddOnExist then return true end
+    return C_AddOns.DoesAddOnExist(folder)
+end
+
+-- Idempotent and safe: no-ops when C_AddOns is unavailable and skips any module
+-- that isn't installed. Takes effect on the ReloadUI at the end of the flow.
+function ns.ApplyEUIModuleSet()
+    if not (C_AddOns and C_AddOns.DisableAddOn) then return end
+    for _, folder in ipairs(ns.GetEUIModuleSet()) do
+        if euiModuleInstalled(folder) then
+            C_AddOns.DisableAddOn(folder)
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Finish installation
+---------------------------------------------------------------------------------
 
 function ns.FinishInstallation()
     ns.db.installedVersion = ns.version
     ns:SetCharLoaded()
 
-    -- Disable EUI's built-ins that the standalone tools replace. Nameplates and
-    -- AuraBuffReminders only when their replacement addon is present; the
-    -- CooldownManager always (BlizzardCDM is the intended cooldown UI).
-    if IsAddOnLoaded("Plater") then ns.DisableEUIModule("EllesmereUINameplates") end
-    if IsAddOnLoaded("BuffReminders") then ns.DisableEUIModule("EllesmereUIAuraBuffReminders") end
-    ns.DisableEUIModule("EllesmereUICooldownManager")
+    -- Runs on the install AND load paths. Addon enable state is per character,
+    -- so an alt that only loads profiles still needs its own pass.
+    ns.ApplyEUIModuleSet()
 
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
