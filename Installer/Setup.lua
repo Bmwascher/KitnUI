@@ -63,7 +63,7 @@ end
 -- {importString, profileName, disableAddons} -> ok, err[, "spec_locked"]. A
 -- spec_locked result does NOT activate the profile, so the SetProfile(name)
 -- call below is still required. Also used: EllesmereUI.SetProfile(name);
--- EllesmereUI.AssignProfileToSpec(name, specID); EllesmereUI.RefreshAllAddons().
+-- EllesmereUI.RefreshAllAddons().
 ---------------------------------------------------------------------------------
 
 setupFunctions["EllesmereUI"] = function(addonKey, import)
@@ -90,9 +90,9 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
         --                           would otherwise inherit.
         --   autoAssignSpecs (false) strips the exporter's spec assignments, which
         --                           would otherwise be written into account-wide
-        --                           EllesmereUIDB.specProfiles on every user.
-        --                           Our own AssignProfileToSpec loop below is only
-        --                           safe because this stays false.
+        --                           EllesmereUIDB.specProfiles on every user. With
+        --                           KitnUI no longer assigning specs either, the
+        --                           user's own assignments survive an install.
         --   applyUIScale    (true)  applies the UI scale baked into the string.
         local ok, err = EllesmereUI.ImportProfileSilent({
             importString  = ns.data.EllesmereUI,
@@ -115,24 +115,23 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
 
     if EllesmereUI.SetProfile then EllesmereUI.SetProfile(ns.profileName) end
 
-    -- One profile now, so every spec of this class points at it. Without this a
-    -- spec change would drop the user onto whatever profile they had assigned
-    -- before, because cleanSlate only purges assignments naming OUR profile.
-    -- This does overwrite spec assignments the user made themselves, which is
-    -- what installing an opinionated profile pack means.
-    local _, _, classID = UnitClass("player")
-    local haveProfile = EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[ns.profileName]
-    if classID and haveProfile and EllesmereUI.AssignProfileToSpec and GetNumSpecializationsForClassID then
-        local numSpecs = GetNumSpecializationsForClassID(classID) or 0
-        for specIndex = 1, numSpecs do
-            local specID = GetSpecializationInfoForClassID(classID, specIndex)
-            if specID then
-                EllesmereUI.AssignProfileToSpec(ns.profileName, specID)
-            end
-        end
-    end
+    -- Spec assignment is deliberately NOT done here. EllesmereUI already owns
+    -- that question and asks it with its own "Assign Preset to Specs" dialog.
+    -- Claiming every spec of the player's class first meant that dialog opened
+    -- with choices already made on the user's behalf, and silently replaced
+    -- assignments they had set themselves. Leaving it alone lets the dialog do
+    -- its job with nothing pre-ticked.
 
     if EllesmereUI.RefreshAllAddons then EllesmereUI.RefreshAllAddons() end
+
+    -- Write the default look once, and only on an import. The shipped profile is
+    -- hand-authored, so a single text slot drifting from the preset would leave
+    -- the config tab reading Custom on a fresh install with nothing wrong. This
+    -- runs after SetProfile because the look is written into the ACTIVE profile's
+    -- module data. The load path skips it on purpose: EllesmereUI profiles are
+    -- account-wide, so an alt running /kitn load lands on the same profile and
+    -- must not overwrite a look the user changed on their main.
+    if import and ns.ApplyLook then ns.ApplyLook("dark") end
     return true
 end
 
@@ -525,13 +524,32 @@ end
 -- stack rather than fight. Listing it here stripped its settings AND its spell
 -- layouts out of the import, which shipped Blizzard's raw look with KitnUI's
 -- spell list.
+-- Off on every install, with no condition attached. These are the EllesmereUI
+-- modules KitnUI either replaces with a dedicated addon or deliberately leaves
+-- to Blizzard, so there is nothing to detect: the pack is opinionated about
+-- them either way. Note that disabling Blizz UI Enhanced also takes its Dragon
+-- Riding skin with it, because that lives inside the same folder.
+local ALWAYS_DISABLED = {
+    "EllesmereUIQoL",
+    "EllesmereUIAuraBuffReminders",
+    "EllesmereUIBlizzardSkin",
+    "EllesmereUIDamageMeters",
+    "EllesmereUIMythicTimer",
+    "EllesmereUIFriends",
+    "EllesmereUIChat",
+    "EllesmereUIBags",
+}
+
 function ns.GetEUIModuleSet()
     local set = {}
+    for _, folder in ipairs(ALWAYS_DISABLED) do
+        set[#set + 1] = folder
+    end
+
+    -- Conditional because EllesmereUI's nameplates are a real option when the
+    -- user has no Plater. The list above has no such fallback question.
     if IsAddOnLoaded("Plater") then
         set[#set + 1] = "EllesmereUINameplates"
-    end
-    if IsAddOnLoaded("BuffReminders") then
-        set[#set + 1] = "EllesmereUIAuraBuffReminders"
     end
     return set
 end
