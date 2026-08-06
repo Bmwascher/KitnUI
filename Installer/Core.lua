@@ -108,6 +108,26 @@ function ns.GetOutdatedAddons()
     return outdated
 end
 
+-- Blizzard caps Edit Mode at five saved layouts. ApplyPresetEditMode de-dupes by
+-- NAME, so writing a layout whose name already exists is a replacement and must
+-- not count against the cap. A layout under KitnUI's OTHER name does not help:
+-- importing the Lulu layout while only the standard one exists still needs a
+-- free slot.
+--
+-- Returns true when the write is safe. An unreadable layout list returns true so
+-- a missing API costs the guard, not the feature: ApplyPresetEditMode reports its
+-- own failure in that case.
+function ns.EditModeSlotFree(layoutName)
+    local layouts = C_EditMode and C_EditMode.GetLayouts and C_EditMode.GetLayouts()
+    if not (layouts and layouts.layouts) then return true end
+
+    for _, layout in ipairs(layouts.layouts) do
+        if layout.layoutName == layoutName then return true end
+    end
+
+    return #layouts.layouts < 5
+end
+
 ---------------------------------------------------------------------------------
 -- Saved variable defaults
 ---------------------------------------------------------------------------------

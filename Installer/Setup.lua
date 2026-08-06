@@ -290,24 +290,9 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
 
         local dataKey, layoutName = editModeTarget()
 
-        -- Cap check. ApplyPresetEditMode de-dupes by NAME, so an existing layout
-        -- with the name we are about to write is a replacement and must not count
-        -- against Blizzard's limit of five. A layout under KitnUI's OTHER name
-        -- does not help: importing the Lulu layout while only the standard one
-        -- exists still needs a free slot.
-        local layouts = C_EditMode and C_EditMode.GetLayouts and C_EditMode.GetLayouts()
-        if layouts and layouts.layouts then
-            local replacing = false
-            for _, layout in ipairs(layouts.layouts) do
-                if layout.layoutName == layoutName then
-                    replacing = true
-                    break
-                end
-            end
-            if #layouts.layouts >= 5 and not replacing then
-                print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
-                return false
-            end
+        if not ns.EditModeSlotFree(layoutName) then
+            print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
+            return false
         end
 
         -- EllesmereUI's importer. It reconciles the layout with this client's
