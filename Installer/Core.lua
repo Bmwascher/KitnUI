@@ -115,7 +115,6 @@ end
 local defaults = {
     profiles = {},          -- [addonKey] = true when imported
     addonVersions = {},     -- [addonKey] = X-header version at time of import
-    variants = {},          -- [addonKey] = chosen variant string (e.g. EllesmereUI "dark"/"color")
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
@@ -328,7 +327,6 @@ local function InitDB()
     ns.db = KitnUIDB
     ns.db.profiles = ns.db.profiles or {}
     ns.db.addonVersions = ns.db.addonVersions or {}
-    ns.db.variants = ns.db.variants or {}
     ns.db.perChar = ns.db.perChar or {}
     ns.db.euiSnap = ns.db.euiSnap or {}
     ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}

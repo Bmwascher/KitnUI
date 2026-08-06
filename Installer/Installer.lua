@@ -178,7 +178,7 @@ end
 ---------------------------------------------------------------------------------
 
 local addonSteps = {
-    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Healer specs auto-swap to the Healer variant." },
+    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Dark and Coloured are a preset inside KitnUI's EllesmereUI tab." },
     { key = "Plater",            display = "Plater Nameplates",       checkAddon = "Plater",               alwaysAvailable = false, desc = "Curated Plater nameplates tuned to match the KitnUI look." },
     { key = "BuffReminders",     display = "BuffReminders",           checkAddon = "BuffReminders",        alwaysAvailable = false, desc = "Flags missing raid buffs, food, and flasks right on your HUD so you never pull under-prepped." },
     { key = "BigWigs",           display = "BigWigs",                 checkAddon = "BigWigs",              alwaysAvailable = false, desc = "Boss timers and warnings, positioned and styled for KitnUI." },
@@ -208,52 +208,27 @@ local function WelcomePage()
     f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
 end
 
--- Reflect which EllesmereUI variant is live: the active one gets the "selected"
--- emphasis + a check; the other stays a plain selectable peer. Re-run after each
--- import so the marking follows the click.
-local function MarkEllesmereVariants()
-    local imported = ns.db and ns.db.profiles and ns.db.profiles["EllesmereUI"]
-    local active = imported and ns.db.variants and ns.db.variants.EllesmereUI
-    SetVariant(WF().Option1, active == "dark" and "selected" or "selectable")
-    SetVariant(WF().Option2, active == "color" and "selected" or "selectable")
-    if WF().Option1._lbl then
-        WF().Option1._lbl:SetText((active == "dark" and (CHECK .. " ") or "") .. "Dark Mode")
-    end
-    if WF().Option2._lbl then
-        WF().Option2._lbl:SetText((active == "color" and (CHECK .. " ") or "") .. ns.ClassColor("Class Color"))
-    end
-end
-
 local function EllesmereUIPage()
     local f = WF()
     f.SubTitle:SetText("EllesmereUI Profile")
     f.Desc1:SetText(stepDesc("EllesmereUI"))
     ShowStatusAndVersion("EllesmereUI")
-    -- Both variants run the same flow; only the colour flag and the toast label
-    -- differ. Bail out before the success feedback when the import fails, so a
-    -- failure can't announce itself as a success.
-    local function importVariant(useColor, label)
+    -- Bail out before the success feedback when the import fails, so a failure
+    -- cannot announce itself as a success.
+    ns.Wizard:SetOption(1, "Install Profile", function()
         ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
-            if not ns.SetupAddon("EllesmereUI", true, useColor) then
+            if not ns.SetupAddon("EllesmereUI", true) then
                 ShowInstallToast("EllesmereUI import failed", 1, 0.2, 0.2)
                 return
             end
             ShowStatusAndVersion("EllesmereUI")
-            SuccessToast(label, "profile imported!")
+            SuccessToast("EllesmereUI", "profile imported!")
             PlayInstallSound()
-            MarkEllesmereVariants()
             SetVariant(WF().Next, "primary")
         end)
-    end
-
-    ns.Wizard:SetOption(1, "Dark Mode", function()
-        importVariant(false, "EllesmereUI Dark Mode")
     end)
-    ns.Wizard:SetOption(2, ns.ClassColor("Class Color"), function()
-        importVariant(true, "EllesmereUI Class Color")
-    end)
-    ns.Wizard:SetOptionHint("Choose a color mode:")
-    MarkEllesmereVariants()
+    SetVariant(WF().Option1, "primary")
+    ns.Wizard:SetOptionHint("Dark and Coloured are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
 end
 
 local function SimpleInstallPage(addonKey, displayName)
@@ -559,24 +534,13 @@ local function EllesmereUILoadPage()
     f.SubTitle:SetText("EllesmereUI Profile")
     f.Desc1:SetText("Activate the EllesmereUI profile on this character.")
     ShowLoadStatusAndVersion("EllesmereUI")
-    ns.Wizard:SetOption(1, "Dark Mode", function()
-        ns.SetupAddon("EllesmereUI", false, false)
+    ns.Wizard:SetOption(1, "Load Profile", function()
+        ns.SetupAddon("EllesmereUI", false)
         WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
-        SuccessToast("EllesmereUI Dark Mode", "profile loaded!")
+        SuccessToast("EllesmereUI", "profile loaded!")
         PlayInstallSound()
-        MarkEllesmereVariants()
         SetVariant(WF().Next, "primary")
     end)
-    ns.Wizard:SetOption(2, ns.ClassColor("Class Color"), function()
-        ns.SetupAddon("EllesmereUI", false, true)
-        WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
-        SuccessToast("EllesmereUI Class Color", "profile loaded!")
-        PlayInstallSound()
-        MarkEllesmereVariants()
-        SetVariant(WF().Next, "primary")
-    end)
-    ns.Wizard:SetOptionHint("Choose a color mode:")
-    MarkEllesmereVariants()
 end
 
 local function SimpleLoadPage(addonKey, displayName)

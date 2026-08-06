@@ -69,7 +69,6 @@ local KitnUINS
 ---@class KitnUIDB
 ---@field profiles table<string, boolean|table>  # [addonKey] = true (CDM = per-spec table)
 ---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
----@field variants table<string, string>         # [addonKey] = chosen variant ("dark"/"color")
 ---@field installedVersion string?
 ---@field perChar table<string, table>
 ---@field devMode boolean

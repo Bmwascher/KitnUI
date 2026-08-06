@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  EllesmereUI.lua                                             ║
--- ║  Purpose: Profile data: EllesmereUI import strings (Dark /   ║
--- ║           Class Color, plus Healer variants).                ║
+-- ║  Purpose: Profile data: the EllesmereUI import string.       ║
+-- ║                                                              ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -14,10 +14,9 @@ local _, ns = ... ---@type string, KitnUINS
 -- install step reports "No EllesmereUI profile data found" and the rest of the
 -- wizard still works.
 --
--- Optional variant keys, added when those looks are authored (Phase 4):
---   ns.data.EllesmereUIColored        -- class-color DPS
---   ns.data.EllesmereUIHealer         -- healer (its presence enables per-spec auto-swap)
---   ns.data.EllesmereUIHealerColored  -- class-color healer
+-- One profile, no variants. It carries every layout KitnUI ships, and the Dark
+-- and Coloured looks are a preset in the KitnUI config tab that writes a handful
+-- of EllesmereUI keys inside this profile rather than swapping profiles.
 --
 -- PLACEHOLDER (2026-08-05): the string below is atrocityUI's own 1440p
 -- EllesmereUI export, copied verbatim from

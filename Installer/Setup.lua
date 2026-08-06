@@ -24,8 +24,8 @@ function ns.SetupAddon(addonKey, import, ...)
     return fn(addonKey, import, ...)
 end
 
--- No v2 addon uses variant base-tracking yet (EllesmereUI color/healer variants
--- are tracked under the single "EllesmereUI" key). Kept for structural parity.
+-- No v2 addon uses variant base-tracking: every addon ships exactly one profile
+-- under its own key. Kept for structural parity.
 local variantBase = {}
 ns.variantBase = variantBase
 
@@ -58,7 +58,7 @@ local function HasData(addonKey)
 end
 
 ---------------------------------------------------------------------------------
--- EllesmereUI (core import + per-spec healer/DPS swap)
+-- EllesmereUI (core import + per-spec assignment)
 -- Public API used (all guarded): EllesmereUI.ImportProfileSilent(opts), opts =
 -- {importString, profileName, disableAddons} -> ok, err[, "spec_locked"]. A
 -- spec_locked result does NOT activate the profile, so the SetProfile(name)
@@ -66,33 +66,11 @@ end
 -- EllesmereUI.AssignProfileToSpec(name, specID); EllesmereUI.RefreshAllAddons().
 ---------------------------------------------------------------------------------
 
--- Maps each spec index to its KitnUI EUI profile name. Healer specs get the
--- Healer variant; pure-DPS classes return nil (all specs use the base profile).
-local function GetSpecProfileMap(className, useColor)
-    local base   = useColor and (ns.profileName .. " Colored") or ns.profileName
-    local healer = useColor and (ns.profileName .. " Healer Colored") or (ns.profileName .. " Healer")
-    local maps = {
-        ["Shaman"]  = { base, base, healer },
-        ["Paladin"] = { healer, base, base },
-        ["Priest"]  = { healer, healer, base },
-        ["Monk"]    = { base, healer, base },
-        ["Druid"]   = { base, base, base, healer },
-        ["Evoker"]  = { base, healer, base },
-    }
-    return maps[className]
-end
-
-setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
+setupFunctions["EllesmereUI"] = function(addonKey, import)
     if not ns.EUIReady() then
         print(ns.title .. ": EllesmereUI API not available.")
         return false
     end
-
-    local suffix     = useColor and " Colored" or ""
-    local dpsName    = ns.profileName .. suffix
-    local healerName = ns.profileName .. " Healer" .. suffix
-    local dpsKey     = useColor and "EllesmereUIColored" or "EllesmereUI"
-    local healerKey  = useColor and "EllesmereUIHealerColored" or "EllesmereUIHealer"
 
     if import then
         if not EllesmereUI.ImportProfileSilent then
@@ -100,9 +78,7 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
             return false
         end
 
-        -- DPS profile (fall back to the base export if a colored variant isn't authored yet)
-        local importDpsKey = HasData(dpsKey) and dpsKey or "EllesmereUI"
-        if not HasData(importDpsKey) then
+        if not HasData("EllesmereUI") then
             print(ns.title .. ": No EllesmereUI profile data found.")
             return false
         end
@@ -118,27 +94,14 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
         --                           Our own AssignProfileToSpec loop below is only
         --                           safe because this stays false.
         --   applyUIScale    (true)  applies the UI scale baked into the string.
-        local modules = ns.GetEUIModuleSet()
         local ok, err = EllesmereUI.ImportProfileSilent({
-            importString  = ns.data[importDpsKey],
-            profileName   = dpsName,
-            disableAddons = modules,
+            importString  = ns.data.EllesmereUI,
+            profileName   = ns.profileName,
+            disableAddons = ns.GetEUIModuleSet(),
         })
         if not ok then
             print(ns.title .. ": EllesmereUI import failed - " .. (err or "unknown error"))
             return false
-        end
-
-        -- Healer profile (optional; its presence enables per-spec auto-swap)
-        if HasData(healerKey) then
-            local hok, herr = EllesmereUI.ImportProfileSilent({
-                importString  = ns.data[healerKey],
-                profileName   = healerName,
-                disableAddons = modules,
-            })
-            if not hok then
-                print(ns.title .. ": EllesmereUI healer import failed - " .. (herr or "unknown error"))
-            end
         end
 
         CompleteSetup(addonKey)
@@ -150,24 +113,21 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
         ns.ApplyEUIModuleSet()
     end
 
-    -- Remember which variant is live so the installer can mark the active choice.
-    -- Set on both import and load, since either path activates a specific variant.
-    if ns.db then
-        ns.db.variants = ns.db.variants or {}
-        ns.db.variants.EllesmereUI = useColor and "color" or "dark"
-    end
+    if EllesmereUI.SetProfile then EllesmereUI.SetProfile(ns.profileName) end
 
-    -- The last import auto-activated its profile; force the DPS profile as default.
-    if EllesmereUI.SetProfile then EllesmereUI.SetProfile(dpsName) end
-
-    -- Assign healer/DPS profiles per spec (specID is the numeric id, not 1-4 index).
-    local className, _, classID = UnitClass("player")
-    local specMap = GetSpecProfileMap(className, useColor)
-    if specMap and classID and EllesmereUI.AssignProfileToSpec then
-        for specIndex, pName in ipairs(specMap) do
+    -- One profile now, so every spec of this class points at it. Without this a
+    -- spec change would drop the user onto whatever profile they had assigned
+    -- before, because cleanSlate only purges assignments naming OUR profile.
+    -- This does overwrite spec assignments the user made themselves, which is
+    -- what installing an opinionated profile pack means.
+    local _, _, classID = UnitClass("player")
+    local haveProfile = EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[ns.profileName]
+    if classID and haveProfile and EllesmereUI.AssignProfileToSpec and GetNumSpecializationsForClassID then
+        local numSpecs = GetNumSpecializationsForClassID(classID) or 0
+        for specIndex = 1, numSpecs do
             local specID = GetSpecializationInfoForClassID(classID, specIndex)
-            if specID and EllesmereUIDB and EllesmereUIDB.profiles and EllesmereUIDB.profiles[pName] then
-                EllesmereUI.AssignProfileToSpec(pName, specID)
+            if specID then
+                EllesmereUI.AssignProfileToSpec(ns.profileName, specID)
             end
         end
     end
