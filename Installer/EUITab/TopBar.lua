@@ -29,7 +29,13 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     end
 
     local text = box:CreateFontString(nil, "OVERLAY")
-    local font = EllesmereUI.GetFontPath and select(2, pcall(EllesmereUI.GetFontPath))
+    -- pcall's second return is the error message when the call fails, so the ok
+    -- flag has to be read separately or a failure reaches SetFont as a font path.
+    local font
+    if EllesmereUI.GetFontPath then
+        local ok, path = pcall(EllesmereUI.GetFontPath)
+        if ok then font = path end
+    end
     text:SetFont(type(font) == "string" and font or STANDARD_TEXT_FONT, 14)
     text:SetPoint("CENTER", box, "CENTER", 0, 0)
     text:SetText("Coming soon.")

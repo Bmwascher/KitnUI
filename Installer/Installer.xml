@@ -3,7 +3,7 @@
 
     <!-- Load order matters: bootstrap + import engine, then the wizard shell
          (defines ns.Wizard), then the pages that use it, then the Extras actions.
-         EUITab.lua goes last: its buttons call ns.OpenInstaller. -->
+         EUITab goes last: its pages read ns state the earlier scripts define. -->
     <Script file="Core.lua" />
     <Script file="Setup.lua" />
     <Script file="Wizard.lua" />

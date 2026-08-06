@@ -75,6 +75,10 @@ function ns.EUISettings()
     if settingsDB and settingsDB.profile then return settingsDB.profile end
 
     local L = _G.EllesmereUI and EllesmereUI.Lite
+    -- Once the fallback is in use, a later NewDB success would swap the real
+    -- store in mid-session and orphan every switch flipped while in fallback,
+    -- leaving them reading off while the values they forced are still forced.
+    -- One-shot latch: stable session-only storage beats that.
     if L and L.NewDB and not settingsFallback then
         local ok, db = pcall(L.NewDB, "KitnUIEUIDB", { profile = {} })
         if ok and db and db.profile then
