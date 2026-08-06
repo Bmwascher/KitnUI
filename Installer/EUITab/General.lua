@@ -168,6 +168,15 @@ local function ApplyLook(key)
     if rf then
         rf.nameColorMode = look.raidName
         rf.topNameBarTextColorMode = look.raidName
+        -- Party frames get their own colour keys ONLY once the user decouples
+        -- the party colour section, and then those keys govern party rather than
+        -- nameColorMode. Written when present and never created, which is exactly
+        -- how EllesmereUI's own dark mode provider treats the matching
+        -- party_healthColorMode: creating it would decouple a section the user
+        -- chose to leave joined.
+        if rf.party_nameColorMode ~= nil then
+            rf.party_nameColorMode = look.raidName
+        end
         if _G._ERF_RefreshAll then pcall(_G._ERF_RefreshAll) end
     end
 end
@@ -212,7 +221,13 @@ local function MatchesLook(key)
     end
 
     local rf = ns.EUIProfile("EllesmereUIRaidFrames")
-    if rf and rf.nameColorMode ~= look.raidName then return false end
+    if rf then
+        if rf.nameColorMode ~= look.raidName then return false end
+        -- Read back only while it exists, matching the write.
+        if rf.party_nameColorMode ~= nil and rf.party_nameColorMode ~= look.raidName then
+            return false
+        end
+    end
 
     return true
 end
