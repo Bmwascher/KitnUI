@@ -74,14 +74,18 @@ local function ApplyEditModeLayout(on)
     local installed = ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]
     if not installed then return end
 
-    if type(ns.data and ns.data.Blizzard_EditMode) ~= "string" then return end
+    -- Emptiness tested exactly as the ON path and EditModeWarning test it. A bare
+    -- type check let an empty string reach the importer, which is both a pointless
+    -- call and a forecast the popup would have got wrong.
+    local standard = ns.data and ns.data.Blizzard_EditMode
+    if type(standard) ~= "string" or strtrim(standard) == "" then return end
 
     if not ns.EditModeSlotFree(ns.profileName) then
         ns.QueueMessage(ns.title .. ": Edit Mode layout limit reached (5 account layouts), so KitnUI's layout was not restored. Delete an account layout and toggle Lulu again.")
         return
     end
 
-    if not EllesmereUI.ApplyPresetEditMode(ns.data.Blizzard_EditMode, ns.profileName) then
+    if not EllesmereUI.ApplyPresetEditMode(standard, ns.profileName) then
         ns.QueueMessage(ns.title .. ": Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat.")
     end
 end
@@ -95,6 +99,44 @@ local function ApplyActionBarModule(on)
     else
         C_AddOns.EnableAddOn(ACTION_BARS)
     end
+end
+
+-- What the Edit Mode step is about to do, worked out BEFORE the popup so the
+-- user can act on it while acting is still cheap. Told only afterwards, the way
+-- out of a full layout list was: toggle on, reload, read the message, delete a
+-- layout, toggle off, reload, toggle on, reload. Three reloads to land one
+-- layout. Cancelling on a warning costs none.
+--
+-- Returns a sentence to append to the popup, or nil when the step will run. The
+-- popup text is the forecast and ApplyEditModeLayout is the outcome, so both read
+-- the same two conditions in the same order: a warning that disagreed with what
+-- then happened would be worse than no warning.
+local function EditModeWarning(on)
+    if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then return nil end
+
+    local data, layoutName
+    if on then
+        data = ns.data and ns.data.Blizzard_EditMode_Lulu
+        layoutName = ns.LuluLayoutName()
+    else
+        -- Someone who never ran the Edit Mode step has nothing to restore, and
+        -- nothing to be warned about either. Silent no-op by design.
+        if not (ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]) then
+            return nil
+        end
+        data = ns.data and ns.data.Blizzard_EditMode
+        layoutName = ns.profileName
+    end
+
+    if type(data) ~= "string" or strtrim(data) == "" then
+        return "\n\nNote: there is no Edit Mode layout to apply yet, so that step will be skipped. Everything else still applies."
+    end
+
+    if not ns.EditModeSlotFree(layoutName) then
+        return "\n\nWarning: you already have 5 account Edit Mode layouts, which is Blizzard's limit, so the Edit Mode step will be SKIPPED.\n\nCancel, delete an account layout, then try again. Carrying on costs you another reload to fix it."
+    end
+
+    return nil
 end
 
 -- Every part of this needs a reload to be true, so the switch owns the popup and
@@ -117,6 +159,9 @@ function ns.SetLuluMode(on)
     else
         text = ns.title .. ": Turn Lulu Mode off?\n\nThis restores the minimap shape, switches EllesmereUI's action bars back on, and re-applies the standard KitnUI Edit Mode layout. Your UI will reload."
     end
+
+    local warning = EditModeWarning(on)
+    if warning then text = text .. warning end
 
     StaticPopupDialogs["KITNUI_LULU_CONFIRM"] = {
         text = text,
