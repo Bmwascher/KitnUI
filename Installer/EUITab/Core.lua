@@ -268,9 +268,37 @@ local function MoveProfileRecords(oldName, newName)
     end
 end
 
+-- EllesmereUI's RenameProfile moves the profile order entry, the spec
+-- assignments, the sync group membership and the CDM spell store to the new
+-- name, but not EllesmereUIDB.colorsPullFrom: the name of the profile supplying
+-- the shared custom colour palette. Renaming that profile leaves the pointer
+-- dangling, GetCustomColorsDB finds no source and returns the bare root table,
+-- and every custom colour silently falls back to an EllesmereUI default. The
+-- visible symptom is the class resource bar jumping to the stock colour for the
+-- spec's resource.
+--
+-- KitnUI is the reason this bites. Importing our profile sets colorsPullFrom to
+-- our own profile name, so the profile a user is most likely to rename is
+-- exactly the one holding the palette. Repaired here rather than reported and
+-- left alone, because the user loses their colours in the meantime.
+--
+-- The palette is cached, so moving the pointer repaints nothing on its own.
+-- Invalidate and repaint through the same two calls EllesmereUI uses after a
+-- colour edit of its own.
+local function RepairColorsPullFrom(oldName, newName)
+    if not (_G.EllesmereUIDB and EllesmereUIDB.colorsPullFrom == oldName) then return end
+    EllesmereUIDB.colorsPullFrom = newName
+
+    local EUI = _G.EllesmereUI
+    if not EUI then return end
+    if EUI.InvalidateColorCache then pcall(EUI.InvalidateColorCache) end
+    if EUI.ApplyColorsToOUF then pcall(EUI.ApplyColorsToOUF) end
+end
+
 local function OnProfileRenamed(oldName, newName)
     if type(oldName) ~= "string" or type(newName) ~= "string" then return end
     MoveProfileRecords(oldName, newName)
+    RepairColorsPullFrom(oldName, newName)
 end
 
 -- Without this, a new profile that reuses a deleted profile's name inherits the
