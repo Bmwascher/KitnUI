@@ -133,7 +133,11 @@ local function EditModeWarning(on)
     end
 
     if not ns.EditModeSlotFree(layoutName) then
-        return "\n\nWarning: you already have 5 account Edit Mode layouts, which is Blizzard's limit, so the Edit Mode step will be SKIPPED.\n\nCancel, delete an account layout, then try again. Carrying on costs you another reload to fix it."
+        -- Coloured, not bolded. A StaticPopup's text is one fontstring with one
+        -- font object, so there is no bold to switch on mid-sentence; colour and
+        -- capitals are the whole toolkit. ns.Red is the same red the installer
+        -- uses for every other failure line.
+        return "\n\n" .. ns.Red("WARNING:") .. " you already have 5 account Edit Mode layouts, which is Blizzard's limit, so the Edit Mode step will be SKIPPED.\n\nCancel, delete an account layout, then try again. Carrying on costs you another reload to fix it."
     end
 
     return nil
@@ -155,7 +159,7 @@ function ns.SetLuluMode(on)
 
     local text
     if on then
-        text = ns.title .. ": Turn Lulu Mode on?\n\nThis makes the minimap round, switches EllesmereUI's action bars off so Blizzard's own bars return, and applies the Lulu Edit Mode layout. Your UI will reload.\n\nEllesmereUI leaves Blizzard's four extra action bars switched on when it stands down. You can turn those off in Blizzard's own settings."
+        text = ns.title .. ": Turn Lulu Mode on?\n\nThis makes the minimap round, switches EllesmereUI's action bars off so Blizzard's own bars return, and applies the Lulu Edit Mode layout. Your UI will reload."
     else
         text = ns.title .. ": Turn Lulu Mode off?\n\nThis restores the minimap shape, switches EllesmereUI's action bars back on, and re-applies the standard KitnUI Edit Mode layout. Your UI will reload."
     end
