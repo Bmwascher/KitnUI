@@ -40,13 +40,17 @@ local function ApplyMinimapShape(on)
     if _G._EMM_FullRebuildMinimap then _G._EMM_FullRebuildMinimap() end
 end
 
+-- Every message here is QUEUED, never printed. Both callers reload immediately
+-- afterwards, so a print lands in a chat frame the client destroys before the
+-- user can read it: they flip the switch, the screen reloads, and nothing ever
+-- explains why the layout did not change. ns.QueueMessage prints on the far side.
 local function ApplyEditModeLayout(on)
     if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then return end
 
     if on then
         local data = ns.data and ns.data.Blizzard_EditMode_Lulu
         if type(data) ~= "string" or strtrim(data) == "" then
-            print(ns.title .. ": No Lulu Edit Mode layout data yet. The rest of Lulu Mode still applies.")
+            ns.QueueMessage(ns.title .. ": No Lulu Edit Mode layout data yet. The rest of Lulu Mode still applies.")
             return
         end
         local name = ns.LuluLayoutName()
@@ -54,11 +58,11 @@ local function ApplyEditModeLayout(on)
         -- blames Edit Mode not being open, which sends the user hunting in the
         -- wrong place. The rest of Lulu Mode still applies either way.
         if not ns.EditModeSlotFree(name) then
-            print(ns.title .. ": Edit Mode layout limit reached (5), so Lulu's layout was skipped. Delete a layout and toggle Lulu again.")
+            ns.QueueMessage(ns.title .. ": Edit Mode layout limit reached (5 account layouts), so Lulu's layout was skipped. Delete an account layout and toggle Lulu again.")
             return
         end
         if not EllesmereUI.ApplyPresetEditMode(data, name) then
-            print(ns.title .. ": Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
+            ns.QueueMessage(ns.title .. ": Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
         end
         return
     end
@@ -73,12 +77,12 @@ local function ApplyEditModeLayout(on)
     if type(ns.data and ns.data.Blizzard_EditMode) ~= "string" then return end
 
     if not ns.EditModeSlotFree(ns.profileName) then
-        print(ns.title .. ": Edit Mode layout limit reached (5), so KitnUI's layout was not restored. Delete a layout and toggle Lulu again.")
+        ns.QueueMessage(ns.title .. ": Edit Mode layout limit reached (5 account layouts), so KitnUI's layout was not restored. Delete an account layout and toggle Lulu again.")
         return
     end
 
     if not EllesmereUI.ApplyPresetEditMode(ns.data.Blizzard_EditMode, ns.profileName) then
-        print(ns.title .. ": Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat.")
+        ns.QueueMessage(ns.title .. ": Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat.")
     end
 end
 

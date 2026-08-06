@@ -156,6 +156,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
+    pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for EllesmereUIDB root keys
@@ -169,6 +170,19 @@ end
 ---------------------------------------------------------------------------------
 -- Color helpers (also used by Setup.lua / Installer.lua via ns)
 ---------------------------------------------------------------------------------
+
+-- Say something to the user across a reload.
+--
+-- Lulu Mode and the installer both call ReloadUI on the line after they report
+-- what they could not do, so those messages were written into a chat frame the
+-- client tore down microseconds later. The user flipped a switch, saw the screen
+-- reload, and was told nothing. Queue instead of print anywhere a reload follows,
+-- and the boot handler prints it on the far side.
+function ns.QueueMessage(text)
+    if type(text) ~= "string" or not ns.db then return end
+    ns.db.pendingMessages = ns.db.pendingMessages or {}
+    ns.db.pendingMessages[#ns.db.pendingMessages + 1] = text
+end
 
 function ns.Color(text)
     return string.format("|cffFF008C%s|r", text)
@@ -377,6 +391,19 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
+
+    -- Drained before the EllesmereUI check below, so a message survives even a
+    -- session where the installer itself is unavailable. Cleared as it is read,
+    -- so a queued line is shown exactly once. The delay matches the login
+    -- notification further down: printed immediately it lands under the client's
+    -- own startup spam, which is the problem this exists to solve.
+    if ns.db.pendingMessages and #ns.db.pendingMessages > 0 then
+        local queued = ns.db.pendingMessages
+        ns.db.pendingMessages = {}
+        C_Timer.After(2, function()
+            for _, line in ipairs(queued) do print(line) end
+        end)
+    end
 
     if not ns.EUIReady() then
         print(ns.title .. ": EllesmereUI not detected - installer unavailable.")
