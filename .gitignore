@@ -6,8 +6,10 @@
 .claude/
 .codex/
 .agents/
+References/
 CLAUDE.md
 AGENTS.md
+
 
 # Editor settings & language-server config (machine-local). .luacheckrc is
 # tracked (shared lint config, like KitnEssentials); .wowluarc.json is not.
@@ -16,8 +18,6 @@ AGENTS.md
 .idea/
 .wow-api-reference
 
-# Third-party reference addon sources (local-only; index in dev/docs/REFERENCES.md)
-References/
 
 # Local-only dev docs: CurseForge readme, art masters, the References index, and
 # planning / Superpowers artifacts. Tracked dev tooling (dev/Annotations/,
