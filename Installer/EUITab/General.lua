@@ -18,14 +18,45 @@ local UNIT_KEYS = { "player", "target", "targettarget", "focus", "focustarget", 
 -- slot renders, so the slot showing the name is discoverable instead of
 -- guessable. Writing a slot that shows something else would tint text that is
 -- not a name.
-local TEXT_SLOTS = { "left", "center", "right", "extra" }
+--
+-- Unit frames render text through TWO independent sets of slots: the four
+-- in-frame ones, and the three on the optional Bottom Text Bar. Each set has its
+-- own content and colour keys, and a profile that uses the bar shows its name
+-- there, so writing only the in-frame set left the name the user actually sees
+-- on whatever colour it already had. Same shape as the raid frames' top name
+-- bar, which was already handled.
+--
+-- `bar` marks the Bottom Text Bar slots so the read-back can ignore them while
+-- the bar is switched off. They are still WRITTEN either way, so the look
+-- survives the user turning the bar on later.
+local TEXT_SLOTS = {
+    { content = "leftTextContent",   color = "leftTextClassColor"   },
+    { content = "centerTextContent", color = "centerTextClassColor" },
+    { content = "rightTextContent",  color = "rightTextClassColor"  },
+    { content = "extraTextContent",  color = "extraTextClassColor"  },
+    { content = "btbLeftContent",    color = "btbLeftClassColor",   bar = true },
+    { content = "btbCenterContent",  color = "btbCenterClassColor", bar = true },
+    { content = "btbRightContent",   color = "btbRightClassColor",  bar = true },
+}
 
--- "both" is NOT a name. EllesmereUI's tag table resolves it to
--- "[curhpshort] | [eui-perhp]%", so it is both HEALTH formats, and the shipped
--- defaults put it on the right slot of every frame. Treating it as a name
--- tinted the health numbers class-coloured on the Dark look.
+-- Four content values put the name in a slot, not one: ContentToTag builds a
+-- string containing [eui-name] for each of these. Testing only for "name"
+-- silently skipped any profile that shows the level or the current target
+-- beside it.
+--
+-- "both" is deliberately absent. It resolves to "[curhpshort] | [eui-perhp]%",
+-- so it is both HEALTH formats and never a name, and the shipped defaults put it
+-- on the right slot of every frame. Treating it as a name tinted the health
+-- numbers class-coloured.
+local NAME_CONTENT = {
+    name         = true,
+    nametotarget = true,
+    levelname    = true,
+    namelevel    = true,
+}
+
 local function SlotShowsName(settings, slot)
-    return settings[slot .. "TextContent"] == "name"
+    return NAME_CONTENT[settings[slot.content]] or false
 end
 
 -- Whichever element carries the class colour, the other goes neutral, so the
@@ -113,7 +144,7 @@ local function ApplyLook(key)
                 settings.healthClassColored = look.healthClass
                 for _, slot in ipairs(TEXT_SLOTS) do
                     if SlotShowsName(settings, slot) then
-                        settings[slot .. "TextClassColor"] = look.nameClass
+                        settings[slot.color] = look.nameClass
                     end
                 end
             end
@@ -141,13 +172,16 @@ local function ApplyLook(key)
     end
 end
 
--- True only when every value this look writes currently holds that look's
--- value, with ONE deliberate exception: topNameBarTextColorMode is written but
--- not read back. That renderer is off by default and only suppresses the
--- in-frame name once the user turns it on, so letting it decide Custom would
--- report a mismatch about a band most users never see. A module that cannot be
--- reached is skipped rather than counted as a mismatch, so a user who disabled
--- Raid Frames still sees Dark or Coloured instead of a permanent Custom.
+-- True only when every value this look writes currently holds that look's value,
+-- with two deliberate exceptions, both the same idea: a text renderer that is
+-- switched off is written but not read back, because letting text nobody can see
+-- decide Custom reports a mismatch the user cannot act on. Those are the raid
+-- frames' topNameBarTextColorMode, and the unit frames' Bottom Text Bar slots
+-- while bottomTextBar is false.
+--
+-- A module that cannot be reached is skipped rather than counted as a mismatch,
+-- so a user who disabled Raid Frames still sees Dark or Coloured instead of a
+-- permanent Custom.
 local function MatchesLook(key)
     local look = LOOKS[key]
     if not look then return false end
@@ -164,8 +198,12 @@ local function MatchesLook(key)
                     return false
                 end
                 for _, slot in ipairs(TEXT_SLOTS) do
-                    if SlotShowsName(settings, slot)
-                        and (settings[slot .. "TextClassColor"] and true or false) ~= look.nameClass then
+                    -- A slot on a switched-off Bottom Text Bar is written but not
+                    -- read back: it renders nothing, so letting it decide Custom
+                    -- would report a mismatch about text that is not on screen.
+                    if (not slot.bar or settings.bottomTextBar)
+                        and SlotShowsName(settings, slot)
+                        and (settings[slot.color] and true or false) ~= look.nameClass then
                         return false
                     end
                 end
