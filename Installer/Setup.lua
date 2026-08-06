@@ -566,15 +566,22 @@ end
 -- effect on the next ReloadUI.
 ---------------------------------------------------------------------------------
 
--- Built at call time because two of the three depend on whether the replacement
+-- Built at call time because every member depends on whether the replacement
 -- addon is actually loaded. Used in two places, and both are needed:
 --   * as ImportProfileSilent's disableAddons, where EllesmereUI ALSO strips
 --     those modules out of the payload and filters cross-module layout anchors
 --   * directly at Finish, because disableAddons only fires on an import. An alt
 --     running /kitn load never imports, and addon enable state is per character,
 --     so the alt would otherwise keep the modules on.
+--
+-- EllesmereUICooldownManager is deliberately NOT here. It is not a competing
+-- cooldown display: it hooks Blizzard's own Cooldown Viewer and skins it. The
+-- Blizzard CDM step supplies the spell layout for that same viewer, so the two
+-- stack rather than fight. Listing it here stripped its settings AND its spell
+-- layouts out of the import, which shipped Blizzard's raw look with KitnUI's
+-- spell list.
 function ns.GetEUIModuleSet()
-    local set = { "EllesmereUICooldownManager" }
+    local set = {}
     if IsAddOnLoaded("Plater") then
         set[#set + 1] = "EllesmereUINameplates"
     end
