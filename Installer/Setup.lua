@@ -303,6 +303,19 @@ end
 -- Blizzard Edit Mode
 ---------------------------------------------------------------------------------
 
+-- Which of KitnUI's two Edit Mode layouts belongs to the current mode. Falls
+-- back to the standard one whenever the Lulu layout has not been authored yet,
+-- so a half-configured Lulu Mode still lands on a working layout. Both branches
+-- of the setup function read from here, so the installer and /kitn load can
+-- never disagree about which layout is current.
+local function editModeTarget()
+    if ns.LuluEnabled and ns.LuluEnabled()
+        and ns.LuluLayoutName and HasData("Blizzard_EditMode_Lulu") then
+        return "Blizzard_EditMode_Lulu", ns.LuluLayoutName()
+    end
+    return "Blizzard_EditMode", ns.profileName
+end
+
 setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
@@ -315,20 +328,23 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
             return false
         end
 
-        -- Cap check has to happen here: ApplyPresetEditMode returns a bare false
-        -- and can't tell us the 5-layout limit was the reason. It de-dupes our
-        -- own layout internally, so an existing KitnUI layout is a replacement,
-        -- not an additional one, and must not count against the cap.
+        local dataKey, layoutName = editModeTarget()
+
+        -- Cap check. ApplyPresetEditMode de-dupes by NAME, so an existing layout
+        -- with the name we are about to write is a replacement and must not count
+        -- against Blizzard's limit of five. A layout under KitnUI's OTHER name
+        -- does not help: importing the Lulu layout while only the standard one
+        -- exists still needs a free slot.
         local layouts = C_EditMode and C_EditMode.GetLayouts and C_EditMode.GetLayouts()
         if layouts and layouts.layouts then
-            local hasOurs = false
+            local replacing = false
             for _, layout in ipairs(layouts.layouts) do
-                if layout.layoutName == ns.profileName then
-                    hasOurs = true
+                if layout.layoutName == layoutName then
+                    replacing = true
                     break
                 end
             end
-            if #layouts.layouts >= 5 and not hasOurs then
+            if #layouts.layouts >= 5 and not replacing then
                 print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
                 return false
             end
@@ -339,7 +355,7 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
         -- and never appear in Edit Mode), waits for EditModeManagerFrame's
         -- account settings, guards combat, forces the Account layout type, and
         -- de-dupes earlier copies of the same name.
-        if not EllesmereUI.ApplyPresetEditMode(ns.data[addonKey], ns.profileName) then
+        if not EllesmereUI.ApplyPresetEditMode(ns.data[dataKey], layoutName) then
             print(ns.title .. ": Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
             return false
         end
@@ -353,8 +369,9 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     if not (C_EditMode and C_EditMode.GetLayouts) then return end
     local layouts = C_EditMode.GetLayouts()
     if not (layouts and layouts.layouts) then return end
+    local _, wantedLayout = editModeTarget()
     for i, v in ipairs(layouts.layouts) do
-        if v.layoutName == ns.profileName then
+        if v.layoutName == wantedLayout then
             C_EditMode.SetActiveLayout(Enum.EditModePresetLayoutsMeta.NumValues + i)
             return
         end
