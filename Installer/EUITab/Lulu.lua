@@ -49,11 +49,36 @@ local function ApplyEditModeLayout(on)
             print(ns.title .. ": No Lulu Edit Mode layout data yet. The rest of Lulu Mode still applies.")
             return
         end
-        if not EllesmereUI.ApplyPresetEditMode(data, ns.LuluLayoutName()) then
+        local name = ns.LuluLayoutName()
+        -- Without this the write fails at five layouts and the message below
+        -- blames Edit Mode not being open, which sends the user hunting in the
+        -- wrong place. The rest of Lulu Mode still applies either way.
+        if not ns.EditModeSlotFree(name) then
+            print(ns.title .. ": Edit Mode layout limit reached (5), so Lulu's layout was skipped. Delete a layout and toggle Lulu again.")
+            return
+        end
+        if not EllesmereUI.ApplyPresetEditMode(data, name) then
             print(ns.title .. ": Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
         end
-    elseif ns.data and type(ns.data.Blizzard_EditMode) == "string" then
-        EllesmereUI.ApplyPresetEditMode(ns.data.Blizzard_EditMode, ns.profileName)
+        return
+    end
+
+    -- Turning Lulu OFF restores the layout KitnUI put there, which means there
+    -- has to be one. Without this check a user who never ran KitnUI's Edit Mode
+    -- step gets KitnUI's layout written the first time they switch Lulu off, and
+    -- their own Edit Mode arrangement replaced by one they never asked for.
+    local installed = ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]
+    if not installed then return end
+
+    if type(ns.data and ns.data.Blizzard_EditMode) ~= "string" then return end
+
+    if not ns.EditModeSlotFree(ns.profileName) then
+        print(ns.title .. ": Edit Mode layout limit reached (5), so KitnUI's layout was not restored. Delete a layout and toggle Lulu again.")
+        return
+    end
+
+    if not EllesmereUI.ApplyPresetEditMode(ns.data.Blizzard_EditMode, ns.profileName) then
+        print(ns.title .. ": Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat.")
     end
 end
 
