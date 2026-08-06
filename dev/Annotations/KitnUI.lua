@@ -41,6 +41,10 @@
 ---@field EUIRegisterReapply fun(fn: function)
 ---@field EUIQueueReapply fun()
 ---@field EUIResetAll fun(): boolean|nil
+---@field LuluEnabled fun(): boolean
+---@field LuluLayoutName fun(): string
+---@field LuluTearDown fun()
+---@field SetLuluMode fun(on: boolean)
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean

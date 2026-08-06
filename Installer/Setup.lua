@@ -142,6 +142,12 @@ setupFunctions["EllesmereUI"] = function(addonKey, import, useColor)
         end
 
         CompleteSetup(addonKey)
+
+        -- The import's enable sweep just turned every module back on that the
+        -- pack did not name, and the action bars are deliberately not named.
+        -- Re-assert the disable set here so a caller that never reaches Finish
+        -- still gets it. Idempotent, so the Finish-time pass is unaffected.
+        ns.ApplyEUIModuleSet()
     end
 
     -- Remember which variant is live so the installer can mark the active choice.
@@ -573,7 +579,20 @@ end
 -- that isn't installed. Takes effect on the ReloadUI at the end of the flow.
 function ns.ApplyEUIModuleSet()
     if not (C_AddOns and C_AddOns.DisableAddOn) then return end
-    for _, folder in ipairs(ns.GetEUIModuleSet()) do
+    local set = ns.GetEUIModuleSet()
+
+    -- Lulu Mode turns EllesmereUI's action bars off. It belongs here and NOT in
+    -- GetEUIModuleSet: that set is also ImportProfileSilent's disableAddons,
+    -- which strips the named modules' settings out of the imported payload.
+    -- Naming the action bars there would throw away the bar configuration this
+    -- addon exists to install. Enable state is all Lulu Mode needs, and the
+    -- import's own enable sweep is undone by this pass because both only take
+    -- effect at the reload and this one runs last.
+    if ns.LuluEnabled and ns.LuluEnabled() then
+        set[#set + 1] = "EllesmereUIActionBars"
+    end
+
+    for _, folder in ipairs(set) do
         if euiModuleInstalled(folder) then
             C_AddOns.DisableAddOn(folder)
         end

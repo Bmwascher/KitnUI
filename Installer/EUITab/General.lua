@@ -253,6 +253,12 @@ ns.EUIPages["General"] = function(parent, yOffset)
         "Swaps the active EllesmereUI profile. Installs the variant first if you have not imported it.");
                                                                                    y = y - h
 
+    _, h = W:Toggle(parent, "Lulu Mode", y,
+        function() return ns.LuluEnabled and ns.LuluEnabled() or false end,
+        function(v) if ns.SetLuluMode then ns.SetLuluMode(v) end end,
+        "Round minimap, Blizzard's own action bars, and a dedicated Edit Mode layout. Asks first, then reloads.");
+                                                                                   y = y - h
+
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
     _, h = W:SectionHeader(parent, "ICONS", y);                                    y = y - h
 

@@ -3,6 +3,7 @@
 
     <!-- Core first: it owns the page router every page file registers into. -->
     <Script file="Core.lua" />
+    <Script file="Lulu.lua" />
     <Script file="General.lua" />
     <Script file="TopBar.lua" />
 </Ui>
