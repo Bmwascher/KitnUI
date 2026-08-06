@@ -108,24 +108,43 @@ function ns.GetOutdatedAddons()
     return outdated
 end
 
--- Blizzard caps Edit Mode at five saved layouts. ApplyPresetEditMode de-dupes by
--- NAME, so writing a layout whose name already exists is a replacement and must
--- not count against the cap. A layout under KitnUI's OTHER name does not help:
--- importing the Lulu layout while only the standard one exists still needs a
--- free slot.
+-- Blizzard's cap is five layouts PER TYPE, not five in total:
+-- EditModeMaxLayoutsPerType is 5, and AreLayoutsOfTypeMaxed compares it against
+-- numLayouts[layoutType], so a character at five Account layouts and five
+-- Character layouts holds ten. Counting the whole list would refuse a write that
+-- would have succeeded and tell the user to delete a layout they do not need to.
 --
--- Returns true when the write is safe. An unreadable layout list returns true so
--- a missing API costs the guard, not the feature: ApplyPresetEditMode reports its
--- own failure in that case.
+-- Every layout KitnUI writes is Account type, because EllesmereUI's importer
+-- forces imported.layoutType to Enum.EditModeLayoutType.Account. So only Account
+-- layouts are counted here.
+--
+-- The name match is type-scoped for the same reason. ApplyPresetEditMode de-dupes
+-- by NAME across both types, so a CHARACTER layout sharing our name would free a
+-- Character slot, not the Account slot we are about to fill. Treating it as a
+-- replacement would let a sixth Account layout through.
+--
+-- A layout under KitnUI's OTHER name does not help either: importing the Lulu
+-- layout while only the standard one exists still needs a free Account slot.
+--
+-- Returns true when the write is safe. An unreadable layout list, or an Enum this
+-- client does not carry, returns true so a missing API costs the guard and not
+-- the feature: ApplyPresetEditMode reports its own failure in that case.
 function ns.EditModeSlotFree(layoutName)
     local layouts = C_EditMode and C_EditMode.GetLayouts and C_EditMode.GetLayouts()
     if not (layouts and layouts.layouts) then return true end
 
+    local accountType = Enum and Enum.EditModeLayoutType and Enum.EditModeLayoutType.Account
+    if accountType == nil then return true end
+
+    local used = 0
     for _, layout in ipairs(layouts.layouts) do
-        if layout.layoutName == layoutName then return true end
+        if layout.layoutType == accountType then
+            if layout.layoutName == layoutName then return true end
+            used = used + 1
+        end
     end
 
-    return #layouts.layouts < 5
+    return used < 5
 end
 
 ---------------------------------------------------------------------------------
