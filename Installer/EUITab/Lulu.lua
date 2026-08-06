@@ -73,6 +73,12 @@ end
 function ns.SetLuluMode(on)
     if InCombatLockdown() then
         print(ns.title .. ": Lulu Mode cannot be changed in combat.")
+        -- The toggle already animated to the new position when it called this,
+        -- and it never re-reads its getter, so it would keep showing a state
+        -- that was refused. RefreshPage rebuilds the row from the real value.
+        if _G.EllesmereUI and EllesmereUI.RefreshPage then
+            pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+        end
         return
     end
 
@@ -104,6 +110,12 @@ function ns.SetLuluMode(on)
             ApplyEditModeLayout(on)
             ApplyActionBarModule(on)
             ReloadUI()
+        end,
+        OnCancel = function()
+            -- Same reason as the combat guard: the knob already moved.
+            if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+            end
         end,
         timeout = 0,
         whileDead = true,
