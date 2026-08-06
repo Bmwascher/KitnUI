@@ -20,9 +20,12 @@ local UNIT_KEYS = { "player", "target", "targettarget", "focus", "focustarget", 
 -- not a name.
 local TEXT_SLOTS = { "left", "center", "right", "extra" }
 
+-- "both" is NOT a name. EllesmereUI's tag table resolves it to
+-- "[curhpshort] | [eui-perhp]%", so it is both HEALTH formats, and the shipped
+-- defaults put it on the right slot of every frame. Treating it as a name
+-- tinted the health numbers class-coloured on the Dark look.
 local function SlotShowsName(settings, slot)
-    local content = settings[slot .. "TextContent"]
-    return content == "name" or content == "both"
+    return settings[slot .. "TextContent"] == "name"
 end
 
 -- Whichever element carries the class colour, the other goes neutral, so the
@@ -46,26 +49,43 @@ local LOOKS = {
 
 local LOOK_ORDER = { "dark", "color" }
 
+-- The class resource bar is its own dark mode group and always has been.
+-- EllesmereUI's Fonts & Colors page carries two master switches, one for Unit
+-- Frames plus Raid Frames and one for the resource bar alone, because people
+-- mix the two on purpose. The appearance preset follows that split: it owns the
+-- frames and leaves the bar to the switch below, so choosing a look never
+-- repaints a bar the user set up separately.
+local function NotResourceBars(p) return p.id ~= "resourceBars" end
+local function IsResourceBars(p) return p.id == "resourceBars" end
+
 -- IsDarkModeAllOn answers "are they all on", so it cannot tell "all off" apart
 -- from "some on". The selector needs both answers, so read the providers
 -- directly. This is the same list IsDarkModeAllOn walks, and each provider
 -- knows its own module's storage shape.
 --
--- Returns true when every provider is on, false when every one is off, and nil
--- when they disagree or cannot be read. nil is a real answer: it means Custom.
-local function DarkModeState()
+-- Returns true when every provider in the group is on, false when every one is
+-- off, and nil when they disagree or cannot be read. nil is a real answer: it
+-- means Custom.
+local function DarkModeState(filter)
     local toggles = _G.EllesmereUI and EllesmereUI._darkModeToggles
     if type(toggles) ~= "table" or #toggles == 0 then return nil end
 
     local anyOn, anyOff = false, false
+    local matched = false
     for i = 1, #toggles do
         local provider = toggles[i]
         if type(provider) ~= "table" or type(provider.isOn) ~= "function" then return nil end
-        local ok, on = pcall(provider.isOn)
-        if not ok then return nil end
-        if on then anyOn = true else anyOff = true end
+        if not filter or filter(provider) then
+            matched = true
+            local ok, on = pcall(provider.isOn)
+            if not ok then return nil end
+            if on then anyOn = true else anyOff = true end
+        end
     end
 
+    -- An empty group is unreadable, not "all off": answering false would let the
+    -- selector claim a look nothing is actually in.
+    if not matched then return nil end
     if anyOn and anyOff then return nil end
     return anyOn
 end
@@ -78,11 +98,11 @@ local function ApplyLook(key)
     local look = LOOKS[key]
     if not (look and _G.EllesmereUI) then return end
 
-    -- A pure view over the three module providers, each of which flips its own
-    -- flag and repaints itself. Writing those three flags directly is exactly
-    -- what this master exists to prevent.
+    -- A pure view over the module providers, each of which flips its own flag
+    -- and repaints itself. Writing those flags directly is exactly what this
+    -- master exists to prevent. Filtered to the frame group: see NotResourceBars.
     if EllesmereUI.SetDarkModeAll then
-        pcall(EllesmereUI.SetDarkModeAll, look.darkMode)
+        pcall(EllesmereUI.SetDarkModeAll, look.darkMode, NotResourceBars)
     end
 
     local uf = ns.EUIProfile("EllesmereUIUnitFrames")
@@ -98,7 +118,13 @@ local function ApplyLook(key)
                 end
             end
         end
+        -- Two refreshers, both required. ReloadFrames rebuilds the frames, but
+        -- the unit NAME is rendered by its own pass and keeps the colour it was
+        -- last painted with, so a look change left names class-coloured with
+        -- everything else already switched. EllesmereUI's own spec-override
+        -- refresh map names both functions for this module for the same reason.
         if _G._EUF_ReloadFrames then pcall(_G._EUF_ReloadFrames) end
+        if _G._EUF_RefreshUnitNames then pcall(_G._EUF_RefreshUnitNames) end
     end
 
     -- Two name renderers, only one live at a time: the top name bar suppresses
@@ -126,7 +152,7 @@ local function MatchesLook(key)
     local look = LOOKS[key]
     if not look then return false end
 
-    local dark = DarkModeState()
+    local dark = DarkModeState(NotResourceBars)
     if dark == nil or dark ~= look.darkMode then return false end
 
     local uf = ns.EUIProfile("EllesmereUIUnitFrames")
@@ -161,11 +187,21 @@ local function CurrentLook()
     return nil
 end
 
--- Resource Bars writes its dark mode flag first and only then guards the
--- repaint on InCombatLockdown, and its palette refresher returns in combat too.
--- So a preset applied mid-fight is stored everywhere and painted almost
--- everywhere: the resource bar alone keeps its old colours until something else
--- repaints it. Refusing in combat is what stops that half-painted state.
+local function LookStateText()
+    local current = CurrentLook()
+    return current and LOOKS[current].label:upper() or "CUSTOM"
+end
+
+-- The installer applies the default look once, at import time, so a fresh
+-- install never opens on Custom. See Setup.lua for why that is data's job and
+-- not the page's.
+ns.ApplyLook = ApplyLook
+
+-- Refused in combat because a look is not one write. It flips dark mode across
+-- two modules, rewrites the unit frame colour flags, rewrites the raid frame
+-- name mode, and asks three different refreshers to repaint. Anything that
+-- defers under lockdown leaves the stored values ahead of what is on screen,
+-- and the user is left looking at a half-applied look mid-fight.
 local function PickLook(key)
     if InCombatLockdown() then
         print(ns.title .. ": Appearance cannot be changed in combat.")
@@ -179,6 +215,22 @@ local function PickLook(key)
     -- registered widget refresh callback, so the fast path would not update it.
     if _G.EllesmereUI and EllesmereUI.RefreshPage then
         pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+    end
+end
+
+-- Same combat refusal as PickLook and for the same reason: the resource bar
+-- provider writes its flag first and only then guards its repaint on
+-- InCombatLockdown, so a mid-fight flip stores the new value and paints the old
+-- one. The refresh puts the switch back where the refusal left the data.
+local function SetResourceBarDark(on)
+    if InCombatLockdown() then
+        print(ns.title .. ": Appearance cannot be changed in combat.")
+    elseif _G.EllesmereUI and EllesmereUI.SetDarkModeAll then
+        pcall(EllesmereUI.SetDarkModeAll, on, IsResourceBars)
+    end
+
+    if _G.EllesmereUI and EllesmereUI.RefreshPage then
+        pcall(EllesmereUI.RefreshPage, EllesmereUI)
     end
 end
 
@@ -321,14 +373,34 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- label row. SectionHeader passes its text through EllesmereUI.L, and a
     -- composed string is simply not in the localisation table, so it comes back
     -- unchanged.
-    local current = CurrentLook()
-    local state   = current and LOOKS[current].label:upper() or "CUSTOM"
+    local lookHeader
+    lookHeader, h = W:SectionHeader(parent, "APPEARANCE (" .. LookStateText() .. ")", y)
+                                                                                   y = y - h
 
-    _, h = W:SectionHeader(parent, "APPEARANCE (" .. state .. ")", y);            y = y - h
+    -- EllesmereUI caches a built page and re-shows the same wrapper rather than
+    -- running the builder again, so a look changed from EllesmereUI's own
+    -- options left this header naming the look the user had abandoned until a
+    -- reload. Showing the wrapper fires OnShow on its children, which is the one
+    -- moment the page is guaranteed to be back on screen. Hooked, not set, so a
+    -- handler EllesmereUI adds to its own widget later still runs.
+    if lookHeader and lookHeader._label then
+        lookHeader:HookScript("OnShow", function()
+            lookHeader._label:SetText("APPEARANCE (" .. LookStateText() .. ")")
+        end)
+    end
 
     _, h = W:WideDualButton(parent, LOOKS.dark.label, LOOKS.color.label, y,
         function() PickLook("dark") end,
         function() PickLook("color") end);                                        y = y - h
+
+    -- Its own switch, not part of the preset. EllesmereUI splits the resource
+    -- bar out of its own dark mode master for the same reason: a dark bar over
+    -- coloured frames, or the reverse, is a normal thing to want.
+    _, h = W:Toggle(parent, "Dark Class Resource Bar", y,
+        function() return DarkModeState(IsResourceBars) == true end,
+        function(v) SetResourceBarDark(v) end,
+        "Darkens the class resource bar on its own, without changing the unit frames or raid frames.");
+                                                                                   y = y - h
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
     _, h = W:SectionHeader(parent, "LULU MODE", y);                                y = y - h
