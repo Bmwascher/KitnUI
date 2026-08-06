@@ -156,6 +156,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
+    euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for EllesmereUIDB root keys
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
@@ -367,6 +368,7 @@ local function InitDB()
     ns.db.profiles = ns.db.profiles or {}
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.perChar = ns.db.perChar or {}
+    ns.db.euiSettings = ns.db.euiSettings or {}
     ns.db.euiSnap = ns.db.euiSnap or {}
     ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}
 end

@@ -59,38 +59,56 @@ function ns.EUIProfile(folder)
     return nil
 end
 
--- KitnUI's own switch states live inside the EllesmereUI profile, so they
--- export, import and switch along with it for free.
+-- Keyed by profile because a value from one profile says nothing about another.
+local function ActiveProfileName()
+    if _G.EllesmereUI and EllesmereUI.GetActiveProfileName then
+        local ok, name = pcall(EllesmereUI.GetActiveProfileName)
+        if ok and type(name) == "string" then return name end
+    end
+    return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
+end
+
+-- KitnUI's switch states live in KitnUI's own SavedVariable, filed under the
+-- EllesmereUI profile they belong to.
 --
--- The saved-variable name must NOT be "KitnUIDB". NewDB wipes _G[svName] in
--- place, and KitnUIDB is the installer's real SavedVariable declared in the
--- TOC, so passing it would destroy the installer's state. "KitnUIEUIDB" yields
--- the folder key "KitnUIEUI", which does not match KitnUI's addon folder. That
--- is harmless: the key is only ever a table key, and the sidebar keys off
--- ns.EUI_MODULE_KEY instead.
-local settingsDB
+-- They used to ride the EllesmereUI profile itself, through Lite.NewDB, which
+-- landed them in EllesmereUIDB.profiles[name].addons.KitnUIEUI and made them
+-- export, import and switch along with it for free. That store is not safe for
+-- anyone but EllesmereUI. Its Spec Overrides engine snapshots and diffs EVERY
+-- database in the Lite registry, ours included, banks each difference as a
+-- per-spec override, and writes it back over the live table at login and on
+-- every spec change. EllesmereUI's own modules survive that because a removal
+-- marker self-heals against their registered defaults; a third party registers
+-- none, so the marker stands and the switch reads off after every reload.
+--
+-- NaowhUI stores its settings there and pays the price: a hand-maintained list
+-- of every key it holds down, a sync pass into EllesmereUI's override maps at
+-- login, at each spec change and at logout, and a cleanup routine for the rows
+-- left behind. That is a fair trade for a whole UI suite. It is not one for two
+-- switches, and the hand-maintained list rots the moment a page is added.
+--
+-- What this costs: switch states no longer ride an exported profile. For a
+-- profile installer that is close to free, because the installer runs again on
+-- the other end. What it buys, beyond surviving a reload: the switch state and
+-- the snapshot recording what that switch overrode now live in the same file,
+-- so the two halves can no longer go out of step.
 local settingsFallback
 
 function ns.EUISettings()
-    if settingsDB and settingsDB.profile then return settingsDB.profile end
-
-    local L = _G.EllesmereUI and EllesmereUI.Lite
-    -- Once the fallback is in use, a later NewDB success would swap the real
-    -- store in mid-session and orphan every switch flipped while in fallback,
-    -- leaving them reading off while the values they forced are still forced.
-    -- One-shot latch: stable session-only storage beats that.
-    if L and L.NewDB and not settingsFallback then
-        local ok, db = pcall(L.NewDB, "KitnUIEUIDB", { profile = {} })
-        if ok and db and db.profile then
-            settingsDB = db
-            return db.profile
-        end
+    local root = ns.db
+    -- ns.db is filled by Installer/Core.lua at PLAYER_LOGIN, which registers its
+    -- handler first and so runs first. Anything reaching here earlier still has
+    -- to render: session-only storage beats erroring. Latched, because swapping
+    -- the real store in mid-session would orphan every switch flipped before it.
+    if not root or settingsFallback then
+        settingsFallback = settingsFallback or {}
+        return settingsFallback
     end
 
-    -- A tab that cannot store settings must still render. In-memory means the
-    -- switches work for the session and forget on logout, which beats erroring.
-    settingsFallback = settingsFallback or {}
-    return settingsFallback
+    root.euiSettings = root.euiSettings or {}
+    local profile = ActiveProfileName()
+    root.euiSettings[profile] = root.euiSettings[profile] or {}
+    return root.euiSettings[profile]
 end
 
 ---------------------------------------------------------------------------------
@@ -111,15 +129,9 @@ local function SnapRoot()
     return ns.db.euiSnap
 end
 
--- Keyed by profile because a value from one profile says nothing about another.
-local function ActiveProfileName()
-    if _G.EllesmereUI and EllesmereUI.GetActiveProfileName then
-        local ok, name = pcall(EllesmereUI.GetActiveProfileName)
-        if ok and type(name) == "string" then return name end
-    end
-    return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
-end
-
+-- Snapshots key by profile off the same helper the switch states use, so the
+-- two halves can never disagree about which profile a record belongs to.
+--
 -- Use this on the ON path only. It builds tables on the way down.
 function ns.EUISnap(section, key)
     local root = SnapRoot()
@@ -231,58 +243,77 @@ function ns.EUIQueueReapply()
     end)
 end
 
--- Snapshots are keyed by profile name, so a rename orphans them and whatever
--- KitnUI forced into that profile becomes unrestorable.
-local function OnProfileRenamed(oldName, newName)
-    if type(oldName) ~= "string" or type(newName) ~= "string" then return end
-    local root = ns.db and ns.db.euiSnap
-    if not root then return end
-    for _, section in pairs(root) do
-        -- Never clobber: an existing newName record is real data.
-        if section[oldName] and not section[newName] then
-            section[newName] = section[oldName]
+-- Both halves are keyed by profile name, so a rename orphans them and whatever
+-- KitnUI forced into that profile becomes unrestorable. They move together or
+-- not at all: a switch state without its snapshot cannot put the original back,
+-- and a snapshot without its switch state is a value nothing admits to holding.
+local function MoveProfileRecords(oldName, newName)
+    local snap = ns.db and ns.db.euiSnap
+    if snap then
+        for _, section in pairs(snap) do
+            -- Never clobber: an existing newName record is real data.
+            if section[oldName] and not section[newName] then
+                section[newName] = section[oldName]
+            end
+            section[oldName] = nil
         end
-        section[oldName] = nil
+    end
+
+    local settings = ns.db and ns.db.euiSettings
+    if settings then
+        if settings[oldName] and not settings[newName] then
+            settings[newName] = settings[oldName]
+        end
+        settings[oldName] = nil
     end
 end
 
--- Without this, a new profile that reuses a deleted profile's name inherits its
--- snapshots and restores values it never had.
+local function OnProfileRenamed(oldName, newName)
+    if type(oldName) ~= "string" or type(newName) ~= "string" then return end
+    MoveProfileRecords(oldName, newName)
+end
+
+-- Without this, a new profile that reuses a deleted profile's name inherits the
+-- old one's records and restores values it never had.
 local function OnProfileDeleted(name)
     if type(name) ~= "string" then return end
-    local root = ns.db and ns.db.euiSnap
-    if not root then return end
-    for _, section in pairs(root) do
-        section[name] = nil
+
+    local snap = ns.db and ns.db.euiSnap
+    if snap then
+        for _, section in pairs(snap) do
+            section[name] = nil
+        end
     end
+
+    local settings = ns.db and ns.db.euiSettings
+    if settings then settings[name] = nil end
 
     -- Deleting the ACTIVE profile repoints every db to Default without going
     -- through SwitchProfile, ApplyProfileData or OnSpecSwitchComplete, so this
     -- handler is the only place that learns about it. Safe to queue before the
-    -- repoint happens: EUIQueueReapply defers by 0.1 seconds.
+    -- repoint happens: EUIQueueReapply defers by 0.1 seconds. Queued even when
+    -- there was nothing to clear, because the repoint still happened.
     ns.EUIQueueReapply()
 end
 
--- KitnUI's two halves of state live in two different files: the switch states
--- ride the EllesmereUI profile, and the snapshots live in KitnUIDB. Anything
--- that destroys one without the other leaves EllesmereUI holding forced values
--- that nothing remembers the originals of, and the next re-apply would then
--- record KitnUI's own forced value as if it were the user's, permanently.
---
--- So the reset path turns every switch off first and lets each module's own
+-- Both halves of KitnUI's state now live in KitnUIDB: the switch states and the
+-- snapshots recording what those switches overrode. The caller nils KitnUIDB, so
+-- they die together and can no longer be destroyed out of step. What still has
+-- to be handled is the OTHER side: EllesmereUI is left holding whatever KitnUI
+-- forced into it, and once the snapshots are gone nothing remembers the
+-- originals. So the reset turns every switch off FIRST and lets each page's own
 -- re-apply put the originals back while the snapshots are still there.
 --
--- Three things this has to cover beyond the active profile:
+-- Two things this has to cover beyond the active profile:
 --   * Lulu Mode's module disable and Edit Mode layout are not in the re-apply
 --     registry, because reversing them needs a reload. Reset reloads anyway.
---   * Switch states in OTHER EllesmereUI profiles ride those profiles and would
---     outlive their snapshots, so a later visit to one would record KitnUI's own
---     forced value as the user's original. They cannot be restored from here
---     without switching to each profile, but they CAN be cleared, which leaves
---     the forced value in place with nothing claiming it and nothing to
---     mis-record. That is the honest trade.
---   * Everything runs synchronously, because the caller nils KitnUIDB straight
---     after and a debounced pass would fire into the wreckage.
+--   * Switch states in OTHER EllesmereUI profiles cannot be restored from here
+--     without switching to each profile in turn. Nilling KitnUIDB drops them
+--     with their snapshots, which leaves the forced value in place with nothing
+--     claiming it and nothing left to mis-record. That is the honest trade.
+--
+-- Everything runs synchronously, because the caller nils KitnUIDB straight after
+-- and a debounced pass would fire into the wreckage.
 --
 -- Returns false and does nothing in combat. The Lulu teardown reverses an Edit
 -- Mode layout, and ApplyPresetEditMode refuses in combat, so a reset typed
@@ -305,15 +336,10 @@ function ns.EUIResetAll()
         pcall(fn)
     end
 
-    -- Every other profile's switch block, dropped whole.
-    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
-    if type(profiles) == "table" then
-        for _, profile in pairs(profiles) do
-            if type(profile) == "table" and type(profile.addons) == "table" then
-                profile.addons.KitnUIEUI = nil
-            end
-        end
-    end
+    -- Every other profile's switch block, dropped whole. The caller nils
+    -- KitnUIDB immediately after, so this is belt and braces rather than the
+    -- only clearance, and it keeps EUIResetAll correct on its own terms.
+    if ns.db then ns.db.euiSettings = {} end
 end
 
 ---------------------------------------------------------------------------------
@@ -389,6 +415,37 @@ end
 -- Boot
 ---------------------------------------------------------------------------------
 
+-- Switch states used to live in EllesmereUIDB.profiles[name].addons.KitnUIEUI.
+-- Nothing writes there any more, so without this sweep every profile keeps a
+-- stale block forever and carries it into every export the user shares.
+--
+-- The values are moved rather than dropped. They are unreliable, which is why
+-- this store was abandoned, but Lulu Mode's flag is the one that matters:
+-- disabling the action bars module and swapping the Edit Mode layout both
+-- outlive a reload on their own, so losing the flag would leave Lulu applied
+-- with the switch reading off and no way to reverse it from the page.
+--
+-- Idempotent by construction: the blocks are gone after the first pass, and an
+-- entry already in the new store is never overwritten because it is the newer
+-- of the two.
+local function MigrateLegacySettings()
+    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+    if type(profiles) ~= "table" or not ns.db then return end
+
+    ns.db.euiSettings = ns.db.euiSettings or {}
+    for name, profile in pairs(profiles) do
+        if type(profile) == "table" and type(profile.addons) == "table" then
+            local old = profile.addons.KitnUIEUI
+            if type(old) == "table" then
+                if next(old) and ns.db.euiSettings[name] == nil then
+                    ns.db.euiSettings[name] = CopyTable(old)
+                end
+                profile.addons.KitnUIEUI = nil
+            end
+        end
+    end
+end
+
 -- PLAYER_LOGIN, matching every EllesmereUI options file: page builders read
 -- ns.db, which Installer/Core.lua only fills at login.
 local boot = CreateFrame("Frame")
@@ -396,6 +453,10 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
     if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
+
+    -- Before anything reads a switch state. ns.db is filled by Installer/Core.lua,
+    -- which registers its PLAYER_LOGIN handler first and so has already run.
+    MigrateLegacySettings()
 
     InjectSidebar()
 
