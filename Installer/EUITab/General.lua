@@ -217,14 +217,24 @@ end
 -- is on screen. See LiveRaidNameKey.
 --
 -- Both party twins are written when present, but only the LIVE one is read back,
--- and reading it whenever it exists is an approximation. EllesmereUI honours a
--- twin only while that section is decoupled, so a twin on a synced section is read
--- here while governing nothing. Its own re-sync deletes the section's twins before
--- syncing, so it never creates that case; an imported profile can. An apply always
--- leaves the live twin holding the look's value, so no apply can produce a false
--- header. Exact gating would cost one lookup on rf.partySyncSections; it is not
--- done because the residual case is unreachable through EllesmereUI's own
--- interface and only mislabels a header.
+-- and picking that one by whether the twin EXISTS is an approximation of what
+-- EllesmereUI does, which is to honour a twin only while its section is
+-- decoupled. Two states slip through it, both label-only:
+--
+--   * A twin sitting on a synced section is read while governing nothing.
+--     EllesmereUI's own re-sync deletes a section's twins before syncing, so its
+--     interface never creates this; an imported profile can.
+--   * Party and raid can be reading DIFFERENT renderers. Decouple the top name
+--     bar for party alone, switch it off there, and leave the text section
+--     joined: party then shows its in-frame name governed by the joined
+--     nameColorMode, while the raid bar is on so this reads the joined
+--     topNameBarTextColorMode and never looks at the key party is using. That
+--     one IS reachable through EllesmereUI's options.
+--
+-- No apply can produce either: an apply writes every key involved, so the header
+-- is only ever wrong about an edit made by hand afterwards. Exact gating would
+-- cost one lookup on rf.partySyncSections per key, and it is not done because
+-- the whole residual is a wrong word in a header nobody is steering by.
 --
 -- A module that cannot be reached is skipped rather than counted as a mismatch,
 -- so a user who disabled Raid Frames still sees Dark or Coloured instead of a
