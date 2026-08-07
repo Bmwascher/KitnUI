@@ -407,14 +407,18 @@ boot:SetScript("OnEvent", function()
     InitDB()
 
     -- Drained before the EllesmereUI check below, so a message survives even a
-    -- session where the installer itself is unavailable. Cleared as it is read,
-    -- so a queued line is shown exactly once. The delay matches the login
-    -- notification further down: printed immediately it lands under the client's
-    -- own startup spam, which is the problem this exists to solve.
+    -- session where the installer itself is unavailable. Consumed only when it is
+    -- shown, so an interrupted login carries it to the next one. The delay matches
+    -- the login notification further down: printed immediately it lands under the
+    -- client's own startup spam, which is the problem this exists to solve.
     if ns.db.pendingMessages and #ns.db.pendingMessages > 0 then
-        local queued = ns.db.pendingMessages
-        ns.db.pendingMessages = {}
+        -- Cleared INSIDE the timer, not before it. Clearing first meant a reload
+        -- inside the two-second delay consumed the lines without ever showing
+        -- them, which is the failure the queue exists to prevent.
         C_Timer.After(2, function()
+            local queued = ns.db and ns.db.pendingMessages
+            if not queued or #queued == 0 then return end
+            ns.db.pendingMessages = {}
             for _, line in ipairs(queued) do print(line) end
         end)
     end
