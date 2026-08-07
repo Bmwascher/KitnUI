@@ -80,6 +80,34 @@ local LOOKS = {
 
 local LOOK_ORDER = { "dark", "color" }
 
+-- Raid frames render the unit name through two renderers and only one is live:
+-- the top name bar suppresses the in-frame name while it is enabled. Both are
+-- WRITTEN so the look survives the user switching the bar on later; only the
+-- live one is READ BACK, because a header decided by invisible text reports a
+-- mismatch the user cannot act on.
+local RAID_NAME_KEYS = { "nameColorMode", "topNameBarTextColorMode" }
+
+-- Party frames honour these twins only once the user decouples the matching
+-- colour section, so they are written when present and never created. Creating
+-- one would decouple a section the user chose to leave joined, which is exactly
+-- how EllesmereUI's own dark mode provider treats party_healthColorMode.
+local RAID_NAME_PARTY_KEYS = { "party_nameColorMode", "party_topNameBarTextColorMode" }
+
+-- Which of the two name renderers is on screen, for the raid keys (prefix "")
+-- or the party twins (prefix "party_"). A twin is treated as governing whenever
+-- it EXISTS. That is an approximation: EllesmereUI honours a twin only while
+-- that section is decoupled, so a twin sitting on a synced section is read here
+-- while governing nothing. Its own re-sync deletes the section's twins first, so
+-- it does not create that case; an imported profile can. The approximation
+-- applies to the bar-state twin read here exactly as it does to the colour
+-- twins. See the limit noted above MatchesLook.
+local function LiveRaidNameKey(rf, prefix)
+    local enabled = rf[prefix .. "topNameBarEnabled"]
+    if enabled == nil then enabled = rf.topNameBarEnabled end
+    if enabled then return prefix .. "topNameBarTextColorMode" end
+    return prefix .. "nameColorMode"
+end
+
 -- The class resource bar is its own dark mode group and always has been.
 -- EllesmereUI's Fonts & Colors page carries two master switches, one for Unit
 -- Frames plus Raid Frames and one for the resource bar alone, because people
@@ -162,31 +190,41 @@ local function ApplyLook(key)
     -- the in-frame name while it is enabled. Both are written so the look
     -- survives the user turning that bar on later. Their custom colours are NOT
     -- written: both already default to white, and overwriting would discard a
-    -- colour the user picked on purpose. MatchesLook deliberately reads back
-    -- only nameColorMode, the renderer that is live by default: see its comment.
+    -- colour the user picked on purpose. MatchesLook reads back whichever of the
+    -- two is on screen: see its comment.
     local rf = ns.EUIProfile("EllesmereUIRaidFrames")
     if rf then
-        rf.nameColorMode = look.raidName
-        rf.topNameBarTextColorMode = look.raidName
-        -- Party frames get their own colour keys ONLY once the user decouples
-        -- the party colour section, and then those keys govern party rather than
-        -- nameColorMode. Written when present and never created, which is exactly
-        -- how EllesmereUI's own dark mode provider treats the matching
-        -- party_healthColorMode: creating it would decouple a section the user
-        -- chose to leave joined.
-        if rf.party_nameColorMode ~= nil then
-            rf.party_nameColorMode = look.raidName
+        for _, k in ipairs(RAID_NAME_KEYS) do
+            rf[k] = look.raidName
+        end
+        for _, k in ipairs(RAID_NAME_PARTY_KEYS) do
+            if rf[k] ~= nil then
+                rf[k] = look.raidName
+            end
         end
         if _G._ERF_RefreshAll then pcall(_G._ERF_RefreshAll) end
     end
 end
 
 -- True only when every value this look writes currently holds that look's value,
--- with two deliberate exceptions, both the same idea: a text renderer that is
--- switched off is written but not read back, because letting text nobody can see
--- decide Custom reports a mismatch the user cannot act on. Those are the raid
--- frames' topNameBarTextColorMode, and the unit frames' Bottom Text Bar slots
+-- with one deliberate exception: a text renderer that is switched off is written
+-- but not read back, because letting text nobody can see decide Custom reports a
+-- mismatch the user cannot act on. That is the unit frames' Bottom Text Bar slots
 -- while bottomTextBar is false.
+--
+-- The raid frames are not an exception to that rule, they are the same rule: they
+-- have two name renderers rather than a switch, so the read follows whichever one
+-- is on screen. See LiveRaidNameKey.
+--
+-- Both party twins are written when present, but only the LIVE one is read back,
+-- and reading it whenever it exists is an approximation. EllesmereUI honours a
+-- twin only while that section is decoupled, so a twin on a synced section is read
+-- here while governing nothing. Its own re-sync deletes the section's twins before
+-- syncing, so it never creates that case; an imported profile can. An apply always
+-- leaves the live twin holding the look's value, so no apply can produce a false
+-- header. Exact gating would cost one lookup on rf.partySyncSections; it is not
+-- done because the residual case is unreachable through EllesmereUI's own
+-- interface and only mislabels a header.
 --
 -- A module that cannot be reached is skipped rather than counted as a mismatch,
 -- so a user who disabled Raid Frames still sees Dark or Coloured instead of a
@@ -222,11 +260,11 @@ local function MatchesLook(key)
 
     local rf = ns.EUIProfile("EllesmereUIRaidFrames")
     if rf then
-        if rf.nameColorMode ~= look.raidName then return false end
+        local liveKey = LiveRaidNameKey(rf, "")
+        if rf[liveKey] ~= look.raidName then return false end
         -- Read back only while it exists, matching the write.
-        if rf.party_nameColorMode ~= nil and rf.party_nameColorMode ~= look.raidName then
-            return false
-        end
+        local partyKey = LiveRaidNameKey(rf, "party_")
+        if rf[partyKey] ~= nil and rf[partyKey] ~= look.raidName then return false end
     end
 
     return true
