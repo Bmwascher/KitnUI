@@ -22,9 +22,25 @@ local ARROW_TEX = "Interface\\AddOns\\KitnUI\\Media\\Nameplates\\DoubleArrow.tga
 -- bar still centres when the profile has never set one.
 local DEFAULT_BAR_H = 17
 
+-- The art is 64x64 but the chevron only occupies part of it. Measured from the
+-- file's alpha channel on 2026-08-07: opaque pixels run x 12..52 and y 4..59, so
+-- 41x56 of 64x64, leaving 12 transparent columns on the left and 11 on the right.
+--
+-- Uncropped, that padding is why a Side Gap of 0 did not touch the plate and why
+-- the arrows looked soft: about a third of the width the user set was invisible,
+-- and the visible chevron was drawn from far fewer source pixels than its box
+-- suggested. Cropping to the measured box makes the Width slider mean the width
+-- of the ARROW rather than the width of its box.
+local CROP_L, CROP_R = 12 / 64, 53 / 64
+local CROP_T, CROP_B = 4 / 64, 60 / 64
+
+-- Plater's indicator used 15x12 with its own art. This asset's visible chevron is
+-- 41x56, so it is TALLER than it is wide and 15x12 squashes it. These defaults
+-- keep the native 0.73 ratio at a comparable size. Existing saved values are
+-- untouched; this only affects a profile that has never set them.
 local DEFAULTS = {
-    npArrowW         = 15,
-    npArrowH         = 12,
+    npArrowW         = 16,
+    npArrowH         = 22,
     npArrowGap       = 14,
     npArrowY         = 0,
     npArrowGlow      = true,
@@ -178,14 +194,15 @@ local function EnsureArrows(plate)
     plate._kitnArrowR:SetTexture(ARROW_TEX)
     plate._kitnArrowR:Hide()
 
-    -- One chevron asset serves both sides. The right arrow swaps its left and
-    -- right texture coordinates, mirroring it horizontally, so both point INTO
-    -- the plate: >> plate <<
+    -- Two jobs in one call. The crop trims the transparent padding measured off
+    -- the file, so the Width slider sizes the chevron and not its empty box. The
+    -- right arrow additionally SWAPS its left and right coordinates, mirroring it
+    -- horizontally so both point INTO the plate: >> plate <<
     --
     -- SetTexCoord, not SetRotation(pi): a 180 degree rotation mirrors VERTICALLY
-    -- too. These are the two coord sets the Plater indicator carried.
-    plate._kitnArrowL:SetTexCoord(0, 1, 0, 1)
-    plate._kitnArrowR:SetTexCoord(1, 0, 0, 1)
+    -- too, which is invisible on a symmetric chevron and wrong on anything else.
+    plate._kitnArrowL:SetTexCoord(CROP_L, CROP_R, CROP_T, CROP_B)
+    plate._kitnArrowR:SetTexCoord(CROP_R, CROP_L, CROP_T, CROP_B)
 
     return true
 end
@@ -218,9 +235,13 @@ local function PositionArrows(plate, t, gapL, gapR)
     local PP = EllesmereUI.PP
     if not (PP and PP.Point and PP.Width) then return end
 
-    local dy = (t.npArrowH - HealthBarHeight()) / 2
-    local lox = -(gapL + t.npArrowW / 2)
-    local rox =  (gapR + t.npArrowW / 2)
+    -- Rounded to whole pixels. A half-pixel offset lands the texture between
+    -- screen pixels and the arrow renders soft, which is what an odd difference
+    -- between arrow height and bar height produces every time. EllesmereUI rounds
+    -- its own arrow geometry the same way.
+    local dy  =  math.floor((t.npArrowH - HealthBarHeight()) / 2 + 0.5)
+    local lox = -math.floor(gapL + t.npArrowW / 2 + 0.5)
+    local rox =  math.floor(gapR + t.npArrowW / 2 + 0.5)
     local y = t.npArrowY
 
     plate._kitnArrowL:ClearAllPoints()
@@ -412,20 +433,31 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "TARGET ARROW", y);                             y = y - h
 
-    row, h = W:Toggle(parent, "KitnUI Target Arrows", y,
-        function() return ns.NameplateArrowsEnabled() end,
-        function(v)
-            local s = ns.EUISettings()
-            if s then s.npArrows = v and true or nil end
-            ApplyArrows(true)
-        end,
-        "Draws KitnUI's own chevrons around your target's nameplate. While this is on, EllesmereUI's own target arrows are switched off and given back when you switch this off. EllesmereUI's have 16 styles and dodge auras automatically; these do not.");
-                                                                                   y = y - h
+    -- Two controls per row, matching the density of every other page in this
+    -- panel. Nine full-width rows made this page twice as tall as EllesmereUI's
+    -- own and read as a list rather than a settings group.
+    row, h = W:DualRow(parent, y,
+        { type = "toggle", text = "KitnUI Target Arrows",
+          tooltip = "Draws KitnUI's own chevrons around your target's nameplate. EllesmereUI's own target arrows are switched off while this is on, and given back when you switch it off. Theirs have 16 styles and dodge auras automatically; these do not.",
+          getValue = function() return ns.NameplateArrowsEnabled() end,
+          setValue = function(v)
+              local s = ns.EUISettings()
+              if s then s.npArrows = v and true or nil end
+              ApplyArrows(true)
+          end },
+        { type = "toggle", text = "Additive Glow",
+          tooltip = "Makes the arrows glow rather than sit flat. Turn it off if they wash out against a bright background.",
+          getValue = function() return GetFlag("npArrowGlow") end,
+          setValue = function(v) SetNum("npArrowGlow", v and true or false) end }
+    );                                                                             y = y - h
 
-    -- The swatch rides the enable row rather than taking a row of its own: there
-    -- is no colour entry type for DualRow, and a lone swatch row reads as clutter.
-    if row and EllesmereUI.BuildColorSwatch and EllesmereUI.PP then
-        local swatch = EllesmereUI.BuildColorSwatch(row, row:GetFrameLevel() + 5,
+    -- The swatch rides the enable toggle rather than taking a row of its own:
+    -- DualRow has no colour entry type, and a lone swatch row reads as clutter.
+    -- Anchored to the LEFT of that half's control, which is where EllesmereUI puts
+    -- the swatch for its own target arrow colour.
+    local leftRgn = row and row._leftRegion
+    if leftRgn and leftRgn._control and EllesmereUI.BuildColorSwatch and EllesmereUI.PP then
+        local swatch = EllesmereUI.BuildColorSwatch(leftRgn, leftRgn:GetFrameLevel() + 5,
             function()
                 local t = Cfg()
                 local c = DefaultArrowColor()
@@ -438,50 +470,42 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
                 UpdateArrows()
             end, nil, 20)
         if swatch then
-            EllesmereUI.PP.Point(swatch, "RIGHT", row, "RIGHT", -14, 0)
+            EllesmereUI.PP.Point(swatch, "RIGHT", leftRgn._control, "LEFT", -8, 0)
         end
     end
 
-    _, h = W:Slider(parent, "Arrow Width", y, 4, 64, 1,
-        function() return GetNum("npArrowW") end,
-        function(v) SetNum("npArrowW", v) end,
-        "How wide each chevron is. Width and height are separate, so the arrows do not have to be square.");
-                                                                                   y = y - h
+    _, h = W:DualRow(parent, y,
+        { type = "slider", text = "Arrow Width", min = 4, max = 64, step = 1,
+          tooltip = "How wide each chevron is. Width and height are separate, so the arrows do not have to be square.",
+          getValue = function() return GetNum("npArrowW") end,
+          setValue = function(v) SetNum("npArrowW", v) end },
+        { type = "slider", text = "Arrow Height", min = 4, max = 64, step = 1,
+          tooltip = "How tall each chevron is. The art is taller than it is wide, so a matching shape is roughly 3 tall for every 2 wide.",
+          getValue = function() return GetNum("npArrowH") end,
+          setValue = function(v) SetNum("npArrowH", v) end }
+    );                                                                             y = y - h
 
-    _, h = W:Slider(parent, "Arrow Height", y, 4, 64, 1,
-        function() return GetNum("npArrowH") end,
-        function(v) SetNum("npArrowH", v) end,
-        "How tall each chevron is.");                                              y = y - h
+    _, h = W:DualRow(parent, y,
+        { type = "slider", text = "Side Gap", min = -30, max = 60, step = 1,
+          tooltip = "How far the arrows sit from the nameplate. 0 puts them against its edge, and negative values move them in over it.",
+          getValue = function() return GetNum("npArrowGap") end,
+          setValue = function(v) SetNum("npArrowGap", v) end },
+        { type = "slider", text = "Vertical Offset", min = -30, max = 30, step = 1,
+          tooltip = "Moves both arrows up or down without changing their height.",
+          getValue = function() return GetNum("npArrowY") end,
+          setValue = function(v) SetNum("npArrowY", v) end }
+    );                                                                             y = y - h
 
-    _, h = W:Slider(parent, "Side Gap", y, -30, 60, 1,
-        function() return GetNum("npArrowGap") end,
-        function(v) SetNum("npArrowGap", v) end,
-        "How far the arrows sit from the nameplate. Negative values move them in over it.");
-                                                                                   y = y - h
-
-    _, h = W:Slider(parent, "Vertical Offset", y, -30, 30, 1,
-        function() return GetNum("npArrowY") end,
-        function(v) SetNum("npArrowY", v) end,
-        "Moves both arrows up or down without changing their height.");            y = y - h
-
-    _, h = W:Spacer(parent, y, 20);                                                y = y - h
-
-    _, h = W:Toggle(parent, "Additive Glow", y,
-        function() return GetFlag("npArrowGlow") end,
-        function(v) SetNum("npArrowGlow", v and true or false) end,
-        "Makes the arrows glow rather than sit flat. Turn it off if they wash out against a bright background.");
-                                                                                   y = y - h
-
-    _, h = W:Toggle(parent, "Move Aside While Casting", y,
-        function() return GetFlag("npArrowCastNudge") end,
-        function(v) SetNum("npArrowCastNudge", v and true or false) end,
-        "Steps the LEFT arrow out of the cast bar's way while your target is casting. The right arrow stays put.");
-                                                                                   y = y - h
-
-    _, h = W:Slider(parent, "Cast Nudge", y, 0, 30, 1,
-        function() return GetNum("npArrowCastKick") end,
-        function(v) SetNum("npArrowCastKick", v) end,
-        "How far the left arrow moves while your target is casting.");             y = y - h
+    _, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Move Aside While Casting",
+          tooltip = "Steps the LEFT arrow out of the cast bar's way while your target is casting. The right arrow stays put.",
+          getValue = function() return GetFlag("npArrowCastNudge") end,
+          setValue = function(v) SetNum("npArrowCastNudge", v and true or false) end },
+        { type = "slider", text = "Cast Nudge", min = 0, max = 30, step = 1,
+          tooltip = "How far the left arrow moves while your target is casting.",
+          getValue = function() return GetNum("npArrowCastKick") end,
+          setValue = function(v) SetNum("npArrowCastKick", v) end }
+    );                                                                             y = y - h
 
     return math.abs(y)
 end
