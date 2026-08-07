@@ -63,12 +63,15 @@ local CROP_T, CROP_B = 4 / 64, 60 / 64
 --   Plater box    = 15 * 2.6 = 39 wide, 12 * 2.6 = 31.2 tall
 --   visible arrow = 39 * 41/64 = 25.0 wide, 31.2 * 56/64 = 27.3 tall
 --
--- Kitn compared the two side by side and landed on 24x30 independently, which is
--- within a pixel on width and three on height. Derivation and eye agree, so the
--- defaults are his observed numbers.
+-- The gap is the same maths: x * scale = 36.4 puts the box's inner edge 2.6
+-- INSIDE the bar, and the chevron is inset a further 11/64 * 39 = 6.7 within its
+-- own box, leaving it 4.1 outside. So the derivation says 25 / 27.3 / 4.1.
 --
--- 24:30 is a touch wider than the art's native 41:56, which keeps the same slight
--- squash Plater's own 15x12 applies.
+-- LOCKED at 24 / 27 / 3, Kitn's call after comparing both in game. The width and
+-- gap are a pixel under the derived figures and the height takes the derived one;
+-- he arrived at 24 and 3 by eye before seeing the arithmetic, so where they
+-- disagree by a pixel the eye wins. Do not "correct" these back to the computed
+-- values: they were chosen against the real thing, which the maths only models.
 --
 -- NOTE for anyone changing the shipped health bar height: Plater scales its
 -- indicator WITH the bar and we do not, so these defaults are correct for a 26px
@@ -77,7 +80,7 @@ local CROP_T, CROP_B = 4 / 64, 60 / 64
 -- Existing saved values are untouched; this only affects a fresh profile.
 local DEFAULTS = {
     npArrowW         = 24,
-    npArrowH         = 30,
+    npArrowH         = 27,
     npArrowGap       = 3,
     npArrowY         = 0,
     npArrowGlow      = true,
