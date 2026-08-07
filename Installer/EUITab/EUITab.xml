@@ -6,5 +6,6 @@
     <Script file="Lulu.lua" />
     <Script file="General.lua" />
     <Script file="Gameplay.lua" />
+    <Script file="Nameplates.lua" />
     <Script file="TopBar.lua" />
 </Ui>

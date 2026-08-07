@@ -26,6 +26,12 @@ local BORDER_COL = { 0.69, 0.55, 1.0, 0.20 }   -- faint purple-white 1px border
 -- own accent, so the installer reads as KitnUI's rather than EUI's purple.
 local KITN_PINK = { 1, 0, 0.549 }
 
+-- Exported because the Nameplates page defaults its target arrow colour to the
+-- same brand accent, and two copies of a brand colour drift. POSITIONAL, because
+-- SetColorTexture takes three arguments; anything reading it into a keyed colour
+-- table has to convert.
+ns.KITN_PINK = KITN_PINK
+
 -- Baked KitnUI installer background art (pink panel chrome + cat). Source art is
 -- 1412x1114 (KitnUI-EUI-Background.png) with a black margin around a ~1.36:1 pink
 -- panel; shipped as an uncompressed TGA (WoW's reliable format). ART_CROP reshapes

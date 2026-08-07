@@ -42,7 +42,9 @@
 ---@field EUIRegisterReapply fun(fn: function)
 ---@field EUIQueueReapply fun()
 ---@field EUIResetAll fun(): boolean|nil
+---@field KITN_PINK number[]
 ---@field BeginnerEnabled fun(): boolean
+---@field NameplateArrowsEnabled fun(): boolean
 ---@field LuluEnabled fun(): boolean
 ---@field LuluLayoutName fun(): string
 ---@field LuluTearDown fun()

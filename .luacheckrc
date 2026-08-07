@@ -74,6 +74,10 @@ read_globals = {
     "GetClassColor",
     "GetRealmName",
 
+    -- Unit state (target arrows: which plate, hostile or not, casting or not)
+    "UnitExists", "UnitIsUnit", "UnitCanAttack",
+    "UnitCastingInfo", "UnitChannelInfo",
+
     -- Spec functions
     "C_SpecializationInfo",
     "GetSpecialization", "GetSpecializationInfo",

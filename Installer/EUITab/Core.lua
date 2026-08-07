@@ -17,7 +17,7 @@ ns.EUI_MODULE_KEY = "KitnUI"
 ns.EUIPages = ns.EUIPages or {}
 -- Top Bar goes last because it is a placeholder, and a page that says "Coming
 -- soon" should not sit between two working pages.
-ns.EUIPageOrder = { "General", "Gameplay", "Top Bar" }
+ns.EUIPageOrder = { "General", "Gameplay", "Nameplates", "Top Bar" }
 
 ---------------------------------------------------------------------------------
 -- EllesmereUI database access
