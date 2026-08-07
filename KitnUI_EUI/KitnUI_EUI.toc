@@ -1,0 +1,14 @@
+## Title: |cffFF008CKitn|r|cffffffffUI|r_EUI
+## Notes: KitnUI's configuration pages inside EllesmereUI.
+## Author: Bitebtw
+## Version: @project-version@
+## Interface: 120005, 120007
+## Dependencies: KitnUI, EllesmereUI
+## IconTexture: Interface\Icons\INV_Misc_Gift_05
+## Group: KitnUI
+
+# No SavedVariables line, deliberately. Switch states live in EllesmereUI's
+# profile store and snapshots live in KitnUIDB, so this addon persists nothing of
+# its own. Lite.NewDB wipes the global matching its svName, and KitnUI_EUIDB
+# being undeclared is exactly what makes that wipe harmless.
+EUITab.xml

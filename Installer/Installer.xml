@@ -3,11 +3,10 @@
 
     <!-- Load order matters: bootstrap + import engine, then the wizard shell
          (defines ns.Wizard), then the pages that use it, then the Extras actions.
-         EUITab goes last: its pages read ns state the earlier scripts define. -->
+         The EllesmereUI tab is a separate addon (KitnUI_EUI) and loads itself. -->
     <Script file="Core.lua" />
     <Script file="Setup.lua" />
     <Script file="Wizard.lua" />
     <Script file="Installer.lua" />
     <Script file="Extras.lua" />
-    <Include file="EUITab\EUITab.xml" />
 </Ui>

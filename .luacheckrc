@@ -18,6 +18,7 @@ globals = {
 
     -- Cross-addon shared globals (other Kitn addons register into these)
     "KitnCommands",
+    "KitnUI_Shared",  -- KitnUI's ns table, published for the KitnUI_EUI addon
 
     -- Slash command registration (required by WoW)
     "SLASH_KITN1", "SLASH_KITN2", "SLASH_KITN3",

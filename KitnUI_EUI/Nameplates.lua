@@ -16,7 +16,7 @@
 local _, ns = ... ---@type string, KitnUINS
 
 local NAMEPLATES = "EllesmereUINameplates"
-local ARROW_TEX = "Interface\\AddOns\\KitnUI\\Media\\Nameplates\\DoubleArrow.tga"
+local ARROW_TEX = "Interface\\AddOns\\KitnUI_EUI\\Media\\Nameplates\\DoubleArrow.tga"
 
 -- EllesmereUI's own default, used only when the profile cannot be read, so a
 -- texture taller or shorter than the bar still centres. This is NOT the height

@@ -7,6 +7,13 @@
 
 local addonName, ns = ... ---@type string, KitnUINS
 
+-- The forward half of the bridge to KitnUI_EUI, which is a separate addon and so
+-- gets a separate namespace table. It reads eight symbols from here (db, data,
+-- profileName, title, Red, QueueMessage, EditModeSlotFree, KITN_PINK) through an
+-- __index fallthrough, so this must be the SAME table, not a copy: ns.db is not
+-- filled until PLAYER_LOGIN and a copy would freeze it empty.
+_G.KitnUI_Shared = ns
+
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 
 ---------------------------------------------------------------------------------
@@ -373,7 +380,12 @@ SlashCmdList["KITN"] = function(msg)
         print("  /kitn update   - Reimport only profiles that have been updated")
         print("  /kitn load     - Apply installed profiles to this character")
         print("  /kitn cdm      - Import Blizzard CDM layouts for your current class")
-        print("  /kitn options  - Open the KitnUI tab in EllesmereUI's config panel")
+        -- Registered by KitnUI_EUI, which can be disabled on its own now that it is a
+        -- separate addon. Advertising a command that answers "Unknown command" is
+        -- worse than saying nothing.
+        if KitnCommands and KitnCommands["options"] then
+            print("  /kitn options  - Open the KitnUI tab in EllesmereUI's config panel")
+        end
         print("  /kitn reset    - Reset installer state (does not remove addon profiles)")
         print("  /kitn version  - Show addon version")
         if KitnHelpLines then
