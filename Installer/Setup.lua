@@ -518,8 +518,15 @@ end
 -- effect on the next ReloadUI.
 ---------------------------------------------------------------------------------
 
--- Built at call time because every member depends on whether the replacement
--- addon is actually loaded. Used in two places, and both are needed:
+-- Built at call time, and a FRESH table every call, for two reasons. One member
+-- is conditional: see the nameplates branch below; the rest are unconditional.
+-- And ApplyEUIModuleSet appends to what this returns, while the same return also
+-- becomes ImportProfileSilent's disableAddons, so a shared static set would let
+-- that append leak into the import's strip list. Lulu Mode's action bars entry
+-- is deliberately NOT part of this set; ApplyEUIModuleSet appends it separately
+-- and explains why.
+--
+-- Used in two places, and both are needed:
 --   * as ImportProfileSilent's disableAddons, where EllesmereUI ALSO strips
 --     those modules out of the payload and filters cross-module layout anchors
 --   * directly at Finish, because disableAddons only fires on an import. An alt
