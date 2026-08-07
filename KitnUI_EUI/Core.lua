@@ -494,6 +494,25 @@ local function InjectSidebar()
     })
 end
 
+-- Export and import walk EllesmereUI's own _ADDON_DB_MAP rather than the db
+-- registry, so a companion addon is invisible to them without this. The UI reads
+-- the map live, so a login-time insert is picked up.
+--
+-- Only folder and display are read off a map entry. `canon` is derived by the
+-- map's own file-scope loop for shipped entries and an injected one simply has
+-- none, which AddonsToCanon handles by passing unknown keys through unchanged.
+-- The loaded check falls back to the folder name, and KitnUI_EUI is a real
+-- loaded addon, which is why the folder had to match the addon folder.
+local function InjectProfileAddon()
+    local EUI = _G.EllesmereUI
+    local map = EUI and EUI._ADDON_DB_MAP
+    if type(map) ~= "table" then return end
+    for _, e in ipairs(map) do
+        if e.folder == "KitnUI_EUI" then return end   -- a reload must not re-insert
+    end
+    map[#map + 1] = { folder = "KitnUI_EUI", display = "KitnUI" }
+end
+
 ---------------------------------------------------------------------------------
 -- Boot
 ---------------------------------------------------------------------------------
@@ -542,6 +561,12 @@ boot:SetScript("OnEvent", function(self)
     MigrateLegacySettings()
 
     InjectSidebar()
+
+    -- Registration first, injection second. GetAddonProfile resolves a map entry
+    -- through Lite._dbRegistry, so a map entry with no registered db reads
+    -- "Ready" in the export list and exports nothing.
+    ns.EUISettingsDB()
+    InjectProfileAddon()
 
     -- Each guarded on the exact function it hooks: EllesmereUI dropping any one
     -- of these must cost that behaviour, not the tab.
