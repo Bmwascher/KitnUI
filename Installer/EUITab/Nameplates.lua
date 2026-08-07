@@ -52,9 +52,13 @@ local CROP_T, CROP_B = 4 / 64, 60 / 64
 -- the bar and the chevron, inset within its own box, ends up a little outside it.
 -- That predicted about 3, and 3 is what looked right in game.
 --
--- The SIZE conversion needs the REAL bar height, and an earlier attempt used
--- EllesmereUI's default of 17 rather than the 26 the KitnUI profile ships. That
--- one substitution was the whole remaining error. At 26:
+-- 15 and 12 are the ARROW's width and height in that preset, not the bar's. The
+-- conversion needs the bar height only because it feeds Plater's scale, and an
+-- earlier attempt used EllesmereUI's default of 17 rather than the 26 the KitnUI
+-- profile actually ships. That one substitution was the whole remaining error.
+--
+-- Both nameplate sets run the same 220x26 bar, so the 2.6 applies on both sides
+-- and the comparison is like for like:
 --   scale         = 26 / 10 = 2.6
 --   Plater box    = 15 * 2.6 = 39 wide, 12 * 2.6 = 31.2 tall
 --   visible arrow = 39 * 41/64 = 25.0 wide, 31.2 * 56/64 = 27.3 tall
