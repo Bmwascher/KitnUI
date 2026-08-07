@@ -379,9 +379,9 @@ local function OnProfileDeleted(name)
     ns.EUIQueueReapply()
 end
 
--- Both halves of KitnUI's state now live in KitnUIDB: the switch states and the
--- snapshots recording what those switches overrode. The caller nils KitnUIDB, so
--- they die together and can no longer be destroyed out of step. What still has
+-- The switch states now live in EllesmereUIDB, one block per profile; only the
+-- snapshots recording what those switches overrode still live in KitnUIDB. The
+-- caller nils KitnUIDB, so the snapshots die when it does. What still has
 -- to be handled is the OTHER side: EllesmereUI is left holding whatever KitnUI
 -- forced into it, and once the snapshots are gone nothing remembers the
 -- originals. So the reset turns every switch off FIRST and lets each page's own
@@ -390,10 +390,13 @@ end
 -- Two things this has to cover beyond the active profile:
 --   * Lulu Mode's module disable and Edit Mode layout are not in the re-apply
 --     registry, because reversing them needs a reload. Reset reloads anyway.
---   * Switch states in OTHER EllesmereUI profiles cannot be restored from here
---     without switching to each profile in turn. Nilling KitnUIDB drops them
---     with their snapshots, which leaves the forced value in place with nothing
---     claiming it and nothing left to mis-record. That is the honest trade.
+--   * Every profile's switch block is cleared, not just the active one's. The
+--     active profile goes through db:ResetProfile so the live db.profile
+--     reference stays valid; every other profile's block is deleted outright,
+--     safe because nothing holds a reference to it until a profile switch, at
+--     which point RepointAllDBs re-points and re-merges the defaults. The
+--     snapshots stay a separate store in KitnUIDB; the caller nilling that
+--     file is what clears those.
 --
 -- Everything runs synchronously, because the caller nils KitnUIDB straight after
 -- and a debounced pass would fire into the wreckage.
@@ -410,18 +413,49 @@ function ns.EUIResetAll()
 
     if ns.LuluTearDown then pcall(ns.LuluTearDown) end
 
-    local settings = ns.EUISettings()
-    for key in pairs(settings) do
-        settings[key] = nil
+    -- The ACTIVE profile is cleared through the db object so the live
+    -- db.profile reference stays valid: ResetProfile wipes in place and
+    -- re-merges the registered defaults.
+    local db = ns.EUISettingsDB()
+    if db and db.ResetProfile then
+        pcall(function() db:ResetProfile() end)
+    else
+        local settings = ns.EUISettings()
+        for key in pairs(settings) do
+            settings[key] = nil
+        end
     end
 
     for _, fn in ipairs(reapplyFns) do
         pcall(fn)
     end
 
-    -- Every other profile's switch block, dropped whole. The caller nils
-    -- KitnUIDB immediately after, so this is belt and braces rather than the
-    -- only clearance, and it keeps EUIResetAll correct on its own terms.
+    -- Every OTHER profile's block, dropped whole. Until 2026-08-07 the caller
+    -- nilling KitnUIDB did this for free; now those blocks live in
+    -- EllesmereUIDB and would survive a reset, leaving their switches reading ON
+    -- with no snapshots anywhere.
+    --
+    -- The active profile is identified by table IDENTITY rather than by name.
+    -- Both EllesmereUIDB.activeProfile and db._profileName track the active
+    -- profile and RepointAllDBs keeps them in step, but comparing against the
+    -- live db.profile pointer is what the loop actually needs to know: skip the
+    -- one table the db object is currently holding, whatever it is called. That
+    -- cannot go stale, so no name source has to be trusted.
+    --
+    -- Safe to delete rather than clear: nothing holds a reference to a
+    -- non-active profile's block until a profile switch, and RepointAllDBs
+    -- re-points and re-merges the defaults at that point.
+    local live = db and db.profile
+    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+    if type(profiles) == "table" then
+        for _, profile in pairs(profiles) do
+            if type(profile) == "table" and type(profile.addons) == "table"
+               and profile.addons.KitnUI_EUI ~= live then
+                profile.addons.KitnUI_EUI = nil
+            end
+        end
+    end
+
     if ns.db then ns.db.euiSettings = {} end
 end
 
