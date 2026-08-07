@@ -518,7 +518,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
     _, h = W:Toggle(parent, "KitnUI Pink Accent", y,
         function() return AccentSettings().pink and true or false end,
         function(v)
-            AccentSettings().pink = v and true or nil
+            AccentSettings().pink = v and true or false
             ApplyAccent()
         end,
         "Sets EllesmereUI's accent to KitnUI pink for this profile, and stops that accent tinting quest tracker headers, the Mythic+ timer, the damage meter and the Friends tab.");

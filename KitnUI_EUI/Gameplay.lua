@@ -272,10 +272,15 @@ local function ApplyBeginner(on)
     ApplyActionBars(on)
 end
 
+-- Off is stored as an explicit false, never by deleting the key. Under the
+-- registered defaults in KitnUI_EUI/Core.lua an absent key means "restore me to
+-- the default", so a deleted key would come back ON after a reload, and
+-- EllesmereUI's spec-override engine would separately bank the absence as a
+-- removal marker. Every switch in this addon follows the same rule.
 local function SetBeginnerMode(on)
     local s = ns.EUISettings()
     if not s then return end
-    s.beginner = on and true or nil
+    s.beginner = on and true or false
 
     if not RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled()) end) then
         print(ns.title .. ": Beginner Mode applies when you leave combat.")
@@ -376,7 +381,7 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
         function() local s = ns.EUISettings() return s and s.hideAllTooltipsInCombat and true or false end,
         function(v)
             local s = ns.EUISettings()
-            if s then s.hideAllTooltipsInCombat = v and true or nil end
+            if s then s.hideAllTooltipsInCombat = v and true or false end
         end,
         "Hides every tooltip while you are in combat. EllesmereUI has its own combat tooltip setting with a peek key; KitnUI's is a plain hide, so running both gives you the stricter one.");
                                                                                    y = y - h
@@ -385,7 +390,7 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
         function() local s = ns.EUISettings() return s and s.hideCdmTooltipsInCombat and true or false end,
         function(v)
             local s = ns.EUISettings()
-            if s then s.hideCdmTooltipsInCombat = v and true or nil end
+            if s then s.hideCdmTooltipsInCombat = v and true or false end
         end,
         "Hides only Cooldown Manager tooltips while you are in combat, leaving action bar and unit frame tooltips alone.");
                                                                                    y = y - h

@@ -482,7 +482,7 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
           getValue = function() return ns.NameplateArrowsEnabled() end,
           setValue = function(v)
               local s = ns.EUISettings()
-              if s then s.npArrows = v and true or nil end
+              if s then s.npArrows = v and true or false end
               ApplyArrows(true)
           end },
         { type = "toggle", text = "Additive Glow",

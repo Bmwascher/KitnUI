@@ -197,7 +197,7 @@ function ns.SetLuluMode(on)
                 return
             end
             local s = ns.EUISettings()
-            s.lulu = on and true or nil
+            s.lulu = on and true or false
             ApplyMinimapShape(on)
             ApplyEditModeLayout(on)
             ApplyActionBarModule(on)
