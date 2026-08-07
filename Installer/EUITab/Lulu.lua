@@ -109,10 +109,15 @@ end
 --
 -- Returns a sentence to append to the popup, or nil when the step will run. The
 -- popup text is the forecast and ApplyEditModeLayout is the outcome, so both read
--- the same two conditions in the same order: a warning that disagreed with what
+-- the same conditions in the same order: a warning that disagreed with what
 -- then happened would be worse than no warning.
 local function EditModeWarning(on)
-    if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then return nil end
+    -- Not nil: nil is this function's word for "the step will run", and
+    -- ApplyEditModeLayout returns silently on this same guard. Saying nothing
+    -- here promises a layout step that never happens and never explains itself.
+    if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then
+        return "\n\nNote: this version of EllesmereUI cannot apply Edit Mode layouts, so that step will be skipped. Everything else still applies."
+    end
 
     local data, layoutName
     if on then
