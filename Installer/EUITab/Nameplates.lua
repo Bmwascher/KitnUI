@@ -34,14 +34,20 @@ local DEFAULT_BAR_H = 17
 local CROP_L, CROP_R = 12 / 64, 53 / 64
 local CROP_T, CROP_B = 4 / 64, 60 / 64
 
--- Plater's indicator used 15x12 with its own art. This asset's visible chevron is
--- 41x56, so it is TALLER than it is wide and 15x12 squashes it. These defaults
--- keep the native 0.73 ratio at a comparable size. Existing saved values are
--- untouched; this only affects a profile that has never set them.
+-- Plater's numbers do NOT transfer directly, because Plater sizes the whole 64x64
+-- box and we size the cropped arrow. At Plater's width 15 the visible chevron is
+-- 15 * 41/64 = 9.6 wide; at its height 12 it is 12 * 56/64 = 10.5 tall. Its x of
+-- 14 is measured to the box edge, so the visible arrow sits a further 15 * 11/64
+-- = 2.6 out, about 17 in our terms.
+--
+-- These defaults are that conversion, so a fresh profile reproduces the Plater
+-- look rather than the Plater numbers. Note 10x11 is wider than the art's native
+-- 41:56 shape: Plater's 15x12 squashes the chevron, and matching the reference
+-- means keeping that squash. Existing saved values are untouched.
 local DEFAULTS = {
-    npArrowW         = 16,
-    npArrowH         = 22,
-    npArrowGap       = 14,
+    npArrowW         = 10,
+    npArrowH         = 11,
+    npArrowGap       = 17,
     npArrowY         = 0,
     npArrowGlow      = true,
     npArrowCastNudge = true,
@@ -486,12 +492,15 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
     );                                                                             y = y - h
 
     _, h = W:DualRow(parent, y,
-        { type = "slider", text = "Side Gap", min = -30, max = 60, step = 1,
-          tooltip = "How far the arrows sit from the nameplate. 0 puts them against its edge, and negative values move them in over it.",
+        -- "Gap", not "Offset", even though it sits beside Vertical Offset: this
+        -- one moves the arrows APART from each other, and its neighbour moves
+        -- both the same way. Naming them alike would imply they behave alike.
+        { type = "slider", text = "Horizontal Gap", min = -30, max = 60, step = 1,
+          tooltip = "How far each arrow sits from the nameplate. 0 puts them against its edge, and negative values move them in over it. This pushes the two arrows APART; Vertical Offset moves them both the same way.",
           getValue = function() return GetNum("npArrowGap") end,
           setValue = function(v) SetNum("npArrowGap", v) end },
         { type = "slider", text = "Vertical Offset", min = -30, max = 30, step = 1,
-          tooltip = "Moves both arrows up or down without changing their height.",
+          tooltip = "Moves both arrows up or down together, without changing their height.",
           getValue = function() return GetNum("npArrowY") end,
           setValue = function(v) SetNum("npArrowY", v) end }
     );                                                                             y = y - h
