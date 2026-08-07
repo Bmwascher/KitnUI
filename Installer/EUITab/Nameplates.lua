@@ -34,20 +34,33 @@ local DEFAULT_BAR_H = 17
 local CROP_L, CROP_R = 12 / 64, 53 / 64
 local CROP_T, CROP_B = 4 / 64, 60 / 64
 
--- Plater's numbers do NOT transfer directly, because Plater sizes the whole 64x64
--- box and we size the cropped arrow. At Plater's width 15 the visible chevron is
--- 15 * 41/64 = 9.6 wide; at its height 12 it is 12 * 56/64 = 10.5 tall. Its x of
--- 14 is measured to the box edge, so the visible arrow sits a further 15 * 11/64
--- = 2.6 out, about 17 in our terms.
+-- Plater's numbers do NOT transfer directly, and the reason is one line in
+-- Plater.lua:8199 that two earlier guesses in this file missed:
 --
--- These defaults are that conversion, so a fresh profile reproduces the Plater
--- look rather than the Plater numbers. Note 10x11 is wider than the art's native
--- 41:56 shape: Plater's 15x12 squashes the chevron, and matching the reference
--- means keeping that squash. Existing saved values are untouched.
+--   scale = healthBarHeight / 10
+--
+-- Every dimension of a target indicator is multiplied by that before it is drawn
+-- (Plater.lua:8246 for the size, :8253 and :8257 for the position). So Plater's
+-- 15x12 is not 15x12: on EllesmereUI's default 17px health bar the same preset
+-- would draw a 25.5 x 20.4 BOX. That factor, not the crop, is why matching
+-- Plater's numbers looked tiny.
+--
+-- Working the whole conversion at a 17px bar, with our crop applied:
+--   scale         = 17 / 10 = 1.7
+--   Plater box    = 15 * 1.7 = 25.5 wide, 12 * 1.7 = 20.4 tall
+--   visible arrow = 25.5 * 41/64 = 16.3 wide, 20.4 * 56/64 = 17.9 tall
+--
+-- The gap falls out of the same maths. Plater anchors the texture's LEFT edge to
+-- the bar's left, offset by -x * scale, so with x = 14 the box's right edge lands
+-- 1.7 INSIDE the bar. The visible chevron is inset a further 11/64 * 25.5 = 4.4
+-- from that edge, leaving it 2.7 outside the bar. Our gap measures to the visible
+-- arrow, so the equivalent is about 3, not the 17 an earlier guess produced.
+--
+-- Existing saved values are untouched; this only affects a fresh profile.
 local DEFAULTS = {
-    npArrowW         = 10,
-    npArrowH         = 11,
-    npArrowGap       = 17,
+    npArrowW         = 16,
+    npArrowH         = 18,
+    npArrowGap       = 3,
     npArrowY         = 0,
     npArrowGlow      = true,
     npArrowCastNudge = true,
