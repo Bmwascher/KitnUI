@@ -185,6 +185,10 @@ function ns.SetLuluMode(on)
             -- the minimap and the action bars changed and the layout missing.
             if InCombatLockdown() then
                 print(ns.title .. ": Lulu Mode cannot be changed in combat. Try again after this fight.")
+                -- Same reason as the entry guard: the knob already moved.
+                if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                    pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+                end
                 return
             end
             local s = ns.EUISettings()
