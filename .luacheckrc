@@ -62,6 +62,7 @@ read_globals = {
 
     -- Static popups
     "StaticPopup_Show", "StaticPopup_Hide",
+    "YES", "NO",  -- Blizzard's localized Yes/No button text
 
     -- Chat frame (used for programmatic slash commands + Extras chat setup)
     "DEFAULT_CHAT_FRAME", "ChatEdit_SendText",

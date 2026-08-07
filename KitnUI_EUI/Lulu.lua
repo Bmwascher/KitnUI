@@ -224,6 +224,41 @@ ns.EUIRegisterReapply(function()
     ApplyMinimapShape(ns.LuluEnabled())
 end)
 
+-- Lulu's other two halves need a reload, so an imported profile that turns it on
+-- leaves the switch reading ON with only the minimap applied. Prompt rather than
+-- let the switch lie. Only on a genuine off-to-on transition driven by an import:
+-- a login with Lulu already applied, or an import that leaves it alone, prompts
+-- nothing.
+local luluWasOn
+
+function ns.LuluReconcile()
+    local on = false
+    if ns.LuluEnabled then on = ns.LuluEnabled() end
+    local was = luluWasOn
+
+    -- Do NOT latch when the prompt cannot be shown. Latching would consume the
+    -- only notice the player gets: the next pass would see on == was and never
+    -- detect the transition again, leaving Lulu on with two thirds of it
+    -- unapplied and nothing to explain why. Left unlatched, the next reconcile
+    -- trigger (a profile switch, or the next login) prompts instead.
+    if was ~= nil and on and not was and InCombatLockdown() then return end
+
+    luluWasOn = on
+    if was == nil or on == was or not on then return end
+    StaticPopup_Show("KITNUI_LULU_IMPORTED")
+end
+
+StaticPopupDialogs["KITNUI_LULU_IMPORTED"] = {
+    text = ns.title .. ": the profile you just loaded turns Lulu Mode on.\n\nTwo of its three parts need a reload: EllesmereUI's action bars switch off so Blizzard's own bars return, and Lulu's Edit Mode layout applies. Reload now?",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function() ReloadUI() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 -- Called by ns.EUIResetAll, which reloads straight afterwards. The re-apply
 -- registry handles the minimap; these two are the parts a reload is required for,
 -- and leaving them behind would strand the action bars off and the Lulu layout

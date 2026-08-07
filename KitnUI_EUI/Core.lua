@@ -305,6 +305,7 @@ function ns.EUIQueueReapply()
         for _, fn in ipairs(reapplyFns) do
             pcall(fn)
         end
+        if ns.LuluReconcile then pcall(ns.LuluReconcile) end
     end)
 end
 
