@@ -4,6 +4,13 @@ manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 
+# KitnUI_EUI ships as a SIBLING addon folder, not a subfolder of KitnUI.
+# package-as makes the repo root into KitnUI/, and move-folders lifts a
+# subdirectory out to the package root, which is the documented shape for a
+# multi-addon repo. Verified against the BigWigs packager wiki 2026-08-07.
+move-folders:
+  KitnUI/KitnUI_EUI: KitnUI_EUI
+
 # Only tracked files need listing here — gitignored paths (References/,
 # dev/docs/, .claude/, .wow-api-reference, editor configs) never reach the
 # packager's clone. Tracked dev-tree files (incl. dev/Annotations/) are
