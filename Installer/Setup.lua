@@ -265,8 +265,16 @@ end
 -- Which of KitnUI's two Edit Mode layouts belongs to the current mode. Falls
 -- back to the standard one whenever the Lulu layout has not been authored yet,
 -- so a half-configured Lulu Mode still lands on a working layout. Both branches
--- of the setup function read from here, so the installer and /kitn load can
--- never disagree about which layout is current.
+-- of the setup function read from here, so they always agree with each other
+-- inside one run.
+--
+-- Across runs they can differ, and that is deliberate rather than a hole. A full
+-- install imports the EllesmereUI profile first, and that import deletes the
+-- existing profile, which clears the config tab's switch states along with it.
+-- So a re-install reads Lulu as off here and lands the standard layout, while
+-- /kitn load on the same character reads it as still on. A re-install returning
+-- to defaults is the intended outcome; this comment used to claim an invariant
+-- that does not hold, which is the part that was wrong.
 local function editModeTarget()
     if ns.LuluEnabled and ns.LuluEnabled()
         and ns.LuluLayoutName and HasData("Blizzard_EditMode_Lulu") then
