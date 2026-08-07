@@ -294,7 +294,21 @@ KitnCommands["reset"] = function()
     -- combat, and a refusal must abort the whole reset rather than proceeding to
     -- wipe the saved variables the restore still needs.
     if ns.EUIResetAll and ns.EUIResetAll() == false then return end
-    KitnUIDB = nil
+
+    -- That teardown queues a line for anything it could NOT put back, and the
+    -- queue lives in the very table this function is about to delete. Printing
+    -- here instead does not work either: the reload on the next line destroys
+    -- the chat frame, which is the whole reason QueueMessage exists. So the
+    -- queue is the one thing carried across the wipe, and InitDB rebuilds every
+    -- other key at the next login. Without this a reset that could not restore
+    -- the Edit Mode layout was completely silent, which is the exact failure
+    -- QueueMessage was written to remove.
+    local carried = ns.db and ns.db.pendingMessages
+    if carried and #carried > 0 then
+        KitnUIDB = { pendingMessages = carried }
+    else
+        KitnUIDB = nil
+    end
     ReloadUI()
 end
 
