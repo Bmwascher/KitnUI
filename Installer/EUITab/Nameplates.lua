@@ -18,8 +18,10 @@ local _, ns = ... ---@type string, KitnUINS
 local NAMEPLATES = "EllesmereUINameplates"
 local ARROW_TEX = "Interface\\AddOns\\KitnUI\\Media\\Nameplates\\DoubleArrow.tga"
 
--- EllesmereUI's own default, read here so a texture taller or shorter than the
--- bar still centres when the profile has never set one.
+-- EllesmereUI's own default, used only when the profile cannot be read, so a
+-- texture taller or shorter than the bar still centres. This is NOT the height
+-- KitnUI ships: the installed profile sets 26, which is what the arrow size
+-- defaults are derived against.
 local DEFAULT_BAR_H = 17
 
 -- The art is 64x64 but the chevron only occupies part of it. Measured from the
@@ -45,21 +47,33 @@ local CROP_T, CROP_B = 4 / 64, 60 / 64
 -- would draw a 25.5 x 20.4 BOX. That factor, not the crop, is why matching
 -- Plater's numbers looked tiny.
 --
--- Working the whole conversion at a 17px bar, with our crop applied:
---   scale         = 17 / 10 = 1.7
---   Plater box    = 15 * 1.7 = 25.5 wide, 12 * 1.7 = 20.4 tall
---   visible arrow = 25.5 * 41/64 = 16.3 wide, 20.4 * 56/64 = 17.9 tall
---
 -- The gap falls out of the same maths. Plater anchors the texture's LEFT edge to
--- the bar's left, offset by -x * scale, so with x = 14 the box's right edge lands
--- 1.7 INSIDE the bar. The visible chevron is inset a further 11/64 * 25.5 = 4.4
--- from that edge, leaving it 2.7 outside the bar. Our gap measures to the visible
--- arrow, so the equivalent is about 3, not the 17 an earlier guess produced.
+-- the bar's left, offset by -x * scale, so the box's right edge lands just inside
+-- the bar and the chevron, inset within its own box, ends up a little outside it.
+-- That predicted about 3, and 3 is what looked right in game.
+--
+-- The SIZE conversion needs the REAL bar height, and an earlier attempt used
+-- EllesmereUI's default of 17 rather than the 26 the KitnUI profile ships. That
+-- one substitution was the whole remaining error. At 26:
+--   scale         = 26 / 10 = 2.6
+--   Plater box    = 15 * 2.6 = 39 wide, 12 * 2.6 = 31.2 tall
+--   visible arrow = 39 * 41/64 = 25.0 wide, 31.2 * 56/64 = 27.3 tall
+--
+-- Kitn compared the two side by side and landed on 24x30 independently, which is
+-- within a pixel on width and three on height. Derivation and eye agree, so the
+-- defaults are his observed numbers.
+--
+-- 24:30 is a touch wider than the art's native 41:56, which keeps the same slight
+-- squash Plater's own 15x12 applies.
+--
+-- NOTE for anyone changing the shipped health bar height: Plater scales its
+-- indicator WITH the bar and we do not, so these defaults are correct for a 26px
+-- bar and would want re-deriving at another. See DEFAULT_BAR_H below.
 --
 -- Existing saved values are untouched; this only affects a fresh profile.
 local DEFAULTS = {
-    npArrowW         = 16,
-    npArrowH         = 18,
+    npArrowW         = 24,
+    npArrowH         = 30,
     npArrowGap       = 3,
     npArrowY         = 0,
     npArrowGlow      = true,
