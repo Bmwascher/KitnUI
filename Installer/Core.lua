@@ -419,7 +419,13 @@ boot:SetScript("OnEvent", function()
             local queued = ns.db and ns.db.pendingMessages
             if not queued or #queued == 0 then return end
             ns.db.pendingMessages = {}
+            -- Blank lines around the block. It lands two seconds into a login,
+            -- packed against the client's own startup output, and without the
+            -- gap it reads as one more line of that rather than as the answer to
+            -- something the user did.
+            print("")
             for _, line in ipairs(queued) do print(line) end
+            print("")
         end)
     end
 

@@ -44,13 +44,18 @@ end
 -- afterwards, so a print lands in a chat frame the client destroys before the
 -- user can read it: they flip the switch, the screen reloads, and nothing ever
 -- explains why the layout did not change. ns.QueueMessage prints on the far side.
+--
+-- Every one of them reports something that did NOT happen, so every one is red.
+-- They arrive two seconds into a login, in the middle of the client's own
+-- startup spam, and a plain white line there reads as more spam and is scrolled
+-- past. The whole point of queueing was that the user sees it.
 local function ApplyEditModeLayout(on)
     if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then return end
 
     if on then
         local data = ns.data and ns.data.Blizzard_EditMode_Lulu
         if type(data) ~= "string" or strtrim(data) == "" then
-            ns.QueueMessage(ns.title .. ": No Lulu Edit Mode layout data yet. The rest of Lulu Mode still applies.")
+            ns.QueueMessage(ns.title .. ": " .. ns.Red("No Lulu Edit Mode layout data yet. The rest of Lulu Mode still applies."))
             return
         end
         local name = ns.LuluLayoutName()
@@ -58,11 +63,11 @@ local function ApplyEditModeLayout(on)
         -- blames Edit Mode not being open, which sends the user hunting in the
         -- wrong place. The rest of Lulu Mode still applies either way.
         if not ns.EditModeSlotFree(name) then
-            ns.QueueMessage(ns.title .. ": Edit Mode layout limit reached (5 account layouts), so Lulu's layout was skipped. Delete an account layout and toggle Lulu again.")
+            ns.QueueMessage(ns.title .. ": " .. ns.Red("Edit Mode layout limit reached (5 account layouts), so Lulu's layout was skipped. Delete an account layout and toggle Lulu again."))
             return
         end
         if not EllesmereUI.ApplyPresetEditMode(data, name) then
-            ns.QueueMessage(ns.title .. ": Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
+            ns.QueueMessage(ns.title .. ": " .. ns.Red("Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat."))
         end
         return
     end
@@ -81,12 +86,12 @@ local function ApplyEditModeLayout(on)
     if type(standard) ~= "string" or strtrim(standard) == "" then return end
 
     if not ns.EditModeSlotFree(ns.profileName) then
-        ns.QueueMessage(ns.title .. ": Edit Mode layout limit reached (5 account layouts), so KitnUI's layout was not restored. Delete an account layout and toggle Lulu again.")
+        ns.QueueMessage(ns.title .. ": " .. ns.Red("Edit Mode layout limit reached (5 account layouts), so KitnUI's layout was not restored. Delete an account layout and toggle Lulu again."))
         return
     end
 
     if not EllesmereUI.ApplyPresetEditMode(standard, ns.profileName) then
-        ns.QueueMessage(ns.title .. ": Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat.")
+        ns.QueueMessage(ns.title .. ": " .. ns.Red("Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat."))
     end
 end
 
