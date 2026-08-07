@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  EUITab/Lulu.lua                                             ║
+-- ║  KitnUI_EUI/Lulu.lua                                         ║
 -- ║  Purpose: Lulu Mode: round minimap, Blizzard action bars,    ║
 -- ║           and a dedicated Edit Mode layout, as one switch.   ║
 -- ╚══════════════════════════════════════════════════════════════╝

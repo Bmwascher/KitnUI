@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  EUITab/General.lua                                          ║
+-- ║  KitnUI_EUI/General.lua                                      ║
 -- ║  Purpose: The General page: appearance preset, Lulu Mode,    ║
 -- ║           accent scoping.                                    ║
 -- ╚══════════════════════════════════════════════════════════════╝

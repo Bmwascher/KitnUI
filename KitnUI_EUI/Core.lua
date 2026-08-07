@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  EUITab/Core.lua                                             ║
+-- ║  KitnUI_EUI/Core.lua                                         ║
 -- ║  Purpose: Inject a KitnUI category into EllesmereUI's config ║
 -- ║           panel and provide the machinery its pages share.   ║
 -- ╚══════════════════════════════════════════════════════════════╝

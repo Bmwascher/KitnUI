@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  EUITab/Gameplay.lua                                         ║
+-- ║  KitnUI_EUI/Gameplay.lua                                     ║
 -- ║  Purpose: The Gameplay page: Beginner Mode, and two combat   ║
 -- ║           tooltip switches.                                  ║
 -- ╚══════════════════════════════════════════════════════════════╝

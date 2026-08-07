@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  EUITab/TopBar.lua                                           ║
+-- ║  KitnUI_EUI/TopBar.lua                                       ║
 -- ║  Purpose: Reserved page. The top bar itself is a separate    ║
 -- ║           project; this holds its slot in the tab.           ║
 -- ╚══════════════════════════════════════════════════════════════╝

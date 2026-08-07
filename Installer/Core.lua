@@ -300,7 +300,16 @@ KitnCommands["reset"] = function()
     -- go, otherwise they and the switch states die out of step. It refuses in
     -- combat, and a refusal must abort the whole reset rather than proceeding to
     -- wipe the saved variables the restore still needs.
-    if ns.EUIResetAll and ns.EUIResetAll() == false then return end
+    -- Absence aborts for the same reason a refusal does. KitnUI_EUI is a separate
+    -- addon and can be disabled on its own, and with it goes the only code that
+    -- can put back what its switches are holding down. Wiping the snapshots then
+    -- would strand Lulu's action bars and Edit Mode layout with nothing left to
+    -- reverse them. Refusing out loud beats a reset that looks like it worked.
+    if not ns.EUIResetAll then
+        print(ns.title .. ": cannot reset while the KitnUI_EUI addon is disabled, because the settings it is holding down could not be put back. Enable it, reload, then try again.")
+        return
+    end
+    if ns.EUIResetAll() == false then return end
 
     -- That teardown queues a line for anything it could NOT put back, and the
     -- queue lives in the very table this function is about to delete. Printing

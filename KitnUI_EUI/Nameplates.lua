@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  EUITab/Nameplates.lua                                       ║
+-- ║  KitnUI_EUI/Nameplates.lua                                   ║
 -- ║  Purpose: KitnUI's own target arrows, replacing EllesmereUI's ║
 -- ║           while switched on.                                 ║
 -- ╚══════════════════════════════════════════════════════════════╝

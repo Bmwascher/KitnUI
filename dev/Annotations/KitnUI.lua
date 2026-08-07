@@ -42,6 +42,8 @@
 ---@field EUIRegisterReapply fun(fn: function)
 ---@field EUIQueueReapply fun()
 ---@field EUIResetAll fun(): boolean|nil
+---@field EUI_DEFAULTS table       # EllesmereUI settings profile defaults (14 keys)
+---@field EUISettingsDB fun(): table|nil   # EllesmereUI's db object for our settings, or nil
 ---@field KITN_PINK number[]
 ---@field BeginnerEnabled fun(): boolean
 ---@field NameplateArrowsEnabled fun(): boolean
@@ -49,6 +51,7 @@
 ---@field LuluLayoutName fun(): string
 ---@field LuluTearDown fun()
 ---@field SetLuluMode fun(on: boolean)
+---@field LuluReconcile fun()   # prompts for a reload when an imported profile turns Lulu Mode on
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean
