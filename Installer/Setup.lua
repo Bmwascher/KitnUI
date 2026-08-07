@@ -577,6 +577,35 @@ local function euiModuleInstalled(folder)
     return C_AddOns.DoesAddOnExist(folder)
 end
 
+-- Every EllesmereUI module folder, read from EllesmereUI's own map so a module
+-- added in a later release is covered without editing a list here. hostAddon is
+-- the folder that actually ships a module whose own entry is a shim, which is
+-- what EllesmereUI's sweep applies. Basics is not in the map and is swept by
+-- name there too.
+--
+-- Returns nil rather than a partial list when the map is unreadable. A guess at
+-- the suite's composition would enable or disable the wrong folders, and the
+-- caller treats nil as "do the half you can prove".
+local function euiAllModules()
+    local map = _G.EllesmereUI and EllesmereUI._ADDON_DB_MAP
+    if type(map) ~= "table" or #map == 0 then return nil end
+
+    local folders, seen = {}, {}
+    for _, entry in ipairs(map) do
+        local folder = type(entry) == "table" and (entry.hostAddon or entry.folder)
+        if type(folder) == "string" and not seen[folder] then
+            seen[folder] = true
+            folders[#folders + 1] = folder
+        end
+    end
+    if #folders == 0 then return nil end
+
+    if not seen.EllesmereUIBasics then
+        folders[#folders + 1] = "EllesmereUIBasics"
+    end
+    return folders
+end
+
 -- Idempotent and safe: no-ops when C_AddOns is unavailable and skips any module
 -- that isn't installed. Takes effect on the ReloadUI at the end of the flow.
 function ns.ApplyEUIModuleSet()
@@ -594,9 +623,31 @@ function ns.ApplyEUIModuleSet()
         set[#set + 1] = "EllesmereUIActionBars"
     end
 
+    local off = {}
     for _, folder in ipairs(set) do
+        off[folder] = true
         if euiModuleInstalled(folder) then
             C_AddOns.DisableAddOn(folder)
+        end
+    end
+
+    -- The other half of the composition. An install already gets this free:
+    -- KitnUI hands the off-list to ImportProfileSilent as disableAddons and
+    -- EllesmereUI's own sweep enables everything the list does not name. But
+    -- /kitn load never imports, so without this an alt keeps whatever modules
+    -- that character happened to have switched off and quietly differs from a
+    -- freshly installed one forever. Running it here covers both paths, and one
+    -- the import misses either way: an install where the user unchecked the
+    -- EllesmereUI step skips the import and its sweep with it.
+    --
+    -- This does override a module the user turned off on purpose. That is the
+    -- point of "load": the character ends up matching the pack.
+    if not C_AddOns.EnableAddOn then return end
+    local all = euiAllModules()
+    if not all then return end
+    for _, folder in ipairs(all) do
+        if not off[folder] and euiModuleInstalled(folder) then
+            C_AddOns.EnableAddOn(folder)
         end
     end
 end
