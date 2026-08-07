@@ -514,39 +514,73 @@ local function InjectProfileAddon()
 end
 
 ---------------------------------------------------------------------------------
--- Boot
+-- Migration
 ---------------------------------------------------------------------------------
 
--- Switch states used to live in EllesmereUIDB.profiles[name].addons.KitnUIEUI.
--- Nothing writes there any more, so without this sweep every profile keeps a
--- stale block forever and carries it into every export the user shares.
+-- Switch states used to live in KitnUIDB.euiSettings, keyed by EllesmereUI
+-- profile name (commit 0a4835e). They now live in the profile itself. This moves
+-- them once.
 --
--- The values are moved rather than dropped. They are unreliable, which is why
--- this store was abandoned, but Lulu Mode's flag is the one that matters:
--- disabling the action bars module and swapping the Edit Mode layout both
--- outlive a reload on their own, so losing the flag would leave Lulu applied
--- with the switch reading off and no way to reverse it from the page.
+-- Guarded on a version stamp rather than on the destination being empty: with
+-- registered defaults the destination is NEVER empty, so emptiness cannot be the
+-- condition.
 --
--- Idempotent by construction: the blocks are gone after the first pass, and an
--- entry already in the new store is never overwritten because it is the newer
--- of the two.
-local function MigrateLegacySettings()
-    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
-    if type(profiles) ~= "table" or not ns.db then return end
+-- The old table is left in place rather than deleted. If this migration is
+-- wrong we want the evidence, and a stale table costs a few bytes. A later
+-- release drops it.
+local MIGRATION_VERSION = 1
 
-    ns.db.euiSettings = ns.db.euiSettings or {}
+local function MigrateSettingsForward()
+    if not ns.db then return end
+    if (ns.db.euiMigration or 0) >= MIGRATION_VERSION then return end
+
+    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+    if type(profiles) ~= "table" then return end
+
+    local old = ns.db.euiSettings
+    -- The pre-0a4835e key had no underscore, so it is a different key from the
+    -- one we write now and would otherwise be stranded. Swept here too.
+    local function LegacyBlock(profile)
+        local b = profile.addons and profile.addons.KitnUIEUI
+        return type(b) == "table" and next(b) and b or nil
+    end
+
     for name, profile in pairs(profiles) do
-        if type(profile) == "table" and type(profile.addons) == "table" then
-            local old = profile.addons.KitnUIEUI
-            if type(old) == "table" then
-                if next(old) and ns.db.euiSettings[name] == nil then
-                    ns.db.euiSettings[name] = CopyTable(old)
+        if type(profile) == "table" then
+            local source = (type(old) == "table" and type(old[name]) == "table" and old[name])
+                            or LegacyBlock(profile)
+            if source then
+                profile.addons = profile.addons or {}
+                -- An absent block, or an absent key inside one, counts as still
+                -- at its default and is created. NewDB only builds the ACTIVE
+                -- profile's block at login; the rest appear on first switch via
+                -- RepointAllDBs, so filling only existing blocks would silently
+                -- skip every other profile.
+                local dest = profile.addons.KitnUI_EUI
+                if type(dest) ~= "table" then
+                    dest = {}
+                    profile.addons.KitnUI_EUI = dest
                 end
-                profile.addons.KitnUIEUI = nil
+                for key, default in pairs(ns.EUI_DEFAULTS) do
+                    local incoming = source[key]
+                    if incoming ~= nil and dest[key] == nil then
+                        if type(default) == "table" and type(incoming) == "table" then
+                            dest[key] = CopyTable(incoming)
+                        else
+                            dest[key] = incoming
+                        end
+                    end
+                end
             end
         end
     end
+
+    ns.db.euiMigration = MIGRATION_VERSION
 end
+
+---------------------------------------------------------------------------------
+-- Boot
+---------------------------------------------------------------------------------
 
 -- PLAYER_LOGIN, matching every EllesmereUI options file: page builders read
 -- ns.db, which Installer/Core.lua only fills at login.
@@ -556,9 +590,12 @@ boot:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
     if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
 
-    -- Before anything reads a switch state. ns.db is filled by Installer/Core.lua,
-    -- which registers its PLAYER_LOGIN handler first and so has already run.
-    MigrateLegacySettings()
+    -- Before anything reads a switch state, and before the db is registered so
+    -- the merge sees migrated values rather than bare defaults. ns.db is filled
+    -- by Installer/Core.lua, which registers its PLAYER_LOGIN handler first (its
+    -- frame is created at KitnUI load time, before this addon loads) and so has
+    -- already run.
+    MigrateSettingsForward()
 
     InjectSidebar()
 

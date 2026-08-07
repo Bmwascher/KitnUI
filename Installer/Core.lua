@@ -408,6 +408,10 @@ local function InitDB()
     ns.db.profiles = ns.db.profiles or {}
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.perChar = ns.db.perChar or {}
+    -- Vestigial after the 2026-08-07 migration: switch states live in
+    -- EllesmereUI's profile now, and this table is only read by
+    -- MigrateSettingsForward. Delete this line and the migration together, one
+    -- release after they ship.
     ns.db.euiSettings = ns.db.euiSettings or {}
     ns.db.euiSnap = ns.db.euiSnap or {}
     ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}
