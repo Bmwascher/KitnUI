@@ -36,58 +36,6 @@ local DEFAULT_BAR_H = 17
 local CROP_L, CROP_R = 12 / 64, 53 / 64
 local CROP_T, CROP_B = 4 / 64, 60 / 64
 
--- Plater's numbers do NOT transfer directly, and the reason is one line in
--- Plater.lua:8199 that two earlier guesses in this file missed:
---
---   scale = healthBarHeight / 10
---
--- Every dimension of a target indicator is multiplied by that before it is drawn
--- (Plater.lua:8246 for the size, :8253 and :8257 for the position). So Plater's
--- 15x12 is not 15x12: on EllesmereUI's default 17px health bar the same preset
--- would draw a 25.5 x 20.4 BOX. That factor, not the crop, is why matching
--- Plater's numbers looked tiny.
---
--- The gap falls out of the same maths. Plater anchors the texture's LEFT edge to
--- the bar's left, offset by -x * scale, so the box's right edge lands just inside
--- the bar and the chevron, inset within its own box, ends up a little outside it.
--- That predicted about 3, and 3 is what looked right in game.
---
--- 15 and 12 are the ARROW's width and height in that preset, not the bar's. The
--- conversion needs the bar height only because it feeds Plater's scale, and an
--- earlier attempt used EllesmereUI's default of 17 rather than the 26 the KitnUI
--- profile actually ships. That one substitution was the whole remaining error.
---
--- Both nameplate sets run the same 220x26 bar, so the 2.6 applies on both sides
--- and the comparison is like for like:
---   scale         = 26 / 10 = 2.6
---   Plater box    = 15 * 2.6 = 39 wide, 12 * 2.6 = 31.2 tall
---   visible arrow = 39 * 41/64 = 25.0 wide, 31.2 * 56/64 = 27.3 tall
---
--- The gap is the same maths: x * scale = 36.4 puts the box's inner edge 2.6
--- INSIDE the bar, and the chevron is inset a further 11/64 * 39 = 6.7 within its
--- own box, leaving it 4.1 outside. So the derivation says 25 / 27.3 / 4.1.
---
--- LOCKED at 24 / 27 / 3, Kitn's call after comparing both in game. The width and
--- gap are a pixel under the derived figures and the height takes the derived one;
--- he arrived at 24 and 3 by eye before seeing the arithmetic, so where they
--- disagree by a pixel the eye wins. Do not "correct" these back to the computed
--- values: they were chosen against the real thing, which the maths only models.
---
--- NOTE for anyone changing the shipped health bar height: Plater scales its
--- indicator WITH the bar and we do not, so these defaults are correct for a 26px
--- bar and would want re-deriving at another. See DEFAULT_BAR_H below.
---
--- Existing saved values are untouched; this only affects a fresh profile.
-local DEFAULTS = {
-    npArrowW         = 24,
-    npArrowH         = 27,
-    npArrowGap       = 3,
-    npArrowY         = 0,
-    npArrowGlow      = true,
-    npArrowCastNudge = true,
-    npArrowCastKick  = 8,
-}
-
 -- KITN_PINK is POSITIONAL, because SetColorTexture takes three arguments. The
 -- setting is KEYED, because the draw code reads .r and because that is the shape
 -- EllesmereUI uses for every colour in its profiles. Copying without converting
@@ -114,7 +62,7 @@ local function Cfg()
     local s = ns.EUISettings()
     if not s then return nil end
     local t = {}
-    for key, fallback in pairs(DEFAULTS) do
+    for key, fallback in pairs(ns.EUI_DEFAULTS) do
         local cur = s[key]
         if cur == nil then t[key] = fallback else t[key] = cur end
     end
@@ -452,17 +400,17 @@ local function SetNum(key, v)
     UpdateArrows()
 end
 
--- Not `t and t[key] or DEFAULTS[key]`: the house rule bars that shape, and here
--- it would also be wrong the day a slider's value can legitimately be false.
+-- Not `t and t[key] or ns.EUI_DEFAULTS[key]`: the house rule bars that shape, and
+-- here it would also be wrong the day a slider's value can legitimately be false.
 local function GetNum(key)
     local t = Cfg()
-    if not t then return DEFAULTS[key] end
+    if not t then return ns.EUI_DEFAULTS[key] end
     return t[key]
 end
 
 local function GetFlag(key)
     local t = Cfg()
-    if not t then return DEFAULTS[key] end
+    if not t then return ns.EUI_DEFAULTS[key] end
     return t[key] and true or false
 end
 

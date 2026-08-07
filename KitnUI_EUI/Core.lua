@@ -93,47 +93,87 @@ local function ActiveProfileName()
     return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
 end
 
--- KitnUI's switch states live in KitnUI's own SavedVariable, filed under the
--- EllesmereUI profile they belong to.
+---------------------------------------------------------------------------------
+-- Settings store
+---------------------------------------------------------------------------------
+
+-- Switch states live in EllesmereUI's own per-profile store, which is what puts
+-- KitnUI in its Export Profile list: the export resolves each listed addon
+-- through Lite._dbRegistry, so an addon outside the registry can appear in the
+-- list and still export nothing.
 --
--- They used to ride the EllesmereUI profile itself, through Lite.NewDB, which
--- landed them in EllesmereUIDB.profiles[name].addons.KitnUIEUI and made them
--- export, import and switch along with it for free. That store is not safe for
--- anyone but EllesmereUI. Its Spec Overrides engine snapshots and diffs EVERY
--- database in the Lite registry, ours included, banks each difference as a
--- per-spec override, and writes it back over the live table at login and on
--- every spec change. EllesmereUI's own modules survive that because a removal
--- marker self-heals against their registered defaults; a third party registers
--- none, so the marker stands and the switch reads off after every reload.
+-- Commit 0a4835e moved these OUT of that store because EllesmereUI's spec
+-- override engine was nilling them on every reload. That diagnosis was right and
+-- the conclusion was too broad: a removal marker self-heals against a REGISTERED
+-- DEFAULT (HasRegisteredDefault walks db._profileDefaults), and the only reason a
+-- third party has none is that it passed none. NaowhUI passes { profile = {} },
+-- which is why it needs a hand-maintained sync pass. We pass real defaults
+-- instead, and the engine leaves us alone.
 --
--- NaowhUI stores its settings there and pays the price: a hand-maintained list
--- of every key it holds down, a sync pass into EllesmereUI's override maps at
--- login, at each spec change and at logout, and a cleanup routine for the rows
--- left behind. That is a fair trade for a whole UI suite. It is not one for two
--- switches, and the hand-maintained list rots the moment a page is added.
---
--- What this costs: switch states no longer ride an exported profile. For a
--- profile installer that is close to free, because the installer runs again on
--- the other end. What it buys, beyond surviving a reload: the switch state and
--- the snapshot recording what that switch overrode now live in the same file,
--- so the two halves can no longer go out of step.
+-- EVERY switch key must appear here. A key missing from this table is a key the
+-- override engine is free to delete on the next reload, which is exactly the bug
+-- that drove these settings out of the store in the first place. The values are
+-- the OFF state: a default of true would make a switch read on for someone who
+-- never touched it.
+local DEFAULTS = {
+    profile = {
+        -- Lulu
+        lulu                    = false,
+        -- Gameplay
+        beginner                = false,
+        hideAllTooltipsInCombat = false,
+        hideCdmTooltipsInCombat = false,
+        -- General. A table with one leaf, and the LEAF carries the default: the
+        -- 0a4835e failure was `accent = {}` surviving with the leaf nilled, so a
+        -- default of an empty table would fix nothing.
+        accent                  = { pink = false },
+        -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
+        -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
+        -- and a registered default has to be a literal.
+        npArrows                = false,
+        npArrowColor            = { r = 1, g = 0, b = 0.549 },
+        npArrowW                = 24,
+        npArrowH                = 27,
+        npArrowGap              = 3,
+        npArrowY                = 0,
+        npArrowGlow             = true,
+        npArrowCastNudge        = true,
+        npArrowCastKick         = 8,
+    },
+}
+
+ns.EUI_DEFAULTS = DEFAULTS.profile
+
 local settingsFallback
+local settingsDB
 
-function ns.EUISettings()
-    local root = ns.db
-    -- ns.db is filled by Installer/Core.lua at PLAYER_LOGIN, which registers its
-    -- handler first and so runs first. Anything reaching here earlier still has
-    -- to render: session-only storage beats erroring. Latched, because swapping
-    -- the real store in mid-session would orphan every switch flipped before it.
-    if not root or settingsFallback then
-        settingsFallback = settingsFallback or {}
-        return settingsFallback
+-- The svName minus its trailing "DB" is the folder EllesmereUI files us under,
+-- so "KitnUI_EUIDB" lands us in profiles[name].addons.KitnUI_EUI. NewDB also
+-- wipes _G[svName]; KitnUI_EUIDB is declared by nothing, so that wipe hits a
+-- throwaway. This is the entire reason the tab is a separate addon: from inside
+-- a folder called KitnUI the svName would have to be KitnUIDB, our real file.
+function ns.EUISettingsDB()
+    if settingsDB and type(settingsDB.profile) == "table" then return settingsDB end
+    local L = _G.EllesmereUI and EllesmereUI.Lite
+    if not (L and L.NewDB) then return nil end
+    local ok, db = pcall(L.NewDB, "KitnUI_EUIDB", DEFAULTS)
+    if ok and type(db) == "table" and type(db.profile) == "table" then
+        settingsDB = db
+        return settingsDB
     end
+    return nil
+end
 
-    root.euiSettings = root.euiSettings or {}
-    local profile = ActiveProfileName()
-    root.euiSettings[profile] = root.euiSettings[profile] or {}
-    return root.euiSettings[profile]
+-- Latched fallback for a session where EllesmereUI is absent or too old: the
+-- pages still have to render, and session-only storage beats erroring. Latched
+-- because swapping the real store in mid-session would orphan every switch
+-- flipped before it.
+function ns.EUISettings()
+    if settingsFallback then return settingsFallback end
+    local db = ns.EUISettingsDB()
+    if db then return db.profile end
+    settingsFallback = {}
+    return settingsFallback
 end
 
 ---------------------------------------------------------------------------------
@@ -268,10 +308,10 @@ function ns.EUIQueueReapply()
     end)
 end
 
--- Both halves are keyed by profile name, so a rename orphans them and whatever
--- KitnUI forced into that profile becomes unrestorable. They move together or
--- not at all: a switch state without its snapshot cannot put the original back,
--- and a snapshot without its switch state is a value nothing admits to holding.
+-- The SNAPSHOT is keyed by profile name and lives in KitnUIDB, so a rename
+-- orphans it and whatever KitnUI forced into that profile becomes unrestorable.
+-- The switch states need no help: they live inside the profile table itself, and
+-- EllesmereUI.RenameProfile moves that table wholesale.
 local function MoveProfileRecords(oldName, newName)
     local snap = ns.db and ns.db.euiSnap
     if snap then
@@ -282,14 +322,6 @@ local function MoveProfileRecords(oldName, newName)
             end
             section[oldName] = nil
         end
-    end
-
-    local settings = ns.db and ns.db.euiSettings
-    if settings then
-        if settings[oldName] and not settings[newName] then
-            settings[newName] = settings[oldName]
-        end
-        settings[oldName] = nil
     end
 end
 
@@ -327,7 +359,8 @@ local function OnProfileRenamed(oldName, newName)
 end
 
 -- Without this, a new profile that reuses a deleted profile's name inherits the
--- old one's records and restores values it never had.
+-- old one's SNAPSHOTS and restores values it never had. The switch states go
+-- with the profile table that EllesmereUI.DeleteProfile drops.
 local function OnProfileDeleted(name)
     if type(name) ~= "string" then return end
 
@@ -337,9 +370,6 @@ local function OnProfileDeleted(name)
             section[name] = nil
         end
     end
-
-    local settings = ns.db and ns.db.euiSettings
-    if settings then settings[name] = nil end
 
     -- Deleting the ACTIVE profile repoints every db to Default without going
     -- through SwitchProfile, ApplyProfileData or OnSpecSwitchComplete, so this
