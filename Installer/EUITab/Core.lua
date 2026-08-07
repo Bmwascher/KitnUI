@@ -15,7 +15,9 @@ ns.EUI_MODULE_KEY = "KitnUI"
 -- Page files register themselves here rather than Core listing them, so adding
 -- a page never edits this file. Order is separate because the router is keyed.
 ns.EUIPages = ns.EUIPages or {}
-ns.EUIPageOrder = { "General", "Top Bar" }
+-- Top Bar goes last because it is a placeholder, and a page that says "Coming
+-- soon" should not sit between two working pages.
+ns.EUIPageOrder = { "General", "Gameplay", "Top Bar" }
 
 ---------------------------------------------------------------------------------
 -- EllesmereUI database access
@@ -56,6 +58,21 @@ function ns.EUIProfile(folder)
         end
     end
 
+    return nil
+end
+
+-- ns.EUIProfile reaches a module's PROFILE, through GetAddon or the registry
+-- scan. This reaches the addon OBJECT, which is where modules hang their public
+-- helpers: EllesmereUIActionBars keeps its visibility compat layer there, and
+-- writing barVisibility without it desyncs five companion fields.
+--
+-- No registry fallback, deliberately: _dbRegistry stores dbs, not addons, so
+-- there is nothing there to fall back to.
+function ns.EUIAddon(folder)
+    local L = _G.EllesmereUI and EllesmereUI.Lite
+    if not (L and L.GetAddon and folder) then return nil end
+    local ok, addon = pcall(L.GetAddon, folder, true)
+    if ok and type(addon) == "table" then return addon end
     return nil
 end
 

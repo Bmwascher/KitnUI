@@ -30,6 +30,7 @@
 ---@field ClassColor fun(text: string): string
 ---@field EUIReady fun(): boolean
 ---@field EUIProfile fun(folder: string): table|nil
+---@field EUIAddon fun(folder: string): table|nil
 ---@field EUISettings fun(): table
 ---@field EUI_ABSENT string
 ---@field EUISnap fun(section: string, key: string): table|nil
@@ -41,6 +42,7 @@
 ---@field EUIRegisterReapply fun(fn: function)
 ---@field EUIQueueReapply fun()
 ---@field EUIResetAll fun(): boolean|nil
+---@field BeginnerEnabled fun(): boolean
 ---@field LuluEnabled fun(): boolean
 ---@field LuluLayoutName fun(): string
 ---@field LuluTearDown fun()
