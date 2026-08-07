@@ -9,10 +9,14 @@ local _, ns = ... ---@type string, KitnUINS
 local CDM = "EllesmereUICooldownManager"
 local ACTION_BARS = "EllesmereUIActionBars"
 
--- The two action bars Beginner Mode holds visible. Not every bar: a beginner
--- needs their main rotation bars readable, and forcing all eight would fight
--- whatever layout the profile installed.
-local AB_KEYS = { "MainBar", "Bar2" }
+-- The action bars Beginner Mode holds visible. Kitn's call, 2026-08-07: bars 1,
+-- 2, 3 and 5 are the ones KitnUI's own layout puts on screen. Not every bar,
+-- because forcing all eight would reveal bars the profile deliberately hides.
+--
+-- Keys, not numbers: EllesmereUI's registry names bar 1 "MainBar" and the rest
+-- "Bar<n>" (EllesmereUIActionBars.lua:180-186), so bar 5 is "Bar5" and there is
+-- no "Bar1".
+local AB_KEYS = { "MainBar", "Bar2", "Bar3", "Bar5" }
 
 -- Written to every non-buff bar. showTooltip is deliberately NOT in here; it
 -- goes to every bar including buff bars, because an aura has no keybind but a
@@ -362,7 +366,7 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
     _, h = W:Toggle(parent, "Beginner Mode", y,
         function() return ns.BeginnerEnabled() end,
         function(v) SetBeginnerMode(v) end,
-        "Shows tooltips, keybinds and key-press highlights on the Cooldown Manager, and keeps Action Bars 1 and 2 always visible. Applies when you leave combat.");
+        "Shows tooltips, keybinds and key-press highlights on the Cooldown Manager, and keeps Action Bars 1, 2, 3 and 5 always visible.");
                                                                                    y = y - h
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
