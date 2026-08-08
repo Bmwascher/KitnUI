@@ -166,7 +166,7 @@ local defaults = {
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
-    euiSnapGlobal = {},     -- [key] = { prev = <old value> } for EllesmereUIDB root keys
+    euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, Lulu's Edit Mode layout, Lulu's per-character action bars state
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
 

@@ -83,7 +83,7 @@ local KitnUINS
 ---@field devMode boolean
 ---@field dismissedVersion string?
 ---@field euiSnap table<string, table>       # [section][profile][key] = { prev = <original> }, machine-local, never exported
----@field euiSnapGlobal table<string, table> # [key] = { prev = <original> } for account-wide values: EllesmereUIDB-root settings, luluEditModeLayout (preset index or layout name), luluActionBars (was the module enabled)
+---@field euiSnapGlobal table<string, table> # [key] = { prev = <original> } for values outside a profile: EllesmereUIDB-root settings, luluEditModeLayout (preset index or layout name), "luluActionBars:<player GUID>" (was the module enabled for that character)
 ---@field euiMigration number?               # version stamp for the one-time move of switch states into the profile
 ---@field euiSettings table?                 # vestigial pre-migration switch store, kept as evidence
 local KitnUIDB

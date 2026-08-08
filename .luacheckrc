@@ -72,7 +72,7 @@ read_globals = {
     "PlaySound", "SOUNDKIT",
 
     -- Unit functions
-    "UnitName", "UnitClass",
+    "UnitName", "UnitClass", "UnitGUID",
     "GetClassColor",
     "GetRealmName",
 
