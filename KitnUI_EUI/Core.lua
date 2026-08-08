@@ -11,8 +11,20 @@ local _, ns = ... ---@type string, KitnUINS
 -- moment they exist rather than at load. Writes stay local by design: anything
 -- this addon defines is its own. The trap that implies is that assigning a name
 -- KitnUI also owns would shadow it silently for this addon only.
+-- Without it this addon has no ns.title, no ns.db and no ns.data, and every file
+-- after this one uses all three at load. Say so once and load nothing: a KitnUI
+-- old enough to satisfy the folder dependency but too old to publish the bridge
+-- is a version mismatch the user can fix, and a stack of Lua errors at every
+-- login would not tell them that. EUI_INERT is set before the return because the
+-- files after this one read it to stop as well; the print prefix is spelled out
+-- because ns.title is one of the things that is missing.
 local core = _G.KitnUI_Shared
-if core then setmetatable(ns, { __index = core }) end
+if not core then
+    ns.EUI_INERT = true
+    print("|cffFF008CKitn|r|cffffffffUI:|r The KitnUI_EUI addon needs a newer KitnUI. Update KitnUI, or switch the KitnUI_EUI addon off.")
+    return
+end
+setmetatable(ns, { __index = core })
 
 -- Used as the sidebar row key, the info-table key, and RegisterModule's folder
 -- argument. It does not have to match KitnUI's real addon folder: alwaysLoaded
@@ -91,6 +103,27 @@ local function ActiveProfileName()
         if ok and type(name) == "string" then return name end
     end
     return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
+end
+
+-- The same table ns.EUIProfile returns, read straight out of EllesmereUI's saved
+-- variables instead of out of its live registry. A module that is switched off is
+-- in neither, but its settings are still filed under the active profile and are
+-- still what it will read the next time it loads: NewDB does not create them, it
+-- finds them (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:265-273).
+--
+-- This exists for one job, undoing a value KitnUI forced into a module that has
+-- since been switched off. Nothing else should prefer it: while the module is
+-- loaded ns.EUIProfile returns the very same table AND the module's own helpers
+-- are reachable, and only that route can apply a change without a reload.
+function ns.EUIStoredProfile(folder)
+    if not folder then return nil end
+    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+    if type(profiles) ~= "table" then return nil end
+    local profile = profiles[ActiveProfileName()]
+    if type(profile) ~= "table" or type(profile.addons) ~= "table" then return nil end
+    local stored = profile.addons[folder]
+    if type(stored) ~= "table" then return nil end
+    return stored
 end
 
 ---------------------------------------------------------------------------------
@@ -412,13 +445,27 @@ function ns.EUIResetAll()
         return false
     end
 
+    -- Refused, not degraded. On an EllesmereUI too old for Lite.NewDB the store
+    -- is the session-only fallback, which starts empty and knows none of the real
+    -- switch states: Lulu could be recorded ON in EllesmereUIDB while the fallback
+    -- reads OFF, so the teardown below would skip and leave the action bars off
+    -- and the Lulu layout active. The caller nils KitnUIDB straight afterwards,
+    -- taking every snapshot with it, and the loop further down would delete the
+    -- persistent switch blocks too. Nothing would be left that knows what to put
+    -- back. EllesmereUIDB is a saved variable and survives a downgrade, so this
+    -- state is reachable and the settings it is holding down are real.
+    local db = ns.EUISettingsDB()
+    if not db then
+        print(ns.title .. ": Cannot reset with this version of EllesmereUI, because it cannot read the settings KitnUI is holding down and resetting would strand them. Update EllesmereUI, then try again.")
+        return false
+    end
+
     if ns.LuluTearDown then pcall(ns.LuluTearDown) end
 
     -- The ACTIVE profile is cleared through the db object so the live
     -- db.profile reference stays valid: ResetProfile wipes in place and
     -- re-merges the registered defaults.
-    local db = ns.EUISettingsDB()
-    if db and db.ResetProfile then
+    if db.ResetProfile then
         pcall(function() db:ResetProfile() end)
     else
         local settings = ns.EUISettings()
@@ -446,7 +493,7 @@ function ns.EUIResetAll()
     -- Safe to delete rather than clear: nothing holds a reference to a
     -- non-active profile's block until a profile switch, and RepointAllDBs
     -- re-points and re-merges the defaults at that point.
-    local live = db and db.profile
+    local live = db.profile
     local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
     if type(profiles) == "table" then
         for _, profile in pairs(profiles) do

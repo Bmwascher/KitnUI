@@ -6,6 +6,10 @@
 
 local _, ns = ... ---@type string, KitnUINS
 
+-- Core.lua sets this and stops when KitnUI's shared namespace is unreachable, so
+-- ns has no title, no db and no data. Everything below needs all three.
+if ns.EUI_INERT then return end
+
 local ACTION_BARS = "EllesmereUIActionBars"
 
 function ns.LuluEnabled()
@@ -21,7 +25,12 @@ end
 -- part that snapshots. The other two are reversed by re-enabling the addon and
 -- re-activating the standard layout.
 local function ApplyMinimapShape(on)
-    local saved = on and ns.EUISnap("lulu", "minimapShape") or ns.EUIPeekSnap("lulu", "minimapShape")
+    local saved
+    if on then
+        saved = ns.EUISnap("lulu", "minimapShape")
+    else
+        saved = ns.EUIPeekSnap("lulu", "minimapShape")
+    end
     if not saved then return end
 
     local profile = ns.EUIProfile("EllesmereUIMinimap")
@@ -226,38 +235,107 @@ end)
 
 -- Lulu's other two halves need a reload, so an imported profile that turns it on
 -- leaves the switch reading ON with only the minimap applied. Prompt rather than
--- let the switch lie. Only on a genuine off-to-on transition driven by an import:
--- a login with Lulu already applied, or an import that leaves it alone, prompts
--- nothing.
-local luluWasOn
+-- let the switch lie.
+--
+-- Driven by a STATE MISMATCH, not by watching for an off-to-on transition. The
+-- normal import path never shows a transition to watch: EllesmereUI's own import
+-- button calls ReloadUI the moment it finishes
+-- (References/EllesmereUI-v8.7.5/EllesmereUI/EUI__General_Options.lua:5099-5129),
+-- so the client is gone before the debounced reconcile runs, and at the next
+-- login the imported ON state is simply the state this addon starts in. The
+-- mismatch survives that reload and is what the user actually needs telling
+-- about: Lulu recorded ON while the action bar module it switches off is still
+-- loaded means its reload-only halves were never applied.
+--
+-- The reverse mismatch is not prompted. Lulu OFF with the module unloaded is what
+-- a pending Enable looks like between the toggle and the reload the toggle
+-- already asked for.
+local ACTION_BARS_LOADED_UNKNOWN = "unknown"
+
+local function ActionBarsLoaded()
+    if not (C_AddOns and C_AddOns.IsAddOnLoaded) then return ACTION_BARS_LOADED_UNKNOWN end
+    if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist(ACTION_BARS) then
+        -- Not installed, so Lulu's action bar half has nothing to do and is not
+        -- missing. Reported as loaded, which is the no-mismatch answer.
+        --
+        -- Known gap: this module is the proxy for all three halves, so a user
+        -- without it who imports Lulu ON is never prompted and the Edit Mode half
+        -- stays unapplied. Detecting that half directly means asking Edit Mode
+        -- which layout is active, which is a different problem; running
+        -- EllesmereUI without its action bars is the rarer state of the two.
+        return true
+    end
+    local ok, loaded = pcall(C_AddOns.IsAddOnLoaded, ACTION_BARS)
+    if not ok then return ACTION_BARS_LOADED_UNKNOWN end
+    return loaded and true or false
+end
+
+-- Cleared when the mismatch clears, so a user who declines gets asked again the
+-- next time they load a profile rather than on every single reconcile pass.
+local promptedForMismatch = false
 
 function ns.LuluReconcile()
     local on = false
     if ns.LuluEnabled then on = ns.LuluEnabled() end
-    local was = luluWasOn
 
-    -- Do NOT latch when the prompt cannot be shown. Latching would consume the
-    -- only notice the player gets: the next pass would see on == was and never
-    -- detect the transition again, leaving Lulu on with two thirds of it
-    -- unapplied and nothing to explain why. Left unlatched, the next reconcile
-    -- trigger (a profile switch, or the next login) prompts instead.
-    if was ~= nil and on and not was and InCombatLockdown() then return end
+    local loaded = ActionBarsLoaded()
+    -- Unknown is not a mismatch. Prompting for a reload on a reading we could not
+    -- take would nag a user whose UI is already correct.
+    local mismatch = on and loaded == true
 
-    luluWasOn = on
-    if was == nil or on == was or not on then return end
+    if not mismatch then
+        promptedForMismatch = false
+        return
+    end
+
+    if promptedForMismatch then return end
+
+    -- Not in combat, and not latched either: the mismatch is still there
+    -- afterwards, so the next reconcile trigger prompts instead.
+    if InCombatLockdown() then return end
+
+    promptedForMismatch = true
+
+    -- Built here rather than at file scope. At file scope ns.title is read before
+    -- KitnUI has necessarily filled it, and a nil there is a load error in a file
+    -- that would otherwise degrade quietly. The Edit Mode forecast is the same one
+    -- the toggle shows, for the same reason: a full layout list costs the user a
+    -- second reload to discover afterwards and nothing to cancel on now.
+    -- Describes the STATE, not how it got there. An imported profile is the common
+    -- cause, but re-enabling EllesmereUI's action bars by hand reaches the same
+    -- mismatch, and a message that blamed an import would be wrong there.
+    local text = ns.title .. ": Lulu Mode is on, but two of its three parts are not.\n\nEllesmereUI's action bars still need to switch off so Blizzard's own bars return, and Lulu's Edit Mode layout still needs to apply. Both need a reload. Do that now?"
+    local warning = EditModeWarning(true)
+    if warning then text = text .. warning end
+
+    StaticPopupDialogs["KITNUI_LULU_IMPORTED"] = {
+        text = text,
+        button1 = YES,
+        button2 = NO,
+        -- Applies the two halves, then reloads. A bare ReloadUI would put the user
+        -- back exactly where they started: the switch is already ON, so nothing
+        -- would prompt a second time and nothing would ever apply.
+        OnAccept = function()
+            -- Rechecked, as in ns.SetLuluMode: the popup has no timeout, so it can
+            -- be opened out of combat and accepted mid-fight, and
+            -- ApplyPresetEditMode refuses in combat. The reload on the next line
+            -- means nothing retries, so a half-applied Lulu would be permanent.
+            if InCombatLockdown() then
+                print(ns.title .. ": Lulu Mode cannot be applied in combat. Try again after this fight.")
+                promptedForMismatch = false
+                return
+            end
+            ApplyEditModeLayout(true)
+            ApplyActionBarModule(true)
+            ReloadUI()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
     StaticPopup_Show("KITNUI_LULU_IMPORTED")
 end
-
-StaticPopupDialogs["KITNUI_LULU_IMPORTED"] = {
-    text = ns.title .. ": the profile you just loaded turns Lulu Mode on.\n\nTwo of its three parts need a reload: EllesmereUI's action bars switch off so Blizzard's own bars return, and Lulu's Edit Mode layout applies. Reload now?",
-    button1 = YES,
-    button2 = NO,
-    OnAccept = function() ReloadUI() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
 
 -- Called by ns.EUIResetAll, which reloads straight afterwards. The re-apply
 -- registry handles the minimap; these two are the parts a reload is required for,

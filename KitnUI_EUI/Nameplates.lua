@@ -15,6 +15,10 @@
 
 local _, ns = ... ---@type string, KitnUINS
 
+-- Core.lua sets this and stops when KitnUI's shared namespace is unreachable, so
+-- ns has no title, no db and no data. Everything below needs all three.
+if ns.EUI_INERT then return end
+
 local NAMEPLATES = "EllesmereUINameplates"
 local ARROW_TEX = "Interface\\AddOns\\KitnUI_EUI\\Media\\Nameplates\\DoubleArrow.tga"
 
@@ -127,8 +131,12 @@ local function ApplyEUIArrowSuppression(on)
 
     -- Peek on the off path: EUISnap would seed a record in every profile of a
     -- user who never turned the arrows on.
-    local saved = on and ns.EUISnap("nameplates", "euiArrows")
-                     or ns.EUIPeekSnap("nameplates", "euiArrows")
+    local saved
+    if on then
+        saved = ns.EUISnap("nameplates", "euiArrows")
+    else
+        saved = ns.EUIPeekSnap("nameplates", "euiArrows")
+    end
     if not saved then return end
 
     if on then

@@ -6,6 +6,10 @@
 
 local _, ns = ... ---@type string, KitnUINS
 
+-- Core.lua sets this and stops when KitnUI's shared namespace is unreachable, so
+-- ns has no title, no db and no data. Everything below needs all three.
+if ns.EUI_INERT then return end
+
 ---------------------------------------------------------------------------------
 -- Appearance preset
 ---------------------------------------------------------------------------------
@@ -365,7 +369,12 @@ end
 -- go through ns.EUIOverride and ns.EUIRestore, which write a single key.
 local function ApplyAccentColor()
     local on = AccentSettings().pink and true or false
-    local saved = on and ns.EUISnap("accent", "color") or ns.EUIPeekSnap("accent", "color")
+    local saved
+    if on then
+        saved = ns.EUISnap("accent", "color")
+    else
+        saved = ns.EUIPeekSnap("accent", "color")
+    end
     if not saved then return end
 
     local EUI = _G.EllesmereUI
@@ -404,7 +413,12 @@ end
 -- Half two: the scoping.
 local function ApplyAccentScope()
     local on = AccentSettings().pink and true or false
-    local saved = on and ns.EUISnap("accent", "scope") or ns.EUIPeekSnap("accent", "scope")
+    local saved
+    if on then
+        saved = ns.EUISnap("accent", "scope")
+    else
+        saved = ns.EUIPeekSnap("accent", "scope")
+    end
     if not saved then return end
 
     saved.keys = saved.keys or {}
@@ -435,8 +449,12 @@ local function ApplyAccentScope()
     -- would leave the forced value in place with nothing to restore, and turning
     -- the switch on again would record our own forced value as the original.
     if _G.EllesmereUIDB then
-        local popup = on and ns.EUISnapGlobal("popupMenuButtonTextColorMode")
-                          or ns.EUIPeekSnapGlobal("popupMenuButtonTextColorMode")
+        local popup
+        if on then
+            popup = ns.EUISnapGlobal("popupMenuButtonTextColorMode")
+        else
+            popup = ns.EUIPeekSnapGlobal("popupMenuButtonTextColorMode")
+        end
         if popup then
             if on then
                 ns.EUIOverride(EllesmereUIDB, popup, "popupMenuButtonTextColorMode", "native")
@@ -507,7 +525,10 @@ ns.EUIPages["General"] = function(parent, yOffset)
     _, h = W:SectionHeader(parent, "LULU MODE", y);                                y = y - h
 
     _, h = W:Toggle(parent, "Lulu Mode", y,
-        function() return ns.LuluEnabled and ns.LuluEnabled() or false end,
+        function()
+            if not ns.LuluEnabled then return false end
+            return ns.LuluEnabled()
+        end,
         function(v) if ns.SetLuluMode then ns.SetLuluMode(v) end end,
         "Round minimap, Blizzard's own action bars, and a dedicated Edit Mode layout. Asks first, then reloads.");
                                                                                    y = y - h

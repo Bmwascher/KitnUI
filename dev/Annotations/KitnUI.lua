@@ -30,6 +30,7 @@
 ---@field ClassColor fun(text: string): string
 ---@field EUIReady fun(): boolean
 ---@field EUIProfile fun(folder: string): table|nil
+---@field EUIStoredProfile fun(folder: string): table|nil   # the same profile read from EllesmereUI's saved variables, for a module that is switched off
 ---@field EUIAddon fun(folder: string): table|nil
 ---@field EUISettings fun(): table
 ---@field EUI_ABSENT string
@@ -51,7 +52,8 @@
 ---@field LuluLayoutName fun(): string
 ---@field LuluTearDown fun()
 ---@field SetLuluMode fun(on: boolean)
----@field LuluReconcile fun()   # prompts for a reload when an imported profile turns Lulu Mode on
+---@field LuluReconcile fun()   # prompts to apply and reload when Lulu reads on but its action bar half is not in force
+---@field EUI_INERT boolean      # KitnUI_EUI only: set by its Core.lua when KitnUI's shared namespace is unreachable, and every other file in that addon stops on it
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean

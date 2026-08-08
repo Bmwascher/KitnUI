@@ -6,6 +6,10 @@
 
 local _, ns = ... ---@type string, KitnUINS
 
+-- Core.lua sets this and stops when KitnUI's shared namespace is unreachable, so
+-- ns has no title, no db and no data. Everything below needs all three.
+if ns.EUI_INERT then return end
+
 local CDM = "EllesmereUICooldownManager"
 local ACTION_BARS = "EllesmereUIActionBars"
 
@@ -163,15 +167,23 @@ local function ApplyCdm(on)
         local write = on and not SkipBar(bar)
         if write or (not on and type(bar) == "table") then
             local snapKey = BarSnapKey(bar, i, "showTooltip")
-            local saved = write and ns.EUISnap("beginner", snapKey)
-                                or ns.EUIPeekSnap("beginner", snapKey)
+            local saved
+            if write then
+                saved = ns.EUISnap("beginner", snapKey)
+            else
+                saved = ns.EUIPeekSnap("beginner", snapKey)
+            end
             ApplyOne(bar, saved, "showTooltip", true, on)
 
             if not on or not IsBuffBar(bar) then
                 for _, key in ipairs(CDM_KEYBIND_ORDER) do
                     local k = BarSnapKey(bar, i, key)
-                    local rec = write and ns.EUISnap("beginner", k)
-                                      or ns.EUIPeekSnap("beginner", k)
+                    local rec
+                    if write then
+                        rec = ns.EUISnap("beginner", k)
+                    else
+                        rec = ns.EUIPeekSnap("beginner", k)
+                    end
                     ApplyOne(bar, rec, key, CDM_KEYBIND[key], on)
                 end
             end
@@ -223,12 +235,65 @@ local function ApplyVisibility(settings, saved, VC, on)
     end
 end
 
+-- VisibilityCompat.ApplyMode, ported field for field from
+-- References/EllesmereUI-v8.7.5/EllesmereUIActionBars/EllesmereUIActionBars.lua:270-292,
+-- for the one case where the live one cannot be reached: the module is switched
+-- off, so it is not loaded, while the values KitnUI forced are still in its saved
+-- settings and still have to come back out. Writing the mode string on its own
+-- there would leave a mouseover bar at alpha 0 and mouseoverEnabled true, so the
+-- bar reads "always" and stays invisible.
+--
+-- Duplicated logic, and the reason it is worth it: this is a pure rewrite of six
+-- fields on a table the caller hands in, with no addon state behind it, and the
+-- alternative is a restore that cannot happen at all. It drifts if EllesmereUI
+-- changes the field set, which is why the live layer is still preferred wherever
+-- it exists and this runs nowhere else.
+local function ApplyModeStored(settings, mode)
+    if not settings then return end
+
+    mode = mode or "always"
+    settings.barVisibility = mode
+    settings.alwaysHidden = (mode == "never")
+
+    local wasMouseover = settings.mouseoverEnabled
+    settings.mouseoverEnabled = (mode == "mouseover")
+    if mode == "mouseover" then
+        if not settings._savedBarAlpha then
+            settings._savedBarAlpha = settings.mouseoverAlpha or 1
+        end
+        settings.mouseoverAlpha = 0
+    elseif wasMouseover and settings._savedBarAlpha then
+        settings.mouseoverAlpha = settings._savedBarAlpha
+        settings._savedBarAlpha = nil
+    end
+
+    settings.combatHideEnabled = (mode == "out_of_combat")
+    settings.combatShowEnabled = (mode == "in_combat")
+end
+
 local function ApplyActionBars(on)
+    -- The live profile first: while the module is loaded that IS the table it
+    -- reads, and it is the only route that can apply a change without a reload.
+    --
+    -- Lulu Mode switches this module off, so on the OFF path the values KitnUI
+    -- forced sit unattended in EllesmereUI's saved variables and the live lookup
+    -- finds nothing. The restore has to reach them there or it never happens:
+    -- /kitn reset deletes the snapshots immediately afterwards and nothing else
+    -- remembers what the originals were, so the bars would keep KitnUI's keybind
+    -- and visibility settings for good with the switch reading off.
+    --
+    -- The ON path keeps the early return. Forcing values into a module the user
+    -- has switched off changes nothing they can see and is not worth doing;
+    -- Blizzard's own bars are on screen there and carry their own keybind text
+    -- setting, and the Cooldown Manager half still applies either way.
     local profile = ns.EUIProfile(ACTION_BARS)
+    local stored = false
+    if not profile and not on then
+        profile = ns.EUIStoredProfile(ACTION_BARS)
+        stored = profile ~= nil
+    end
+
     local bars = profile and profile.bars
-    -- Nil while Lulu Mode is on, which disables this addon outright so Blizzard's
-    -- own bars are on screen. Correct: Blizzard's bars carry their own keybind
-    -- text setting, and the Cooldown Manager half still applies.
     if type(bars) ~= "table" then return end
 
     local VC = VisibilityCompat()
@@ -236,14 +301,33 @@ local function ApplyActionBars(on)
     for _, key in ipairs(AB_KEYS) do
         local settings = bars[key]
         if type(settings) == "table" then
-            local hideRec = on and ns.EUISnap("beginner", key .. "\31hideKeybind")
-                               or ns.EUIPeekSnap("beginner", key .. "\31hideKeybind")
+            local hideRec
+            if on then
+                hideRec = ns.EUISnap("beginner", key .. "\31hideKeybind")
+            else
+                hideRec = ns.EUIPeekSnap("beginner", key .. "\31hideKeybind")
+            end
             ApplyOne(settings, hideRec, "hideKeybind", false, on)
 
-            local visRec = on and ns.EUISnap("beginner", key .. "\31barVisibility")
-                              or ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
+            local visRec
+            if on then
+                visRec = ns.EUISnap("beginner", key .. "\31barVisibility")
+            else
+                visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
+            end
+
             if VC then
                 ApplyVisibility(settings, visRec, VC, on)
+            elseif stored then
+                -- Exactly what ApplyVisibility's OFF branch does, through the
+                -- ported ApplyMode. The plain-value branch below must not be used
+                -- here: it would write barVisibility, clear the record, and leave
+                -- the five companion fields on Beginner Mode's values with nothing
+                -- left that knows the difference.
+                if visRec and visRec.prev ~= nil then
+                    ApplyModeStored(settings, visRec.prev)
+                    visRec.prev = nil
+                end
             else
                 -- No compat layer means no companion fields to keep in step, so
                 -- both are plain values and the ordinary trio is correct: it
@@ -253,12 +337,16 @@ local function ApplyActionBars(on)
                 --
                 -- Known incomplete: the legacy alwaysHidden, combatHideEnabled and
                 -- combatShowEnabled flags are not touched, so a bar carrying one
-                -- would stay hidden. Chasing them would mean reimplementing
-                -- ApplyMode for a version nobody runs.
+                -- would stay hidden. ApplyModeStored above is not the answer here:
+                -- it writes the six-field model this version does not have.
                 ApplyOne(settings, visRec, "barVisibility", "always", on)
 
-                local moRec = on and ns.EUISnap("beginner", key .. "\31mouseoverEnabled")
-                                 or ns.EUIPeekSnap("beginner", key .. "\31mouseoverEnabled")
+                local moRec
+                if on then
+                    moRec = ns.EUISnap("beginner", key .. "\31mouseoverEnabled")
+                else
+                    moRec = ns.EUIPeekSnap("beginner", key .. "\31mouseoverEnabled")
+                end
                 ApplyOne(settings, moRec, "mouseoverEnabled", false, on)
             end
         end

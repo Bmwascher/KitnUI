@@ -6,6 +6,10 @@
 
 local _, ns = ... ---@type string, KitnUINS
 
+-- Core.lua sets this and stops when KitnUI's shared namespace is unreachable, so
+-- ns has no title, no db and no data. Everything below needs all three.
+if ns.EUI_INERT then return end
+
 ns.EUIPages["Top Bar"] = function(parent, yOffset)
     local W = EllesmereUI.Widgets
     local y = yOffset
