@@ -432,6 +432,14 @@ end
 --     snapshots stay a separate store in KitnUIDB; the caller nilling that
 --     file is what clears those.
 --
+-- And one thing it deliberately does NOT cover, stated here because losing the
+-- statement would make it look like an oversight. A value forced into a
+-- NON-active EllesmereUI profile stays forced. The re-apply registry only ever
+-- reaches the live profile, and that profile's snapshots die with KitnUIDB, so
+-- nothing is left that knows the original. Reaching further would mean walking
+-- every profile through every page's restore with the db object pointed
+-- somewhere it is not, which is a larger and riskier job than the case is worth.
+--
 -- Everything runs synchronously, because the caller nils KitnUIDB straight after
 -- and a debounced pass would fire into the wreckage.
 --
@@ -544,7 +552,7 @@ local function RegisterModule(config)
                 EllesmereUI:RegisterModule(r.key, r.config)
             end
         ]], "KitnUI-register")
-        ok = trampoline and pcall(trampoline) or false
+        if trampoline then ok = pcall(trampoline) end
         _G.__KitnUI_pendingReg = nil
     end
 
