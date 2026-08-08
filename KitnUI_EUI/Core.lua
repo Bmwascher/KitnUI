@@ -694,14 +694,24 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
-    if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
 
-    -- Before anything reads a switch state, and before the db is registered so
-    -- the merge sees migrated values rather than bare defaults. ns.db is filled
-    -- by Installer/Core.lua, which registers its PLAYER_LOGIN handler first (its
-    -- frame is created at KitnUI load time, before this addon loads) and so has
-    -- already run.
+    -- ABOVE the capability guard, deliberately. Migration depends on none of the
+    -- things that guard protects: it needs ns.db and EllesmereUIDB.profiles and
+    -- nothing else. Below the guard it would be skipped on an EllesmereUI that has
+    -- Lite.NewDB but no config panel, and the legacy block would then sit
+    -- unconsumed while /kitn reset still works, because the export frame publishes
+    -- EUIResetAll whether or not this handler returned early. Reset would open the
+    -- new store, read a defaulted lulu = false, skip the teardown, and then delete
+    -- the one record that said Lulu was on, stranding its action bars and layout
+    -- with nothing left to restore them.
+    --
+    -- Ordered before the db is registered either way, so the defaults merge sees
+    -- migrated values rather than bare defaults. ns.db is filled by
+    -- Installer/Core.lua, whose PLAYER_LOGIN handler is registered first (its frame
+    -- is created at KitnUI load time, before this addon loads) and has already run.
     MigrateSettingsForward()
+
+    if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
 
     InjectSidebar()
 
