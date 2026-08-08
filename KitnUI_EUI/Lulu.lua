@@ -192,6 +192,18 @@ local function ApplyEditModeLayout(on)
             ns.QueueMessage(ns.title .. ": " .. ns.Red("Edit Mode layout limit reached (5 account layouts), so Lulu's layout was skipped. Delete an account layout and toggle Lulu again."))
             return
         end
+        -- Somewhere to write the way back, secured BEFORE the layout moves.
+        -- UnitGUID is declared nilable
+        -- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua:1209-1222),
+        -- and a layout swapped with nowhere to record what it replaced is a
+        -- layout the switch can never undo. Skipping is recoverable; that is not.
+        local guid = LuluCharacter()
+        local saved = guid and ns.EUISnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
+        if not saved then
+            ns.QueueMessage(ns.title .. ": " .. ns.Red("Lulu's Edit Mode layout was skipped, because KitnUI could not tell which character this is and would not have been able to undo it. The rest of Lulu Mode still applies."))
+            return
+        end
+
         -- Read BEFORE the import, because ApplyPresetEditMode overwrites
         -- info.activeLayout on its way out and never reads it back
         -- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:4979-4983).
@@ -206,9 +218,7 @@ local function ApplyEditModeLayout(on)
 
         -- Record-once, like every other snapshot in this addon: a second apply
         -- must not capture Lulu's OWN layout as the thing to go back to.
-        local guid = LuluCharacter()
-        local saved = guid and ns.EUISnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
-        if saved and saved.prev == nil then
+        if saved.prev == nil then
             if current == nil then current = ns.EUI_ABSENT end
             saved.prev = current
         end
@@ -259,10 +269,22 @@ local function ApplyEditModeLayout(on)
     -- two outcomes: the debt is settled, or it can never be settled.
     --
     -- Fallback only, for the two cases above: the record could not be read when it
-    -- was taken, or it names a layout that has since gone. Still gated on the
-    -- install step, for the reason it always was — writing KitnUI's layout over the
-    -- arrangement of someone who never asked for it would be worse than leaving
-    -- Edit Mode alone.
+    -- was taken, or it names a layout that has since gone.
+    --
+    -- KitnUI's layout is ACTIVATED where it already exists, and only imported
+    -- where it does not. Activating costs no layout slot, so it is the only way
+    -- out when the account list is full, and it does not depend on KitnUI still
+    -- remembering the install: /kitn reset forgets that, but it does not delete
+    -- the layout from Edit Mode, and a debt carried across a reset has to be
+    -- settleable afterwards or it was pointless to carry.
+    if ActivateEditModeLayout(ns.profileName) == "ok" then
+        saved.prev = nil
+        return
+    end
+
+    -- Still gated on the install step, for the reason it always was — writing
+    -- KitnUI's layout over the arrangement of someone who never asked for it
+    -- would be worse than leaving Edit Mode alone.
     --
     -- Emptiness tested exactly as the ON path and EditModeWarning test it. A bare
     -- type check let an empty string reach the importer, which is both a pointless

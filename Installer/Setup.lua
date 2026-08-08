@@ -606,10 +606,32 @@ local function euiAllModules()
     return folders
 end
 
+-- Every enable and disable below names the current character, because that is
+-- what this function's own comments describe and what an addon's enable state
+-- actually is. Leaving the argument off does NOT mean "this character": it means
+-- the whole account. Blizzard's addon list maps its "All" selection to nil
+-- (.wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:8-15)
+-- and passes a player GUID for every per-character operation (:563-571, :646-652).
+-- Without the argument, an alt running /kitn load was rewriting every other
+-- character's module choices.
+local function AddonCharacter()
+    if not UnitGUID then return nil end
+    local guid = UnitGUID("player")
+    if type(guid) ~= "string" or guid == "" then return nil end
+    return guid
+end
+
 -- Idempotent and safe: no-ops when C_AddOns is unavailable and skips any module
 -- that isn't installed. Takes effect on the ReloadUI at the end of the flow.
 function ns.ApplyEUIModuleSet()
     if not (C_AddOns and C_AddOns.DisableAddOn) then return end
+
+    -- Nothing at all rather than something account-wide. Doing the pass without
+    -- a character would reach every alt, which is the failure this argument was
+    -- added to remove.
+    local character = AddonCharacter()
+    if not character then return end
+
     local set = ns.GetEUIModuleSet()
 
     local off = {}
@@ -622,12 +644,10 @@ function ns.ApplyEUIModuleSet()
     -- import's own enable sweep is undone by this pass because both only take
     -- effect at the reload and this one runs last.
     --
-    -- Handed to Lulu rather than added to the list below. The loop's own calls
-    -- name no character, so they reach every character on the account, and they
-    -- take no record — an alt loading a Lulu profile would have switched the
-    -- module off for everyone and left nobody able to switch it back. Lulu's pass
-    -- confines the change to this character and writes down what it found. It is
-    -- still marked in `off` so the enable sweep at the end leaves it alone.
+    -- Handed to Lulu rather than added to the list below, because the loop takes
+    -- no record: turning Lulu off afterwards would have had nothing to put back.
+    -- Lulu's own pass writes down what it found. It is still marked in `off` so
+    -- the enable sweep at the end leaves it alone.
     if ns.LuluEnabled and ns.LuluEnabled() then
         off["EllesmereUIActionBars"] = true
         if ns.LuluApplyActionBars then ns.LuluApplyActionBars(true) end
@@ -635,7 +655,7 @@ function ns.ApplyEUIModuleSet()
     for _, folder in ipairs(set) do
         off[folder] = true
         if euiModuleInstalled(folder) then
-            C_AddOns.DisableAddOn(folder)
+            C_AddOns.DisableAddOn(folder, character)
         end
     end
 
@@ -649,13 +669,22 @@ function ns.ApplyEUIModuleSet()
     -- EllesmereUI step skips the import and its sweep with it.
     --
     -- This does override a module the user turned off on purpose. That is the
-    -- point of "load": the character ends up matching the pack.
+    -- point of "load": the character ends up matching the pack. THIS character,
+    -- and no other — the whole reason the argument is here.
+    --
+    -- One sweep is still outside KitnUI's reach: EllesmereUI's own import enables
+    -- every module with no character of its own
+    -- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:5266-5285),
+    -- so an INSTALL still touches the account before this pass runs last. /kitn
+    -- load never imports, so that path is entirely this character's. An alt with
+    -- Lulu applied whose action bars that sweep switches back on lands in the
+    -- "apply" mismatch at its next login, and Lulu's own prompt puts it right.
     if not C_AddOns.EnableAddOn then return end
     local all = euiAllModules()
     if not all then return end
     for _, folder in ipairs(all) do
         if not off[folder] and euiModuleInstalled(folder) then
-            C_AddOns.EnableAddOn(folder)
+            C_AddOns.EnableAddOn(folder, character)
         end
     end
 end

@@ -771,24 +771,31 @@ KitnCommands["config"] = KitnCommands["options"]
 -- Reverse bridge
 ---------------------------------------------------------------------------------
 
--- KitnUI proper calls these four: Installer/Core.lua:308-312 (EUIResetAll),
--- Setup.lua:134 (ApplyLook), Setup.lua:279-281 and :622 (LuluEnabled,
--- LuluLayoutName). All four call sites nil-guard, so a symbol missing here
--- fails SILENTLY. Naming them in one list is what stops that happening by
--- accident. Keep this list and the table in the spec in step.
-local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName" }
+-- KitnUI proper calls these five: EUIResetAll from Installer/Core.lua's reset,
+-- ApplyLook and LuluLayoutName from Setup.lua's profile writes, LuluEnabled and
+-- LuluApplyActionBars from Setup.lua's EllesmereUI module pass. Every call site
+-- nil-guards, so a symbol missing here fails SILENTLY — which is exactly what
+-- happened to LuluApplyActionBars when it was added to Lulu.lua and not to this
+-- list, and the installer's action bars step quietly did nothing for a commit.
+-- Naming them in one list is what is supposed to stop that. Keep this list and
+-- the table in the spec in step.
+--
+-- The read-through metatable above is one-way: KitnUI_EUI reads KitnUI's
+-- namespace, but anything this addon defines stays in this addon's table until
+-- it is copied back here.
+local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars" }
 
 -- Its own frame, deliberately. Core's main boot handler returns early when
 -- EllesmereUI is too old to have RegisterModule or Widgets, and none of these
--- four needs EllesmereUI: the reapply registry they depend on is populated at
+-- needs EllesmereUI: the reapply registry they depend on is populated at
 -- file scope. Publishing behind that guard would leave /kitn reset with no
 -- teardown on exactly the configuration where forced values from a previous
 -- session are still held down. Gameplay.lua's tooltip hook uses its own frame
 -- for the same reason and says so.
 --
--- Login rather than file scope because ApplyLook, LuluEnabled and LuluLayoutName
--- live in General.lua and Lulu.lua, which EUITab.xml loads AFTER this file.
--- Copy by value is safe: none of the four is ever reassigned after definition.
+-- Login rather than file scope because all but EUIResetAll live in General.lua
+-- and Lulu.lua, which EUITab.xml loads AFTER this file. Copy by value is safe:
+-- none of them is ever reassigned after definition.
 local exportBoot = CreateFrame("Frame")
 exportBoot:RegisterEvent("PLAYER_LOGIN")
 exportBoot:SetScript("OnEvent", function(self)
