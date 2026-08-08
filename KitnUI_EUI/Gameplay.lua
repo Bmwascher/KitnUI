@@ -289,14 +289,28 @@ end
 -- So containers are rebuilt, but only where a snapshot says this bar was actually
 -- held down. Building one for a bar with no record would invent settings the user
 -- never had; DeepMergeDefaults fills the rest in when the module next loads.
+-- A snapshot record that is CURRENTLY holding a value down, as opposed to one
+-- that merely exists. ns.EUIRestore clears .prev and deliberately leaves the
+-- record table behind (KitnUI_EUI/Core.lua:299-311), and ns.EUISnap reuses it
+-- (:234-241), so a bar Beginner Mode held down and released in some earlier
+-- session still has three truthy record tables with nothing in them. Reading
+-- existence as activity would rebuild containers for a bar that needs nothing,
+-- and worse, a stale mouseoverEnabled record would send a compat-recorded
+-- visibility mode down the legacy two-value branch and drop it.
+local function ActiveSnap(key)
+    local rec = ns.EUIPeekSnap("beginner", key)
+    if rec and rec.prev ~= nil then return rec end
+    return nil
+end
+
 local function RestoreStoredActionBars()
     local profile = ns.EUIStoredProfile(ACTION_BARS)
     if not profile then return end
 
     for _, key in ipairs(AB_KEYS) do
-        local hideRec = ns.EUIPeekSnap("beginner", key .. "\31hideKeybind")
-        local visRec  = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
-        local moRec   = ns.EUIPeekSnap("beginner", key .. "\31mouseoverEnabled")
+        local hideRec = ActiveSnap(key .. "\31hideKeybind")
+        local visRec  = ActiveSnap(key .. "\31barVisibility")
+        local moRec   = ActiveSnap(key .. "\31mouseoverEnabled")
 
         if hideRec or visRec or moRec then
             if type(profile.bars) ~= "table" then profile.bars = {} end
@@ -315,7 +329,7 @@ local function RestoreStoredActionBars()
                 -- string and throw the recorded one away.
                 ApplyOne(settings, visRec, "barVisibility", "always", false)
                 ApplyOne(settings, moRec, "mouseoverEnabled", false, false)
-            elseif visRec and visRec.prev ~= nil then
+            elseif visRec then
                 if visRec.prev == ns.EUI_ABSENT then
                     -- ApplyModeStored has no way to say "this key was never set",
                     -- and writing the sentinel as a mode would be worse than the
