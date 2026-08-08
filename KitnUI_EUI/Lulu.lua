@@ -277,8 +277,16 @@ local function ApplyEditModeLayout(on)
     -- remembering the install: /kitn reset forgets that, but it does not delete
     -- the layout from Edit Mode, and a debt carried across a reset has to be
     -- settleable afterwards or it was pointless to carry.
-    if ActivateEditModeLayout(ns.profileName) == "ok" then
+    local fallback = ActivateEditModeLayout(ns.profileName)
+    if fallback == "ok" then
         saved.prev = nil
+        return
+    end
+    if fallback == "unavailable" then
+        -- Record KEPT, for the same reason as the branch above: not being able to
+        -- ask Edit Mode says nothing about what Edit Mode holds. Treating this as
+        -- "KitnUI has no layout" would drop the debt over a question never asked.
+        ns.QueueMessage(ns.title .. ": " .. ns.Red("Edit Mode could not be reached, so the layout change Lulu Mode made is still waiting to come back. Toggle Lulu Mode off again out of combat."))
         return
     end
 
@@ -588,6 +596,29 @@ local function ActionBarsLoaded()
     return loaded and true or false
 end
 
+-- A record on the action bars is a debt to switch the module back ON. Once it IS
+-- on and Lulu is off, that debt is settled, whoever settled it, and the record has
+-- to go: held any longer it becomes a claim on a state the user now owns, and the
+-- next time they switch the module off themselves KitnUI offers to reverse them.
+--
+-- EllesmereUI's own profile import is how this happens in practice. It enables
+-- every module in the suite for the WHOLE account
+-- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:5266-5285),
+-- so one character installing pays every other character's debt without either
+-- addon knowing. The rule is written here rather than after the import for that
+-- reason: what matters is the state, not which of several routes produced it, and
+-- only the character whose record it is can see its own module.
+--
+-- Not while Lulu is ON: that state is the "apply" mismatch, the record still
+-- describes the true original, and the reload is about to switch the module off
+-- again.
+local function SettleActionBarsIfLoaded()
+    if ns.LuluEnabled and ns.LuluEnabled() then return end
+    if not LuluOwnsActionBars() then return end
+    if ActionBarsLoaded() ~= true then return end
+    ClearActionBarState()
+end
+
 -- Holds WHICH mismatch was prompted, not merely that one was, so a state that
 -- flips from one direction to the other still asks. Set only once the dialog is
 -- actually on screen, and cleared by declining it or by the mismatch going away.
@@ -616,6 +647,11 @@ local function CurrentMismatch()
 end
 
 function ns.LuluReconcile()
+    -- Before the mismatch is read, not after: a settled debt must stop counting as
+    -- one in the very same pass, or the reading below is taken against a record
+    -- that no longer means anything.
+    SettleActionBarsIfLoaded()
+
     local kind = CurrentMismatch()
 
     if not kind then
