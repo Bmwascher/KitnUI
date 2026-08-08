@@ -607,9 +607,15 @@ end
 -- registered defaults the destination is NEVER empty, so emptiness cannot be the
 -- condition.
 --
--- The old table is left in place rather than deleted. If this migration is
--- wrong we want the evidence, and a stale table costs a few bytes. A later
--- release drops it.
+-- KitnUIDB.euiSettings is left in place rather than deleted. If this migration is
+-- wrong we want the evidence, and a stale table in our own saved variables costs
+-- a few bytes. A later release drops it.
+--
+-- The pre-0a4835e block is NOT left in place, because it is not ours. It sits in
+-- EllesmereUI's profile, so it rides every exported profile forever, and worse:
+-- /kitn reset nils KitnUIDB and takes the version stamp below with it, so the
+-- next login re-runs this migration and re-imports those stale switch states
+-- over the reset the user just asked for.
 local MIGRATION_VERSION = 1
 
 local function MigrateSettingsForward()
@@ -654,6 +660,11 @@ local function MigrateSettingsForward()
                     end
                 end
             end
+
+            -- Cleared whether or not it was the source. When euiSettings supplied
+            -- the values it is the newer of the two stores and wins outright, so
+            -- what is left here is older data that has already been superseded.
+            if profile.addons then profile.addons.KitnUIEUI = nil end
         end
     end
 
@@ -737,7 +748,7 @@ KitnCommands["config"] = KitnCommands["options"]
 -- Reverse bridge
 ---------------------------------------------------------------------------------
 
--- KitnUI proper calls these four: Installer/Core.lua:296 (EUIResetAll),
+-- KitnUI proper calls these four: Installer/Core.lua:308-312 (EUIResetAll),
 -- Setup.lua:134 (ApplyLook), Setup.lua:279-281 and :622 (LuluEnabled,
 -- LuluLayoutName). All four call sites nil-guard, so a symbol missing here
 -- fails SILENTLY. Naming them in one list is what stops that happening by

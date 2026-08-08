@@ -168,7 +168,7 @@ local function EnsureArrows(plate)
     -- later, so a region has to be BORN inside the template holder. We only ever
     -- anchor to the health bar, so this is insurance rather than a present need,
     -- but it is insurance that cannot be retrofitted.
-    if EllesmereUI.IS_121 then
+    if _G.EllesmereUI and EllesmereUI.IS_121 then
         local ok, holder = pcall(CreateFrame, "Frame", nil, plate.health,
             "DisableUntrustedLayoutScriptsTemplate")
         if ok and holder then
@@ -228,7 +228,7 @@ end
 -- npArrowY whatever dy is, because the two offsets are symmetric. So a wrong barH
 -- does not move the arrow, it makes the height slider deliver the wrong height.
 local function PositionArrows(plate, t, gapL, gapR)
-    local PP = EllesmereUI.PP
+    local PP = _G.EllesmereUI and EllesmereUI.PP
     if not (PP and PP.Point and PP.Width) then return end
 
     -- Rounded to whole pixels. A half-pixel offset lands the texture between
@@ -452,7 +452,8 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
     -- Anchored to the LEFT of that half's control, which is where EllesmereUI puts
     -- the swatch for its own target arrow colour.
     local leftRgn = row and row._leftRegion
-    if leftRgn and leftRgn._control and EllesmereUI.BuildColorSwatch and EllesmereUI.PP then
+    if leftRgn and leftRgn._control and _G.EllesmereUI
+       and EllesmereUI.BuildColorSwatch and EllesmereUI.PP then
         local swatch = EllesmereUI.BuildColorSwatch(leftRgn, leftRgn:GetFrameLevel() + 5,
             function()
                 local t = Cfg()
