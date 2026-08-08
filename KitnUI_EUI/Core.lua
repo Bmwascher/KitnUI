@@ -497,9 +497,22 @@ function ns.EUIResetAll()
     local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
     if type(profiles) == "table" then
         for _, profile in pairs(profiles) do
-            if type(profile) == "table" and type(profile.addons) == "table"
-               and profile.addons.KitnUI_EUI ~= live then
-                profile.addons.KitnUI_EUI = nil
+            if type(profile) == "table" and type(profile.addons) == "table" then
+                if profile.addons.KitnUI_EUI ~= live then
+                    profile.addons.KitnUI_EUI = nil
+                end
+
+                -- The pre-0a4835e key, swept unconditionally. It is never the live
+                -- store, so no identity test applies, and the migration cannot be
+                -- relied on to have removed it: EllesmereUI passes unknown addon
+                -- keys straight through an import
+                -- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:128-136,
+                -- copied at :3029-3031), so importing an old profile reintroduces
+                -- one long after the migration has stamped. Left here it would
+                -- outlive this reset, which also nils KitnUIDB and the stamp with
+                -- it, and the next login would migrate those stale switches back
+                -- into the profile the user just reset.
+                profile.addons.KitnUIEUI = nil
             end
         end
     end
