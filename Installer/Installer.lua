@@ -178,7 +178,7 @@ end
 ---------------------------------------------------------------------------------
 
 local addonSteps = {
-    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Dark and Coloured are a preset inside KitnUI's EllesmereUI tab." },
+    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Dark and Colored are a preset inside KitnUI's EllesmereUI tab." },
     { key = "Plater",            display = "Plater Nameplates",       checkAddon = "Plater",               alwaysAvailable = false, desc = "Curated Plater nameplates tuned to match the KitnUI look." },
     { key = "BuffReminders",     display = "BuffReminders",           checkAddon = "BuffReminders",        alwaysAvailable = false, desc = "Flags missing raid buffs, food, and flasks right on your HUD so you never pull under-prepped." },
     { key = "BigWigs",           display = "BigWigs",                 checkAddon = "BigWigs",              alwaysAvailable = false, desc = "Boss timers and warnings, positioned and styled for KitnUI." },
@@ -228,7 +228,7 @@ local function EllesmereUIPage()
         end)
     end)
     SetVariant(WF().Option1, "primary")
-    ns.Wizard:SetOptionHint("Dark and Coloured are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
+    ns.Wizard:SetOptionHint("Dark and Colored are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
 end
 
 local function SimpleInstallPage(addonKey, displayName)

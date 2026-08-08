@@ -70,7 +70,7 @@ local LOOKS = {
         raidName    = "class",
     },
     color = {
-        label       = "Coloured",
+        label       = "Colored",
         darkMode    = false,
         healthClass = true,
         nameClass   = false,
