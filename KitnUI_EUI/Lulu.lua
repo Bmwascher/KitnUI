@@ -110,8 +110,17 @@ local function ApplyActionBarModule(on)
 
     if on then
         C_AddOns.DisableAddOn(ACTION_BARS)
+        -- Records that LULU switched it off, not the user. ns.LuluReconcile needs
+        -- that to tell "Lulu is still applied under a profile that says it is
+        -- off", which it should offer to undo, from "the user does not want
+        -- EllesmereUI's action bars", which is none of KitnUI's business. Kept in
+        -- KitnUIDB rather than the profile: whether an addon is switched off is an
+        -- account-wide fact about THIS machine, exactly like a snapshot, and it
+        -- must not ride an exported profile to a machine where it is untrue.
+        if ns.db then ns.db.euiLuluDisabledBars = true end
     else
         C_AddOns.EnableAddOn(ACTION_BARS)
+        if ns.db then ns.db.euiLuluDisabledBars = nil end
     end
 end
 
@@ -247,9 +256,17 @@ end)
 -- about: Lulu recorded ON while the action bar module it switches off is still
 -- loaded means its reload-only halves were never applied.
 --
--- The reverse mismatch is not prompted. Lulu OFF with the module unloaded is what
--- a pending Enable looks like between the toggle and the reload the toggle
--- already asked for.
+-- BOTH directions are prompted, because the switch can lie both ways. Kitn's
+-- in-game test on 2026-08-08 found the reverse: switch to a profile whose Lulu is
+-- OFF and the minimap goes back to square, because that half re-applies without a
+-- reload, while the action bars stay Blizzard's and Lulu's Edit Mode layout stays
+-- active. The profile says no Lulu and two thirds of Lulu is on screen. This file
+-- previously dismissed that state as the moment between the toggle and its
+-- reload, which was wrong: a profile switch reaches it with no reload coming.
+--
+-- The reverse direction is GUARDED on ns.db.euiLuluDisabledBars, so it fires only
+-- where Lulu was the one that switched the module off. Someone who switched
+-- EllesmereUI's action bars off themselves must never be offered them back.
 local ACTION_BARS_LOADED_UNKNOWN = "unknown"
 
 local function ActionBarsLoaded()
@@ -273,68 +290,90 @@ local function ActionBarsLoaded()
     return loaded and true or false
 end
 
--- Set only once the dialog is actually on screen, and cleared again by declining
--- it or by the mismatch going away. It stops a second reconcile in the same pass
--- from stacking a duplicate prompt; it must never become the reason a prompt is
--- not shown, because the mismatch it guards leaves Lulu two thirds unapplied.
-local promptedForMismatch = false
+local function LuluOwnsActionBars()
+    if not ns.db then return false end
+    if ns.db.euiLuluDisabledBars then return true end
+    return false
+end
+
+-- Holds WHICH mismatch was prompted, not merely that one was, so a state that
+-- flips from one direction to the other still asks. Set only once the dialog is
+-- actually on screen, and cleared by declining it or by the mismatch going away.
+-- It stops a second reconcile in the same pass stacking a duplicate prompt; it
+-- must never become the reason a prompt is not shown.
+local promptedForMismatch
 
 function ns.LuluReconcile()
     local on = false
     if ns.LuluEnabled then on = ns.LuluEnabled() end
 
     local loaded = ActionBarsLoaded()
-    -- Unknown is not a mismatch. Prompting for a reload on a reading we could not
-    -- take would nag a user whose UI is already correct.
-    local mismatch = on and loaded == true
 
-    if not mismatch then
-        promptedForMismatch = false
+    -- Unknown is neither mismatch. Prompting for a reload on a reading we could
+    -- not take would nag a user whose UI is already correct.
+    local kind
+    if on and loaded == true then
+        kind = "apply"
+    elseif not on and loaded == false and LuluOwnsActionBars() then
+        kind = "undo"
+    end
+
+    if not kind then
+        promptedForMismatch = nil
         return
     end
 
-    if promptedForMismatch then return end
+    if promptedForMismatch == kind then return end
 
     -- Not in combat, and not latched either: the mismatch is still there
     -- afterwards, so the next reconcile trigger prompts instead.
     if InCombatLockdown() then return end
 
+    -- Both texts describe the STATE, not how it got there. An imported profile is
+    -- the common cause of "apply" and a profile switch of "undo", but each is
+    -- reachable other ways and a message that named a cause would be wrong there.
+    --
     -- Built here rather than at file scope. At file scope ns.title is read before
     -- KitnUI has necessarily filled it, and a nil there is a load error in a file
     -- that would otherwise degrade quietly. The Edit Mode forecast is the same one
     -- the toggle shows, for the same reason: a full layout list costs the user a
     -- second reload to discover afterwards and nothing to cancel on now.
-    -- Describes the STATE, not how it got there. An imported profile is the common
-    -- cause, but re-enabling EllesmereUI's action bars by hand reaches the same
-    -- mismatch, and a message that blamed an import would be wrong there.
-    local text = ns.title .. ": Lulu Mode is on, but two of its three parts are not.\n\nEllesmereUI's action bars still need to switch off so Blizzard's own bars return, and Lulu's Edit Mode layout still needs to apply. Both need a reload. Do that now?"
-    local warning = EditModeWarning(true)
+    local text, apply
+    if kind == "apply" then
+        apply = true
+        text = ns.title .. ": Lulu Mode is on, but two of its three parts are not.\n\nEllesmereUI's action bars still need to switch off so Blizzard's own bars return, and Lulu's Edit Mode layout still needs to apply. Both need a reload. Do that now?"
+    else
+        apply = false
+        text = ns.title .. ": Lulu Mode is off for this profile, but two of its three parts are still on.\n\nEllesmereUI's action bars are still switched off, and Lulu's Edit Mode layout is still the active one. Putting both back needs a reload. Do that now?"
+    end
+
+    local warning = EditModeWarning(apply)
     if warning then text = text .. warning end
 
     StaticPopupDialogs["KITNUI_LULU_IMPORTED"] = {
         text = text,
         button1 = YES,
         button2 = NO,
-        -- Applies the two halves, then reloads. A bare ReloadUI would put the user
-        -- back exactly where they started: the switch is already ON, so nothing
-        -- would prompt a second time and nothing would ever apply.
+        -- Does the work, THEN reloads. A bare ReloadUI would put the user back
+        -- exactly where they started: the switch state is unchanged either way, so
+        -- nothing else would ever apply it.
         OnAccept = function()
             -- Rechecked, as in ns.SetLuluMode: the popup has no timeout, so it can
             -- be opened out of combat and accepted mid-fight, and
             -- ApplyPresetEditMode refuses in combat. The reload on the next line
-            -- means nothing retries, so a half-applied Lulu would be permanent.
+            -- means nothing retries, so a half-done Lulu would be permanent.
             if InCombatLockdown() then
-                print(ns.title .. ": Lulu Mode cannot be applied in combat. Try again after this fight.")
-                promptedForMismatch = false
+                print(ns.title .. ": Lulu Mode cannot be changed in combat. Try again after this fight.")
+                promptedForMismatch = nil
                 return
             end
-            ApplyEditModeLayout(true)
-            ApplyActionBarModule(true)
+            ApplyEditModeLayout(apply)
+            ApplyActionBarModule(apply)
             ReloadUI()
         end,
         -- Declining is not the same as being told. The mismatch is still real, so
         -- release the latch and let the next profile switch or login ask again.
-        OnCancel = function() promptedForMismatch = false end,
+        OnCancel = function() promptedForMismatch = nil end,
         timeout = 0,
         whileDead = true,
         hideOnEscape = true,
@@ -347,7 +386,7 @@ function ns.LuluReconcile()
     -- and latching on that would spend the user's only notice on a prompt they
     -- never saw.
     if not StaticPopup_Show("KITNUI_LULU_IMPORTED") then return end
-    promptedForMismatch = true
+    promptedForMismatch = kind
 end
 
 -- Called by ns.EUIResetAll, which reloads straight afterwards. The re-apply
