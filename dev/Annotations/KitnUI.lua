@@ -83,10 +83,9 @@ local KitnUINS
 ---@field devMode boolean
 ---@field dismissedVersion string?
 ---@field euiSnap table<string, table>       # [section][profile][key] = { prev = <original> }, machine-local, never exported
----@field euiSnapGlobal table<string, table> # [key] = { prev = <original> } for EllesmereUIDB-root values
+---@field euiSnapGlobal table<string, table> # [key] = { prev = <original> } for account-wide values: EllesmereUIDB-root settings, luluEditModeLayout (preset index or layout name), luluActionBars (was the module enabled)
 ---@field euiMigration number?               # version stamp for the one-time move of switch states into the profile
 ---@field euiSettings table?                 # vestigial pre-migration switch store, kept as evidence
----@field euiLuluDisabledBars boolean?       # Lulu, not the user, switched EllesmereUIActionBars off on THIS machine
 local KitnUIDB
 
 -- Installer wizard singleton (UI/Wizard.lua). Only the surface Installer.lua

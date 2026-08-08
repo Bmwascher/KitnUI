@@ -49,6 +49,71 @@ local function ApplyMinimapShape(on)
     if _G._EMM_FullRebuildMinimap then _G._EMM_FullRebuildMinimap() end
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode layout, read and re-activate
+---------------------------------------------------------------------------------
+
+-- Which layout is active now, in a form that survives the list being reordered.
+--
+-- C_EditMode.GetLayouts returns SAVED layouts only, while its activeLayout field
+-- indexes the presets-first COMBINED list, so the two need reconciling. That is
+-- the same convention Installer/Setup.lua:327 already uses.
+--
+-- A preset is recorded as its INDEX: presets come first and their count is fixed,
+-- so those indices cannot shift. A saved layout is recorded as its NAME, because
+-- ApplyPresetEditMode inserts ahead of existing layouts and shifts every index
+-- after it, so a saved index goes stale the moment Lulu Mode runs.
+local function ActiveEditModeLayout()
+    if not (C_EditMode and C_EditMode.GetLayouts) then return nil end
+
+    local ok, info = pcall(C_EditMode.GetLayouts)
+    if not (ok and type(info) == "table" and type(info.layouts) == "table") then return nil end
+    if type(info.activeLayout) ~= "number" then return nil end
+
+    local presets = Enum and Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues
+    if type(presets) ~= "number" then return nil end
+
+    if info.activeLayout <= presets then return info.activeLayout end
+
+    local entry = info.layouts[info.activeLayout - presets]
+    if type(entry) ~= "table" or type(entry.layoutName) ~= "string" then return nil end
+
+    -- Override layouts belong to Plunderstorm and its kin. They are transient and
+    -- cannot be re-activated by name afterwards, so there is nothing worth
+    -- recording and pretending otherwise would record a name that never comes back.
+    local override = Enum.EditModeLayoutType and Enum.EditModeLayoutType.Override
+    if override ~= nil and entry.layoutType == override then return nil end
+
+    return entry.layoutName
+end
+
+-- Puts back what ActiveEditModeLayout recorded. Returns false when the record can
+-- no longer be honoured, which is an ordinary outcome rather than an error: the
+-- user can rename or delete a layout between Lulu Mode going on and coming off.
+local function ActivateEditModeLayout(record)
+    if record == nil then return false end
+    if not (C_EditMode and C_EditMode.GetLayouts and C_EditMode.SetActiveLayout) then return false end
+
+    local presets = Enum and Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues
+    if type(presets) ~= "number" then return false end
+
+    if type(record) == "number" then
+        if record < 1 or record > presets then return false end
+        return pcall(C_EditMode.SetActiveLayout, record) and true or false
+    end
+
+    local ok, info = pcall(C_EditMode.GetLayouts)
+    if not (ok and type(info) == "table" and type(info.layouts) == "table") then return false end
+
+    for i, entry in ipairs(info.layouts) do
+        if type(entry) == "table" and entry.layoutName == record then
+            return pcall(C_EditMode.SetActiveLayout, presets + i) and true or false
+        end
+    end
+
+    return false
+end
+
 -- Every message here is QUEUED, never printed. Both callers reload immediately
 -- afterwards, so a print lands in a chat frame the client destroys before the
 -- user can read it: they flip the switch, the screen reloads, and nothing ever
@@ -75,16 +140,54 @@ local function ApplyEditModeLayout(on)
             ns.QueueMessage(ns.title .. ": " .. ns.Red("Edit Mode layout limit reached (5 account layouts), so Lulu's layout was skipped. Delete an account layout and toggle Lulu again."))
             return
         end
+        -- Read BEFORE the import, because ApplyPresetEditMode overwrites
+        -- info.activeLayout on its way out and never reads it back
+        -- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:4979-4983).
+        -- Committed only AFTER the import succeeds: recording a layout to go back
+        -- to, for a switch that never happened, is worse than recording nothing.
+        local current = ActiveEditModeLayout()
+
         if not EllesmereUI.ApplyPresetEditMode(data, name) then
             ns.QueueMessage(ns.title .. ": " .. ns.Red("Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat."))
+            return
+        end
+
+        -- Record-once, like every other snapshot in this addon: a second apply
+        -- must not capture Lulu's OWN layout as the thing to go back to.
+        local saved = ns.EUISnapGlobal("luluEditModeLayout")
+        if saved and saved.prev == nil then
+            if current == nil then current = ns.EUI_ABSENT end
+            saved.prev = current
         end
         return
     end
 
-    -- Turning Lulu OFF restores the layout KitnUI put there, which means there
-    -- has to be one. Without this check a user who never ran KitnUI's Edit Mode
-    -- step gets KitnUI's layout written the first time they switch Lulu off, and
-    -- their own Edit Mode arrangement replaced by one they never asked for.
+    -- Turning Lulu OFF puts back the layout that was active before Lulu replaced
+    -- it, whatever that was. Kitn's in-game test on 2026-08-08 is why: the old
+    -- code restored KitnUI's OWN layout and only if the Edit Mode install step had
+    -- been run, so a user who skipped that step was left in Lulu's layout with no
+    -- way out through the switch. The ON path writes its layout unconditionally,
+    -- so the OFF path has to be able to undo it unconditionally too.
+    local saved = ns.EUIPeekSnapGlobal("luluEditModeLayout")
+    local record = saved and saved.prev
+
+    if record ~= nil and record ~= ns.EUI_ABSENT then
+        if ActivateEditModeLayout(record) then
+            saved.prev = nil
+            return
+        end
+        -- Renamed or deleted while Lulu was on. Falling through to KitnUI's own
+        -- layout is better than leaving Lulu's, but the user is told, because the
+        -- arrangement they get is not the one they had.
+        ns.QueueMessage(ns.title .. ": " .. ns.Red("The Edit Mode layout you used before Lulu Mode is gone, so it could not be put back."))
+    end
+
+    if saved then saved.prev = nil end
+
+    -- Fallback only, for the two cases above: nothing was recorded, or the record
+    -- could not be honoured. Still gated on the install step, for the reason it
+    -- always was — writing KitnUI's layout over the arrangement of someone who
+    -- never asked for it would be worse than leaving Edit Mode alone.
     local installed = ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]
     if not installed then return end
 
@@ -104,24 +207,68 @@ local function ApplyEditModeLayout(on)
     end
 end
 
-local function ApplyActionBarModule(on)
-    if not (C_AddOns and C_AddOns.DisableAddOn and C_AddOns.EnableAddOn) then return end
-    if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist(ACTION_BARS) then return end
+-- Record-once, exactly like every other snapshot here. It answers one question at
+-- restore time: was EllesmereUI's action bars module switched on before Lulu Mode
+-- touched it? Nothing about it is a claim of authorship — it exists only because
+-- Lulu's ON path wrote it, and that is what makes it trustworthy.
+local function RecordActionBarState()
+    local saved = ns.EUISnapGlobal("luluActionBars")
+    if not (saved and saved.prev == nil) then return end
 
-    if on then
-        C_AddOns.DisableAddOn(ACTION_BARS)
-        -- Records that LULU switched it off, not the user. ns.LuluReconcile needs
-        -- that to tell "Lulu is still applied under a profile that says it is
-        -- off", which it should offer to undo, from "the user does not want
-        -- EllesmereUI's action bars", which is none of KitnUI's business. Kept in
-        -- KitnUIDB rather than the profile: whether an addon is switched off is an
-        -- account-wide fact about THIS machine, exactly like a snapshot, and it
-        -- must not ride an exported profile to a machine where it is untrue.
-        if ns.db then ns.db.euiLuluDisabledBars = true end
-    else
-        C_AddOns.EnableAddOn(ACTION_BARS)
-        if ns.db then ns.db.euiLuluDisabledBars = nil end
+    -- An unreadable state must NOT be recorded as "was enabled". EUI_ABSENT means
+    -- "could not tell", and the restore treats that the same as no record: it
+    -- leaves the module alone rather than guessing in the user's stead.
+    local prev = ns.EUI_ABSENT
+    if C_AddOns and C_AddOns.GetAddOnEnableState and Enum and Enum.AddOnEnableState then
+        local ok, state = pcall(C_AddOns.GetAddOnEnableState, ACTION_BARS)
+        if ok and type(state) == "number" then
+            -- Blizzard's own test for enabled, from
+            -- .wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:188.
+            prev = state > Enum.AddOnEnableState.None
+        end
     end
+    saved.prev = prev
+end
+
+local function ClearActionBarState()
+    local saved = ns.EUIPeekSnapGlobal("luluActionBars")
+    if saved then saved.prev = nil end
+end
+
+-- Whether Lulu Mode is what is holding the module off right now, and so whether
+-- there is anything of KitnUI's to offer to undo.
+local function LuluOwnsActionBars()
+    local saved = ns.EUIPeekSnapGlobal("luluActionBars")
+    if not saved then return false end
+    if saved.prev == true then return true end
+    return false
+end
+
+-- The record is taken and released OUTSIDE the capability checks, deliberately.
+-- Sharing their early returns is what made an uninstalled action bars module a
+-- permanent prompt loop: the record survived, every accept restored nothing, and
+-- the reload came back to the same question.
+local function ApplyActionBarModule(on)
+    if on then RecordActionBarState() end
+
+    local usable = C_AddOns and C_AddOns.DisableAddOn and C_AddOns.EnableAddOn
+    if usable and C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist(ACTION_BARS) then
+        usable = false
+    end
+
+    if usable then
+        if on then
+            C_AddOns.DisableAddOn(ACTION_BARS)
+        elseif LuluOwnsActionBars() then
+            -- Switched back on ONLY where the record says it was on to begin with.
+            -- A user who already had EllesmereUI's action bars off must get them
+            -- back off: reversing that is a deliberate choice of theirs that
+            -- KitnUI has no business overruling.
+            C_AddOns.EnableAddOn(ACTION_BARS)
+        end
+    end
+
+    if not on then ClearActionBarState() end
 end
 
 -- What the Edit Mode step is about to do, worked out BEFORE the popup so the
@@ -264,9 +411,10 @@ end)
 -- previously dismissed that state as the moment between the toggle and its
 -- reload, which was wrong: a profile switch reaches it with no reload coming.
 --
--- The reverse direction is GUARDED on ns.db.euiLuluDisabledBars, so it fires only
--- where Lulu was the one that switched the module off. Someone who switched
--- EllesmereUI's action bars off themselves must never be offered them back.
+-- The reverse direction is GUARDED on the luluActionBars snapshot, which records
+-- whether the module was switched ON before Lulu touched it. Someone who had
+-- EllesmereUI's action bars off already must never be offered them back: the
+-- record says false there, and nothing of KitnUI's is being held down.
 local ACTION_BARS_LOADED_UNKNOWN = "unknown"
 
 local function ActionBarsLoaded()
@@ -290,12 +438,6 @@ local function ActionBarsLoaded()
     return loaded and true or false
 end
 
-local function LuluOwnsActionBars()
-    if not ns.db then return false end
-    if ns.db.euiLuluDisabledBars then return true end
-    return false
-end
-
 -- Holds WHICH mismatch was prompted, not merely that one was, so a state that
 -- flips from one direction to the other still asks. Set only once the dialog is
 -- actually on screen, and cleared by declining it or by the mismatch going away.
@@ -303,23 +445,30 @@ end
 -- must never become the reason a prompt is not shown.
 local promptedForMismatch
 
-function ns.LuluReconcile()
+-- Which way the switch is lying, or nil when it is telling the truth. Unknown is
+-- neither: prompting for a reload on a reading we could not take would nag a user
+-- whose UI is already correct.
+local function CurrentMismatch()
     local on = false
     if ns.LuluEnabled then on = ns.LuluEnabled() end
 
     local loaded = ActionBarsLoaded()
 
-    -- Unknown is neither mismatch. Prompting for a reload on a reading we could
-    -- not take would nag a user whose UI is already correct.
-    local kind
-    if on and loaded == true then
-        kind = "apply"
-    elseif not on and loaded == false and LuluOwnsActionBars() then
-        kind = "undo"
-    end
+    if on and loaded == true then return "apply" end
+    if not on and loaded == false and LuluOwnsActionBars() then return "undo" end
+    return nil
+end
+
+function ns.LuluReconcile()
+    local kind = CurrentMismatch()
 
     if not kind then
         promptedForMismatch = nil
+        -- A dialog already on screen was raised for a state that no longer holds.
+        -- It has no timeout, and its accept handler carries the direction it was
+        -- built with, so leaving it up lets the user apply the OFF work to a
+        -- profile that has since switched ON.
+        StaticPopup_Hide("KITNUI_LULU_IMPORTED")
         return
     end
 
@@ -367,6 +516,17 @@ function ns.LuluReconcile()
                 promptedForMismatch = nil
                 return
             end
+
+            -- Re-checked for the same reason, one step further out: with no
+            -- timeout this dialog can sit open across a profile switch, and `apply`
+            -- was decided when it was built. Doing the OFF work under a profile
+            -- that now says ON would switch the action bars back on and drop the
+            -- Lulu layout, against a switch reading on.
+            if CurrentMismatch() ~= kind then
+                promptedForMismatch = nil
+                return
+            end
+
             ApplyEditModeLayout(apply)
             ApplyActionBarModule(apply)
             ReloadUI()
@@ -393,8 +553,26 @@ end
 -- registry handles the minimap; these two are the parts a reload is required for,
 -- and leaving them behind would strand the action bars off and the Lulu layout
 -- active with the switch reading off and no record of either.
+-- Keyed on the RECORDS, not on the switch. Keying on the switch missed the exact
+-- state the undo prompt exists for: the user switches to a profile whose Lulu
+-- reads off while Lulu is still applied, declines or ignores the prompt, and runs
+-- /kitn reset. The switch says off, so the teardown skipped, and the caller then
+-- nils KitnUIDB and takes both records with it — leaving the action bars off and
+-- the Lulu layout active with nothing left that knows how to undo either.
+--
+-- The records answer the real question: is there anything of ours still applied.
+local function LuluApplied()
+    if ns.LuluEnabled and ns.LuluEnabled() then return true end
+    if LuluOwnsActionBars() then return true end
+
+    local layout = ns.EUIPeekSnapGlobal("luluEditModeLayout")
+    if layout and layout.prev ~= nil then return true end
+
+    return false
+end
+
 function ns.LuluTearDown()
-    if not ns.LuluEnabled() then return end
+    if not LuluApplied() then return end
     ApplyEditModeLayout(false)
     ApplyActionBarModule(false)
 end
