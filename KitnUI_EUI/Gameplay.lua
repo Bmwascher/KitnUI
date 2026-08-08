@@ -215,24 +215,23 @@ local function VisibilityCompat()
     return VC
 end
 
--- THE one rule for undoing a visibility override, shared by all three call sites
--- so they cannot drift apart. `expand` rewrites the whole six-field model from a
+-- THE one rule for undoing a visibility override, shared by both call sites so
+-- they cannot drift apart. `expand` rewrites the whole six-field model from a
 -- mode: the module's own ApplyMode where it is reachable, the ported copy where
--- it is not, and nil where neither applies.
+-- the module is unloaded.
 --
--- Two records must NEVER be expanded, and telling them apart is what `saved.plain`
--- exists for. A record the no-compat writer made describes barVisibility ALONE,
--- because that writer changes that one key and leaves the companion fields as the
--- user had them; expanding it would write five fields nobody recorded, over
--- values the user still owns, and mouseoverEnabled true would silently become
--- false. The sentinel is not a mode at all.
---
--- The marker is on the LEGACY writer rather than the compat one on purpose:
--- unmarked therefore means "a mode", which is what every record written so far
--- is, so no existing snapshot is misread.
+-- Expanding is unconditionally right here because there is exactly ONE writer.
+-- Only the compat branch ever records a visibility snapshot, so every record
+-- holds a mode that VC.Normalize produced, and the forced state it is undoing was
+-- always written by ApplyMode. Earlier versions of this file had a second writer
+-- and spent four review rounds failing to tell the two records apart; the fix in
+-- the end was to stop having two.
 local function RestoreVisibility(settings, saved, expand)
     if not saved or saved.prev == nil then return end
-    if saved.plain or saved.prev == ns.EUI_ABSENT or not expand then
+    -- Defensive only. Normalize never returns nil, so the sentinel cannot be
+    -- recorded here; if one ever appears, putting the scalar back is the only
+    -- reading of it that cannot invent a mode.
+    if saved.prev == ns.EUI_ABSENT or not expand then
         ns.EUIRestore(settings, saved, "barVisibility")
         return
     end
@@ -252,12 +251,7 @@ end
 local function ApplyVisibility(settings, saved, VC, on)
     if not saved then return end
     if on then
-        if saved.prev == nil then
-            saved.prev = VC.Normalize(settings)
-            -- A mode, so drop any marker a previous no-compat session left on this
-            -- same record table. Record tables are reused, never recreated.
-            saved.plain = nil
-        end
+        if saved.prev == nil then saved.prev = VC.Normalize(settings) end
         VC.ApplyMode(settings, "always")
     else
         RestoreVisibility(settings, saved, VC.ApplyMode)
@@ -400,37 +394,29 @@ local function ApplyActionBars(on)
             end
             ApplyOne(settings, hideRec, "hideKeybind", false, on)
 
-            local visRec
-            if on then
-                visRec = ns.EUISnap("beginner", key .. "\31barVisibility")
-            else
-                visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
-            end
-
+            -- Bar visibility is skipped ENTIRELY, and not even snapshotted, when
+            -- the module's own compat layer is missing. That layer is the only
+            -- thing that can write the six-field visibility model correctly, and
+            -- the hand-written substitute this file used to carry produced four
+            -- consecutive data-loss defects in review: two writers meant two record
+            -- shapes, nothing said which writer made a given record, and every
+            -- attempt to infer it broke on some sequence of version changes with
+            -- Beginner Mode left on. One writer is the only version of this that
+            -- cannot lose a setting.
+            --
+            -- What that costs, on an EllesmereUI that has to predate
+            -- VisibilityCompat: Beginner Mode does not force bars visible there.
+            -- The keybind half above and the whole Cooldown Manager half still
+            -- apply. Nothing is written, so nothing can be lost, and a later
+            -- upgrade starts clean.
             if VC then
+                local visRec
+                if on then
+                    visRec = ns.EUISnap("beginner", key .. "\31barVisibility")
+                else
+                    visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
+                end
                 ApplyVisibility(settings, visRec, VC, on)
-            elseif on then
-                -- ONE record for visibility, exactly as the compat branch keeps
-                -- one, because two records for one setting is what several rounds
-                -- of review kept breaking on: nothing said which writer made a
-                -- record, so every restore had to guess.
-                --
-                -- Known incomplete, and the cost of that choice: with no compat
-                -- layer the companion fields are not touched, so a bar the user had
-                -- on mouseover keeps mouseoverEnabled true and mouseoverAlpha 0 and
-                -- stays invisible while Beginner Mode reads "always". That is a
-                -- cosmetic fault on a version of EllesmereUI that has to predate
-                -- VisibilityCompat, and it is strictly better than the alternative,
-                -- which was overwriting a setting and destroying the record of it.
-                -- Restoring puts the recorded mode back and the bar behaves again.
-                --
-                -- The marker is what keeps that promise: it tells the restore this
-                -- record covers barVisibility alone, so the companion fields this
-                -- branch left alone stay left alone.
-                if visRec and visRec.prev == nil then visRec.plain = true end
-                ApplyOne(settings, visRec, "barVisibility", "always", on)
-            else
-                RestoreVisibility(settings, visRec, nil)
             end
         end
     end
