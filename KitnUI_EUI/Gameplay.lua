@@ -417,6 +417,17 @@ local function ApplyActionBars(on)
                     visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
                 end
                 ApplyVisibility(settings, visRec, VC, on)
+            elseif not on then
+                -- Asymmetric, deliberately. Turning ON writes nothing without the
+                -- compat layer, so there is nothing to record. Turning OFF can
+                -- still OWE a restore that a compat layer recorded before the user
+                -- downgraded, and refusing it would strand all six forced fields
+                -- while /kitn reset destroys the one snapshot that knows the
+                -- original mode. The ported ApplyMode expands it, for the same
+                -- reason the unloaded path uses it: the record is a mode either
+                -- way, and only the live layer is missing.
+                local visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
+                RestoreVisibility(settings, visRec, ApplyModeStored)
             end
         end
     end
