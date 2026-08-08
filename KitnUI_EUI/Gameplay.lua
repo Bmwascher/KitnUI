@@ -303,6 +303,13 @@ local function ActiveSnap(key)
     return nil
 end
 
+-- Reached whenever the live lookup fails, which is normally because Lulu Mode
+-- switched the module off. It is also correct in the rarer case where the module
+-- IS loaded and only the lookup failed, on an EllesmereUI with neither GetAddon
+-- nor an exposed _dbRegistry: ns.EUIStoredProfile returns the very table NewDB
+-- handed that module (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:268-273),
+-- so the write still lands on the live settings. All that is lost there is the
+-- repaint, and the caller of a restore is always about to reload anyway.
 local function RestoreStoredActionBars()
     local profile = ns.EUIStoredProfile(ACTION_BARS)
     if not profile then return end
@@ -322,23 +329,32 @@ local function RestoreStoredActionBars()
 
             ApplyOne(settings, hideRec, "hideKeybind", false, false)
 
-            if moRec then
-                -- Recorded by the legacy no-compat branch below, which stores the
-                -- two as independent plain values. Restoring them through
-                -- ApplyModeStored would derive mouseoverEnabled from the mode
-                -- string and throw the recorded one away.
-                ApplyOne(settings, visRec, "barVisibility", "always", false)
+            -- A recorded MODE decides everything, and it decides mouseoverEnabled
+            -- too: EllesmereUI's own Normalize resolves from barVisibility first
+            -- and falls through to the companion flags only when it is absent
+            -- (References/EllesmereUI-v8.7.5/EllesmereUIActionBars/EllesmereUIActionBars.lua:294-312),
+            -- and ApplyMode writes the flags from the mode.
+            --
+            -- So a separate mouseoverEnabled record is redundant here, and it is
+            -- DISCARDED rather than replayed. That is the point: the legacy branch
+            -- below records the two independently, and if the compat layer appears
+            -- before that pair is consumed, nothing ever clears the mouseover half.
+            -- Replaying an orphan like that would write a value from some earlier
+            -- version's session over whatever the user has chosen since, and then
+            -- clear the only record of it. Selecting the branch on the orphan's
+            -- mere presence was the same bug one step earlier.
+            if visRec and visRec.prev ~= ns.EUI_ABSENT then
+                ApplyModeStored(settings, visRec.prev)
+                visRec.prev = nil
+                if moRec then moRec.prev = nil end
+            else
+                -- No mode to derive from. Either nothing recorded barVisibility, or
+                -- it recorded that the key was never set, in which case Normalize
+                -- really does fall through to the companion flags and the separately
+                -- recorded mouseoverEnabled is the honest answer. Both helpers no-op
+                -- on a nil record.
+                ns.EUIRestore(settings, visRec, "barVisibility")
                 ApplyOne(settings, moRec, "mouseoverEnabled", false, false)
-            elseif visRec then
-                if visRec.prev == ns.EUI_ABSENT then
-                    -- ApplyModeStored has no way to say "this key was never set",
-                    -- and writing the sentinel as a mode would be worse than the
-                    -- forced value it replaces.
-                    ns.EUIRestore(settings, visRec, "barVisibility")
-                else
-                    ApplyModeStored(settings, visRec.prev)
-                    visRec.prev = nil
-                end
             end
         end
     end
@@ -385,7 +401,21 @@ local function ApplyActionBars(on)
             end
 
             if VC then
+                local restoring = visRec and visRec.prev ~= nil
                 ApplyVisibility(settings, visRec, VC, on)
+
+                -- Where the orphan is created, and so where it is cleaned up.
+                -- ApplyMode has just written mouseoverEnabled from the restored
+                -- mode, which makes any record left behind by the legacy branch
+                -- below stale from this instant. Left in place it survives
+                -- indefinitely, because this branch is the only one that runs from
+                -- now on and it never reads that key. RestoreStoredActionBars would
+                -- eventually find it and replay a value from an older version's
+                -- session.
+                if restoring and not on then
+                    local stale = ns.EUIPeekSnap("beginner", key .. "\31mouseoverEnabled")
+                    if stale then stale.prev = nil end
+                end
             else
                 -- No compat layer means no companion fields to keep in step, so
                 -- both are plain values and the ordinary trio is correct: it
