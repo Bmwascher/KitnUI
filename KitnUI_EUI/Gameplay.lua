@@ -271,29 +271,83 @@ local function ApplyModeStored(settings, mode)
     settings.combatShowEnabled = (mode == "in_combat")
 end
 
+-- The OFF path for a module that is not loaded, kept entirely separate from the
+-- live one because the table it works on is not the same kind of table.
+--
+-- EllesmereUI writes a DEFAULTS-STRIPPED copy of every loaded module's profile at
+-- logout: any value equal to its registered default is deleted, and a sub-table
+-- that empties out under a string key is deleted with it
+-- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:193-205, written
+-- back at :363-375). Beginner Mode forces barVisibility "always" and hideKeybind
+-- false, and those ARE this module's defaults
+-- (References/EllesmereUI-v8.7.5/EllesmereUIActionBars/EllesmereUIActionBars.lua:527-539),
+-- so the very reload that Lulu Mode triggers can strip the bar table KitnUI wrote
+-- into, and `bars` along with it. Treating a missing container as nothing to do
+-- would silently skip the restore in exactly the case this function exists for
+-- and let the following /kitn reset delete the only record of the originals.
+--
+-- So containers are rebuilt, but only where a snapshot says this bar was actually
+-- held down. Building one for a bar with no record would invent settings the user
+-- never had; DeepMergeDefaults fills the rest in when the module next loads.
+local function RestoreStoredActionBars()
+    local profile = ns.EUIStoredProfile(ACTION_BARS)
+    if not profile then return end
+
+    for _, key in ipairs(AB_KEYS) do
+        local hideRec = ns.EUIPeekSnap("beginner", key .. "\31hideKeybind")
+        local visRec  = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
+        local moRec   = ns.EUIPeekSnap("beginner", key .. "\31mouseoverEnabled")
+
+        if hideRec or visRec or moRec then
+            if type(profile.bars) ~= "table" then profile.bars = {} end
+            local settings = profile.bars[key]
+            if type(settings) ~= "table" then
+                settings = {}
+                profile.bars[key] = settings
+            end
+
+            ApplyOne(settings, hideRec, "hideKeybind", false, false)
+
+            if moRec then
+                -- Recorded by the legacy no-compat branch below, which stores the
+                -- two as independent plain values. Restoring them through
+                -- ApplyModeStored would derive mouseoverEnabled from the mode
+                -- string and throw the recorded one away.
+                ApplyOne(settings, visRec, "barVisibility", "always", false)
+                ApplyOne(settings, moRec, "mouseoverEnabled", false, false)
+            elseif visRec and visRec.prev ~= nil then
+                if visRec.prev == ns.EUI_ABSENT then
+                    -- ApplyModeStored has no way to say "this key was never set",
+                    -- and writing the sentinel as a mode would be worse than the
+                    -- forced value it replaces.
+                    ns.EUIRestore(settings, visRec, "barVisibility")
+                else
+                    ApplyModeStored(settings, visRec.prev)
+                    visRec.prev = nil
+                end
+            end
+        end
+    end
+end
+
 local function ApplyActionBars(on)
-    -- The live profile first: while the module is loaded that IS the table it
-    -- reads, and it is the only route that can apply a change without a reload.
+    -- The live profile is the only route that can apply a change without a
+    -- reload, so it is always preferred. Lulu Mode switches this module off,
+    -- which is what makes the lookup fail, and the OFF path still owes the user
+    -- their settings back: /kitn reset deletes the snapshots immediately
+    -- afterwards and nothing else remembers what the originals were.
     --
-    -- Lulu Mode switches this module off, so on the OFF path the values KitnUI
-    -- forced sit unattended in EllesmereUI's saved variables and the live lookup
-    -- finds nothing. The restore has to reach them there or it never happens:
-    -- /kitn reset deletes the snapshots immediately afterwards and nothing else
-    -- remembers what the originals were, so the bars would keep KitnUI's keybind
-    -- and visibility settings for good with the switch reading off.
-    --
-    -- The ON path keeps the early return. Forcing values into a module the user
-    -- has switched off changes nothing they can see and is not worth doing;
+    -- The ON path has no such fallback and keeps the early return. Forcing values
+    -- into a module the user has switched off changes nothing they can see;
     -- Blizzard's own bars are on screen there and carry their own keybind text
     -- setting, and the Cooldown Manager half still applies either way.
     local profile = ns.EUIProfile(ACTION_BARS)
-    local stored = false
-    if not profile and not on then
-        profile = ns.EUIStoredProfile(ACTION_BARS)
-        stored = profile ~= nil
+    if not profile then
+        if not on then RestoreStoredActionBars() end
+        return
     end
 
-    local bars = profile and profile.bars
+    local bars = profile.bars
     if type(bars) ~= "table" then return end
 
     local VC = VisibilityCompat()
@@ -318,16 +372,6 @@ local function ApplyActionBars(on)
 
             if VC then
                 ApplyVisibility(settings, visRec, VC, on)
-            elseif stored then
-                -- Exactly what ApplyVisibility's OFF branch does, through the
-                -- ported ApplyMode. The plain-value branch below must not be used
-                -- here: it would write barVisibility, clear the record, and leave
-                -- the five companion fields on Beginner Mode's values with nothing
-                -- left that knows the difference.
-                if visRec and visRec.prev ~= nil then
-                    ApplyModeStored(settings, visRec.prev)
-                    visRec.prev = nil
-                end
             else
                 -- No compat layer means no companion fields to keep in step, so
                 -- both are plain values and the ordinary trio is correct: it
@@ -337,8 +381,8 @@ local function ApplyActionBars(on)
                 --
                 -- Known incomplete: the legacy alwaysHidden, combatHideEnabled and
                 -- combatShowEnabled flags are not touched, so a bar carrying one
-                -- would stay hidden. ApplyModeStored above is not the answer here:
-                -- it writes the six-field model this version does not have.
+                -- would stay hidden. ApplyModeStored is not the answer here: it
+                -- writes the six-field model this version does not have.
                 ApplyOne(settings, visRec, "barVisibility", "always", on)
 
                 local moRec

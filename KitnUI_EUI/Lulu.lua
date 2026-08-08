@@ -255,23 +255,28 @@ local ACTION_BARS_LOADED_UNKNOWN = "unknown"
 local function ActionBarsLoaded()
     if not (C_AddOns and C_AddOns.IsAddOnLoaded) then return ACTION_BARS_LOADED_UNKNOWN end
     if C_AddOns.DoesAddOnExist and not C_AddOns.DoesAddOnExist(ACTION_BARS) then
-        -- Not installed, so Lulu's action bar half has nothing to do and is not
-        -- missing. Reported as loaded, which is the no-mismatch answer.
+        -- Not installed, so Lulu's action bar half has nothing left to do. FALSE
+        -- is the no-mismatch answer here: the caller's mismatch is "Lulu is on and
+        -- this module is STILL LOADED", so returning true would report a mismatch
+        -- that can never be cleared, and every accept would reload into the same
+        -- prompt again.
         --
         -- Known gap: this module is the proxy for all three halves, so a user
         -- without it who imports Lulu ON is never prompted and the Edit Mode half
         -- stays unapplied. Detecting that half directly means asking Edit Mode
         -- which layout is active, which is a different problem; running
         -- EllesmereUI without its action bars is the rarer state of the two.
-        return true
+        return false
     end
     local ok, loaded = pcall(C_AddOns.IsAddOnLoaded, ACTION_BARS)
     if not ok then return ACTION_BARS_LOADED_UNKNOWN end
     return loaded and true or false
 end
 
--- Cleared when the mismatch clears, so a user who declines gets asked again the
--- next time they load a profile rather than on every single reconcile pass.
+-- Set only once the dialog is actually on screen, and cleared again by declining
+-- it or by the mismatch going away. It stops a second reconcile in the same pass
+-- from stacking a duplicate prompt; it must never become the reason a prompt is
+-- not shown, because the mismatch it guards leaves Lulu two thirds unapplied.
 local promptedForMismatch = false
 
 function ns.LuluReconcile()
@@ -293,8 +298,6 @@ function ns.LuluReconcile()
     -- Not in combat, and not latched either: the mismatch is still there
     -- afterwards, so the next reconcile trigger prompts instead.
     if InCombatLockdown() then return end
-
-    promptedForMismatch = true
 
     -- Built here rather than at file scope. At file scope ns.title is read before
     -- KitnUI has necessarily filled it, and a nil there is a load error in a file
@@ -329,12 +332,22 @@ function ns.LuluReconcile()
             ApplyActionBarModule(true)
             ReloadUI()
         end,
+        -- Declining is not the same as being told. The mismatch is still real, so
+        -- release the latch and let the next profile switch or login ask again.
+        OnCancel = function() promptedForMismatch = false end,
         timeout = 0,
         whileDead = true,
         hideOnEscape = true,
         preferredIndex = 3,
     }
-    StaticPopup_Show("KITNUI_LULU_IMPORTED")
+
+    -- Latched on the SHOWN dialog, never on the attempt. StaticPopup_Show returns
+    -- nil when every dialog frame is already taken
+    -- (.wow-api-reference/Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua:366-370),
+    -- and latching on that would spend the user's only notice on a prompt they
+    -- never saw.
+    if not StaticPopup_Show("KITNUI_LULU_IMPORTED") then return end
+    promptedForMismatch = true
 end
 
 -- Called by ns.EUIResetAll, which reloads straight afterwards. The re-apply
