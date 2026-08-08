@@ -215,6 +215,31 @@ local function VisibilityCompat()
     return VC
 end
 
+-- THE one rule for undoing a visibility override, shared by all three call sites
+-- so they cannot drift apart. `expand` rewrites the whole six-field model from a
+-- mode: the module's own ApplyMode where it is reachable, the ported copy where
+-- it is not, and nil where neither applies.
+--
+-- Two records must NEVER be expanded, and telling them apart is what `saved.plain`
+-- exists for. A record the no-compat writer made describes barVisibility ALONE,
+-- because that writer changes that one key and leaves the companion fields as the
+-- user had them; expanding it would write five fields nobody recorded, over
+-- values the user still owns, and mouseoverEnabled true would silently become
+-- false. The sentinel is not a mode at all.
+--
+-- The marker is on the LEGACY writer rather than the compat one on purpose:
+-- unmarked therefore means "a mode", which is what every record written so far
+-- is, so no existing snapshot is misread.
+local function RestoreVisibility(settings, saved, expand)
+    if not saved or saved.prev == nil then return end
+    if saved.plain or saved.prev == ns.EUI_ABSENT or not expand then
+        ns.EUIRestore(settings, saved, "barVisibility")
+        return
+    end
+    expand(settings, saved.prev)
+    saved.prev = nil
+end
+
 -- barVisibility uses the snapshot STORE but NOT ns.EUIOverride or ns.EUIRestore,
 -- because those write tbl[key] directly and that is the defect above. The
 -- record-once guard lives INSIDE ns.EUIOverride, so skipping the helper means
@@ -227,11 +252,15 @@ end
 local function ApplyVisibility(settings, saved, VC, on)
     if not saved then return end
     if on then
-        if saved.prev == nil then saved.prev = VC.Normalize(settings) end
+        if saved.prev == nil then
+            saved.prev = VC.Normalize(settings)
+            -- A mode, so drop any marker a previous no-compat session left on this
+            -- same record table. Record tables are reused, never recreated.
+            saved.plain = nil
+        end
         VC.ApplyMode(settings, "always")
-    elseif saved.prev ~= nil then
-        VC.ApplyMode(settings, saved.prev)
-        saved.prev = nil
+    else
+        RestoreVisibility(settings, saved, VC.ApplyMode)
     end
 end
 
@@ -325,17 +354,7 @@ local function RestoreStoredActionBars()
 
             ApplyOne(settings, hideRec, "hideKeybind", false, false)
 
-            if visRec then
-                if visRec.prev == ns.EUI_ABSENT then
-                    -- ApplyModeStored has no way to say "this key was never set",
-                    -- and writing the sentinel as a mode would be worse than the
-                    -- forced value it replaces.
-                    ns.EUIRestore(settings, visRec, "barVisibility")
-                else
-                    ApplyModeStored(settings, visRec.prev)
-                    visRec.prev = nil
-                end
-            end
+            RestoreVisibility(settings, visRec, ApplyModeStored)
         end
     end
 
@@ -390,12 +409,11 @@ local function ApplyActionBars(on)
 
             if VC then
                 ApplyVisibility(settings, visRec, VC, on)
-            else
+            elseif on then
                 -- ONE record for visibility, exactly as the compat branch keeps
-                -- one, because two schemes for one setting is what four rounds of
-                -- review kept breaking on: nothing marks which scheme wrote a
-                -- record, a restore has to guess, and every way of guessing is
-                -- wrong for some history that mixes the two.
+                -- one, because two records for one setting is what several rounds
+                -- of review kept breaking on: nothing said which writer made a
+                -- record, so every restore had to guess.
                 --
                 -- Known incomplete, and the cost of that choice: with no compat
                 -- layer the companion fields are not touched, so a bar the user had
@@ -403,10 +421,16 @@ local function ApplyActionBars(on)
                 -- stays invisible while Beginner Mode reads "always". That is a
                 -- cosmetic fault on a version of EllesmereUI that has to predate
                 -- VisibilityCompat, and it is strictly better than the alternative,
-                -- which was silently overwriting a setting and destroying the only
-                -- record of it. Restoring puts the recorded mode back and the bar
-                -- behaves again.
+                -- which was overwriting a setting and destroying the record of it.
+                -- Restoring puts the recorded mode back and the bar behaves again.
+                --
+                -- The marker is what keeps that promise: it tells the restore this
+                -- record covers barVisibility alone, so the companion fields this
+                -- branch left alone stay left alone.
+                if visRec and visRec.prev == nil then visRec.plain = true end
                 ApplyOne(settings, visRec, "barVisibility", "always", on)
+            else
+                RestoreVisibility(settings, visRec, nil)
             end
         end
     end
