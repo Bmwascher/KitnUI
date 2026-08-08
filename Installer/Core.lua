@@ -166,7 +166,7 @@ local defaults = {
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
-    euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, Lulu's Edit Mode layout, Lulu's per-character action bars state
+    euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
 
@@ -320,11 +320,37 @@ KitnCommands["reset"] = function()
     -- the Edit Mode layout was completely silent, which is the exact failure
     -- QueueMessage was written to remove.
     local carried = ns.db and ns.db.pendingMessages
-    if carried and #carried > 0 then
-        KitnUIDB = { pendingMessages = carried }
-    else
-        KitnUIDB = nil
+
+    -- Lulu's records are debts, not settings. Each one is what a character needs
+    -- to switch its action bars back on or put its Edit Mode layout back, and the
+    -- teardown above can only settle THIS character's: it reads the current
+    -- player's records and nothing else. The wipe below would take an alt's with
+    -- it, leaving that character with the module off, Lulu's layout active, and
+    -- nothing left that knows either — the reset also clears every profile's
+    -- switch block, so the alt does not even come back reading Lulu ON. They ride
+    -- across the wipe for the same reason the queued messages do.
+    --
+    -- Only records still OWED travel. The teardown clears what it settles, so the
+    -- current character's are already gone unless something refused to apply.
+    local owed
+    local snaps = ns.db and ns.db.euiSnapGlobal
+    if type(snaps) == "table" then
+        for key, saved in pairs(snaps) do
+            if type(key) == "string" and key:sub(1, 4) == "lulu"
+                and type(saved) == "table" and saved.prev ~= nil then
+                owed = owed or {}
+                owed[key] = { prev = saved.prev }
+            end
+        end
     end
+
+    local fresh
+    if (carried and #carried > 0) or owed then
+        fresh = {}
+        if carried and #carried > 0 then fresh.pendingMessages = carried end
+        if owed then fresh.euiSnapGlobal = owed end
+    end
+    KitnUIDB = fresh
     ReloadUI()
 end
 

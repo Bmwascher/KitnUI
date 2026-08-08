@@ -12,6 +12,34 @@ if ns.EUI_INERT then return end
 
 local ACTION_BARS = "EllesmereUIActionBars"
 
+-- BOTH of Lulu's records are per character, because both of the things they
+-- describe are.
+--
+-- An addon's enable state is per character (Installer/Setup.lua:663 says so, and
+-- Blizzard's own addon list has a per-character selector at
+-- .wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:651-652).
+-- Which Edit Mode layout is ACTIVE is per character too: the layout definitions
+-- are account-wide, but Blizzard builds the list for the current player
+-- (.wow-api-reference/Interface/AddOns/Blizzard_EditMode/Shared/EditModeManager.lua:7-8)
+-- and Installer/Setup.lua:319-327 already calls activating one "on this
+-- character".
+--
+-- One shared record would let an alt undo with a layout it never had, and let
+-- whichever character undid first take the record away from every other.
+--
+-- The key is the player GUID, which is the value Blizzard's own selector passes
+-- to these same addon functions (AddonList.lua:651-652).
+local function LuluCharacter()
+    if not UnitGUID then return nil end
+    local guid = UnitGUID("player")
+    if type(guid) ~= "string" or guid == "" then return nil end
+    return guid
+end
+
+local function LuluSnapKey(name, guid)
+    return name .. ":" .. guid
+end
+
 function ns.LuluEnabled()
     local s = ns.EUISettings()
     return s.lulu and true or false
@@ -131,7 +159,9 @@ end
 -- Lulu's Edit Mode half is still in force, whether the way back is an activation
 -- or an import, and whether the toggle should warn about the layout limit.
 local function LuluLayoutRecord()
-    local saved = ns.EUIPeekSnapGlobal("luluEditModeLayout")
+    local guid = LuluCharacter()
+    if not guid then return nil end
+    local saved = ns.EUIPeekSnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
     if not saved then return nil end
     return saved.prev
 end
@@ -176,7 +206,8 @@ local function ApplyEditModeLayout(on)
 
         -- Record-once, like every other snapshot in this addon: a second apply
         -- must not capture Lulu's OWN layout as the thing to go back to.
-        local saved = ns.EUISnapGlobal("luluEditModeLayout")
+        local guid = LuluCharacter()
+        local saved = guid and ns.EUISnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
         if saved and saved.prev == nil then
             if current == nil then current = ns.EUI_ABSENT end
             saved.prev = current
@@ -190,7 +221,8 @@ local function ApplyEditModeLayout(on)
     -- been run, so a user who skipped that step was left in Lulu's layout with no
     -- way out through the switch. What the ON path replaced is what the OFF path
     -- owes back — no more, and no less.
-    local saved = ns.EUIPeekSnapGlobal("luluEditModeLayout")
+    local guid = LuluCharacter()
+    local saved = guid and ns.EUIPeekSnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
     local record = saved and saved.prev
 
     -- Nothing recorded means Lulu never replaced a layout. Its ON path skips the
@@ -219,21 +251,31 @@ local function ApplyEditModeLayout(on)
         ns.QueueMessage(ns.title .. ": " .. ns.Red("The Edit Mode layout you used before Lulu Mode is gone, so it could not be put back."))
     end
 
-    saved.prev = nil
-
+    -- The record is NOT released yet, and the order below is the whole point.
+    -- Everything from here can fail: the account can be at the layout limit, and
+    -- the import can refuse. Releasing first left Lulu's layout active with
+    -- nothing that knew a change was still owed, so the undo prompt never offered
+    -- the retry that would have worked a minute later. It is released on exactly
+    -- two outcomes: the debt is settled, or it can never be settled.
+    --
     -- Fallback only, for the two cases above: the record could not be read when it
     -- was taken, or it names a layout that has since gone. Still gated on the
     -- install step, for the reason it always was — writing KitnUI's layout over the
     -- arrangement of someone who never asked for it would be worse than leaving
     -- Edit Mode alone.
-    local installed = ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]
-    if not installed then return end
-
+    --
     -- Emptiness tested exactly as the ON path and EditModeWarning test it. A bare
     -- type check let an empty string reach the importer, which is both a pointless
     -- call and a forecast the popup would have got wrong.
+    local installed = ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]
     local standard = ns.data and ns.data.Blizzard_EditMode
-    if type(standard) ~= "string" or strtrim(standard) == "" then return end
+    if not installed or type(standard) ~= "string" or strtrim(standard) == "" then
+        -- Nothing will ever restore this one: KitnUI has no layout of its own to
+        -- offer here. Holding the record would prompt the user forever to retry
+        -- work that cannot be done.
+        saved.prev = nil
+        return
+    end
 
     if not ns.EditModeSlotFree(ns.profileName) then
         ns.QueueMessage(ns.title .. ": " .. ns.Red("Edit Mode layout limit reached (5 account layouts), so KitnUI's layout was not restored. Delete an account layout and toggle Lulu again."))
@@ -242,7 +284,10 @@ local function ApplyEditModeLayout(on)
 
     if not EllesmereUI.ApplyPresetEditMode(standard, ns.profileName) then
         ns.QueueMessage(ns.title .. ": " .. ns.Red("Restoring KitnUI's Edit Mode layout failed. Open Edit Mode once, then try again out of combat."))
+        return
     end
+
+    saved.prev = nil
 end
 
 -- Lulu's action bar half is confined to the character that flipped the switch.
@@ -257,37 +302,21 @@ end
 -- this, turning Lulu Mode on for one character would switch EllesmereUI's action
 -- bars off for alts who never asked for it, and a module enabled on two of five
 -- characters would come back enabled on all five.
---
--- The value is the player GUID, which is what Blizzard's own in-game character
--- selector passes to these same functions (AddonList.lua:651-652).
---
--- Edit Mode is account-wide either way: ApplyPresetEditMode forces layoutType to
--- Account. That is Blizzard's model, not a choice this file gets to make.
-local function ActionBarCharacter()
-    if not UnitGUID then return nil end
-    local guid = UnitGUID("player")
-    if type(guid) ~= "string" or guid == "" then return nil end
-    return guid
-end
-
-local function ActionBarSnapKey(guid)
-    return "luluActionBars:" .. guid
-end
 
 -- Whether Lulu Mode is what is holding the module off for THIS character right
 -- now, and so whether there is anything of KitnUI's to offer to undo.
 local function LuluOwnsActionBars()
-    local guid = ActionBarCharacter()
+    local guid = LuluCharacter()
     if not guid then return false end
-    local saved = ns.EUIPeekSnapGlobal(ActionBarSnapKey(guid))
+    local saved = ns.EUIPeekSnapGlobal(LuluSnapKey("luluActionBars", guid))
     if not saved then return false end
     return saved.prev == true
 end
 
 local function ClearActionBarState()
-    local guid = ActionBarCharacter()
+    local guid = LuluCharacter()
     if not guid then return end
-    local saved = ns.EUIPeekSnapGlobal(ActionBarSnapKey(guid))
+    local saved = ns.EUIPeekSnapGlobal(LuluSnapKey("luluActionBars", guid))
     if saved then saved.prev = nil end
 end
 
@@ -301,7 +330,7 @@ end
 -- prompt loop: the record survived, every accept restored nothing, and the reload
 -- came back to the same question.
 local function ApplyActionBarModule(on)
-    local guid = ActionBarCharacter()
+    local guid = LuluCharacter()
     if not guid then return end
 
     local usable = C_AddOns and C_AddOns.DisableAddOn and C_AddOns.EnableAddOn
@@ -315,14 +344,22 @@ local function ApplyActionBarModule(on)
 
         -- Record-once, exactly like every other snapshot here: a second apply must
         -- not capture Lulu's own handiwork as the thing to go back to.
-        local saved = ns.EUISnapGlobal(ActionBarSnapKey(guid))
+        local saved = ns.EUISnapGlobal(LuluSnapKey("luluActionBars", guid))
         if not saved then return end
         if saved.prev == nil then
             local ok, state = pcall(C_AddOns.GetAddOnEnableState, ACTION_BARS, guid)
             if not (ok and type(state) == "number") then return end
             -- Blizzard's own test for enabled, from
             -- .wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:188.
-            saved.prev = state > Enum.AddOnEnableState.None
+            --
+            -- Already off, by the user's own hand or by an earlier pass: Lulu has
+            -- nothing to switch and nothing to remember. Recording "it was off"
+            -- is what poisoned the next apply — the record outlived its purpose,
+            -- the user switched the module back on in the meantime, and record-once
+            -- then refused to update it, so Lulu switched the module off and would
+            -- not switch it back. A record now exists ONLY where Lulu owes one.
+            if state <= Enum.AddOnEnableState.None then return end
+            saved.prev = true
         end
 
         C_AddOns.DisableAddOn(ACTION_BARS, guid)
@@ -339,6 +376,13 @@ local function ApplyActionBarModule(on)
 
     ClearActionBarState()
 end
+
+-- Reached from Installer/Setup.lua's module pass, which puts EllesmereUI's module
+-- set into the state the pack expects and meets the action bars when Lulu is on.
+-- That pass must come through here rather than switching the module off itself:
+-- its own calls name no character, so they reach every character on the account,
+-- and they take no record, so turning Lulu off afterwards had nothing to put back.
+ns.LuluApplyActionBars = ApplyActionBarModule
 
 -- What the Edit Mode step is about to do, worked out BEFORE the popup so the
 -- user can act on it while acting is still cheap. Told only afterwards, the way

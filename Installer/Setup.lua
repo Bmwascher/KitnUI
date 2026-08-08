@@ -612,6 +612,8 @@ function ns.ApplyEUIModuleSet()
     if not (C_AddOns and C_AddOns.DisableAddOn) then return end
     local set = ns.GetEUIModuleSet()
 
+    local off = {}
+
     -- Lulu Mode turns EllesmereUI's action bars off. It belongs here and NOT in
     -- GetEUIModuleSet: that set is also ImportProfileSilent's disableAddons,
     -- which strips the named modules' settings out of the imported payload.
@@ -619,11 +621,17 @@ function ns.ApplyEUIModuleSet()
     -- addon exists to install. Enable state is all Lulu Mode needs, and the
     -- import's own enable sweep is undone by this pass because both only take
     -- effect at the reload and this one runs last.
+    --
+    -- Handed to Lulu rather than added to the list below. The loop's own calls
+    -- name no character, so they reach every character on the account, and they
+    -- take no record — an alt loading a Lulu profile would have switched the
+    -- module off for everyone and left nobody able to switch it back. Lulu's pass
+    -- confines the change to this character and writes down what it found. It is
+    -- still marked in `off` so the enable sweep at the end leaves it alone.
     if ns.LuluEnabled and ns.LuluEnabled() then
-        set[#set + 1] = "EllesmereUIActionBars"
+        off["EllesmereUIActionBars"] = true
+        if ns.LuluApplyActionBars then ns.LuluApplyActionBars(true) end
     end
-
-    local off = {}
     for _, folder in ipairs(set) do
         off[folder] = true
         if euiModuleInstalled(folder) then

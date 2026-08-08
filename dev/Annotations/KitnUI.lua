@@ -51,6 +51,7 @@
 ---@field LuluEnabled fun(): boolean
 ---@field LuluLayoutName fun(): string
 ---@field LuluTearDown fun()
+---@field LuluApplyActionBars fun(on: boolean)   # KitnUI_EUI only: the installer's module pass switches EllesmereUI's action bars through this so the change is per-character and recorded
 ---@field SetLuluMode fun(on: boolean)
 ---@field LuluReconcile fun()   # prompts to apply and reload when Lulu reads on but its action bar half is not in force
 ---@field EUI_INERT boolean      # KitnUI_EUI only: set by its Core.lua when KitnUI's shared namespace is unreachable, and every other file in that addon stops on it
@@ -83,7 +84,7 @@ local KitnUINS
 ---@field devMode boolean
 ---@field dismissedVersion string?
 ---@field euiSnap table<string, table>       # [section][profile][key] = { prev = <original> }, machine-local, never exported
----@field euiSnapGlobal table<string, table> # [key] = { prev = <original> } for values outside a profile: EllesmereUIDB-root settings, luluEditModeLayout (preset index or layout name), "luluActionBars:<player GUID>" (was the module enabled for that character)
+---@field euiSnapGlobal table<string, table> # [key] = { prev = <original> } for values outside a profile: EllesmereUIDB-root settings, plus Lulu's two per-character debts, "luluEditModeLayout:<player GUID>" (preset index or layout name) and "luluActionBars:<player GUID>" (true where Lulu switched the module off)
 ---@field euiMigration number?               # version stamp for the one-time move of switch states into the profile
 ---@field euiSettings table?                 # vestigial pre-migration switch store, kept as evidence
 local KitnUIDB
