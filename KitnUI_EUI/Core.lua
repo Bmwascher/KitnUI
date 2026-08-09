@@ -156,10 +156,21 @@ local DEFAULTS = {
         beginner                = false,
         hideAllTooltipsInCombat = false,
         hideCdmTooltipsInCombat = false,
-        -- General. A table with one leaf, and the LEAF carries the default: the
-        -- 0a4835e failure was `accent = {}` surviving with the leaf nilled, so a
-        -- default of an empty table would fix nothing.
-        accent                  = { pink = false },
+        -- General. A plain on/off value. It was `accent = { pink = false }` until
+        -- 2026-08-09, and the switch wrote into that sub-table in place.
+        --
+        -- Kitn's in-game test: the value was live in the store at the instant of
+        -- a reload and absent from the saved file straight after, while every
+        -- scalar switch survived the same save. The arrow colour below is the
+        -- tell. It is a table too, and it persists — because its setter REPLACES
+        -- the table rather than writing into it. Writing into a sub-table is the
+        -- one thing the accent switch did differently, and EllesmereUI's logout
+        -- pass drops a sub-table once its contents match the registered default,
+        -- so a sub-table shared with that default deletes itself.
+        --
+        -- A scalar cannot be reached that way: assigning it writes a key on the
+        -- settings table and never touches the defaults table at all.
+        accentPink              = false,
         -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
         -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
         -- and a registered default has to be a literal.
@@ -637,7 +648,11 @@ end
 -- /kitn reset nils KitnUIDB and takes the version stamp below with it, so the
 -- next login re-runs this migration and re-imports those stale switch states
 -- over the reset the user just asked for.
-local MIGRATION_VERSION = 1
+-- 2 since 2026-08-09: the accent switch stopped being a nested table, so its old
+-- value has to fold forward and the dead key has to go. Re-running version 1's
+-- work is harmless — every write it makes is guarded on the destination key being
+-- absent.
+local MIGRATION_VERSION = 2
 
 local function MigrateSettingsForward()
     if not ns.db then return end
@@ -686,6 +701,21 @@ local function MigrateSettingsForward()
             -- the values it is the newer of the two stores and wins outright, so
             -- what is left here is older data that has already been superseded.
             if profile.addons then profile.addons.KitnUIEUI = nil end
+
+            -- The accent switch's old nested shape, folded forward and removed.
+            -- Unconditional, and not inside the `source` branch above: this one
+            -- is about the CURRENT block, not the pre-migration stores. The key
+            -- has to go rather than just be ignored, because EllesmereUI's logout
+            -- pass only touches keys it has a default for — an unknown key is
+            -- kept forever and would ride every exported profile.
+            local block = profile.addons and profile.addons.KitnUI_EUI
+            local dead = type(block) == "table" and block.accent
+            if type(dead) == "table" then
+                if block.accentPink == nil and dead.pink ~= nil then
+                    block.accentPink = dead.pink and true or false
+                end
+                block.accent = nil
+            end
         end
     end
 

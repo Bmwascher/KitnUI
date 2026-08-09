@@ -359,16 +359,23 @@ local ACCENT_KEYS = {
 -- FF008C, the same pink ns.Color uses for the chat prefix.
 local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 140 / 255
 
-local function AccentSettings()
+-- Read and write the switch directly on the settings table, never through a
+-- sub-table. See the DEFAULTS comment in Core.lua: a sub-table written in place
+-- is what made this switch the only one that did not survive a reload.
+local function AccentEnabled()
     local s = ns.EUISettings()
-    s.accent = s.accent or {}
-    return s.accent
+    return s.accentPink and true or false
+end
+
+local function SetAccentEnabled(v)
+    local s = ns.EUISettings()
+    s.accentPink = v and true or false
 end
 
 -- Half one: the colour. This snapshot holds a TABLE, not a scalar, so it cannot
 -- go through ns.EUIOverride and ns.EUIRestore, which write a single key.
 local function ApplyAccentColor()
-    local on = AccentSettings().pink and true or false
+    local on = AccentEnabled()
     local saved
     if on then
         saved = ns.EUISnap("accent", "color")
@@ -412,7 +419,7 @@ end
 
 -- Half two: the scoping.
 local function ApplyAccentScope()
-    local on = AccentSettings().pink and true or false
+    local on = AccentEnabled()
     local saved
     if on then
         saved = ns.EUISnap("accent", "scope")
@@ -537,9 +544,9 @@ ns.EUIPages["General"] = function(parent, yOffset)
     _, h = W:SectionHeader(parent, "ACCENT", y);                                   y = y - h
 
     _, h = W:Toggle(parent, "KitnUI Pink Accent", y,
-        function() return AccentSettings().pink and true or false end,
+        AccentEnabled,
         function(v)
-            AccentSettings().pink = v and true or false
+            SetAccentEnabled(v)
             ApplyAccent()
         end,
         "Sets EllesmereUI's accent to KitnUI pink for this profile, and stops that accent tinting quest tracker headers, the Mythic+ timer, the damage meter and the Friends tab.");
