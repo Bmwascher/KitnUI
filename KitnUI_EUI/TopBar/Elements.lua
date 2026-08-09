@@ -224,6 +224,300 @@ local vaultElement = {
     end,
 }
 
+---------------------------------------------------------------------------------
+-- Hearthstone: three independently-configurable mouse buttons (tbHearthLeft/
+-- Middle/Right), each set to a specific owned stone's item id or "RANDOM".
+-- Pinned raw item ids rather than EllesmereUI.ResolveDalaranSlot: that
+-- resolver conflates the Dalaran Hearthstone with the Key to the Arcantina
+-- and prefers the key, so it can never hand back Dalaran once the key is
+-- owned (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI.lua:5691-5696
+-- has the two the wrong way round).
+--
+-- HEARTH_IDS is WindTools' own "hearthstones" table
+-- (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:114-151), a
+-- purpose-built subset of that file's own 51-entry superset
+-- (GameBar.lua:153-217) -- not copied wholesale. Left out: the Engineering
+-- Wormholes heading (a different mechanic, teleporting to a zone rather than
+-- home, and KitnUI's own future portals element's job, not hearthstone's) and
+-- the Patch Items heading (Garrison Hearthstone, Flight Master's Whistle,
+-- Translocation Cypher -- none of them share the Hearthstone cooldown or
+-- teleport to the bind point). The two ids the design doc's own defaults
+-- require -- 140192 (Dalaran Hearthstone) and 253629 (Key to the Arcantina),
+-- both from that same Patch Items heading -- are appended explicitly.
+local HEARTH_IDS = {
+    6948, 54452, 64488, 93672, 142542, 162973, 163045, 165669, 165670, 165802,
+    166746, 166747, 168907, 172179, 180290, 182773, 183716, 184353, 188952,
+    190196, 193588, 200630, 206195, 208704, 209035, 210455, 212337, 228940,
+    235016, 236687, 245970, 246565, 257736, 263489, 263933, 265100,
+    140192, 253629,
+}
+
+-- The ownership scan is the expensive part of this element and is paid once
+-- (ScanOwned, run at PLAYER_LOGIN), then shared by all three dropdowns and
+-- all three mouse buttons through these tables.
+local owned = {}                           -- numeric item ids the player owns, scan order
+local hearthValues = { RANDOM = "Random" } -- [stringKey] = display name; mutated in place as
+                                            -- C_Item resolves names, which Options.lua's dropdown
+                                            -- refresh reads live off this same table reference
+local hearthOrder  = { "RANDOM" }          -- ordered stringKeys matching hearthValues
+local hearthIcons  = {}                    -- [stringKey] = icon texture, for the dropdown's icon column
+hearthValues._noLoc = true                 -- item/toy names are data, never localization keys
+hearthValues._menuOpts = { icon = function(key) return hearthIcons[key] end }
+
+-- Options.lua builds all three dropdowns off this one pair of tables, so the
+-- ownership scan is never repeated per-dropdown.
+function ns.TopBar.HearthValues()
+    return hearthValues, hearthOrder
+end
+
+-- One reroll history per mouse button, so left/middle/right set to RANDOM
+-- roll independently rather than sharing a single "last stone" memory.
+local randomCache = {}
+
+-- Avoids repeating the immediately previous roll when more than one stone is
+-- owned. Bounded at 10 attempts, matching WindTools' own guard against a
+-- pathological repeat (GameBar.lua:1732-1745); with only two owned stones the
+-- odds of needing anywhere near that many are effectively zero.
+local function PickRandom(slot)
+    if #owned == 0 then return 6948 end
+    if #owned == 1 then return owned[1] end
+    local last = randomCache[slot]
+    local id = owned[math.random(#owned)]
+    for _ = 1, 10 do
+        if id ~= last then break end
+        id = owned[math.random(#owned)]
+    end
+    return id
+end
+
+-- A fixed setting resolves to its own id. "RANDOM" resolves to whatever this
+-- slot last rolled, WITHOUT rolling again here -- rolling on every call would
+-- mean an unrelated Apply() (an opacity slider, say) silently swapped the
+-- stone nobody clicked. Only RerollAll(), called from an actual click,
+-- advances it.
+local function ResolveID(setting, slot)
+    local id = tonumber(setting)
+    if id then return id end
+    if not randomCache[slot] then randomCache[slot] = PickRandom(slot) end
+    return randomCache[slot]
+end
+
+-- Rerolls every slot currently set to RANDOM. Called from PreClick, so each
+-- click uses a freshly rolled stone and the immediately preceding roll is
+-- never repeated -- "rerolls after use" in effect, since the only way to use
+-- one roll is to trigger the next PreClick, which replaces it before firing.
+local function RerollAll()
+    if ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft) == "RANDOM" then
+        randomCache.left = PickRandom("left")
+    end
+    if ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle) == "RANDOM" then
+        randomCache.mid = PickRandom("mid")
+    end
+    if ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight) == "RANDOM" then
+        randomCache.right = PickRandom("right")
+    end
+end
+
+-- Toys must be used by name, not item:ID -- item:ID only resolves for
+-- something actually in the bags, and a toy fired from the Toy Box, not the
+-- bags, is exactly what most of HEARTH_IDS are
+-- (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:76-79).
+local function MacroText(id)
+    if not id then return "" end
+    local toyName = C_ToyBox and C_ToyBox.GetToyInfo and select(2, C_ToyBox.GetToyInfo(id))
+    if toyName then return "/use " .. toyName end
+    return "/use item:" .. id
+end
+
+local function StoneLabel(id)
+    if not id then return "Hearthstone" end
+    return hearthValues[tostring(id)] or tostring(id)
+end
+
+-- The stone the left click currently resolves to. All owned hearth-class
+-- items share the one "Hearthstone" cooldown category, so reading this one
+-- id's cooldown is reading the shared cooldown, matching NaowhUI's own
+-- single-id tooltip reading (NaowhUI_TopBar.lua:259-270).
+local _hearthId
+
+local function FmtCD(sec)
+    sec = math.floor(sec + 0.5)
+    if sec >= 3600 then
+        return format("%d:%02d:%02d", sec / 3600, (sec % 3600) / 60, sec % 60)
+    end
+    return format("%d:%02d", sec / 60, sec % 60)
+end
+
+-- C_Item.GetItemCooldown's returns carry no SecretReturnsForAspect entry in
+-- the generated API docs, unlike a Cooldown WIDGET's own GetCooldownTimes /
+-- GetCooldownDuration (those ARE marked Enum.SecretAspect.Cooldown). This
+-- reads the item API, never a Cooldown frame, so the arithmetic below is safe.
+local function HearthCooldownRemaining()
+    if not _hearthId then return nil end
+    if not (C_Item and C_Item.GetItemCooldown) then return nil end
+    local start, duration = C_Item.GetItemCooldown(_hearthId)
+    if type(start) == "number" and type(duration) == "number" and duration > 0 then
+        local remaining = start + duration - GetTime()
+        if remaining > 0 then return remaining end
+    end
+    return nil
+end
+
+local function HearthTooltip(tt)
+    tt:AddLine("Hearthstone", 1, 1, 1)
+    local remaining = HearthCooldownRemaining()
+    if remaining then
+        tt:AddDoubleLine("Cooldown", FmtCD(remaining), 0.7, 0.7, 0.7, 1, 0.3, 0.3)
+    else
+        tt:AddDoubleLine("Cooldown", "Ready", 0.7, 0.7, 0.7, 0.3, 1, 0.3)
+    end
+    tt:AddLine(" ")
+    tt:AddLine("Left-click: " .. StoneLabel(ResolveID(
+        ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft), "left")), 1, 1, 1)
+    tt:AddLine("Middle-click: " .. StoneLabel(ResolveID(
+        ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle), "mid")), 1, 1, 1)
+    tt:AddLine("Right-click: " .. StoneLabel(ResolveID(
+        ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight), "right")), 1, 1, 1)
+end
+
+-- Forward-declared: the defer watcher below closes over it before it is
+-- assigned, and by the time PLAYER_REGEN_ENABLED can actually fire, the
+-- assignment further down has long since run.
+local HearthAttrs
+
+-- "The Random reroll... rewrites the macro after use: defer it out of combat
+-- rather than dropping it" -- a PreClick that finds InCombatLockdown() true
+-- cannot write the reroll now, but must not forget it either, or the button
+-- would keep firing a stale roll until some later click happens to land
+-- outside combat. This is Bar.lua's own Defer()/pendingApply shape, scoped
+-- down to this one button.
+local hearthDeferPending, hearthDeferBtn = false, nil
+local hearthDeferFrame = CreateFrame("Frame")
+hearthDeferFrame:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    hearthDeferPending = false
+    if hearthDeferBtn then
+        RerollAll()
+        HearthAttrs(hearthDeferBtn)
+    end
+end)
+
+local function DeferHearthRefresh(btn)
+    hearthDeferBtn = btn
+    if hearthDeferPending then return end
+    hearthDeferPending = true
+    hearthDeferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+-- WireSecureAttributes (Bar.lua) calls this every Apply(), always outside
+-- combat, so the writes below need no InCombatLockdown() guard of their own
+-- -- exactly HomeAttrs' own reasoning above. The PreClick it wires the first
+-- time through DOES need one: a click can happen independently of any Apply().
+HearthAttrs = function(btn)
+    local leftID  = ResolveID(ns.TopBar.Get("tbHearthLeft",   ns.EUI_DEFAULTS.tbHearthLeft),   "left")
+    local rightID = ResolveID(ns.TopBar.Get("tbHearthRight",  ns.EUI_DEFAULTS.tbHearthRight),  "right")
+    local midID   = ResolveID(ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle), "mid")
+    _hearthId = leftID
+
+    btn:SetAttribute("type1", "macro")
+    btn:SetAttribute("macrotext1", MacroText(leftID))
+    btn:SetAttribute("type2", "macro")
+    btn:SetAttribute("macrotext2", MacroText(rightID))
+    btn:SetAttribute("type3", "macro")
+    btn:SetAttribute("macrotext3", MacroText(midID))
+
+    if not btn._hearthWired then
+        -- Toy names may not be cached at login, so every click re-resolves
+        -- all three macros fresh rather than trusting whatever Apply() last
+        -- wrote, exactly as NaowhUI_TopBar.lua:616-622 does.
+        btn:SetScript("PreClick", function(self)
+            if InCombatLockdown() then
+                DeferHearthRefresh(self)
+                return
+            end
+            RerollAll()
+            HearthAttrs(self)
+        end)
+
+        -- Live cooldown countdown while hovering. A dedicated ticker rather
+        -- than Bar.lua's per-second one: this task's files are Elements.lua
+        -- and Options.lua only, and Readouts.lua's own ticker is file-local.
+        -- Started on OnEnter, cancelled on OnLeave, so it never runs while
+        -- nothing is being hovered.
+        btn:HookScript("OnEnter", function(self)
+            self._hearthTicker = C_Timer.NewTicker(0.5, function()
+                if GameTooltip:IsOwned(self) then
+                    GameTooltip:ClearLines()
+                    HearthTooltip(GameTooltip)
+                    GameTooltip:Show()
+                end
+            end)
+        end)
+        btn:HookScript("OnLeave", function(self)
+            if self._hearthTicker then
+                self._hearthTicker:Cancel()
+                self._hearthTicker = nil
+            end
+        end)
+        btn._hearthWired = true
+    end
+end
+
+-- Nil-guarded: the bar (and this button) may not exist yet -- the feature can
+-- be switched off, or ScanOwned's async name/icon callbacks can land before
+-- Apply() has ever built anything. Combat-guarded because this writes secure
+-- attributes; ScanOwned only ever runs from PLAYER_LOGIN and an item-load
+-- callback, neither of which is realistically mid-combat, but the family's
+-- own hard rule applies regardless of how unlikely the timing is.
+local function RefreshHearthButton()
+    local btn = _G.KitnUITopBar_hearthstone
+    if not btn then return end
+    if InCombatLockdown() then return end
+    HearthAttrs(btn)
+end
+
+-- Filters HEARTH_IDS down to what this character actually owns. Names and
+-- icons resolve asynchronously (Item:ContinueOnItemLoad), so each one re-runs
+-- RefreshHearthButton once it lands rather than leaving the button (and any
+-- open dropdown, which reads hearthValues/hearthIcons by the same reference
+-- Options.lua was handed) stuck on a raw id.
+local function ScanOwned()
+    for _, id in ipairs(HEARTH_IDS) do
+        local isToy = PlayerHasToy and PlayerHasToy(id)
+        local count = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(id)
+        if isToy or (count and count > 0) then
+            owned[#owned + 1] = id
+            local key = tostring(id)
+            hearthValues[key] = key
+            hearthOrder[#hearthOrder + 1] = key
+
+            if Item then
+                local item = Item:CreateFromItemID(id)
+                item:ContinueOnItemLoad(function()
+                    hearthValues[key] = item:GetItemName() or key
+                    hearthIcons[key]  = item:GetItemIcon()
+                    RefreshHearthButton()
+                end)
+            end
+        end
+    end
+    RefreshHearthButton()
+end
+
+local hearthScanWatcher = CreateFrame("Frame")
+hearthScanWatcher:RegisterEvent("PLAYER_LOGIN")
+hearthScanWatcher:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_LOGIN")
+    ScanOwned()
+end)
+
+local hearthstoneElement = {
+    id = "hearthstone", label = "Hearthstone", icon = PLACEHOLDER_ICON, panel = "right",
+    kind = "launcher", secure = true,
+    attrs = HearthAttrs,
+    tooltip = HearthTooltip,
+}
+
 ns.TopBar.Elements = {
     friendsElement,
     guildElement,
@@ -249,6 +543,7 @@ ns.TopBar.Elements = {
     Macro("toybox", "Toy Box", PLACEHOLDER_ICON, "left",
         "/click CollectionsMicroButton\n/run CollectionsJournal_SetTab(CollectionsJournal, 3)"),
 
+    hearthstoneElement,
     homeElement,
     vaultElement,
 

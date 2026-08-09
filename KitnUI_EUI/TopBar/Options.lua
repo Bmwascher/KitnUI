@@ -181,7 +181,26 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     );                                                                             y = y - h
 
     _, h = W:SectionHeader(parent, "HEARTHSTONE", y);                              y = y - h
-    -- Filled by Task 6.
+
+    -- All three dropdowns read the same owned-stone list HearthValues()
+    -- returns: the ownership scan (Elements.lua) is paid once and shared
+    -- here, never rescanned per dropdown.
+    local hearthValues, hearthOrder = ns.TopBar.HearthValues()
+
+    _, h = W:WideDropdown(parent, "Left Click", y, hearthValues,
+        function() return ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft) end,
+        function(v) ns.TopBar.Set("tbHearthLeft", v); ns.TopBar.Apply() end,
+        hearthOrder);                                                              y = y - h
+
+    _, h = W:WideDropdown(parent, "Middle Click", y, hearthValues,
+        function() return ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle) end,
+        function(v) ns.TopBar.Set("tbHearthMiddle", v); ns.TopBar.Apply() end,
+        hearthOrder);                                                              y = y - h
+
+    _, h = W:WideDropdown(parent, "Right Click", y, hearthValues,
+        function() return ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight) end,
+        function(v) ns.TopBar.Set("tbHearthRight", v); ns.TopBar.Apply() end,
+        hearthOrder);                                                              y = y - h
 
     return math.abs(y)
 end

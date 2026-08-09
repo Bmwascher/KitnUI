@@ -111,6 +111,9 @@ read_globals = {
     -- Top bar: Great Vault progress
     "C_WeeklyRewards", "WeeklyRewards_ShowUI",
 
+    -- Top bar: hearthstone ownership scan and macro building
+    "C_Item", "PlayerHasToy", "C_ToyBox", "Item",
+
     -- Keyboard modifiers (Extras clean-icons copy popup)
     "IsControlKeyDown",
 
