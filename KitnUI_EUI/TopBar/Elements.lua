@@ -10,16 +10,13 @@ if ns.EUI_INERT then return end
 
 ns.TopBar = ns.TopBar or {}
 
--- Placeholder art. No icon texture was specified for any of the twelve
--- launchers below (Task 1's own brief gives ids, labels, panels and
--- macrotexts, but no icon column), and Blizzard's own frames do not offer one
--- consistent, static, file-path icon to borrow: several of the target panels
--- (CharacterFrame, PlayerSpellsFrame, ProfessionsFrame, AchievementFrame)
--- render a dynamic or spec-dependent portrait instead of a fixed icon, so
--- there is nothing fixed to copy. The question mark makes the gap visible
--- in-game rather than hiding it behind a plausible-looking guess. Real art is
--- a follow-up, and nothing draws yet in Task 1 regardless.
-local PLACEHOLDER_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+-- One file per element, named after the element's own id, so adding an element
+-- means adding one texture and nothing else. Verified present for all nineteen
+-- icon-drawing elements on 2026-08-09.
+local ICON_DIR = "Interface\\AddOns\\KitnUI_EUI\\Media\\TopBar\\"
+local function Icon(id)
+    return ICON_DIR .. "icon-" .. id .. ".tga"
+end
 
 -- A launcher's whole job is to click something Blizzard already owns. Secure,
 -- because several of the targets are protected, and a macro is the only way to
@@ -149,7 +146,7 @@ local function HomeAttrs(btn)
 end
 
 local homeElement = {
-    id = "home", label = "Home", icon = PLACEHOLDER_ICON, panel = "right",
+    id = "home", label = "Home", icon = Icon("home"), panel = "right",
     kind = "launcher", secure = true,
     attrs = HomeAttrs,
     tooltip = function(tt)
@@ -174,7 +171,7 @@ local homeElement = {
 -- everything with a ticker and cross-element state lives there. This element
 -- only supplies the click and hands the tooltip off.
 local friendsElement = {
-    id = "friends", label = "Friends", icon = PLACEHOLDER_ICON, panel = "left",
+    id = "friends", label = "Friends", icon = Icon("friends"), panel = "left",
     kind = "launcher", secure = false,
     onClick = function(_self, button)
         if button ~= "LeftButton" then return end
@@ -194,7 +191,7 @@ local friendsElement = {
 -- so this stays the ordinary Macro() passthrough every other micro-button
 -- launcher in this file uses -- only its tooltip is replaced, because Macro()'s
 -- own is a one-line label and this one needs the roster.
-local guildElement = Macro("guild", "Guild", PLACEHOLDER_ICON, "left",
+local guildElement = Macro("guild", "Guild", Icon("guild"), "left",
     "/click GuildMicroButton")
 guildElement.tooltip = function(tt)
     tt:AddLine("Guild", 1, 1, 1)
@@ -208,7 +205,7 @@ end
 -- gated the same way every other insecure launcher in this file is, for the
 -- same reason gamemenu is.
 local vaultElement = {
-    id = "vault", label = "Great Vault", icon = PLACEHOLDER_ICON, panel = "right",
+    id = "vault", label = "Great Vault", icon = Icon("vault"), panel = "right",
     kind = "launcher", secure = false,
     onClick = function(_self, button)
         if button ~= "LeftButton" then return end
@@ -539,7 +536,7 @@ hearthScanWatcher:SetScript("OnEvent", function(self)
 end)
 
 local hearthstoneElement = {
-    id = "hearthstone", label = "Hearthstone", icon = PLACEHOLDER_ICON, panel = "right",
+    id = "hearthstone", label = "Hearthstone", icon = Icon("hearthstone"), panel = "right",
     kind = "launcher", secure = true,
     attrs = HearthAttrs,
     tooltip = HearthTooltip,
@@ -777,7 +774,7 @@ local function TogglePortalFlyout(anchorBtn)
 end
 
 local portalsElement = {
-    id = "portals", label = "Mythic+ Portals", icon = PLACEHOLDER_ICON, panel = "right",
+    id = "portals", label = "Mythic+ Portals", icon = Icon("portals"), panel = "right",
     kind = "launcher", secure = false,
     onClick = function(self, button)
         if button ~= "LeftButton" then return end
@@ -870,7 +867,7 @@ local function VolumeWireButton(btn)
 end
 
 local volumeElement = {
-    id = "volume", label = "Volume", icon = PLACEHOLDER_ICON, panel = "right",
+    id = "volume", label = "Volume", icon = Icon("volume"), panel = "right",
     kind = "launcher", secure = false,
     onClick = function(_self, button)
         if button == "LeftButton" then
@@ -895,16 +892,16 @@ ns.TopBar.Elements = {
     friendsElement,
     guildElement,
 
-    Macro("groupfinder", "Group Finder", PLACEHOLDER_ICON, "left",
+    Macro("groupfinder", "Group Finder", Icon("groupfinder"), "left",
         "/click LFDMicroButton"),
 
-    Macro("journal", "Encounter Journal", PLACEHOLDER_ICON, "left",
+    Macro("journal", "Encounter Journal", Icon("journal"), "left",
         "/click EJMicroButton"),
 
-    Macro("achievements", "Achievements", PLACEHOLDER_ICON, "left",
+    Macro("achievements", "Achievements", Icon("achievements"), "left",
         "/click AchievementMicroButton"),
 
-    Macro("collections", "Collections", PLACEHOLDER_ICON, "left",
+    Macro("collections", "Collections", Icon("collections"), "left",
         "/click CollectionsMicroButton"),
 
     -- Toy Box is a tab inside the same Collections journal as `collections`,
@@ -913,7 +910,7 @@ ns.TopBar.Elements = {
     -- Blizzard_Collections.lua's own titles[3] = TOY_BOX) on the line after:
     -- /click runs its OnClick synchronously, so the journal already exists
     -- and is shown by the time the second line runs.
-    Macro("toybox", "Toy Box", PLACEHOLDER_ICON, "left",
+    Macro("toybox", "Toy Box", Icon("toybox"), "left",
         "/click CollectionsMicroButton\n/run CollectionsJournal_SetTab(CollectionsJournal, 3)"),
 
     hearthstoneElement,
@@ -921,7 +918,7 @@ ns.TopBar.Elements = {
     homeElement,
     vaultElement,
 
-    Macro("character", "Character panel", PLACEHOLDER_ICON, "right",
+    Macro("character", "Character panel", Icon("character"), "right",
         "/click CharacterMicroButton"),
 
     -- No SpellbookMicroButton exists on Mainline: the 12.0 client folded the
@@ -931,22 +928,22 @@ ns.TopBar.Elements = {
     -- The brief's own instruction to verify micro-button names rather than
     -- trust the table applies here: the table's `/click SpellbookMicroButton`
     -- would silently do nothing, because that global no longer exists.
-    Macro("spellbook", "Spellbook", PLACEHOLDER_ICON, "right",
+    Macro("spellbook", "Spellbook", Icon("spellbook"), "right",
         "/run PlayerSpellsUtil.OpenToSpellBookTab()"),
 
-    Macro("talents", "Talents", PLACEHOLDER_ICON, "right",
+    Macro("talents", "Talents", Icon("talents"), "right",
         "/click PlayerSpellsMicroButton"),
 
-    Macro("professions", "Professions", PLACEHOLDER_ICON, "right",
+    Macro("professions", "Professions", Icon("professions"), "right",
         "/click ProfessionMicroButton"),
 
     volumeElement,
 
-    Macro("euiconfig", "EllesmereUI", PLACEHOLDER_ICON, "right",
+    Macro("euiconfig", "EllesmereUI", Icon("euiconfig"), "right",
         "/run if EllesmereUI and EllesmereUI.Toggle then EllesmereUI:Toggle() end"),
 
     -- Absent entirely, not greyed out, when KitnEssentials is not loaded.
-    Macro("kitnessentials", "KitnEssentials", PLACEHOLDER_ICON, "right", "/kes",
+    Macro("kitnessentials", "KitnEssentials", Icon("kitnessentials"), "right", "/kes",
         function()
             return C_AddOns and C_AddOns.IsAddOnLoaded
                and C_AddOns.IsAddOnLoaded("KitnEssentials") and true or false
@@ -956,7 +953,7 @@ ns.TopBar.Elements = {
     -- button logs out), so this toggles GameMenuFrame directly and refuses in
     -- combat rather than relying on secure attribute handling.
     {
-        id = "gamemenu", label = "Game Menu", icon = PLACEHOLDER_ICON, panel = "right",
+        id = "gamemenu", label = "Game Menu", icon = Icon("gamemenu"), panel = "right",
         kind = "launcher", secure = false,
         onClick = function()
             if InCombatLockdown() then
