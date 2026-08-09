@@ -106,6 +106,7 @@ read_globals = {
     -- Top bar: friends and guild counts/rosters
     "ToggleFriendsFrame", "C_FriendList", "BNGetNumFriends", "C_BattleNet",
     "GetNumGuildMembers", "IsInGuild", "C_GuildInfo", "C_Club", "CommunitiesUtil",
+    "IsInInstance",
 
     -- Top bar: Great Vault progress
     "C_WeeklyRewards", "WeeklyRewards_ShowUI",

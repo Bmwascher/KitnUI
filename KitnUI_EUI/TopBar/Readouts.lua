@@ -273,8 +273,21 @@ end
 -- but the tooltip stops listing names.
 ---------------------------------------------------------------------------------
 
+-- The name lists come from C_Club, whose member APIs are marked
+-- SecretInChatMessagingLockdown (ClubDocumentation.lua). That predicate is
+-- defined at SecretPredicatesDocumentation.lua:53-55 as covering encounter,
+-- challenge mode and PvP restrictions AND "when the player is on a
+-- communication-restricted map such as a dungeon or raid" -- with no combat
+-- requirement in that last clause. EllesmereUI.InProtectedInstance() is
+-- narrower than that: it wants combat as well for raid and pvp, and Challenge
+-- Mode for party. So test the instance type directly and keep the host's
+-- helper as an additional trigger rather than the only one.
+local RESTRICTED_INSTANCE = { party = true, raid = true, pvp = true, arena = true }
+
 local function RosterReadable()
     if InCombatLockdown() then return false end
+    local inInstance, instanceType = IsInInstance()
+    if inInstance and RESTRICTED_INSTANCE[instanceType] then return false end
     if EllesmereUI and EllesmereUI.InProtectedInstance
        and EllesmereUI.InProtectedInstance() then return false end
     return true
@@ -487,9 +500,16 @@ local function UpdateFriendsBadge()
     friendsText:SetText(tostring(FriendsCount()))
 end
 
+-- pcall'd: whether GetNumGuildMembers can return a Secret value in combat is
+-- unproven in either direction (the two Mainline call sites that prove its
+-- return survives an ordinary `==` comparison are both in frames that close
+-- on entering combat, so neither says anything about the combat case). A
+-- failure here should cost this one refresh, not throw on a ticker during
+-- the raid pull the badge is supposed to survive.
 local function UpdateGuildBadge()
     if not guildText then return end
-    guildText:SetText(tostring(GuildCount()))
+    local ok, count = pcall(GuildCount)
+    if ok then guildText:SetText(tostring(count)) end
 end
 
 local function UpdateVaultText()

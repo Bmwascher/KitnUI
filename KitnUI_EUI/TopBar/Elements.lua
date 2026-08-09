@@ -110,7 +110,14 @@ local function HomeOnClick(_self, button)
         return
     end
     if button == "LeftButton" and not cachedHouse then
-        print("|cffFF008CKitn|r|cffffffffUI:|r House data cannot be updated in combat.")
+        -- Split by cause: "no house yet" and "can't fetch mid-fight" are
+        -- different problems with different fixes, and the brief's own copy
+        -- conflated them.
+        if InCombatLockdown() then
+            print(ns.title .. ": house data cannot be updated in combat. Try again after this fight.")
+        else
+            print(ns.title .. ": no house found yet. If you own one, open the housing dashboard once and try again.")
+        end
     end
 end
 
