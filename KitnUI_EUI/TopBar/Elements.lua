@@ -112,14 +112,10 @@ ns.TopBar.Elements = {
 
 -- fps is absent from every panel on purpose: it is positioned against the clock,
 -- not laid out with the icons. Bar.lua treats it as a special case.
-ns.TopBar.DEFAULT_ORDER = {
-    left   = { "friends", "guild", "groupfinder", "journal", "achievements",
-               "collections", "toybox" },
-    centre = { "clock" },
-    right  = { "hearthstone", "portals", "home", "vault", "character",
-               "spellbook", "talents", "professions", "volume", "euiconfig",
-               "kitnessentials", "gamemenu" },
-}
+--
+-- Read from the registered default rather than duplicated. Two copies of an
+-- ordering drift, and the one that drifts is always the one nobody is looking at.
+ns.TopBar.DEFAULT_ORDER = ns.EUI_DEFAULTS and ns.EUI_DEFAULTS.tbOrder
 
 ns.TopBar.ById = {}
 for _, el in ipairs(ns.TopBar.Elements) do

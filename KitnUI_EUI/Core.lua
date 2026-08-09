@@ -193,6 +193,48 @@ local DEFAULTS = {
         npArrowGlow             = true,
         npArrowCastNudge        = true,
         npArrowCastKick         = 8,
+
+        -- Top Bar. tbOrder and tbOff are TABLES, and the rule above applies to
+        -- them with force: every write replaces the whole table. Never index into
+        -- one to change a single entry.
+        tbEnabled               = false,
+        -- The real order, as a literal, because a registered default has to be
+        -- one and Core.lua loads before Elements.lua. This is the single source:
+        -- Elements.lua reads it back rather than keeping its own copy.
+        tbOrder                 = {
+            left   = { "friends", "guild", "groupfinder", "journal",
+                       "achievements", "collections", "toybox" },
+            centre = { "clock" },
+            right  = { "hearthstone", "portals", "home", "vault", "character",
+                       "spellbook", "talents", "professions", "volume",
+                       "euiconfig", "kitnessentials", "gamemenu" },
+        },
+        tbOff                   = {},
+        tbIconSize              = 20,
+        tbClockSize             = 24,
+        tbSysSize               = 11,
+        tbOpacity               = 85,
+        tbSpacing               = 14,
+        tbBackdrop              = true,
+        tbTooltips              = true,
+        tbAccentOverride        = false,
+        tbAccentR               = 1,
+        tbAccentG               = 0,
+        tbAccentB               = 0.549,
+        tbUse24h                = true,
+        tbServerTime            = false,
+        tbHideCombat            = false,
+        tbHidePetBattle         = true,
+        tbHideVehicle           = false,
+        tbHideSerious           = false,
+        tbFade                  = false,
+        tbFadeTime              = 0.25,
+        tbFriendsInGameOnly     = false,
+        tbHearthLeft            = "RANDOM",
+        tbHearthMiddle          = "6948",
+        tbHearthRight           = "140192",
+        -- tbPos and tbSysPos get NO default. They are absent until dragged, and
+        -- absent is their meaningful "not set" state.
     },
 }
 

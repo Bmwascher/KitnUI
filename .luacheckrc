@@ -92,6 +92,10 @@ read_globals = {
     "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",
     "ShowUIPanel", "HideUIPanel",
 
+    -- Top bar frame (Bar.lua): tooltip owner, Unlock Mode drag, the visibility
+    -- state driver Task 8 wires up
+    "GameTooltip", "RegisterStateDriver", "UnregisterStateDriver", "GetCursorPosition",
+
     -- Keyboard modifiers (Extras clean-icons copy popup)
     "IsControlKeyDown",
 

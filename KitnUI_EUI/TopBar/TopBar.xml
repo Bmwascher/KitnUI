@@ -5,4 +5,5 @@
          Each later task appends its own line as it creates its file. A manifest
          naming a file that does not exist yet fails the task's own reload check. -->
     <Script file="Elements.lua" />
+    <Script file="Bar.lua" />
 </Ui>
