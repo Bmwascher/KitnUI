@@ -94,6 +94,55 @@ local PAD = 8
 -- Button footprint around the icon texture, on top of tbIconSize.
 local BTN_PAD = 8
 
+-- Icon rest tint and the hover tween. REST is flat white, matching NaowhUI's
+-- own icon default. TWEEN_TIME is fixed by the design and deliberately not
+-- exposed as a setting.
+local REST_R, REST_G, REST_B = 1, 1, 1
+local TWEEN_TIME = 0.2
+
+-- The three accent scalars resolve the same way for the panel accent lines
+-- and the icon hover tween, so both read through this one helper.
+local function AccentRGB()
+    local r, g, b
+    if Get("tbAccentOverride", ns.EUI_DEFAULTS.tbAccentOverride) then
+        r = Get("tbAccentR", ns.EUI_DEFAULTS.tbAccentR)
+        g = Get("tbAccentG", ns.EUI_DEFAULTS.tbAccentG)
+        b = Get("tbAccentB", ns.EUI_DEFAULTS.tbAccentB)
+    elseif EllesmereUI and EllesmereUI.GetAccentColor then
+        r, g, b = EllesmereUI.GetAccentColor()
+    end
+    if not (r and g and b) then
+        r, g, b = ns.EUI_DEFAULTS.tbAccentR, ns.EUI_DEFAULTS.tbAccentG, ns.EUI_DEFAULTS.tbAccentB
+    end
+    return r, g, b
+end
+
+-- One texture, vertex colour interpolated: the icon art is a single texture,
+-- not two cross-faded layers, so this cannot be an AnimationGroup.
+--
+-- This OnUpdate is an ANIMATION, not polling: it has a fixed 0.2s duration
+-- and unhooks itself on the final frame. The project's no-OnUpdate rule
+-- targets indefinite per-frame work, which this is not.
+local function TintTo(btn, tr, tg, tb)
+    if not btn._icon then return end
+    local sr, sg, sb = btn._icon:GetVertexColor()
+    if sr == tr and sg == tg and sb == tb then
+        btn:SetScript("OnUpdate", nil)
+        return
+    end
+    btn._tweenT = 0
+    btn:SetScript("OnUpdate", function(self, elapsed)
+        self._tweenT = self._tweenT + elapsed
+        local t = self._tweenT / TWEEN_TIME
+        if t >= 1 then
+            self._icon:SetVertexColor(tr, tg, tb)
+            self:SetScript("OnUpdate", nil)
+            return
+        end
+        self._icon:SetVertexColor(sr + (tr - sr) * t, sg + (tg - sg) * t, sb + (tb - sb) * t)
+    end)
+end
+
 -- Each panel is a plain frame: a BACKGROUND fill (hidden when tbBackdrop is
 -- off) and a one-pixel OVERLAY accent line along the bottom edge. Both anchor
 -- to the panel rather than take an explicit size, so they track it whenever
@@ -145,12 +194,14 @@ local function CreateElementButton(el)
     -- re-owning to ANCHOR_RIGHT) calls SetOwner a second time from inside its
     -- own tooltip function, which is a re-owner, not a first owner.
     btn:SetScript("OnEnter", function(self)
+        TintTo(self, AccentRGB())
         if not Get("tbTooltips", ns.EUI_DEFAULTS.tbTooltips) then return end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         if el.tooltip then el.tooltip(GameTooltip) end
         GameTooltip:Show()
     end)
-    btn:SetScript("OnLeave", function()
+    btn:SetScript("OnLeave", function(self)
+        TintTo(self, REST_R, REST_G, REST_B)
         GameTooltip:Hide()
     end)
 
@@ -209,18 +260,7 @@ local function ApplyPanelColors()
 
     local opacity  = Get("tbOpacity", ns.EUI_DEFAULTS.tbOpacity) / 100
     local backdrop = Get("tbBackdrop", ns.EUI_DEFAULTS.tbBackdrop) and true or false
-
-    local r, g, b
-    if Get("tbAccentOverride", ns.EUI_DEFAULTS.tbAccentOverride) then
-        r = Get("tbAccentR", ns.EUI_DEFAULTS.tbAccentR)
-        g = Get("tbAccentG", ns.EUI_DEFAULTS.tbAccentG)
-        b = Get("tbAccentB", ns.EUI_DEFAULTS.tbAccentB)
-    elseif EllesmereUI and EllesmereUI.GetAccentColor then
-        r, g, b = EllesmereUI.GetAccentColor()
-    end
-    if not (r and g and b) then
-        r, g, b = ns.EUI_DEFAULTS.tbAccentR, ns.EUI_DEFAULTS.tbAccentG, ns.EUI_DEFAULTS.tbAccentB
-    end
+    local r, g, b = AccentRGB()
 
     for _, panel in ipairs({ leftPanel, centrePanel, rightPanel }) do
         if panel._bg then
@@ -238,11 +278,19 @@ end
 local function ApplyFonts()
 end
 
--- Icons carry no per-user colour setting yet; this keeps every icon's tint at a
--- known baseline instead of leaving it whatever the texture last had.
+-- Respects an in-progress hover: without this, changing the accent (or any
+-- other Apply-triggering setting) while hovering an icon would snap it to
+-- white and leave it there until the pointer moves.
 local function ApplyIconColors()
     for _, btn in pairs(buttons) do
-        if btn._icon then btn._icon:SetVertexColor(1, 1, 1) end
+        if btn._icon then
+            btn:SetScript("OnUpdate", nil)
+            if btn:IsMouseOver() then
+                btn._icon:SetVertexColor(AccentRGB())
+            else
+                btn._icon:SetVertexColor(REST_R, REST_G, REST_B)
+            end
+        end
     end
 end
 
