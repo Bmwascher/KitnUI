@@ -7,6 +7,16 @@
 - **NEW:** Rebuilt the installer as a single-window, EllesmereUI-skinned wizard on custom KitnUI background art, replacing the old page-by-page flow
 - Trimmed the companion set to Plater, BuffReminders, BigWigs, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode, and per-spec Blizzard CDM (dropped Details, WarpDeplete, MRT, Ayije CDM, Baganator)
 
+### Top Bar
+- **NEW:** KitnUI now draws its own top bar, with a clock, an FPS/latency readout, and a row of one-click launchers down each side (Group Finder, Encounter Journal, Achievements, Collections, Toy Box, Character, Spellbook, Talents, Professions, Volume, EllesmereUI settings, KitnEssentials, Game Menu, and more)
+- **NEW:** Hearthstone launcher with independent left/middle/right-click stones — pick a specific stone or let it roll one at random, bag items and Toy Box entries both supported
+- **NEW:** Mythic+ portal flyout for the current season's dungeon teleports
+- **NEW:** Live friend and guild online counts and Great Vault progress
+- Off by default — running the installer turns it on for you
+- Configurable visibility: hide the bar in combat, pet battles, vehicles, or in keystones, raids and rated PvP
+- Optional mouseover fade, resting the bar at low visibility until your mouse moves over it
+- Draggable anywhere on screen from EllesmereUI's Unlock Mode
+
 ### Installer
 - **NEW:** Clickable step sidebar with real per-profile import state (green check = actually imported) and a highlighted current step — click any step to jump straight to it and (re)install a single profile
 - **NEW:** Active-variant indicator marks which EllesmereUI color mode is currently live

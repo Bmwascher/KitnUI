@@ -78,16 +78,6 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
-    -- Bar.lua's OnEnter handler already checks this flag before calling an
-    -- element's tooltip function; this is only the switch that sets it.
-    _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Show Tooltips",
-          tooltip = "Shows a tooltip when you hover a top bar icon.",
-          getValue = function() return ns.TopBar.Get("tbTooltips", true) end,
-          setValue = function(v) ns.TopBar.Set("tbTooltips", v and true or false); ns.TopBar.Apply() end },
-        { type = "label", text = "" }
-    );                                                                             y = y - h
-
     _, h = W:SectionHeader(parent, "APPEARANCE", y);                               y = y - h
 
     _, h = W:DualRow(parent, y,
@@ -126,7 +116,10 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- The swatch rides this toggle's row rather than taking one of its own:
     -- DualRow has no colour entry type. The setter is the seeding one from
     -- Task 2: turning the override on captures the live accent first, so the
-    -- colour does not jump.
+    -- colour does not jump. Forward-declared so the setter, built first, can
+    -- reach the swatch and its repaint function built just below it.
+    local accentSwatch, updateAccentSwatch
+
     row, h = W:DualRow(parent, y,
         { type = "toggle", text = "Use A Custom Accent",
           tooltip = "Uses a fixed colour for the bar's accent line instead of following EllesmereUI's own accent.",
@@ -138,9 +131,16 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
                       ns.TopBar.Set("tbAccentR", r)
                       ns.TopBar.Set("tbAccentG", g)
                       ns.TopBar.Set("tbAccentB", b)
+                      -- Repaints the swatch from the seeding write above.
+                      -- Without this it keeps showing whatever colour it was
+                      -- last built with until the page happens to rebuild.
+                      if updateAccentSwatch then updateAccentSwatch() end
                   end
               end
               ns.TopBar.Set("tbAccentOverride", v and true or false)
+              if accentSwatch then
+                  if v then accentSwatch:Show() else accentSwatch:Hide() end
+              end
               ns.TopBar.Apply()
           end },
         { type = "label", text = "" }
@@ -149,7 +149,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     local leftRgn = row and row._leftRegion
     if leftRgn and leftRgn._control and EllesmereUI
        and EllesmereUI.BuildColorSwatch and EllesmereUI.PP then
-        local swatch = EllesmereUI.BuildColorSwatch(leftRgn, leftRgn:GetFrameLevel() + 5,
+        accentSwatch, updateAccentSwatch = EllesmereUI.BuildColorSwatch(leftRgn, leftRgn:GetFrameLevel() + 5,
             function()
                 return ns.TopBar.Get("tbAccentR", 1), ns.TopBar.Get("tbAccentG", 0), ns.TopBar.Get("tbAccentB", 0.549)
             end,
@@ -159,10 +159,29 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
                 ns.TopBar.Set("tbAccentB", b)
                 ns.TopBar.Apply()
             end, nil, 20)
-        if swatch then
-            EllesmereUI.PP.Point(swatch, "RIGHT", leftRgn._control, "LEFT", -8, 0)
+        if accentSwatch then
+            EllesmereUI.PP.Point(accentSwatch, "RIGHT", leftRgn._control, "LEFT", -8, 0)
+            -- Shown only when the override is on: AccentRGB() (Bar.lua) only
+            -- reads tbAccentR/G/B while tbAccentOverride is true, so with the
+            -- override off this is a dead control and stays hidden.
+            if ns.TopBar.Get("tbAccentOverride", false) then
+                accentSwatch:Show()
+            else
+                accentSwatch:Hide()
+            end
         end
     end
+
+    -- Bar.lua's OnEnter handler already checks this flag before calling an
+    -- element's tooltip function; this is only the switch that sets it. Last
+    -- control in APPEARANCE, per the design's control table.
+    _, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Show Tooltips",
+          tooltip = "Shows a tooltip when you hover a top bar icon.",
+          getValue = function() return ns.TopBar.Get("tbTooltips", true) end,
+          setValue = function(v) ns.TopBar.Set("tbTooltips", v and true or false); ns.TopBar.Apply() end },
+        { type = "label", text = "" }
+    );                                                                             y = y - h
 
     _, h = W:SectionHeader(parent, "VISIBILITY", y);                              y = y - h
 

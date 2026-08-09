@@ -301,14 +301,30 @@ local function PickRandom(slot)
     return id
 end
 
--- A fixed setting resolves to its own id. "RANDOM" resolves to whatever this
--- slot last rolled, WITHOUT rolling again here -- rolling on every call would
--- mean an unrelated Apply() (an opacity slider, say) silently swapped the
--- stone nobody clicked. Only RerollAll(), called from an actual click,
--- advances it.
+-- `owned` is the numeric-item-id array ScanOwned populates -- not a set, so
+-- this is a linear scan. HEARTH_IDS tops out at 39 entries, so the cost is
+-- trivial and it is only ever paid from a click or an Apply(), never a tick.
+local function IsOwned(id)
+    for _, ownedID in ipairs(owned) do
+        if ownedID == id then return true end
+    end
+    return false
+end
+
+-- A fixed setting resolves to its own id, PROVIDED the character actually
+-- owns it. A stored id the scan does not find (the shipped default on a
+-- character without it, or a stone since disenchanted/deleted) falls
+-- through to the RANDOM path instead of resolving to a stone that cannot be
+-- clicked -- otherwise the click silently does nothing and the tooltip and
+-- dropdown are left showing a raw item id nobody can act on.
+--
+-- "RANDOM" (and now an unowned fixed id) resolves to whatever this slot last
+-- rolled, WITHOUT rolling again here -- rolling on every call would mean an
+-- unrelated Apply() (an opacity slider, say) silently swapped the stone
+-- nobody clicked. Only RerollAll(), called from an actual click, advances it.
 local function ResolveID(setting, slot)
     local id = tonumber(setting)
-    if id then return id end
+    if id and IsOwned(id) then return id end
     if not randomCache[slot] then randomCache[slot] = PickRandom(slot) end
     return randomCache[slot]
 end
@@ -469,6 +485,14 @@ HearthAttrs = function(btn)
             end
         end
         btn:HookScript("OnEnter", function(self)
+            -- Bar.lua's own OnEnter returns before calling el.tooltip when
+            -- tbTooltips is off, but this ticker is wired independently of
+            -- that call, so without the same check here it would spin every
+            -- 0.5s for as long as the pointer sits on the button, unable to
+            -- ever do anything -- gated to match the volume ticker below,
+            -- which gets this for free by starting from inside its own
+            -- tooltip function instead of an OnEnter hook.
+            if not ns.TopBar.Get("tbTooltips", ns.EUI_DEFAULTS.tbTooltips) then return end
             self._hearthTicker = C_Timer.NewTicker(0.5, function()
                 if GameTooltip:IsOwned(self) then
                     GameTooltip:ClearLines()

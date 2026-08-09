@@ -172,26 +172,31 @@ local function FadeReveal()
     if Get("tbFade", ns.EUI_DEFAULTS.tbFade) then PlayFade(1) end
 end
 
+-- bar:IsMouseOver() alone has a gap: FitBarWidth sizes the bar from PAD (8)
+-- plus twice the wider side panel, but LayoutPanels hangs each side panel
+-- off the centre by tbSpacing (default 14), so the wider side overhangs the
+-- bar's own rectangle by about 10px (and a taller side panel overhangs it
+-- vertically too). The panels bound their buttons exactly, so check them as
+-- well to close that gap. Shared by FadeConceal and ApplyFade so there is
+-- one place to be right, not two that can drift apart.
+local function Hovered()
+    if not bar then return false end
+    return bar:IsMouseOver()
+        or (leftPanel and leftPanel:IsMouseOver())
+        or (centrePanel and centrePanel:IsMouseOver())
+        or (rightPanel and rightPanel:IsMouseOver())
+        or false
+end
+
 -- Deferred one frame: moving the pointer from the bar straight onto one of
 -- its own buttons fires this OnLeave before the button's OnEnter, so an
 -- immediate fade-out would dim the bar out from under the button the
 -- pointer just landed on. Waiting one frame lets that OnEnter land first;
--- checking IsMouseOver then is the actual decision, not the delay itself.
+-- checking Hovered() then is the actual decision, not the delay itself.
 local function FadeConceal()
     if not Get("tbFade", ns.EUI_DEFAULTS.tbFade) then return end
     C_Timer.After(0, function()
-        if not bar then return end
-        -- bar:IsMouseOver() alone has a gap: FitBarWidth sizes the bar from
-        -- PAD (8) plus twice the wider side panel, but LayoutPanels hangs
-        -- each side panel off the centre by tbSpacing (default 14), so the
-        -- wider side overhangs the bar's own rectangle by about 10px (and a
-        -- taller side panel overhangs it vertically too). The panels bound
-        -- their buttons exactly, so check them as well to close that gap.
-        local hovered = bar:IsMouseOver()
-            or (leftPanel and leftPanel:IsMouseOver())
-            or (centrePanel and centrePanel:IsMouseOver())
-            or (rightPanel and rightPanel:IsMouseOver())
-        if not hovered then
+        if not Hovered() then
             PlayFade(FADE_REST_ALPHA)
         end
     end)
@@ -244,9 +249,10 @@ local function CreateElementButton(el)
     end
 
     -- The tooltip contract, owned here so no element repeats it. An element's
-    -- own tooltip function only adds lines. The one exception (portals
-    -- re-owning to ANCHOR_RIGHT) calls SetOwner a second time from inside its
-    -- own tooltip function, which is a re-owner, not a first owner.
+    -- own tooltip function only adds lines. The one exception is the portals
+    -- launcher's own flyout buttons (Elements.lua:694-698), which own and
+    -- show a tooltip anchored ANCHOR_RIGHT for themselves -- those buttons
+    -- are not laid out by this file and never reach this OnEnter at all.
     btn:SetScript("OnEnter", function(self)
         TintTo(self, AccentRGB())
         if not Get("tbTooltips", ns.EUI_DEFAULTS.tbTooltips) then return end
@@ -389,7 +395,7 @@ local function ApplyFade()
     if fadeGroup then fadeGroup:Stop() end
     if not Get("tbFade", ns.EUI_DEFAULTS.tbFade) then
         bar:SetAlpha(1)
-    elseif bar:IsMouseOver() then
+    elseif Hovered() then
         bar:SetAlpha(1)
     else
         bar:SetAlpha(FADE_REST_ALPHA)
@@ -594,6 +600,15 @@ end
 -- combat exactly like bar:Show()/Hide() would.
 function ns.TopBar.ApplyVisibility()
     if not bar then return end
+    -- A disabled bar keeps its frame alive for the rest of the session --
+    -- HideBar() only unregisters the driver and hides it, it does not clear
+    -- the `bar` upvalue -- so without this guard a zone change, a hearth, or
+    -- an instance entry after the user disables the bar would resolve
+    -- BuildConditional() and call bar:Show() (or register a "show" driver)
+    -- right back, resurrecting a disabled bar on the next loading screen.
+    -- HideBar() already owns the disabled end state; Apply() re-enters this
+    -- function when the user re-enables, so nothing else has to change.
+    if not ns.TopBar.Enabled() then return end
     ApplyFade()
 
     local cond = BuildConditional()

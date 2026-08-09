@@ -144,6 +144,7 @@ local KitnUIWizard
 ---@field ApplyReadoutFonts fun()
 ---@field UpdateTicker fun()
 ---@field HearthValues fun(): table, table   # hearthValues, hearthOrder
+---@field DEFAULT_ORDER table<string, string[]>   # { left = {...}, centre = {"clock"}, right = {...} }, read from ns.EUI_DEFAULTS.tbOrder (Core.lua), the single source
 ---@field Elements table[]
 ---@field ById table<string, table>
 local KitnUITopBar

@@ -94,7 +94,7 @@ read_globals = {
 
     -- Top bar frame (Bar.lua): tooltip owner, Unlock Mode drag, the visibility
     -- state driver Task 8 wires up
-    "GameTooltip", "RegisterStateDriver", "UnregisterStateDriver", "GetCursorPosition",
+    "GameTooltip", "RegisterStateDriver", "UnregisterStateDriver",
 
     -- Top bar: visibility rules (Task 8) -- keystone/serious-content predicate
     "C_ChallengeMode", "C_PvP", "IsArenaSkirmish",
