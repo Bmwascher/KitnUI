@@ -369,9 +369,15 @@ local function AccentEnabled()
     return s.accentPink and true or false
 end
 
+-- The retired key is cleared here as well as in Core.lua's fold, so that a
+-- deliberate click always ends the ambiguity locally. The fold alone is not
+-- enough: it is debounced, and EllesmereUI.ImportProfileSilent hands control back
+-- without reloading — our own installer calls it that way — so a block carrying
+-- both keys can sit in front of the user for the length of the debounce.
 local function SetAccentEnabled(v)
     local s = ns.EUISettings()
     s.accentPink = v and true or false
+    s.accent = nil
 end
 
 -- Half one: the colour. This snapshot holds a TABLE, not a scalar, so it cannot
