@@ -239,17 +239,31 @@ local vaultElement = {
 -- (GameBar.lua:153-217) -- not copied wholesale. Left out: the Engineering
 -- Wormholes heading (a different mechanic, teleporting to a zone rather than
 -- home, and KitnUI's own future portals element's job, not hearthstone's) and
--- the Patch Items heading (Garrison Hearthstone, Flight Master's Whistle,
--- Translocation Cypher -- none of them share the Hearthstone cooldown or
--- teleport to the bind point). The two ids the design doc's own defaults
--- require -- 140192 (Dalaran Hearthstone) and 253629 (Key to the Arcantina),
--- both from that same Patch Items heading -- are appended explicitly.
+-- the Patch Items heading minus the two ids the design doc's own defaults
+-- require. The other three there -- Garrison Hearthstone (110560), Flight
+-- Master's Whistle (141605), Translocation Cypher (180817) -- stay out:
+-- EllesmereUI's own reverse-engineered model files Garrison Hearthstone in a
+-- table explicitly separate from its shared-cooldown pool, "its own cooldown,
+-- separate from the shared hearthstone one" (References/EllesmereUI-v8.7.5/
+-- EllesmereUIDataBars/EllesmereUIDataBars_Blocks.lua:2468-2478), and neither
+-- of the other two appears anywhere in either current 12.0 addon under
+-- References/ (both being non-bind-point teleports rather than hearthstones).
+--
+-- 264367 (Mushroom) and 190237 (Broker Translocation Matrix) are current v4.19
+-- WindTools does not know about but a v8.7.5 current-12.0 addon confirms are
+-- genuine members of the shared cooldown pool: EllesmereUI's own
+-- HEARTHSTONE_IDS (EllesmereUIDataBars_Blocks.lua:2453-2466, "Static
+-- hearthstone pool (all expansions) shared by every instance") lists both.
+-- 250411 (Timerunner's Hearthstone) was checked and deliberately left out: it
+-- appears only in EllesmereUI.lua's separate portal-flyout pool (:5599), not
+-- in that shared-cooldown table -- an inconsistency inside EllesmereUI itself
+-- that this file is not going to resolve by guessing.
 local HEARTH_IDS = {
     6948, 54452, 64488, 93672, 142542, 162973, 163045, 165669, 165670, 165802,
     166746, 166747, 168907, 172179, 180290, 182773, 183716, 184353, 188952,
     190196, 193588, 200630, 206195, 208704, 209035, 210455, 212337, 228940,
     235016, 236687, 245970, 246565, 257736, 263489, 263933, 265100,
-    140192, 253629,
+    140192, 253629, 264367, 190237,
 }
 
 -- The ownership scan is the expensive part of this element and is paid once
@@ -334,10 +348,17 @@ local function StoneLabel(id)
     return hearthValues[tostring(id)] or tostring(id)
 end
 
--- The stone the left click currently resolves to. All owned hearth-class
--- items share the one "Hearthstone" cooldown category, so reading this one
--- id's cooldown is reading the shared cooldown, matching NaowhUI's own
--- single-id tooltip reading (NaowhUI_TopBar.lua:259-270).
+-- The stone the left click currently resolves to. The tooltip reads THIS
+-- id's own cooldown, not an assumed shared one: EllesmereUI's own
+-- TRAVEL_EXTRAS table (EllesmereUIDataBars_Blocks.lua:2468-2478) shows the
+-- Dalaran Hearthstone (140192) and Key to the Arcantina (253629) -- both
+-- valid choices for any of the three slots here -- run on cooldowns separate
+-- from the main HEARTHSTONE_IDS pool. Querying the resolved id directly,
+-- rather than assuming one shared category, is correct regardless of which
+-- pool it actually belongs to; it just means the tooltip only ever reflects
+-- the LEFT slot's cooldown, not Middle/Right's, if those differ (matching
+-- NaowhUI's own single-id tooltip reading, NaowhUI_TopBar.lua:259-270, which
+-- has the same scope).
 local _hearthId
 
 local function FmtCD(sec)
@@ -444,6 +465,12 @@ HearthAttrs = function(btn)
         -- and Options.lua only, and Readouts.lua's own ticker is file-local.
         -- Started on OnEnter, cancelled on OnLeave, so it never runs while
         -- nothing is being hovered.
+        local function CancelHearthTicker(self)
+            if self._hearthTicker then
+                self._hearthTicker:Cancel()
+                self._hearthTicker = nil
+            end
+        end
         btn:HookScript("OnEnter", function(self)
             self._hearthTicker = C_Timer.NewTicker(0.5, function()
                 if GameTooltip:IsOwned(self) then
@@ -453,12 +480,12 @@ HearthAttrs = function(btn)
                 end
             end)
         end)
-        btn:HookScript("OnLeave", function(self)
-            if self._hearthTicker then
-                self._hearthTicker:Cancel()
-                self._hearthTicker = nil
-            end
-        end)
+        btn:HookScript("OnLeave", CancelHearthTicker)
+        -- A hidden frame does not reliably get OnLeave, and switching the
+        -- element off in the ELEMENTS list while hovering it does exactly
+        -- that. Without this the tooltip ticker outlives the button for the
+        -- rest of the session.
+        btn:HookScript("OnHide", CancelHearthTicker)
         btn._hearthWired = true
     end
 end
