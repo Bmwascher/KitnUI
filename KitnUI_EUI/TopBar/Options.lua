@@ -40,16 +40,25 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
+    -- Read-only: stage one has no way to change an element's panel, so the page
+    -- states where each one sits. Stage two's drag preview replaces this entirely
+    -- and this suffix goes with it. fps has no panel (it anchors itself under the
+    -- clock), which is the one case the fallback exists for.
+    local PANEL_LABEL = { left = "Left", centre = "Centre", right = "Right" }
+    local function RowLabel(el)
+        return el.label .. "  (" .. (PANEL_LABEL[el.panel] or "Under clock") .. ")"
+    end
+
     for i = 1, #rows, 2 do
         local leftEl, rightEl = rows[i], rows[i + 1]
         local rightCfg = { type = "label", text = "" }
         if rightEl then
-            rightCfg = { type = "toggle", text = rightEl.label,
+            rightCfg = { type = "toggle", text = RowLabel(rightEl),
                 getValue = function() return not ns.TopBar.IsOff(rightEl.id) end,
                 setValue = function(v) ns.TopBar.SetOff(rightEl.id, not v); ns.TopBar.Apply() end }
         end
         _, h = W:DualRow(parent, y,
-            { type = "toggle", text = leftEl.label,
+            { type = "toggle", text = RowLabel(leftEl),
               getValue = function() return not ns.TopBar.IsOff(leftEl.id) end,
               setValue = function(v) ns.TopBar.SetOff(leftEl.id, not v); ns.TopBar.Apply() end },
             rightCfg

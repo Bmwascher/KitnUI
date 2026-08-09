@@ -248,6 +248,13 @@ local function FitBarWidth()
     fitPending = false
     local wide = math.max(leftPanel:GetWidth(), rightPanel:GetWidth())
     bar:SetWidth(PAD + centrePanel:GetWidth() + 2 * wide)
+    -- The bar had no height at all until this line. It gets one anchor point,
+    -- which derives none, so GetHeight() returned 0 and Unlock Mode's drag
+    -- region was zero pixels tall. Take the tallest panel: the centre one is
+    -- taller than the sides whenever the clock is larger than an icon.
+    bar:SetHeight(math.max(leftPanel:GetHeight(),
+                           centrePanel:GetHeight(),
+                           rightPanel:GetHeight()))
 end
 
 -- Called from the ticker in Readouts.lua. The flag itself stays private.
@@ -347,7 +354,7 @@ end
 -- several), any id switched off via tbOff, and any element whose `requires`
 -- says no (kitnessentials absent, not greyed out, when it is not loaded).
 local function LayoutSide(panel, order, size, spacing)
-    local x = 0
+    local x, tallest = 0, size
     for _, id in ipairs(order) do
         local el  = ns.TopBar.ById[id]
         local btn = buttons[id]
@@ -355,14 +362,19 @@ local function LayoutSide(panel, order, size, spacing)
             btn:Show()
             btn:ClearAllPoints()
             btn:SetPoint("LEFT", panel, "LEFT", x, 0)
-            x = x + size + spacing
+            -- Real width and height, not the uniform icon size. The clock
+            -- button is sized from its own rendered text by SizeClockButton
+            -- and is wider and taller than any launcher.
+            local w, h = btn:GetWidth(), btn:GetHeight()
+            x = x + w + spacing
+            if h > tallest then tallest = h end
         elseif btn then
             btn:Hide()
         end
     end
     local width = x
     if width > 0 then width = width - spacing end
-    panel:SetSize(math.max(1, width), size)
+    panel:SetSize(math.max(1, width), tallest)
 end
 
 local function LayoutPanels()
