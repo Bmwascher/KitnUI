@@ -91,7 +91,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     );                                                                             y = y - h
 
     _, h = W:DualRow(parent, y,
-        { type = "slider", text = "Button Spacing", min = 0, max = 40, step = 1,
+        { type = "slider", text = "Button Spacing", min = 4, max = 30, step = 1,
           tooltip = "Gap between the icons on each side of the bar.",
           getValue = function() return ns.TopBar.Get("tbSpacing", 14) end,
           setValue = function(v) ns.TopBar.Set("tbSpacing", v); ns.TopBar.Apply() end },
