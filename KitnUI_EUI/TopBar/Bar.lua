@@ -180,7 +180,18 @@ end
 local function FadeConceal()
     if not Get("tbFade", ns.EUI_DEFAULTS.tbFade) then return end
     C_Timer.After(0, function()
-        if bar and not bar:IsMouseOver() then
+        if not bar then return end
+        -- bar:IsMouseOver() alone has a gap: FitBarWidth sizes the bar from
+        -- PAD (8) plus twice the wider side panel, but LayoutPanels hangs
+        -- each side panel off the centre by tbSpacing (default 14), so the
+        -- wider side overhangs the bar's own rectangle by about 10px (and a
+        -- taller side panel overhangs it vertically too). The panels bound
+        -- their buttons exactly, so check them as well to close that gap.
+        local hovered = bar:IsMouseOver()
+            or (leftPanel and leftPanel:IsMouseOver())
+            or (centrePanel and centrePanel:IsMouseOver())
+            or (rightPanel and rightPanel:IsMouseOver())
+        if not hovered then
             PlayFade(FADE_REST_ALPHA)
         end
     end)
@@ -570,12 +581,17 @@ end
 -- Also called directly by the event frame below, which CAN fire mid-combat
 -- (a keystone completing mid-fight is the normal case, not the edge case).
 --
--- RegisterStateDriver/bar:Show() are NOT combat-safe to call from here --
--- see the comment on visibilityEvents above -- so both are gated. Only
--- UnregisterStateDriver is unconditional: it routes through the "setstate"
--- branch with an empty values string (SecureStateDriver.lua:16-23, :159-
--- 161), which just nils a table entry and never reaches resolveDriver, so
--- it never calls Show()/Hide().
+-- NONE of RegisterStateDriver, UnregisterStateDriver or bar:Show() are
+-- combat-safe from here, so all three sit behind the gate. UnregisterStateDriver
+-- looked safe at first (it only reaches the "setstate" branch's values=="" path,
+-- SecureStateDriver.lua:159-161, which never calls resolveDriver) but
+-- UnregisterAttributeDriver sets "setframe" FIRST (:16-23), and that branch of
+-- SecureStateDriverManager_OnAttributeChanged calls SecureStateDriverManager:Show()
+-- unconditionally (:150-154) -- on OUR taint, since we are the one calling
+-- SetAttribute. SecureStateDriverManager is itself a SecureFrameTemplate frame
+-- (:178), and SecureFrameTemplate is protected="true" (Blizzard_FrameXML/
+-- SecureTemplatesBase.xml:4), so that Show() is a protected call and fails in
+-- combat exactly like bar:Show()/Hide() would.
 function ns.TopBar.ApplyVisibility()
     if not bar then return end
     ApplyFade()
@@ -585,8 +601,8 @@ function ns.TopBar.ApplyVisibility()
         -- No driver needed for a plain "show": Blizzard's own 0.2s tick
         -- would just keep re-resolving a no-op. Unregistering also means a
         -- bar the driver had hidden needs an explicit Show() to come back.
-        UnregisterStateDriver(bar, "visibility")
         if InCombatLockdown() then DeferVisibility() return end
+        UnregisterStateDriver(bar, "visibility")
         bar:Show()
         return
     end
