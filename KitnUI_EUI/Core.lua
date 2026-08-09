@@ -159,17 +159,27 @@ local DEFAULTS = {
         -- General. A plain on/off value. It was `accent = { pink = false }` until
         -- 2026-08-09, and the switch wrote into that sub-table in place.
         --
-        -- Kitn's in-game test: the value was live in the store at the instant of
-        -- a reload and absent from the saved file straight after, while every
-        -- scalar switch survived the same save. The arrow colour below is the
-        -- tell. It is a table too, and it persists — because its setter REPLACES
-        -- the table rather than writing into it. Writing into a sub-table is the
-        -- one thing the accent switch did differently, and EllesmereUI's logout
-        -- pass drops a sub-table once its contents match the registered default,
-        -- so a sub-table shared with that default deletes itself.
+        -- WHAT IS PROVEN, measured in Kitn's client on EllesmereUI 8.7.7: the
+        -- value was live in the store at the instant of a reload, absent from the
+        -- saved file immediately after, and every scalar switch in the same block
+        -- survived that same save. Making this one key a scalar fixed it.
         --
-        -- A scalar cannot be reached that way: assigning it writes a key on the
-        -- settings table and never touches the defaults table at all.
+        -- WHAT IS NOT PROVEN is the mechanism, and an earlier version of this
+        -- comment claimed one. Reading Lite 8.7.5 under References/ says it
+        -- cannot happen: DeepMergeDefaults builds a FRESH sub-table, so writing
+        -- in place should never reach the registered default that the logout
+        -- strip compares against. The installed 8.7.7 copy has a byte-identical
+        -- StripDefaults and logout handler, so the difference is somewhere
+        -- neither the cross-vendor reviewer nor I have read. Do not trust the
+        -- withdrawn "shared table" story.
+        --
+        -- What survives that uncertainty is the rule: a scalar cannot be reached
+        -- this way at all, because assigning one writes a key on the settings
+        -- table and never touches the defaults table. The arrow colour below
+        -- stays a table safely for the same reason — its setter REPLACES the
+        -- table instead of writing into it. Both of those shapes are verified in
+        -- game. An in-place write into a table-valued default is the one shape
+        -- that is not, so nothing here uses it.
         accentPink              = false,
         -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
         -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
@@ -695,6 +705,18 @@ local function MigrateSettingsForward()
                         end
                     end
                 end
+
+                -- Handled apart from the loop above, because that loop is driven
+                -- by the CURRENT defaults and accent is no longer among them. The
+                -- old stores still hold it in its retired nested shape, and
+                -- KitnUIDB.euiSettings is our own saved variable, so unlike the
+                -- profile copy it really does persist. Without this a user coming
+                -- straight from that store loses the setting.
+                local oldAccent = source.accent
+                if type(oldAccent) == "table" and oldAccent.pink ~= nil
+                    and dest.accentPink == nil then
+                    dest.accentPink = oldAccent.pink and true or false
+                end
             end
 
             -- Cleared whether or not it was the source. When euiSettings supplied
@@ -702,25 +724,44 @@ local function MigrateSettingsForward()
             -- what is left here is older data that has already been superseded.
             if profile.addons then profile.addons.KitnUIEUI = nil end
 
-            -- The accent switch's old nested shape, folded forward and removed.
-            -- Unconditional, and not inside the `source` branch above: this one
-            -- is about the CURRENT block, not the pre-migration stores. The key
-            -- has to go rather than just be ignored, because EllesmereUI's logout
-            -- pass only touches keys it has a default for — an unknown key is
-            -- kept forever and would ride every exported profile.
-            local block = profile.addons and profile.addons.KitnUI_EUI
-            local dead = type(block) == "table" and block.accent
-            if type(dead) == "table" then
-                if block.accentPink == nil and dead.pink ~= nil then
-                    block.accentPink = dead.pink and true or false
-                end
-                block.accent = nil
-            end
         end
     end
 
     ns.db.euiMigration = MIGRATION_VERSION
 end
+
+-- The accent switch's retired nested shape, folded forward and then DELETED.
+--
+-- Deliberately NOT part of the version-stamped migration above, and not a
+-- once-per-login pass either. A profile imported at any point afterwards brings
+-- the old key with it — EllesmereUI copies an addon block through an import
+-- unchanged — and by then a one-time pass has long since stamped itself done.
+-- Registered with the re-apply registry instead, which fires at login, on a
+-- profile switch and on a profile apply, which is every way a block can arrive.
+-- Registered from THIS file, so it runs before General.lua's accent apply: the
+-- registry runs in registration order and Core.lua loads first.
+--
+-- Deleting rather than ignoring is the point. EllesmereUI's logout pass only
+-- touches keys it has a registered default for, so a key it does not know is
+-- kept forever and rides every exported profile out into the world.
+local function FoldRetiredAccentKey()
+    local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+    if type(profiles) ~= "table" then return end
+
+    for _, profile in pairs(profiles) do
+        local block = type(profile) == "table" and profile.addons
+                        and profile.addons.KitnUI_EUI
+        local dead = type(block) == "table" and block.accent
+        if type(dead) == "table" then
+            if block.accentPink == nil and dead.pink ~= nil then
+                block.accentPink = dead.pink and true or false
+            end
+            block.accent = nil
+        end
+    end
+end
+
+ns.EUIRegisterReapply(FoldRetiredAccentKey)
 
 ---------------------------------------------------------------------------------
 -- Boot
