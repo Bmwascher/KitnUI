@@ -712,6 +712,14 @@ local function CreatePortalFlyout()
     portalFlyout:SetScript("OnHide", function(self) self:UnregisterAllEvents() end)
     portalFlyout:SetScript("OnEvent", function() RefreshPortalButtons() end)
 
+    -- Escape closes it like any other free-floating panel. Nil-guarded: the
+    -- helper is EllesmereUI's own (EllesmereUI.lua:12157, backed by a single
+    -- UISpecialFrames proxy at :12134-12136), not ours, so a future host
+    -- version that renamed or dropped it must not error here.
+    if EllesmereUI and EllesmereUI.RegisterEscapeClose then
+        EllesmereUI.RegisterEscapeClose(portalFlyout)
+    end
+
     return portalFlyout
 end
 
@@ -726,6 +734,43 @@ local function TogglePortalFlyout(anchorBtn)
         fly:Hide()
         return
     end
+
+    -- Wired once per launcher button, the first time it ever opens the
+    -- flyout. HookScript, not SetScript: SetScript would REPLACE whatever
+    -- OnHide handler already lives on this button; HookScript only adds to
+    -- it, so this cannot silently discard behaviour some other file wires
+    -- onto the same frame later. A child's OnHide fires whenever its parent
+    -- is hidden, not only on a direct Hide() call against the child itself,
+    -- so hooking the LAUNCHER button's OnHide catches every path that makes
+    -- the button disappear out from under an open flyout: HideBar() hiding
+    -- the whole bar when tbEnabled goes off, LayoutSide hiding this one
+    -- button when portals is switched off in tbOff, and Task 8's visibility
+    -- work later. In each of those the button is simply gone -- no combat
+    -- transition fires the state driver above, and Escape has nothing left
+    -- to close -- so without this the flyout would sit on screen until the
+    -- player entered combat once or reloaded.
+    --
+    -- This is a hook on the BUTTON, not a reparent of the FLYOUT under it.
+    -- Hiding a parent only hides a child visually; it does not flip the
+    -- child's own IsShown() to false. A flyout reparented under the launcher
+    -- would look closed while still reporting itself open, and would pop
+    -- back into view the instant the button (and the bar) were shown again
+    -- -- the exact bug the custom "combat" state above exists to prevent,
+    -- and what smoke check F3 tests for. Hooking OnHide and calling a real
+    -- Hide() on the flyout itself has no such trap.
+    if not anchorBtn._portalFlyoutHideHooked then
+        anchorBtn._portalFlyoutHideHooked = true
+        anchorBtn:HookScript("OnHide", function()
+            -- Combat-guarded like every other manual Hide() call on this
+            -- frame: once it parents secure buttons, Hide() on it is
+            -- protected, and in combat the state driver has already closed
+            -- it by the time this could ever fire from a bar/button hide.
+            if portalFlyout and portalFlyout:IsShown() and not InCombatLockdown() then
+                portalFlyout:Hide()
+            end
+        end)
+    end
+
     fly:ClearAllPoints()
     fly:SetPoint("TOP", anchorBtn, "BOTTOM", 0, -4)
     fly:Show()
