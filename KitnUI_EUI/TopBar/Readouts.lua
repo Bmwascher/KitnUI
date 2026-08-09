@@ -57,6 +57,11 @@ end
 -- runs, because it attaches to KitnUITopBar_clock — the button Bar.lua's
 -- unmodified CreateElementButton makes for the "clock" element registered in
 -- Elements.lua — which only exists once the bar itself has been built.
+--
+-- The FPS readout further down is EAGER, and the difference is deliberate
+-- rather than two minds about it. The clock has a parent that does not exist
+-- until the bar does; the readout is parented to UIParent and never needed the
+-- bar at all, so there was nothing to wait for.
 ---------------------------------------------------------------------------------
 
 local clockText
@@ -75,6 +80,11 @@ local CLOCK_PAD = 6
 function ns.TopBar.SizeClockButton()
     local btn = _G.KitnUITopBar_clock
     if not (btn and clockText) then return end
+    -- Padding is asymmetric on purpose: a full CLOCK_PAD on each side
+    -- horizontally, half that vertically. The bar's height is driven by the
+    -- tallest panel, so vertical padding on the clock pushes the whole bar
+    -- taller, while horizontal padding only widens the centre panel. NaowhUI
+    -- pads horizontally and not at all vertically for the same reason.
     btn:SetSize(clockText:GetStringWidth() + CLOCK_PAD * 2,
                 clockText:GetStringHeight() + CLOCK_PAD)
 end
@@ -307,8 +317,14 @@ function ns.TopBar.UpdateTicker()
         ticker:Cancel()
         ticker = nil
     end
-    -- Start only when there is something to update. Apply() reaches this before
-    -- the frame exists on the enabled-in-combat path.
+    -- Start only when there is something to update.
+    --
+    -- The `sysText` half of both gates is belt and braces: this file creates
+    -- sysText eagerly at load, so it is never nil in practice. The plan wrote
+    -- these guards for a lazily-created readout, and they are kept because the
+    -- cost is a nil check and the alternative is a ticker calling into a frame
+    -- that a future refactor made lazy again. Do not read them as evidence that
+    -- sysText can currently be nil.
     if ns.TopBar.Enabled() and sysText and not ticker then
         ticker = C_Timer.NewTicker(1, Tick)
     end
