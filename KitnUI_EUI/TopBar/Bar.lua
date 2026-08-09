@@ -733,6 +733,27 @@ function ns.TopBar.ResetPositions()
     ns.TopBar.Apply()
 end
 
+-- Reset/uninstall teardown (Task 9). Order is load-bearing: EllesmereUI's own
+-- FPS counter comes back FIRST, before anything else comes down, so a caller
+-- that throws partway through never strands the counter hidden with no bar
+-- left to give it back.
+function ns.TopBar.Teardown()
+    -- 1. Nil-guarded: Readouts.lua may not have loaded.
+    if ns.TopBar.SuppressEUIFps then ns.TopBar.SuppressEUIFps(false) end
+
+    -- 2. The FPS readout frame is local to Readouts.lua; reach it by its
+    -- global name the same way SuppressEUIFps reaches EUI_FPSCounter.
+    local sysFrame = _G.KitnUITopBarSys
+    if sysFrame then sysFrame:Hide() end
+
+    -- 3. Protected: the bar parents secure buttons, so hiding it is protected
+    -- too. The only caller (ns.EUIResetAll) already refuses in combat before
+    -- it ever reaches here, so a deferral here would be dead code -- return
+    -- early instead.
+    if InCombatLockdown() then return end
+    HideBar()
+end
+
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------

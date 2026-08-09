@@ -532,6 +532,13 @@ function ns.EUIResetAll()
         return false
     end
 
+    -- Show EllesmereUI's own FPS counter and clear KitnUI's own bar before
+    -- anything else is torn down (Task 9). Both refusal gates above have
+    -- already passed at this point, so this only runs on a reset that is
+    -- actually happening. Nil-guarded and pcall'd: KitnUI_EUI/TopBar/ may be
+    -- absent or failed to load, and this function must not throw.
+    if ns.TopBar and ns.TopBar.Teardown then pcall(ns.TopBar.Teardown) end
+
     if ns.LuluTearDown then pcall(ns.LuluTearDown) end
 
     -- The ACTIVE profile is cleared through the db object so the live
