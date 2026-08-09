@@ -674,8 +674,12 @@ local function MigrateSettingsForward()
     local old = ns.db.euiSettings
     -- The pre-0a4835e key had no underscore, so it is a different key from the
     -- one we write now and would otherwise be stranded. Swept here too.
+    -- type-checked, not just truthy: a malformed profile whose addons field is
+    -- not a table would otherwise error on the index and abort the whole
+    -- migration at whichever profile pairs() reached first.
     local function LegacyBlock(profile)
-        local b = profile.addons and profile.addons.KitnUIEUI
+        local addons = profile.addons
+        local b = type(addons) == "table" and addons.KitnUIEUI
         return type(b) == "table" and next(b) and b or nil
     end
 
@@ -684,7 +688,7 @@ local function MigrateSettingsForward()
             local source = (type(old) == "table" and type(old[name]) == "table" and old[name])
                             or LegacyBlock(profile)
             if source then
-                profile.addons = profile.addons or {}
+                if type(profile.addons) ~= "table" then profile.addons = {} end
                 -- An absent block, or an absent key inside one, counts as still
                 -- at its default and is created. NewDB only builds the ACTIVE
                 -- profile's block at login; the rest appear on first switch via
@@ -722,7 +726,7 @@ local function MigrateSettingsForward()
             -- Cleared whether or not it was the source. When euiSettings supplied
             -- the values it is the newer of the two stores and wins outright, so
             -- what is left here is older data that has already been superseded.
-            if profile.addons then profile.addons.KitnUIEUI = nil end
+            if type(profile.addons) == "table" then profile.addons.KitnUIEUI = nil end
 
         end
     end
@@ -736,10 +740,19 @@ end
 -- once-per-login pass either. A profile imported at any point afterwards brings
 -- the old key with it — EllesmereUI copies an addon block through an import
 -- unchanged — and by then a one-time pass has long since stamped itself done.
--- Registered with the re-apply registry instead, which fires at login, on a
--- profile switch and on a profile apply, which is every way a block can arrive.
--- Registered from THIS file, so it runs before General.lua's accent apply: the
--- registry runs in registration order and Core.lua loads first.
+-- Registered with the re-apply registry instead, which fires on a profile
+-- switch, a spec switch and a profile apply, plus once at login — that last one
+-- only on an EllesmereUI complete enough to build the tab, which is the only
+-- state where anything reads the switch anyway. Registered from THIS file, so it
+-- runs before General.lua's accent apply: the registry runs in registration
+-- order and Core.lua loads first.
+--
+-- The retired value WINS, rather than yielding to an accentPink already sitting
+-- in the block. That looks reckless and is not: no released version ever wrote
+-- both keys, so the two together can only mean EllesmereUI merged the registered
+-- default in, which it does on import (ApplyProfileData) and at login
+-- (EUISettingsDB) before this ever runs. Yielding to it would read a defaulted
+-- false as a deliberate choice and throw the real setting away.
 --
 -- Deleting rather than ignoring is the point. EllesmereUI's logout pass only
 -- touches keys it has a registered default for, so a key it does not know is
@@ -749,11 +762,11 @@ local function FoldRetiredAccentKey()
     if type(profiles) ~= "table" then return end
 
     for _, profile in pairs(profiles) do
-        local block = type(profile) == "table" and profile.addons
-                        and profile.addons.KitnUI_EUI
+        local addons = type(profile) == "table" and profile.addons
+        local block = type(addons) == "table" and addons.KitnUI_EUI
         local dead = type(block) == "table" and block.accent
         if type(dead) == "table" then
-            if block.accentPink == nil and dead.pink ~= nil then
+            if dead.pink ~= nil then
                 block.accentPink = dead.pink and true or false
             end
             block.accent = nil

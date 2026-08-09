@@ -360,9 +360,10 @@ local ACCENT_KEYS = {
 local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 140 / 255
 
 -- Read and write the switch directly on the settings table, never through a
--- sub-table. The DEFAULTS comment in Core.lua carries the account: a sub-table
--- written in place is what made this the only switch that did not survive a
--- reload, and it is the shape to keep away from.
+-- sub-table. This switch used to be a sub-table written in place, and in that
+-- shape it was the only one that did not survive a reload. Why that shape and no
+-- other is unexplained — see the DEFAULTS comment in Core.lua, which separates
+-- the measurement from the mechanism. Keep away from the shape regardless.
 local function AccentEnabled()
     local s = ns.EUISettings()
     return s.accentPink and true or false
