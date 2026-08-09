@@ -165,6 +165,27 @@ local function PlayFade(toAlpha)
     fadeGroup:Play()
 end
 
+-- Shared hover handlers: the bar AND every launcher button hook these, so
+-- the bar reads as one hover region rather than fading out the instant the
+-- pointer crosses from the bar's own background onto a button on top of it.
+local function FadeReveal()
+    if Get("tbFade", ns.EUI_DEFAULTS.tbFade) then PlayFade(1) end
+end
+
+-- Deferred one frame: moving the pointer from the bar straight onto one of
+-- its own buttons fires this OnLeave before the button's OnEnter, so an
+-- immediate fade-out would dim the bar out from under the button the
+-- pointer just landed on. Waiting one frame lets that OnEnter land first;
+-- checking IsMouseOver then is the actual decision, not the delay itself.
+local function FadeConceal()
+    if not Get("tbFade", ns.EUI_DEFAULTS.tbFade) then return end
+    C_Timer.After(0, function()
+        if bar and not bar:IsMouseOver() then
+            PlayFade(FADE_REST_ALPHA)
+        end
+    end)
+end
+
 -- Each panel is a plain frame: a BACKGROUND fill (hidden when tbBackdrop is
 -- off) and a one-pixel OVERLAY accent line along the bottom edge. Both anchor
 -- to the panel rather than take an explicit size, so they track it whenever
@@ -227,6 +248,12 @@ local function CreateElementButton(el)
         GameTooltip:Hide()
     end)
 
+    -- HookScript, not SetScript: the tooltip handlers just above own OnEnter/
+    -- OnLeave for this button, and a second SetScript would silently replace
+    -- them. This just adds the fade reveal/conceal alongside.
+    btn:HookScript("OnEnter", FadeReveal)
+    btn:HookScript("OnLeave", FadeConceal)
+
     buttons[el.id] = btn
     return btn
 end
@@ -249,12 +276,12 @@ local function EnsureCreated()
     bar:EnableMouse(true)
     fadeGroup = bar:CreateAnimationGroup()
     fadeAnim  = fadeGroup:CreateAnimation("Alpha")
-    bar:SetScript("OnEnter", function()
-        if Get("tbFade", ns.EUI_DEFAULTS.tbFade) then PlayFade(1) end
-    end)
-    bar:SetScript("OnLeave", function()
-        if Get("tbFade", ns.EUI_DEFAULTS.tbFade) then PlayFade(FADE_REST_ALPHA) end
-    end)
+    -- Without this an AnimationGroup snaps back to its pre-play alpha when it
+    -- finishes, so a fade-in would reach 1 and then immediately revert to the
+    -- rest alpha instead of holding.
+    fadeGroup:SetToFinalAlpha(true)
+    bar:SetScript("OnEnter", FadeReveal)
+    bar:SetScript("OnLeave", FadeConceal)
 
     leftPanel   = CreatePanel("Left")
     centrePanel = CreatePanel("Centre")
@@ -453,12 +480,38 @@ end
 -- Only ever reached from Apply()'s protected half, already gated there.
 local function HideBar()
     if not bar then return end
+    -- Unregister first (combat-safe -- see ApplyVisibility below): a resident
+    -- "visibility" driver gets re-evaluated by Blizzard's own 0.2s tick
+    -- regardless of why the bar is hidden, and a plain "show" conditional
+    -- would call bar:Show() right back on the next tick otherwise.
+    UnregisterStateDriver(bar, "visibility")
     bar:Hide()
 end
 
 ---------------------------------------------------------------------------------
 -- Visibility (Task 8)
 ---------------------------------------------------------------------------------
+
+-- Own frame and own pending flag, deliberately separate from deferFrame/
+-- pendingApply below: registering (or re-Show()ing after an unregister)
+-- performs a Show()/Hide() on `bar` immediately and on the caller's own
+-- taint (SecureStateDriver.lua:26-28 -> :8-13 -> the "setstate" branch of
+-- SecureStateDriverManager_OnAttributeChanged at :157-165 calls
+-- resolveDriver() synchronously, which at :98-104 calls frame:Show()/
+-- Hide()), so it must queue its own retry rather than share Apply()'s.
+local visibilityPending = false
+local visibilityEvents = CreateFrame("Frame")
+visibilityEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+visibilityEvents:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+visibilityEvents:RegisterEvent("CHALLENGE_MODE_START")
+visibilityEvents:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+visibilityEvents:RegisterEvent("CHALLENGE_MODE_RESET")
+
+local function DeferVisibility()
+    if visibilityPending then return end
+    visibilityPending = true
+    visibilityEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
 
 -- Serious content: keystone, raid, or RATED PvP. None of those are reachable
 -- from a macro conditional, so this is Lua, not conditional text, and it
@@ -513,28 +566,47 @@ local function BuildConditional()
 end
 
 -- The funnel's one Task 8 hook (Apply() calls this already, gated behind
--- Apply()'s own combat check). Also called directly, unconditionally, by the
--- event frame below: RegisterStateDriver only ever touches SetAttribute,
--- which SimpleFrameAPIDocumentation.lua does NOT flag IsProtectedFunction
--- (unlike its neighbour SetClampRectInsets, which is), so re-registering the
--- driver is combat-safe and needs no deferral through pendingApply.
+-- Apply()'s own combat check, so that call site never runs in combat).
+-- Also called directly by the event frame below, which CAN fire mid-combat
+-- (a keystone completing mid-fight is the normal case, not the edge case).
+--
+-- RegisterStateDriver/bar:Show() are NOT combat-safe to call from here --
+-- see the comment on visibilityEvents above -- so both are gated. Only
+-- UnregisterStateDriver is unconditional: it routes through the "setstate"
+-- branch with an empty values string (SecureStateDriver.lua:16-23, :159-
+-- 161), which just nils a table entry and never reaches resolveDriver, so
+-- it never calls Show()/Hide().
 function ns.TopBar.ApplyVisibility()
     if not bar then return end
-    RegisterStateDriver(bar, "visibility", BuildConditional())
     ApplyFade()
+
+    local cond = BuildConditional()
+    if cond == "show" then
+        -- No driver needed for a plain "show": Blizzard's own 0.2s tick
+        -- would just keep re-resolving a no-op. Unregistering also means a
+        -- bar the driver had hidden needs an explicit Show() to come back.
+        UnregisterStateDriver(bar, "visibility")
+        if InCombatLockdown() then DeferVisibility() return end
+        bar:Show()
+        return
+    end
+
+    if InCombatLockdown() then DeferVisibility() return end
+    RegisterStateDriver(bar, "visibility", cond)
 end
 
 -- Re-evaluates on its own trigger events rather than waiting for the next
 -- Apply(). CHALLENGE_MODE_COMPLETED and CHALLENGE_MODE_RESET matter most:
 -- without them the "hide" driver registered at keystone start survives the
 -- key ending and persists until some unrelated zone event happens to fire.
-local visibilityEvents = CreateFrame("Frame")
-visibilityEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
-visibilityEvents:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-visibilityEvents:RegisterEvent("CHALLENGE_MODE_START")
-visibilityEvents:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-visibilityEvents:RegisterEvent("CHALLENGE_MODE_RESET")
-visibilityEvents:SetScript("OnEvent", function()
+-- PLAYER_REGEN_ENABLED is only ever registered by DeferVisibility above,
+-- and unregisters itself here once the deferred change lands, matching
+-- deferFrame's own clear-before-retry pattern below.
+visibilityEvents:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_ENABLED" then
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        visibilityPending = false
+    end
     ns.TopBar.ApplyVisibility()
 end)
 
