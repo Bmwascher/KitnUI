@@ -138,20 +138,21 @@ ns.TopBar.Elements = {
             tt:AddLine("Middle-click: Reload UI", 1, 1, 1)
         end,
     },
+
+    -- fps: never laid out in a panel — it lives on its own UIParent frame,
+    -- positioned against the clock rather than with the icons, per the panel
+    -- field's own contract above ("nil means the element is NOT laid out by
+    -- a panel: it anchors itself. fps is the only one"). Bar.lua's
+    -- EnsureCreated now skips CreateElementButton for any element with no
+    -- panel, so this stays out of leftPanel/rightPanel entirely; it is
+    -- present here only so the ELEMENTS list picks it up automatically.
+    -- Never add "fps" to any tbOrder array — it is not laid out.
+    {
+        id = "fps", label = "FPS and latency",
+        kind = "readout", secure = false,
+    },
 }
 
--- fps is absent from every panel on purpose: it is positioned against the
--- clock, not laid out with the icons, so it has no entry in this array at
--- all. Adding it here with panel = nil would still be walked by Bar.lua's
--- EnsureCreated (unmodified by this task) and parented into leftPanel by
--- CreateElementButton's default branch — exactly the "parented to the bar"
--- outcome the design forbids. Readouts.lua builds fps entirely on its own,
--- parented straight to UIParent, and never asks Bar.lua for a button. The
--- on/off switch for it therefore is not yet reachable from the ELEMENTS page
--- (Options.lua's grid only lists ids present in this array) — the data-layer
--- toggle (ns.TopBar.IsOff("fps") / SetOff) is fully wired in Readouts.lua, so
--- adding a row is a small Options.lua-only follow-up, not a Bar.lua change.
---
 -- Read from the registered default rather than duplicated. Two copies of an
 -- ordering drift, and the one that drifts is always the one nobody is looking at.
 ns.TopBar.DEFAULT_ORDER = ns.EUI_DEFAULTS and ns.EUI_DEFAULTS.tbOrder

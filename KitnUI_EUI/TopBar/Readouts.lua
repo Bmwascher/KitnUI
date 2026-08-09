@@ -61,6 +61,24 @@ end
 
 local clockText
 
+-- NaowhUI's own clock button padding:
+-- References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:51.
+local CLOCK_PAD = 6
+
+-- The clock button cannot be sized from tbIconSize like the launchers: its
+-- content is text at tbClockSize, which is wider and taller than any icon.
+-- Bar.lua's ApplySize calls this after its generic pass, so the centre panel
+-- and FitBarWidth measure the real rendered width. GetStringWidth on an
+-- empty FontString returns 0, so this only matters once ApplyReadoutFonts
+-- has already set the text — which, in Apply()'s own call order, it always
+-- has by the time ApplySize runs.
+function ns.TopBar.SizeClockButton()
+    local btn = _G.KitnUITopBar_clock
+    if not (btn and clockText) then return end
+    btn:SetSize(clockText:GetStringWidth() + CLOCK_PAD * 2,
+                clockText:GetStringHeight() + CLOCK_PAD)
+end
+
 local function ClockString()
     local hour, minute
     if Get("tbServerTime", ns.EUI_DEFAULTS.tbServerTime) then

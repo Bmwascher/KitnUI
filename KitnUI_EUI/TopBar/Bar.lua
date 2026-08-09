@@ -225,7 +225,11 @@ local function EnsureCreated()
     rightPanel  = CreatePanel("Right")
 
     for _, el in ipairs(ns.TopBar.Elements) do
-        CreateElementButton(el)
+        -- An element with no panel is not laid out by the bar and anchors itself.
+        -- `fps` is the only one: it lives on its own UIParent frame under the clock.
+        -- Building a button for it would silently parent it into the left panel,
+        -- because the panel resolver above defaults there.
+        if el.panel then CreateElementButton(el) end
     end
 end
 
@@ -303,6 +307,11 @@ local function ApplySize()
         btn:SetSize(size + BTN_PAD, size + BTN_PAD)
         if btn._icon then btn._icon:SetSize(size, size) end
     end
+    -- The clock button just got sized from tbIconSize above like every other
+    -- button, which is wrong for it: its content is text at tbClockSize, not
+    -- an icon. Readouts.lua owns the real measurement; this must run after
+    -- the generic pass above or that pass would overwrite it right back.
+    if ns.TopBar.SizeClockButton then ns.TopBar.SizeClockButton() end
 end
 
 local function ApplyPosition()
