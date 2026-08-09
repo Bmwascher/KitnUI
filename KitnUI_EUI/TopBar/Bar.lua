@@ -466,10 +466,14 @@ local function RegisterUnlock()
             -- overwritten by the next one.
             noResize = true,
             isHidden = function() return not ns.TopBar.Enabled() end,
-            getFrame = function()
-                if not bar then EnsureCreated() end
-                return bar
-            end,
+            -- Deliberately does NOT create. EllesmereUI's ApplySavedPositions calls
+            -- this unconditionally on login and every zone change, before its own
+            -- combat gate and without consulting isHidden (EUI_UnlockMode.lua:4271-
+            -- 4276). Creating here would build the bar and its secure buttons for a
+            -- user who has the feature switched off, and would do it in combat.
+            -- Apply() owns creation. The `key` argument is unused: this element is
+            -- a singleton.
+            getFrame = function() return bar end,
             getSize = function()
                 if not bar then return 1, 1 end
                 return bar:GetWidth(), bar:GetHeight()
