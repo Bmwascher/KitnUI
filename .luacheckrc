@@ -88,13 +88,17 @@ read_globals = {
     -- Combat lockdown
     "InCombatLockdown",
 
-    -- Top bar launchers (gamemenu: insecure toggle, refuses in combat)
+    -- Top bar launchers (gamemenu, clock: insecure toggles, refuse in combat)
     "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",
-    "ShowUIPanel", "HideUIPanel",
+    "ShowUIPanel", "HideUIPanel", "ToggleCalendar",
 
     -- Top bar frame (Bar.lua): tooltip owner, Unlock Mode drag, the visibility
     -- state driver Task 8 wires up
     "GameTooltip", "RegisterStateDriver", "UnregisterStateDriver", "GetCursorPosition",
+
+    -- Top bar readouts (Readouts.lua): clock and the FPS/latency readout
+    "date", "GetTime", "GetGameTime", "GetFramerate", "GetNetStats",
+    "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
 
     -- Keyboard modifiers (Extras clean-icons copy popup)
     "IsControlKeyDown",

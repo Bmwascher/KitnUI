@@ -6,5 +6,6 @@
          naming a file that does not exist yet fails the task's own reload check. -->
     <Script file="Elements.lua" />
     <Script file="Bar.lua" />
+    <Script file="Readouts.lua" />
     <Script file="Options.lua" />
 </Ui>

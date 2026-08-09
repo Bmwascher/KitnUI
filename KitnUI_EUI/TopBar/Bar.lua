@@ -271,11 +271,13 @@ local function ApplyPanelColors()
     end
 end
 
--- No font-consuming elements exist yet: every current button is icon-only. The
--- funnel calls this unconditionally regardless, so Task 4's clock and the
--- system readout can start using tbClockSize / tbSysSize without editing
--- Apply() again.
+-- Nil-guarded: Readouts.lua produces this, and it owns both the clock
+-- FontString (attached to the "clock" element's own button) and the FPS/MS
+-- readout's font, sized from tbClockSize / tbSysSize. Calling it here, rather
+-- than adding a new line to Apply(), is what lets Task 4 land without
+-- touching the funnel.
 local function ApplyFonts()
+    if ns.TopBar.ApplyReadoutFonts then ns.TopBar.ApplyReadoutFonts() end
 end
 
 -- Respects an in-progress hover: without this, changing the accent (or any
@@ -481,8 +483,11 @@ end
 
 -- ApplyPosition falls back to the default top-centre anchor whenever tbPos is
 -- absent, so clearing it here is enough; Apply() puts the bar back on screen.
+-- tbSysPos gets the same treatment: clearing it drops the FPS/MS readout
+-- back to following the clock the next time Readouts.lua repositions it.
 function ns.TopBar.ResetPositions()
     Set("tbPos", nil)
+    Set("tbSysPos", nil)
     ns.TopBar.Apply()
 end
 

@@ -108,10 +108,49 @@ ns.TopBar.Elements = {
         end,
         tooltip = function(tt) tt:AddLine("Game Menu", 1, 1, 1) end,
     },
+
+    -- Clock: the centre panel's only occupant (DEFAULT_ORDER.centre), never
+    -- switched off, so Options.lua excludes it from the ELEMENTS list by id
+    -- rather than this element declining a toggle. Bar.lua creates its button
+    -- as "KitnUITopBar_clock" the same as any other element; Readouts.lua
+    -- reaches that stable global name to attach the actual time FontString
+    -- and to size it from tbClockSize, since neither the button table nor
+    -- centrePanel is part of this file's interface. Left click opens the
+    -- calendar, middle click reloads; both are insecure (ToggleCalendar and
+    -- ReloadUI need no protection) and refuse in combat like gamemenu above.
+    {
+        id = "clock", label = "Clock", panel = "centre",
+        kind = "readout", secure = false,
+        onClick = function(_self, button)
+            if button ~= "LeftButton" and button ~= "MiddleButton" then return end
+            if InCombatLockdown() then
+                UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
+                return
+            end
+            if button == "LeftButton" then
+                ToggleCalendar()
+            else
+                ReloadUI()
+            end
+        end,
+        tooltip = function(tt)
+            tt:AddLine("Left-click: Calendar", 1, 1, 1)
+            tt:AddLine("Middle-click: Reload UI", 1, 1, 1)
+        end,
+    },
 }
 
--- fps is absent from every panel on purpose: it is positioned against the clock,
--- not laid out with the icons. Bar.lua treats it as a special case.
+-- fps is absent from every panel on purpose: it is positioned against the
+-- clock, not laid out with the icons, so it has no entry in this array at
+-- all. Adding it here with panel = nil would still be walked by Bar.lua's
+-- EnsureCreated (unmodified by this task) and parented into leftPanel by
+-- CreateElementButton's default branch — exactly the "parented to the bar"
+-- outcome the design forbids. Readouts.lua builds fps entirely on its own,
+-- parented straight to UIParent, and never asks Bar.lua for a button. The
+-- on/off switch for it therefore is not yet reachable from the ELEMENTS page
+-- (Options.lua's grid only lists ids present in this array) — the data-layer
+-- toggle (ns.TopBar.IsOff("fps") / SetOff) is fully wired in Readouts.lua, so
+-- adding a row is a small Options.lua-only follow-up, not a Bar.lua change.
 --
 -- Read from the registered default rather than duplicated. Two copies of an
 -- ordering drift, and the one that drifts is always the one nobody is looking at.
