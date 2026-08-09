@@ -35,8 +35,9 @@ ns.EUI_MODULE_KEY = "KitnUI"
 -- Page files register themselves here rather than Core listing them, so adding
 -- a page never edits this file. Order is separate because the router is keyed.
 ns.EUIPages = ns.EUIPages or {}
--- Top Bar goes last because it is a placeholder, and a page that says "Coming
--- soon" should not sit between two working pages.
+-- Top Bar goes last because it configures KitnUI's own frame, while the three
+-- above it configure EllesmereUI. It held a "Coming soon" placeholder until the
+-- real page replaced it.
 ns.EUIPageOrder = { "General", "Gameplay", "Nameplates", "Top Bar" }
 
 ---------------------------------------------------------------------------------

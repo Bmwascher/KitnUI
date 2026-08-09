@@ -106,7 +106,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- Task 2: turning the override on captures the live accent first, so the
     -- colour does not jump.
     row, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Override Accent Colour",
+        { type = "toggle", text = "Use A Custom Accent",
           tooltip = "Uses a fixed colour for the bar's accent line instead of following EllesmereUI's own accent.",
           getValue = function() return ns.TopBar.Get("tbAccentOverride", false) end,
           setValue = function(v)
@@ -165,7 +165,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
 end
 
 -- Live accent changes: repaints the bar without a reload, unless the user has
--- pinned it to a fixed colour with Override Accent Colour above.
+-- pinned it to a fixed colour with Use A Custom Accent above.
 if EllesmereUI and EllesmereUI.RegAccent then
     EllesmereUI.RegAccent({ type = "callback", fn = function()
         if not ns.TopBar.Get("tbAccentOverride", false) then ns.TopBar.Apply() end
