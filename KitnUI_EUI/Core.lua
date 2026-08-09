@@ -758,9 +758,13 @@ end
 -- decision. Only a deliberate OFF beside a retired ON is unrecoverable, and that
 -- is unrecoverable in principle: it is byte-identical to the default.
 --
--- Going forward no block can reach that ambiguity. This runs off the re-apply
--- queue before the tab exists, so the switch's setter cannot be reached until
--- the retired key is already gone.
+-- Going forward the ambiguity is out of reach in practice, though NOT because
+-- the tab is absent — an earlier version of this comment said that and it was
+-- wrong. The re-apply queue is debounced by 0.1s while RegisterModule below
+-- returns synchronously, so the tab does exist for that moment. What actually
+-- closes the window: EllesmereUI's import flow reloads the UI as soon as it has
+-- applied the data, so nobody reaches the switch between an import and the fold,
+-- and no other path puts the two keys together at all.
 --
 -- Deleting rather than ignoring is the point. EllesmereUI's logout pass only
 -- touches keys it has a registered default for, so a key it does not know is
