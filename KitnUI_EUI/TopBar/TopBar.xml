@@ -1,0 +1,8 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\..\..\FrameXML\UI.xsd">
+
+    <!-- Elements first: it is pure data and everything below reads it.
+         Each later task appends its own line as it creates its file. A manifest
+         naming a file that does not exist yet fails the task's own reload check. -->
+    <Script file="Elements.lua" />
+</Ui>

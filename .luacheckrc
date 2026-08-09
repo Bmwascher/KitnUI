@@ -88,6 +88,10 @@ read_globals = {
     -- Combat lockdown
     "InCombatLockdown",
 
+    -- Top bar launchers (gamemenu: insecure toggle, refuses in combat)
+    "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",
+    "ShowUIPanel", "HideUIPanel",
+
     -- Keyboard modifiers (Extras clean-icons copy popup)
     "IsControlKeyDown",
 

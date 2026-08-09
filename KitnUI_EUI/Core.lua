@@ -876,7 +876,7 @@ KitnCommands["config"] = KitnCommands["options"]
 -- Reverse bridge
 ---------------------------------------------------------------------------------
 
--- KitnUI proper calls these five: EUIResetAll from Installer/Core.lua's reset,
+-- KitnUI proper calls these six: EUIResetAll from Installer/Core.lua's reset,
 -- ApplyLook and LuluLayoutName from Setup.lua's profile writes, LuluEnabled and
 -- LuluApplyActionBars from Setup.lua's EllesmereUI module pass. Every call site
 -- nil-guards, so a symbol missing here fails SILENTLY — which is exactly what
@@ -888,7 +888,7 @@ KitnCommands["config"] = KitnCommands["options"]
 -- The read-through metatable above is one-way: KitnUI_EUI reads KitnUI's
 -- namespace, but anything this addon defines stays in this addon's table until
 -- it is copied back here.
-local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars" }
+local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar" }
 
 -- Its own frame, deliberately. Core's main boot handler returns early when
 -- EllesmereUI is too old to have RegisterModule or Widgets, and none of these
@@ -898,9 +898,10 @@ local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "
 -- session are still held down. Gameplay.lua's tooltip hook uses its own frame
 -- for the same reason and says so.
 --
--- Login rather than file scope because all but EUIResetAll live in General.lua
--- and Lulu.lua, which EUITab.xml loads AFTER this file. Copy by value is safe:
--- none of them is ever reassigned after definition.
+-- Login rather than file scope because all but EUIResetAll live in General.lua,
+-- Lulu.lua and TopBar/Elements.lua, which EUITab.xml loads AFTER this file. Copy
+-- by value is safe: none of them is ever reassigned after definition, and TopBar
+-- is a table whose reference is copied once and then only added to.
 local exportBoot = CreateFrame("Frame")
 exportBoot:RegisterEvent("PLAYER_LOGIN")
 exportBoot:SetScript("OnEvent", function(self)
