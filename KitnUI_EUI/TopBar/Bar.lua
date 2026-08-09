@@ -250,7 +250,7 @@ local function CreateElementButton(el)
 
     -- The tooltip contract, owned here so no element repeats it. An element's
     -- own tooltip function only adds lines. The one exception is the portals
-    -- launcher's own flyout buttons (Elements.lua:694-698), which own and
+    -- launcher's own flyout buttons (Elements.lua:718-722), which own and
     -- show a tooltip anchored ANCHOR_RIGHT for themselves -- those buttons
     -- are not laid out by this file and never reach this OnEnter at all.
     btn:SetScript("OnEnter", function(self)
