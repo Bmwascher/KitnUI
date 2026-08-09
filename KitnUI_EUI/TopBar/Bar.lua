@@ -88,6 +88,10 @@ local bar, leftPanel, centrePanel, rightPanel
 local fitPending = false
 local buttons = {}
 
+-- Task 8 mouseover fade: the AnimationGroup/Animation pair, built once in
+-- EnsureCreated so PlayFade only ever has to Play() it.
+local fadeGroup, fadeAnim
+
 -- Outer edge cushion for the bar's own bounding box, kept separate from
 -- tbSpacing's user-configurable inter-element gap.
 local PAD = 8
@@ -99,6 +103,11 @@ local BTN_PAD = 8
 -- exposed as a setting.
 local REST_R, REST_G, REST_B = 1, 1, 1
 local TWEEN_TIME = 0.2
+
+-- Alpha the bar rests at when Fade Until Moused Over is on and the pointer
+-- is elsewhere. Low, not zero, so the bar reads as "there but dim" rather
+-- than vanishing outright.
+local FADE_REST_ALPHA = 0.15
 
 -- The three accent scalars resolve the same way for the panel accent lines
 -- and the icon hover tween, so both read through this one helper.
@@ -141,6 +150,19 @@ local function TintTo(btn, tr, tg, tb)
         end
         self._icon:SetVertexColor(sr + (tr - sr) * t, sg + (tg - sg) * t, sb + (tb - sb) * t)
     end)
+end
+
+-- Mouseover fade (Task 8): an AnimationGroup, per the project's no-OnUpdate
+-- rule's one stated exception. FROM is always the bar's live alpha, so a
+-- fade interrupted mid-tween by the opposite hover restarts from where it
+-- visually is rather than snapping.
+local function PlayFade(toAlpha)
+    if not (bar and fadeGroup and fadeAnim) then return end
+    fadeGroup:Stop()
+    fadeAnim:SetFromAlpha(bar:GetAlpha())
+    fadeAnim:SetToAlpha(toAlpha)
+    fadeAnim:SetDuration(Get("tbFadeTime", ns.EUI_DEFAULTS.tbFadeTime))
+    fadeGroup:Play()
 end
 
 -- Each panel is a plain frame: a BACKGROUND fill (hidden when tbBackdrop is
@@ -219,6 +241,20 @@ local function EnsureCreated()
     -- past where Unlock Mode can reach it. NaowhUI shipped that bug and added
     -- the clamp afterwards.
     bar:SetClampedToScreen(true)
+
+    -- Mouseover fade (Task 8), built once here so PlayFade only ever has to
+    -- Play() it. Gated on tbFade inside the handlers, not here, matching how
+    -- the icon OnEnter/OnLeave elsewhere check tbTooltips rather than skip
+    -- wiring altogether.
+    bar:EnableMouse(true)
+    fadeGroup = bar:CreateAnimationGroup()
+    fadeAnim  = fadeGroup:CreateAnimation("Alpha")
+    bar:SetScript("OnEnter", function()
+        if Get("tbFade", ns.EUI_DEFAULTS.tbFade) then PlayFade(1) end
+    end)
+    bar:SetScript("OnLeave", function()
+        if Get("tbFade", ns.EUI_DEFAULTS.tbFade) then PlayFade(FADE_REST_ALPHA) end
+    end)
 
     leftPanel   = CreatePanel("Left")
     centrePanel = CreatePanel("Centre")
@@ -304,6 +340,21 @@ local function ApplyIconColors()
                 btn._icon:SetVertexColor(REST_R, REST_G, REST_B)
             end
         end
+    end
+end
+
+-- Rest-state reconciliation for the mouseover fade (Task 8): runs on every
+-- Apply so switching tbFade off, or changing it while the pointer is
+-- elsewhere, snaps the bar back to visible instead of waiting for a hover.
+local function ApplyFade()
+    if not bar then return end
+    if fadeGroup then fadeGroup:Stop() end
+    if not Get("tbFade", ns.EUI_DEFAULTS.tbFade) then
+        bar:SetAlpha(1)
+    elseif bar:IsMouseOver() then
+        bar:SetAlpha(1)
+    else
+        bar:SetAlpha(FADE_REST_ALPHA)
     end
 end
 
@@ -404,6 +455,88 @@ local function HideBar()
     if not bar then return end
     bar:Hide()
 end
+
+---------------------------------------------------------------------------------
+-- Visibility (Task 8)
+---------------------------------------------------------------------------------
+
+-- Serious content: keystone, raid, or RATED PvP. None of those are reachable
+-- from a macro conditional, so this is Lua, not conditional text, and it
+-- selects WHICH conditional BuildConditional registers rather than being
+-- part of the conditional string itself. Declared ahead of BuildConditional,
+-- which calls it, because Lua 5.1 cannot see a local declared later.
+local function SeriousContent()
+    if not Get("tbHideSerious", false) then return false end
+
+    local _, kind = IsInInstance()
+    if kind == "raid" then return true end
+
+    if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive
+       and C_ChallengeMode.IsChallengeModeActive() then return true end
+
+    -- RATED, not "any arena". Two separate mistakes are being avoided here.
+    --
+    -- First, branching on the "arena" instance type would catch skirmishes.
+    --
+    -- Second, and less obvious: IsRatedArena() ALONE still catches them.
+    -- Blizzard's own match code reads `IsRatedArena() and not IsArenaSkirmish()`
+    -- at .wow-api-reference/Interface/AddOns/Blizzard_PVPMatch/PVPMatchUtil.lua:
+    -- 88-90, so the skirmish exclusion is not belt and braces, it is the
+    -- actual semantics.
+    --
+    -- IsArenaSkirmish is a GLOBAL, not a C_PvP member. Reaching for
+    -- C_PvP.IsArenaSkirmish yields nil, the exclusion silently never fires, and
+    -- the bug this guard exists to prevent comes straight back.
+    local P = _G.C_PvP
+    if P then
+        local skirmish = _G.IsArenaSkirmish and _G.IsArenaSkirmish()
+        if not skirmish then
+            if P.IsRatedArena and P.IsRatedArena() then return true end
+        end
+        if P.IsRatedBattleground and P.IsRatedBattleground() then return true end
+        if P.IsRatedMap and P.IsRatedMap() then return true end
+    end
+
+    return false
+end
+
+-- Built, not typed. WindTools exposes the raw conditional in a text box and it
+-- is the ugliest control on its page.
+local function BuildConditional()
+    local hide = {}
+    if Get("tbHideCombat", false)    then hide[#hide + 1] = "combat"    end
+    if Get("tbHidePetBattle", true)  then hide[#hide + 1] = "petbattle" end
+    if Get("tbHideVehicle", false)   then hide[#hide + 1] = "vehicleui" end
+    if SeriousContent() then return "hide" end
+    if #hide == 0 then return "show" end
+    return "[" .. table.concat(hide, "][") .. "] hide; show"
+end
+
+-- The funnel's one Task 8 hook (Apply() calls this already, gated behind
+-- Apply()'s own combat check). Also called directly, unconditionally, by the
+-- event frame below: RegisterStateDriver only ever touches SetAttribute,
+-- which SimpleFrameAPIDocumentation.lua does NOT flag IsProtectedFunction
+-- (unlike its neighbour SetClampRectInsets, which is), so re-registering the
+-- driver is combat-safe and needs no deferral through pendingApply.
+function ns.TopBar.ApplyVisibility()
+    if not bar then return end
+    RegisterStateDriver(bar, "visibility", BuildConditional())
+    ApplyFade()
+end
+
+-- Re-evaluates on its own trigger events rather than waiting for the next
+-- Apply(). CHALLENGE_MODE_COMPLETED and CHALLENGE_MODE_RESET matter most:
+-- without them the "hide" driver registered at keystone start survives the
+-- key ending and persists until some unrelated zone event happens to fire.
+local visibilityEvents = CreateFrame("Frame")
+visibilityEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+visibilityEvents:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+visibilityEvents:RegisterEvent("CHALLENGE_MODE_START")
+visibilityEvents:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+visibilityEvents:RegisterEvent("CHALLENGE_MODE_RESET")
+visibilityEvents:SetScript("OnEvent", function()
+    ns.TopBar.ApplyVisibility()
+end)
 
 ---------------------------------------------------------------------------------
 -- Apply funnel

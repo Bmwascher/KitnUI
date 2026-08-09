@@ -96,6 +96,9 @@ read_globals = {
     -- state driver Task 8 wires up
     "GameTooltip", "RegisterStateDriver", "UnregisterStateDriver", "GetCursorPosition",
 
+    -- Top bar: visibility rules (Task 8) -- keystone/serious-content predicate
+    "C_ChallengeMode", "C_PvP", "IsArenaSkirmish",
+
     -- Top bar readouts (Readouts.lua): clock and the FPS/latency readout
     "date", "GetTime", "GetGameTime", "GetFramerate", "GetNetStats",
     "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",

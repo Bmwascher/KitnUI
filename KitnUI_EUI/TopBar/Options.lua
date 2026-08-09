@@ -165,7 +165,39 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     end
 
     _, h = W:SectionHeader(parent, "VISIBILITY", y);                              y = y - h
-    -- Filled by Task 8.
+
+    _, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Hide In Combat",
+          tooltip = "Hides the bar the moment you enter combat.",
+          getValue = function() return ns.TopBar.Get("tbHideCombat", false) end,
+          setValue = function(v) ns.TopBar.Set("tbHideCombat", v and true or false); ns.TopBar.Apply() end },
+        { type = "toggle", text = "Hide In Pet Battles",
+          tooltip = "Hides the bar during a pet battle. On by default, since the bar has nothing useful to show there.",
+          getValue = function() return ns.TopBar.Get("tbHidePetBattle", true) end,
+          setValue = function(v) ns.TopBar.Set("tbHidePetBattle", v and true or false); ns.TopBar.Apply() end }
+    );                                                                             y = y - h
+
+    _, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Hide In Vehicles",
+          tooltip = "Hides the bar while you are in a vehicle.",
+          getValue = function() return ns.TopBar.Get("tbHideVehicle", false) end,
+          setValue = function(v) ns.TopBar.Set("tbHideVehicle", v and true or false); ns.TopBar.Apply() end },
+        { type = "toggle", text = "Hide In Keystones, Raids And Rated PvP",
+          tooltip = "Hides the bar in a Mythic+ dungeon, a raid, or rated PvP. A normal dungeon or an unrated arena leaves it alone.",
+          getValue = function() return ns.TopBar.Get("tbHideSerious", false) end,
+          setValue = function(v) ns.TopBar.Set("tbHideSerious", v and true or false); ns.TopBar.Apply() end }
+    );                                                                             y = y - h
+
+    _, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Fade Until Moused Over",
+          tooltip = "Rests the bar at low visibility until you move your mouse over it.",
+          getValue = function() return ns.TopBar.Get("tbFade", false) end,
+          setValue = function(v) ns.TopBar.Set("tbFade", v and true or false); ns.TopBar.Apply() end },
+        { type = "slider", text = "Fade Time", min = 0, max = 2, step = 0.05,
+          tooltip = "How long the fade in and out takes, in seconds.",
+          getValue = function() return ns.TopBar.Get("tbFadeTime", 0.25) end,
+          setValue = function(v) ns.TopBar.Set("tbFadeTime", v); ns.TopBar.Apply() end }
+    );                                                                             y = y - h
 
     _, h = W:SectionHeader(parent, "CLOCK", y);                                    y = y - h
 
