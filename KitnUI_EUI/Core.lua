@@ -747,12 +747,20 @@ end
 -- runs before General.lua's accent apply: the registry runs in registration
 -- order and Core.lua loads first.
 --
--- The retired value WINS, rather than yielding to an accentPink already sitting
--- in the block. That looks reckless and is not: no released version ever wrote
--- both keys, so the two together can only mean EllesmereUI merged the registered
--- default in, which it does on import (ApplyProfileData) and at login
--- (EUISettingsDB) before this ever runs. Yielding to it would read a defaulted
--- false as a deliberate choice and throw the real setting away.
+-- When both keys are present, ON wins from EITHER of them. Neither key can be
+-- trusted alone. Yielding to the scalar would read a defaulted false as a
+-- deliberate choice and throw the real setting away, because EllesmereUI merges
+-- that default in before this ever runs — on import through ApplyProfileData, at
+-- login through EUISettingsDB. Overwriting the scalar outright would throw away
+-- a choice made by hand on an intermediate build that let both keys coexist.
+-- Taking ON from either side is the one rule that loses nothing real, because
+-- the default injection can only ever supply OFF, so an ON is always somebody's
+-- decision. Only a deliberate OFF beside a retired ON is unrecoverable, and that
+-- is unrecoverable in principle: it is byte-identical to the default.
+--
+-- Going forward no block can reach that ambiguity. This runs off the re-apply
+-- queue before the tab exists, so the switch's setter cannot be reached until
+-- the retired key is already gone.
 --
 -- Deleting rather than ignoring is the point. EllesmereUI's logout pass only
 -- touches keys it has a registered default for, so a key it does not know is
@@ -766,8 +774,8 @@ local function FoldRetiredAccentKey()
         local block = type(addons) == "table" and addons.KitnUI_EUI
         local dead = type(block) == "table" and block.accent
         if type(dead) == "table" then
-            if dead.pink ~= nil then
-                block.accentPink = dead.pink and true or false
+            if dead.pink ~= nil or block.accentPink ~= nil then
+                block.accentPink = (dead.pink or block.accentPink) and true or false
             end
             block.accent = nil
         end
