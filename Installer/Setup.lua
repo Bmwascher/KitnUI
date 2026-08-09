@@ -132,6 +132,18 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
     -- account-wide, so an alt running /kitn load lands on the same profile and
     -- must not overwrite a look the user changed on their main.
     if import and ns.ApplyLook then ns.ApplyLook("dark") end
+
+    -- Turning the bar on is the same "explicit request for the KitnUI look"
+    -- as the ApplyLook write above, so it gets the same import gate for the
+    -- same reason (see the comment at :127-133): EllesmereUI profiles are
+    -- account-wide, so an alt running /kitn load lands on the SAME profile
+    -- the main installed, whose tb* block already has tbEnabled true -- the
+    -- alt gets the bar regardless, and nothing is lost by gating. Without
+    -- the gate, /kitn load would flip the bar back on for a user who had
+    -- deliberately switched it off, which is the exact overwrite the
+    -- ApplyLook gate exists to prevent. SetEnabled writes tbEnabled AND
+    -- calls Apply() itself, so no separate Apply() call is needed here.
+    if import and ns.TopBar and ns.TopBar.SetEnabled then ns.TopBar.SetEnabled(true) end
     return true
 end
 

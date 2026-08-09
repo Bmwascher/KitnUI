@@ -55,6 +55,7 @@
 ---@field SetLuluMode fun(on: boolean)
 ---@field LuluReconcile fun()   # prompts to apply and reload when Lulu reads on but its action bar half is not in force
 ---@field EUI_INERT boolean      # KitnUI_EUI only: set by its Core.lua when KitnUI's shared namespace is unreachable, and every other file in that addon stops on it
+---@field TopBar KitnUITopBar    # KitnUI_EUI only: the Top Bar module (KitnUI_EUI/TopBar/), reached through the EXPORTS bridge in KitnUI_EUI/Core.lua
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean
@@ -112,3 +113,37 @@ local KitnUIDB
 ---@field SetTitleIcon fun(self: KitnUIWizard, show: boolean?)
 ---@field SetOptionHint fun(self: KitnUIWizard, text: string)
 local KitnUIWizard
+
+-- Top Bar module (KitnUI_EUI/TopBar/: Bar.lua, Readouts.lua, Elements.lua).
+-- KitnUI_EUI only, reached from KitnUI proper through the EXPORTS bridge in
+-- KitnUI_EUI/Core.lua. No `self` parameter anywhere: unlike KitnUIWizard,
+-- every member is called dot-style (ns.TopBar.Apply()), never with a colon.
+-- Elements and ById are copied by reference at export time and only ever
+-- appended to afterward, never reassigned.
+
+---@class KitnUITopBar
+---@field Get fun(key: string, fallback: any): any
+---@field Set fun(key: string, v: any)
+---@field Order fun(): table<string, table>   # { left = {...}, centre = {...}, right = {...} }, always populated
+---@field SetOrder fun(left: table, centre: table, right: table)
+---@field IsOff fun(id: string): boolean
+---@field SetOff fun(id: string, v: boolean)
+---@field RetryFit fun()
+---@field ApplyVisibility fun()
+---@field Apply fun()
+---@field Enabled fun(): boolean
+---@field SetEnabled fun(v: boolean)   # writes tbEnabled AND calls Apply() itself
+---@field Frame fun(): table|nil       # the bar frame, nil until EnsureCreated builds it
+---@field ResetPositions fun()
+---@field Teardown fun()
+---@field SizeClockButton fun()
+---@field SuppressEUIFps fun(on: boolean)
+---@field FriendsTooltip fun(tt: table)
+---@field GuildTooltip fun(tt: table)
+---@field VaultTooltip fun(tt: table)
+---@field ApplyReadoutFonts fun()
+---@field UpdateTicker fun()
+---@field HearthValues fun(): table, table   # hearthValues, hearthOrder
+---@field Elements table[]
+---@field ById table<string, table>
+local KitnUITopBar
