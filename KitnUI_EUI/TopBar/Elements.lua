@@ -545,6 +545,307 @@ local hearthstoneElement = {
     tooltip = HearthTooltip,
 }
 
+---------------------------------------------------------------------------------
+-- Mythic+ Portals: a secure flyout of this season's dungeon teleports, parented
+-- to the portals launcher button. Modelled directly on
+-- References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_Portals.lua:178-296, the
+-- one current-12.0 addon in References/ that already solves this exact
+-- combat-safe-flyout problem.
+--
+-- EllesmereUI.SEASON_PORTALS belongs to the host, not to us, and its own
+-- comment (EllesmereUI.lua:295-296) says it is updated once per season.
+-- Reading it fresh here, on every requires() and CreateFlyout() call, rather
+-- than snapshotting it once at file scope the way NaowhUI does (its own
+-- comment, Portals.lua:13-14, leans on EllesmereUI being a hard dependency
+-- that is already loaded before it), means a season boundary where the
+-- host's list is briefly missing or empty degrades to "no portals button"
+-- instead of a frozen empty grid baked in at whatever KitnUI_EUI's own load
+-- time happened to see.
+local function SeasonPortals()
+    local EUI = _G.EllesmereUI
+    local list = EUI and EUI.SEASON_PORTALS
+    if type(list) ~= "table" or #list == 0 then return nil end
+    return list
+end
+
+local PORTAL_BTN_SIZE, PORTAL_SPACING, PORTAL_PADDING, PORTAL_COLS = 32, 2, 4, 4
+
+local portalFlyout, portalFlyoutBtns
+
+-- Desaturates unknown teleports and keeps cooldown swipes current. known
+-- comes from C_SpellBook.IsSpellKnown, which carries no secret marker in
+-- SpellBookDocumentation.lua:684-699 (unlike the deprecated global
+-- IsPlayerSpell NaowhUI's own copy uses, which only exists at all behind the
+-- loadDeprecationFallbacks CVar -- Deprecated_SpellBook.lua:4,11-14 -- so it
+-- is not safe to depend on here).
+--
+-- C_Spell.GetSpellCooldown IS a secret-value risk: its own doc entry carries
+-- SecretWhenCooldownsRestricted = true (SpellDocumentation.lua:249-253), and
+-- the SpellCooldownInfo it returns does NOT mark startTime or duration
+-- NeverSecret (SpellSharedDocumentation.lua:19-31) -- only isEnabled,
+-- isActive and isOnGCD are. So this never compares or does arithmetic on
+-- startTime/duration; it branches on isActive (NeverSecret) instead, and
+-- hands startTime/duration to Cooldown:SetCooldown untouched -- SetCooldown's
+-- own "start"/"duration" arguments are explicitly built to accept secret
+-- values (SecretArgumentsAddAspect = { Enum.SecretAspect.Cooldown },
+-- FrameAPICooldownDocumentation.lua:280-283): the widget can paint a swipe
+-- from an opaque cooldown without this file ever reading the real numbers.
+local function RefreshPortalButtons()
+    if not portalFlyoutBtns then return end
+    for _, btn in ipairs(portalFlyoutBtns) do
+        local spellID = btn.spellID
+        local known = C_SpellBook and C_SpellBook.IsSpellKnown
+            and C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
+        if btn._lastKnown ~= known then
+            btn._lastKnown = known
+            btn.icon:SetDesaturated(not known)
+            btn.icon:SetAlpha(known and 1 or 0.4)
+        end
+        local cd = known and C_Spell and C_Spell.GetSpellCooldown
+            and C_Spell.GetSpellCooldown(spellID)
+        if type(cd) == "table" and cd.isActive then
+            btn.cooldown:SetCooldown(cd.startTime, cd.duration)
+        else
+            btn.cooldown:Clear()
+        end
+    end
+end
+
+-- Built once, lazily, on the first click -- never from Apply(). Checks
+-- SeasonPortals() again rather than trusting the caller: TogglePortalFlyout
+-- only ever reaches this after requires() has already passed once to show
+-- the launcher button at all, but a stale or nil list here would build an
+-- empty, useless flyout instead of failing safely.
+local function CreatePortalFlyout()
+    if portalFlyout then return portalFlyout end
+    local portals = SeasonPortals()
+    if not portals then return nil end
+
+    local rows = math.ceil(#portals / PORTAL_COLS)
+    local w = PORTAL_PADDING * 2 + PORTAL_BTN_SIZE * PORTAL_COLS + PORTAL_SPACING * (PORTAL_COLS - 1)
+    local h = PORTAL_PADDING * 2 + PORTAL_BTN_SIZE * rows + PORTAL_SPACING * (rows - 1)
+
+    -- SecureHandlerStateTemplate with a CUSTOM state, not "visibility": a
+    -- visibility state driver owns Show/Hide outright, so it would force this
+    -- flyout open again the instant combat ends. This state only ever closes
+    -- it -- on the way out of combat it does nothing, so a flyout the player
+    -- closed (or never opened) stays closed. Exactly
+    -- NaowhUI_Portals.lua:186-209's own shape. Needed at all because this
+    -- frame is about to parent secure buttons: once it does, an ordinary
+    -- Hide() call on it from Lua is protected, the same rule Bar.lua's own
+    -- HideBar() is built around.
+    portalFlyout = CreateFrame("Frame", "KitnUITopBar_portalsFlyout", UIParent,
+        "SecureHandlerStateTemplate")
+    portalFlyout:SetSize(w, h)
+    portalFlyout:SetFrameStrata("DIALOG")
+    portalFlyout:SetClampedToScreen(true)
+    portalFlyout:Hide()
+
+    local bg = portalFlyout:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.03, 0.03, 0.04, 0.95)
+
+    portalFlyout:SetAttribute("_onstate-combat", [[
+        if newstate == "in" then self:Hide() end
+    ]])
+    RegisterStateDriver(portalFlyout, "combat", "[combat] in; out")
+
+    portalFlyoutBtns = {}
+    for i, entry in ipairs(portals) do
+        local spellID = entry and entry.spellID
+        if spellID then
+            local col = (i - 1) % PORTAL_COLS
+            local row = math.floor((i - 1) / PORTAL_COLS)
+
+            -- SecureActionButtonTemplate: the SetAttribute pair below is a
+            -- protected write, safe here only because CreateFlyout is only
+            -- ever reached from TogglePortalFlyout, which already refused in
+            -- combat before calling it.
+            local btn = CreateFrame("Button", nil, portalFlyout, "SecureActionButtonTemplate")
+            btn:SetSize(PORTAL_BTN_SIZE, PORTAL_BTN_SIZE)
+            btn:SetPoint("TOPLEFT", portalFlyout, "TOPLEFT",
+                PORTAL_PADDING + col * (PORTAL_BTN_SIZE + PORTAL_SPACING),
+                -(PORTAL_PADDING + row * (PORTAL_BTN_SIZE + PORTAL_SPACING)))
+            btn.spellID = spellID
+
+            local icon = btn:CreateTexture(nil, "ARTWORK")
+            icon:SetAllPoints()
+            icon:SetTexCoord(6 / 64, 58 / 64, 6 / 64, 58 / 64)
+            local si = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+            if si and si.iconID then icon:SetTexture(si.iconID) end
+            btn.icon = icon
+
+            local cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
+            cooldown:SetAllPoints()
+            cooldown:SetHideCountdownNumbers(true)
+            cooldown:SetDrawSwipe(true)
+            cooldown:SetDrawBling(false)
+            cooldown:SetDrawEdge(false)
+            btn.cooldown = cooldown
+
+            -- AnyUp AND AnyDown, matching NaowhUI_Portals.lua:257, instead of
+            -- Bar.lua's own useOnKeyDown=false fix for the same
+            -- ActionButtonUseKeyDown CVar problem: these buttons are never
+            -- reached by WireSecureAttributes (they are not in
+            -- ns.TopBar.ById), so there is no per-Apply moment to set that
+            -- attribute on them the way Bar.lua does for every registered
+            -- launcher.
+            btn:RegisterForClicks("AnyUp", "AnyDown")
+            btn:SetAttribute("type", "spell")
+            btn:SetAttribute("spell", spellID)
+
+            btn:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetSpellByID(self.spellID)
+                GameTooltip:Show()
+            end)
+            btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            portalFlyoutBtns[#portalFlyoutBtns + 1] = btn
+        end
+    end
+
+    portalFlyout:SetScript("OnShow", function(self)
+        self:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+        RefreshPortalButtons()
+    end)
+    portalFlyout:SetScript("OnHide", function(self) self:UnregisterAllEvents() end)
+    portalFlyout:SetScript("OnEvent", function() RefreshPortalButtons() end)
+
+    return portalFlyout
+end
+
+-- Hide() on the flyout is protected once it holds secure buttons (see the
+-- comment on CreatePortalFlyout above), so this whole toggle -- both the
+-- Show and the Hide branch -- has to happen outside combat.
+local function TogglePortalFlyout(anchorBtn)
+    if InCombatLockdown() then return end
+    local fly = CreatePortalFlyout()
+    if not fly then return end
+    if fly:IsShown() then
+        fly:Hide()
+        return
+    end
+    fly:ClearAllPoints()
+    fly:SetPoint("TOP", anchorBtn, "BOTTOM", 0, -4)
+    fly:Show()
+end
+
+local portalsElement = {
+    id = "portals", label = "Mythic+ Portals", icon = PLACEHOLDER_ICON, panel = "right",
+    kind = "launcher", secure = false,
+    onClick = function(self, button)
+        if button ~= "LeftButton" then return end
+        if InCombatLockdown() then
+            UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
+            return
+        end
+        TogglePortalFlyout(self)
+    end,
+    tooltip = function(tt) tt:AddLine("Mythic+ Portals", 1, 1, 1) end,
+    -- SEASON_PORTALS is EllesmereUI's, and it moves every season. Absent
+    -- entirely rather than a button that opens an empty grid -- the same
+    -- shape kitnessentials below uses for "the dependency is not there right
+    -- now".
+    requires = function() return SeasonPortals() and true or false end,
+}
+
+---------------------------------------------------------------------------------
+-- Volume: left click +10% master volume, right click -10%, middle click
+-- toggles mute. Sound_MasterVolume and Sound_EnableAllSound are the same pair
+-- WindTools' own volume launcher drives
+-- (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:869-916), and
+-- both are still live Mainline cvars (Blizzard_SettingsDefinitions_Shared/
+-- Audio.lua:388,415). No InCombatLockdown gate, unlike every other launcher
+-- in this file: those guard against opening a Blizzard panel mid-fight; this
+-- only ever calls SetCVar on an audio cvar, which carries no protected or
+-- secure marker in CVarDocumentation.lua and is safe to call at any time.
+local function VolumePercent()
+    local v = tonumber(C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("Sound_MasterVolume"))
+    return v or 0
+end
+
+local function VolumeSetPercent(v)
+    if v < 0 then v = 0 elseif v > 1 then v = 1 end
+    if C_CVar and C_CVar.SetCVar then C_CVar.SetCVar("Sound_MasterVolume", v) end
+end
+
+local function VolumeToggleMute()
+    if not (C_CVar and C_CVar.GetCVar and C_CVar.SetCVar) then return end
+    local enabled = tonumber(C_CVar.GetCVar("Sound_EnableAllSound")) == 1
+    C_CVar.SetCVar("Sound_EnableAllSound", enabled and 0 or 1)
+end
+
+local function VolumeTooltip(tt)
+    tt:AddLine("Volume", 1, 1, 1)
+    tt:AddDoubleLine("Master", format("%d%%", VolumePercent() * 100), 0.7, 0.7, 0.7, 1, 1, 1)
+    tt:AddLine(" ")
+    tt:AddLine("Left-click: +10%", 1, 1, 1)
+    tt:AddLine("Right-click: -10%", 1, 1, 1)
+    tt:AddLine("Middle-click: Mute", 1, 1, 1)
+end
+
+-- Live percentage while hovered, the same ticker shape HearthTooltip's own
+-- uses above (0.5s, IsOwned-guarded, cancelled on OnLeave AND OnHide so a
+-- button hidden mid-hover cannot leak the ticker the way Task 6 originally
+-- did). volume has no attrs() -- it is not secure -- so there is no per-Apply
+-- moment to wire this the way HearthAttrs wires its own ticker; wiring it
+-- from inside the tooltip function itself, keyed off the stable button name
+-- Bar.lua always creates, reaches the same end state without one.
+--
+-- The ticker itself is started here too, synchronously, not only from the
+-- OnEnter hook below: a HookScript added while an OnEnter is already running
+-- does not fire again for that same hover (the engine has already invoked
+-- the handler chain it had when the hover began), so hooking alone is only
+-- good enough for OnLeave/OnHide -- later events that have not fired yet --
+-- never for a live reading on the very first hover.
+local function VolumeCancelTicker(self)
+    if self._volumeTicker then
+        self._volumeTicker:Cancel()
+        self._volumeTicker = nil
+    end
+end
+
+local function VolumeStartTicker(btn)
+    if btn._volumeTicker then return end
+    btn._volumeTicker = C_Timer.NewTicker(0.5, function()
+        if GameTooltip:IsOwned(btn) then
+            GameTooltip:ClearLines()
+            VolumeTooltip(GameTooltip)
+            GameTooltip:Show()
+        end
+    end)
+end
+
+local function VolumeWireButton(btn)
+    if btn._volumeWired then return end
+    btn:HookScript("OnLeave", VolumeCancelTicker)
+    btn:HookScript("OnHide", VolumeCancelTicker)
+    btn._volumeWired = true
+end
+
+local volumeElement = {
+    id = "volume", label = "Volume", icon = PLACEHOLDER_ICON, panel = "right",
+    kind = "launcher", secure = false,
+    onClick = function(_self, button)
+        if button == "LeftButton" then
+            VolumeSetPercent(VolumePercent() + 0.1)
+        elseif button == "RightButton" then
+            VolumeSetPercent(VolumePercent() - 0.1)
+        elseif button == "MiddleButton" then
+            VolumeToggleMute()
+        end
+    end,
+    tooltip = function(tt)
+        local btn = _G.KitnUITopBar_volume
+        if btn then
+            VolumeWireButton(btn)
+            VolumeStartTicker(btn)
+        end
+        VolumeTooltip(tt)
+    end,
+}
+
 ns.TopBar.Elements = {
     friendsElement,
     guildElement,
@@ -571,6 +872,7 @@ ns.TopBar.Elements = {
         "/click CollectionsMicroButton\n/run CollectionsJournal_SetTab(CollectionsJournal, 3)"),
 
     hearthstoneElement,
+    portalsElement,
     homeElement,
     vaultElement,
 
@@ -592,6 +894,8 @@ ns.TopBar.Elements = {
 
     Macro("professions", "Professions", PLACEHOLDER_ICON, "right",
         "/click ProfessionMicroButton"),
+
+    volumeElement,
 
     Macro("euiconfig", "EllesmereUI", PLACEHOLDER_ICON, "right",
         "/run if EllesmereUI and EllesmereUI.Toggle then EllesmereUI:Toggle() end"),

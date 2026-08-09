@@ -114,6 +114,9 @@ read_globals = {
     -- Top bar: hearthstone ownership scan and macro building
     "C_Item", "PlayerHasToy", "C_ToyBox", "Item",
 
+    -- Top bar: portals flyout (spell knowledge and cooldowns)
+    "C_Spell", "C_SpellBook",
+
     -- Keyboard modifiers (Extras clean-icons copy popup)
     "IsControlKeyDown",
 
