@@ -41,7 +41,186 @@ local function Macro(id, label, icon, panel, macrotext, requires)
     }
 end
 
+---------------------------------------------------------------------------------
+-- Home: the one launcher that is not a passthrough. Left click teleports home
+-- via the "teleporthome" secure action type -- three attributes read straight
+-- off the button (house-neighborhood-guid, house-guid, house-plot-id) that the
+-- engine itself turns into C_Housing.TeleportHome(...); nothing here calls
+-- that protected function directly
+-- (.wow-api-reference/Interface/AddOns/Blizzard_FrameXML/SecureTemplates.lua:620-629).
+-- Right click opens the housing dashboard through the same helper the game's
+-- own Housing micro button uses
+-- (.wow-api-reference/Interface/AddOns/Blizzard_MicroMenu/Mainline/MainMenuBarMicroButtons.lua:1012-1020).
+--
+-- C_Housing.GetPlayerOwnedHouses() is async: it answers through the
+-- PLAYER_HOUSE_LIST_UPDATED event, not a return value
+-- (.wow-api-reference/Interface/AddOns/Blizzard_HousingDashboard/Blizzard_HousingDashboardHouseInfoContent.lua:101-109).
+-- The three field names on each list entry -- neighborhoodGUID, houseGUID,
+-- plotID -- are read the same way Blizzard_HousingDashboardHouseUpgrade.lua:362
+-- reads them before its own TeleportHome call. WindTools runs this identical
+-- pattern already, including taking the first owned house with no further
+-- selection UI (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:
+-- 1461-1473, 1608-1610, 1647-1648) -- confirmation this addon is genuinely
+-- 12.0-compatible, not just a plausible guess at the shape.
+--
+-- SetAttribute is protected, so cachedHouse is only ever written onto the
+-- button from inside HomeAttrs, which WireSecureAttributes (Bar.lua) only
+-- ever reaches outside combat: Apply() defers its whole protected half
+-- whenever InCombatLockdown() is true.
+local cachedHouse
+
+local function RequestHouseList()
+    if C_Housing and C_Housing.GetPlayerOwnedHouses then
+        C_Housing.GetPlayerOwnedHouses()
+    end
+end
+
+local housingWatcher = CreateFrame("Frame")
+housingWatcher:RegisterEvent("PLAYER_LOGIN")
+housingWatcher:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
+    if event == "PLAYER_LOGIN" then
+        RequestHouseList()
+        return
+    end
+    local house = type(houseInfoList) == "table" and houseInfoList[1]
+    if house and house.neighborhoodGUID and house.houseGUID and house.plotID then
+        cachedHouse = house
+    else
+        cachedHouse = nil
+    end
+end)
+
+-- Left click with nothing cached: an insecure fallback that explains why,
+-- matching WindTools' own copy for the same state (GameBar.lua:741). Right
+-- click always tries the dashboard; ToggleHousingDashboard is itself the
+-- combat-agnostic helper Blizzard built for exactly this "call it from
+-- outside the Housing addons" case, but the family's own hard rule still
+-- applies to the panel toggle underneath it, so it is gated the same way
+-- gamemenu gates GameMenuFrame above.
+local function HomeOnClick(_self, button)
+    if button == "RightButton" then
+        if InCombatLockdown() then
+            UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
+            return
+        end
+        if HousingFramesUtil and HousingFramesUtil.ToggleHousingDashboard then
+            HousingFramesUtil.ToggleHousingDashboard()
+        end
+        return
+    end
+    if button == "LeftButton" and not cachedHouse then
+        print("|cffFF008CKitn|r|cffffffffUI:|r House data cannot be updated in combat.")
+    end
+end
+
+-- WireSecureAttributes (Bar.lua) calls this every Apply(), always outside
+-- combat. Clearing type1 when nothing is cached stops a stale partial
+-- attribute set from firing a teleport to the wrong plot.
+local function HomeAttrs(btn)
+    if cachedHouse then
+        btn:SetAttribute("type1", "teleporthome")
+        btn:SetAttribute("house-neighborhood-guid", cachedHouse.neighborhoodGUID)
+        btn:SetAttribute("house-guid", cachedHouse.houseGUID)
+        btn:SetAttribute("house-plot-id", cachedHouse.plotID)
+    else
+        btn:SetAttribute("type1", nil)
+        btn:SetAttribute("house-neighborhood-guid", nil)
+        btn:SetAttribute("house-guid", nil)
+        btn:SetAttribute("house-plot-id", nil)
+    end
+    if not btn._homeWired then
+        btn:SetScript("OnClick", HomeOnClick)
+        -- Opportunistic refresh on hover, matching WindTools' ButtonOnEnter
+        -- (GameBar.lua:1269-1271). HookScript ADDS to Bar.lua's own OnEnter
+        -- (tint + tooltip) rather than replacing it.
+        btn:HookScript("OnEnter", function()
+            if not InCombatLockdown() then RequestHouseList() end
+        end)
+        btn._homeWired = true
+    end
+end
+
+local homeElement = {
+    id = "home", label = "Home", icon = PLACEHOLDER_ICON, panel = "right",
+    kind = "launcher", secure = true,
+    attrs = HomeAttrs,
+    tooltip = function(tt)
+        tt:AddLine("Home", 1, 1, 1)
+        tt:AddLine("Left-click: Teleport Home", 1, 1, 1)
+        tt:AddLine("Right-click: Housing Dashboard", 1, 1, 1)
+    end,
+}
+
+---------------------------------------------------------------------------------
+-- Friends: no FriendsMicroButton exists in the Mainline micro menu (confirmed
+-- against .wow-api-reference/Interface/AddOns/Blizzard_MicroMenu/Mainline/
+-- MainMenuBarMicroButtons.xml, which lists Character/Profession/PlayerSpells/
+-- Achievement/QuestLog/Housing/Guild/LFD/Collections/EJ/Help/Store/MainMenu
+-- and nothing for friends), so this cannot be a Macro() passthrough the way
+-- guild below is. ToggleFriendsFrame is the real global
+-- (.wow-api-reference/Interface/AddOns/Blizzard_FriendsFrame/Mainline/
+-- FriendsFrame.lua:1416), and it is not protected, so this is an insecure
+-- toggle guarded the same way gamemenu and clock are above.
+--
+-- The badge (online count) and the roster tooltip are Readouts.lua's job --
+-- everything with a ticker and cross-element state lives there. This element
+-- only supplies the click and hands the tooltip off.
+local friendsElement = {
+    id = "friends", label = "Friends", icon = PLACEHOLDER_ICON, panel = "left",
+    kind = "launcher", secure = false,
+    onClick = function(_self, button)
+        if button ~= "LeftButton" then return end
+        if InCombatLockdown() then
+            UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
+            return
+        end
+        ToggleFriendsFrame()
+    end,
+    tooltip = function(tt)
+        tt:AddLine("Friends", 1, 1, 1)
+        if ns.TopBar.FriendsTooltip then ns.TopBar.FriendsTooltip(tt) end
+    end,
+}
+
+-- Guild: GuildMicroButton DOES exist (Mainline/MainMenuBarMicroButtons.xml:183),
+-- so this stays the ordinary Macro() passthrough every other micro-button
+-- launcher in this file uses -- only its tooltip is replaced, because Macro()'s
+-- own is a one-line label and this one needs the roster.
+local guildElement = Macro("guild", "Guild", PLACEHOLDER_ICON, "left",
+    "/click GuildMicroButton")
+guildElement.tooltip = function(tt)
+    tt:AddLine("Guild", 1, 1, 1)
+    if ns.TopBar.GuildTooltip then ns.TopBar.GuildTooltip(tt) end
+end
+
+-- Great Vault: WeeklyRewardsFrame is load-on-demand, so opening it goes
+-- through WeeklyRewards_ShowUI, the same global the rest of the client uses
+-- to load and show it (.wow-api-reference/Interface/AddOns/Blizzard_UIParent/
+-- Mainline/UIParent.lua:527-534). Not itself a secure/protected frame, but
+-- gated the same way every other insecure launcher in this file is, for the
+-- same reason gamemenu is.
+local vaultElement = {
+    id = "vault", label = "Great Vault", icon = PLACEHOLDER_ICON, panel = "right",
+    kind = "launcher", secure = false,
+    onClick = function(_self, button)
+        if button ~= "LeftButton" then return end
+        if InCombatLockdown() then
+            UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
+            return
+        end
+        WeeklyRewards_ShowUI()
+    end,
+    tooltip = function(tt)
+        tt:AddLine("Great Vault", 1, 1, 1)
+        if ns.TopBar.VaultTooltip then ns.TopBar.VaultTooltip(tt) end
+    end,
+}
+
 ns.TopBar.Elements = {
+    friendsElement,
+    guildElement,
+
     Macro("groupfinder", "Group Finder", PLACEHOLDER_ICON, "left",
         "/click LFDMicroButton"),
 
@@ -62,6 +241,9 @@ ns.TopBar.Elements = {
     -- and is shown by the time the second line runs.
     Macro("toybox", "Toy Box", PLACEHOLDER_ICON, "left",
         "/click CollectionsMicroButton\n/run CollectionsJournal_SetTab(CollectionsJournal, 3)"),
+
+    homeElement,
+    vaultElement,
 
     Macro("character", "Character panel", PLACEHOLDER_ICON, "right",
         "/click CharacterMicroButton"),

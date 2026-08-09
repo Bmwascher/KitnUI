@@ -63,6 +63,19 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
               setValue = function(v) ns.TopBar.SetOff(leftEl.id, not v); ns.TopBar.Apply() end },
             rightCfg
         );                                                                         y = y - h
+
+        -- Sits immediately after whichever row the friends element landed in,
+        -- left or right slot: Task 3 left this out because it has to sit right
+        -- after the friends row, and there was no friends row before Task 5.
+        if leftEl.id == "friends" or (rightEl and rightEl.id == "friends") then
+            _, h = W:DualRow(parent, y,
+                { type = "toggle", text = "Only Friends In World Of Warcraft",
+                  tooltip = "Counts and lists only friends who are actually playing WoW, ignoring anyone online in another Blizzard game.",
+                  getValue = function() return ns.TopBar.Get("tbFriendsInGameOnly") end,
+                  setValue = function(v) ns.TopBar.Set("tbFriendsInGameOnly", v and true or false); ns.TopBar.Apply() end },
+                { type = "label", text = "" }
+            );                                                                     y = y - h
+        end
     end
 
     -- Bar.lua's OnEnter handler already checks this flag before calling an

@@ -100,6 +100,16 @@ read_globals = {
     "date", "GetTime", "GetGameTime", "GetFramerate", "GetNetStats",
     "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
 
+    -- Top bar: home (housing teleport + dashboard)
+    "C_Housing", "HousingFramesUtil",
+
+    -- Top bar: friends and guild counts/rosters
+    "ToggleFriendsFrame", "C_FriendList", "BNGetNumFriends", "C_BattleNet",
+    "GetNumGuildMembers", "IsInGuild", "C_GuildInfo", "C_Club", "CommunitiesUtil",
+
+    -- Top bar: Great Vault progress
+    "C_WeeklyRewards", "WeeklyRewards_ShowUI",
+
     -- Keyboard modifiers (Extras clean-icons copy popup)
     "IsControlKeyDown",
 

@@ -267,11 +267,274 @@ if EllesmereUI and EllesmereUI._applyFPSCounter then
 end
 
 ---------------------------------------------------------------------------------
+-- Friends, guild and vault badges. Counts render unconditionally; the roster
+-- NAME LISTS are gated behind RosterReadable() -- Task 5's own floor, not a
+-- ceiling: in combat or inside a protected instance the badge keeps counting
+-- but the tooltip stops listing names.
+---------------------------------------------------------------------------------
+
+local function RosterReadable()
+    if InCombatLockdown() then return false end
+    if EllesmereUI and EllesmereUI.InProtectedInstance
+       and EllesmereUI.InProtectedInstance() then return false end
+    return true
+end
+
+-- WoW friends are always playing WoW by definition -- only a Battle.net
+-- friend's CURRENT game needs checking against tbFriendsInGameOnly. Neither
+-- FriendInfo (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/
+-- FriendListDocumentation.lua:602-616) nor BNetGameAccountInfo (.wow-api-reference/
+-- Interface/AddOns/Blizzard_APIDocumentationGenerated/BattleNetDocumentation.lua:
+-- 247-274) marks any field Secret.
+local function FriendsCount()
+    local wowOnline = (C_FriendList and C_FriendList.GetNumOnlineFriends
+        and C_FriendList.GetNumOnlineFriends()) or 0
+    local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
+    local bnetOnline = 0
+    local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
+    for i = 1, numBNet do
+        local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
+            and C_BattleNet.GetFriendAccountInfo(i)
+        local gameInfo = accountInfo and accountInfo.gameAccountInfo
+        if gameInfo and gameInfo.isOnline and (not inGameOnly or gameInfo.clientProgram == "WoW") then
+            bnetOnline = bnetOnline + 1
+        end
+    end
+    return wowOnline + bnetOnline
+end
+
+local ROSTER_CAP = 40
+
+local function BuildFriendsRoster(tt)
+    local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
+    local rows = 0
+
+    local numFriends = (C_FriendList and C_FriendList.GetNumFriends and C_FriendList.GetNumFriends()) or 0
+    for i = 1, numFriends do
+        if rows >= ROSTER_CAP then break end
+        local info = C_FriendList.GetFriendInfoByIndex and C_FriendList.GetFriendInfoByIndex(i)
+        if info and info.connected and info.name then
+            rows = rows + 1
+            tt:AddLine(info.name, 1, 1, 1)
+        end
+    end
+
+    local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
+    for i = 1, numBNet do
+        if rows >= ROSTER_CAP then break end
+        local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
+            and C_BattleNet.GetFriendAccountInfo(i)
+        local gameInfo = accountInfo and accountInfo.gameAccountInfo
+        if accountInfo and gameInfo and gameInfo.isOnline
+           and (not inGameOnly or gameInfo.clientProgram == "WoW") then
+            rows = rows + 1
+            local label = gameInfo.characterName or accountInfo.accountName or accountInfo.battleTag
+            tt:AddLine(label or "?", 1, 1, 1)
+        end
+    end
+end
+
+-- Elements.lua's friends element hands its tooltip straight here.
+function ns.TopBar.FriendsTooltip(tt)
+    if not tt then return end
+    if not RosterReadable() then return end
+    -- A pcall failure here costs the tooltip, never the bar.
+    pcall(BuildFriendsRoster, tt)
+end
+
+-- GetNumGuildMembers has no generated-doc entry (it predates the C_
+-- namespace and is never exposed through one), but it is not on the
+-- deprecated-fallback list either (.wow-api-reference/Interface/AddOns/
+-- Blizzard_DeprecatedHousingCatalog/../Blizzard_DeprecatedGuildScript/
+-- Deprecated_GuildScript.lua), and two live Mainline files still call it
+-- directly and compare its return with `==` (Blizzard_Calendar/Mainline/
+-- Blizzard_Calendar.lua:4139, Blizzard_MailFrame/MailFrame.lua:59) -- an
+-- ordinary comparison a Secret value could not survive, so its return is
+-- provably not Secret even without a machine-readable doc entry. The second
+-- return being the ONLINE count is corroborated by WindTools' own working
+-- 12.0 code (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:699),
+-- not independently provable from this reference alone.
+local function GuildCount()
+    if not (IsInGuild and IsInGuild()) then return 0 end
+    if not GetNumGuildMembers then return 0 end
+    local _, online = GetNumGuildMembers()
+    return online or 0
+end
+
+-- The roster LIST has no legacy equivalent left to read: GetGuildRosterInfo
+-- does not exist anywhere in this reference (checked across the whole live
+-- tree), which the deprecation file above does not explain either -- it was
+-- evidently removed outright, not routed through a fallback. The only path
+-- left is C_Club, which is what Blizzard's own guild roster now uses
+-- (.wow-api-reference/Interface/AddOns/Blizzard_Communities/
+-- CommunitiesMemberList.lua:342-354): C_Club.GetGuildClubId(), then
+-- CommunitiesUtil's own wrappers (.wow-api-reference/Interface/AddOns/
+-- Blizzard_FrameXMLUtil/CommunitiesUtil.lua:109-146 -- always loaded, no
+-- LoadOnDemand in Blizzard_FrameXMLUtil's own .toc, the same file spellbook's
+-- PlayerSpellsUtil already relies on above). GetMemberInfo and GetClubMembers
+-- are both marked SecretInChatMessagingLockdown in the generated docs
+-- (ClubDocumentation.lua:433-448, 611-626) -- a combat-adjacent restriction
+-- distinct from ordinary Secret Values but handled the same way here: never
+-- called unless RosterReadable() already said yes.
+local guildLastRequest = 0
+local function RequestGuildRoster()
+    local now = GetTime()
+    if now - guildLastRequest < 15 then return end
+    guildLastRequest = now
+    if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() end
+    if C_Club and C_Club.GetGuildClubId and C_Club.FocusMembers then
+        local clubId = C_Club.GetGuildClubId()
+        if clubId then C_Club.FocusMembers(clubId) end
+    end
+end
+
+local function BuildGuildRoster(tt)
+    if not (C_Club and C_Club.GetGuildClubId and C_Club.AreMembersReady) then return end
+    if not (CommunitiesUtil and CommunitiesUtil.GetMemberIdsSortedByName
+       and CommunitiesUtil.GetMemberInfo and CommunitiesUtil.GetOnlineMembers) then return end
+
+    local clubId = C_Club.GetGuildClubId()
+    if not clubId then return end
+    if not C_Club.AreMembersReady(clubId) then return end
+
+    local memberIds = CommunitiesUtil.GetMemberIdsSortedByName(clubId)
+    if type(memberIds) ~= "table" then return end
+    local infos = CommunitiesUtil.GetMemberInfo(clubId, memberIds)
+    local online = CommunitiesUtil.GetOnlineMembers(infos)
+    if type(online) ~= "table" then return end
+
+    local rows = 0
+    for _, info in ipairs(online) do
+        if rows >= ROSTER_CAP then break end
+        if info and info.name then
+            rows = rows + 1
+            tt:AddLine(info.name, 1, 1, 1)
+        end
+    end
+end
+
+-- Elements.lua's guild element hands its tooltip straight here. The throttled
+-- request runs every hover regardless of RosterReadable(): it only ever
+-- refreshes local Club state, never writes anything onto a secure button, so
+-- it costs nothing to keep warm even when the list itself will not render.
+function ns.TopBar.GuildTooltip(tt)
+    if not tt then return end
+    RequestGuildRoster()
+    if not RosterReadable() then return end
+    pcall(BuildGuildRoster, tt)
+end
+
+-- Great Vault: C_WeeklyRewards.GetActivities() returns nothing useful before
+-- a fresh character's first weekly reset, so every field is nil-checked
+-- before use. "Done" is progress >= threshold, matching Blizzard's own
+-- WeeklyRewardsMixin (.wow-api-reference/Interface/AddOns/
+-- Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua:412). Neither
+-- WeeklyRewardActivityInfo nor its fields are marked Secret in the generated
+-- docs (WeeklyRewardsDocumentation.lua:311-326).
+local function VaultCounts()
+    local activities = C_WeeklyRewards and C_WeeklyRewards.GetActivities and C_WeeklyRewards.GetActivities()
+    if type(activities) ~= "table" then return nil end
+    local raidDone, dungeonDone, worldDone = 0, 0, 0
+    local any = false
+    for _, info in ipairs(activities) do
+        if type(info) == "table" and info.type and info.progress and info.threshold then
+            any = true
+            if info.progress >= info.threshold then
+                if info.type == Enum.WeeklyRewardChestThresholdType.Raid then
+                    raidDone = raidDone + 1
+                elseif info.type == Enum.WeeklyRewardChestThresholdType.Activities then
+                    dungeonDone = dungeonDone + 1
+                elseif info.type == Enum.WeeklyRewardChestThresholdType.World then
+                    worldDone = worldDone + 1
+                end
+            end
+        end
+    end
+    if not any then return nil end
+    return raidDone, dungeonDone, worldDone
+end
+
+-- Elements.lua's vault element hands its tooltip straight here.
+function ns.TopBar.VaultTooltip(tt)
+    if not tt then return end
+    local activities = C_WeeklyRewards and C_WeeklyRewards.GetActivities and C_WeeklyRewards.GetActivities()
+    if type(activities) ~= "table" or #activities == 0 then
+        tt:AddLine("No progress yet this week.", 0.7, 0.7, 0.7)
+        return
+    end
+    for _, info in ipairs(activities) do
+        if type(info) == "table" and info.type and info.progress and info.threshold then
+            local label
+            if info.type == Enum.WeeklyRewardChestThresholdType.Raid then label = "Raid"
+            elseif info.type == Enum.WeeklyRewardChestThresholdType.Activities then label = "Dungeon"
+            elseif info.type == Enum.WeeklyRewardChestThresholdType.World then label = "World" end
+            if label then
+                tt:AddDoubleLine(label, format("%d/%d", info.progress, info.threshold), 0.7, 0.7, 0.7, 1, 1, 1)
+            end
+        end
+    end
+end
+
+-- Badge FontStrings. Fixed size, matching TWEEN_TIME/CLOCK_PAD's own
+-- precedent elsewhere in this file: not exposed as a setting because Task 5
+-- did not ask for one.
+local BADGE_SIZE = 10
+
+local friendsText, guildText, vaultText
+
+local function UpdateFriendsBadge()
+    if not friendsText then return end
+    friendsText:SetText(tostring(FriendsCount()))
+end
+
+local function UpdateGuildBadge()
+    if not guildText then return end
+    guildText:SetText(tostring(GuildCount()))
+end
+
+local function UpdateVaultText()
+    if not vaultText then return end
+    local raidDone, dungeonDone, worldDone = VaultCounts()
+    if not raidDone then
+        vaultText:SetText("|cff808080--|r")
+        return
+    end
+    local accentHex = Hex(AccentRGB())
+    vaultText:SetText(format("|cff%sR|r%d |cff%sD|r%d |cff%sW|r%d",
+        accentHex, raidDone, accentHex, dungeonDone, accentHex, worldDone))
+end
+
+-- Refresh triggers: the events that actually change these counts, plus a
+-- belt-and-braces re-render every tenth Tick() below.
+local badgeWatcher = CreateFrame("Frame")
+badgeWatcher:RegisterEvent("FRIENDLIST_UPDATE")
+badgeWatcher:RegisterEvent("BN_FRIEND_INFO_CHANGED")
+badgeWatcher:RegisterEvent("GUILD_ROSTER_UPDATE")
+badgeWatcher:RegisterEvent("WEEKLY_REWARDS_UPDATE")
+badgeWatcher:SetScript("OnEvent", function(_, event)
+    if event == "FRIENDLIST_UPDATE" or event == "BN_FRIEND_INFO_CHANGED" then
+        UpdateFriendsBadge()
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        UpdateGuildBadge()
+    elseif event == "WEEKLY_REWARDS_UPDATE" then
+        UpdateVaultText()
+    end
+end)
+
+---------------------------------------------------------------------------------
 -- Fonts: Bar.lua's ApplyFonts() calls this on every Apply() once the bar
 -- exists and the feature is enabled. It lazily attaches clockText to the
 -- clock button the first time it runs, then (re)sizes both readouts from
 -- tbClockSize/tbSysSize and refreshes their text immediately, so the size
 -- sliders and the 24h/server-time toggles all take effect live.
+--
+-- friendsText/guildText/vaultText follow the identical lazy pattern. guild's
+-- button is secure (Macro()'s SecureActionButtonTemplate), but the lazy
+-- creation below only ever fires the FIRST time it sees a non-nil button --
+-- which is always inside the same Apply() call that Bar.lua's EnsureCreated
+-- just built it in, already past that call's own InCombatLockdown() gate.
+-- After that first call friendsText/guildText/vaultText are never nil again,
+-- so the branch never re-executes where combat could matter.
 ---------------------------------------------------------------------------------
 
 function ns.TopBar.ApplyReadoutFonts()
@@ -283,6 +546,36 @@ function ns.TopBar.ApplyReadoutFonts()
     if clockText then
         clockText:SetFont(STANDARD_TEXT_FONT, Get("tbClockSize", ns.EUI_DEFAULTS.tbClockSize), "OUTLINE")
         UpdateClock()
+    end
+
+    local friendsBtn = _G.KitnUITopBar_friends
+    if friendsBtn and not friendsText then
+        friendsText = friendsBtn:CreateFontString(nil, "OVERLAY")
+        friendsText:SetPoint("BOTTOM", friendsBtn, "BOTTOM", 0, -2)
+    end
+    if friendsText then
+        friendsText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
+        UpdateFriendsBadge()
+    end
+
+    local guildBtn = _G.KitnUITopBar_guild
+    if guildBtn and not guildText then
+        guildText = guildBtn:CreateFontString(nil, "OVERLAY")
+        guildText:SetPoint("BOTTOM", guildBtn, "BOTTOM", 0, -2)
+    end
+    if guildText then
+        guildText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
+        UpdateGuildBadge()
+    end
+
+    local vaultBtn = _G.KitnUITopBar_vault
+    if vaultBtn and not vaultText then
+        vaultText = vaultBtn:CreateFontString(nil, "OVERLAY")
+        vaultText:SetPoint("BOTTOM", vaultBtn, "BOTTOM", 0, -2)
+    end
+    if vaultText then
+        vaultText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
+        UpdateVaultText()
     end
 
     if sysText then
@@ -297,6 +590,7 @@ end
 ---------------------------------------------------------------------------------
 
 local ticker
+local tickCount = 0
 
 local function Tick()
     -- The FPS readout updates BEFORE the "is the bar shown" early-out, so the
@@ -306,6 +600,15 @@ local function Tick()
     local barFrame = ns.TopBar.Frame()
     if not (barFrame and barFrame:IsShown()) then return end
     UpdateClock()
+
+    -- Belt-and-braces re-render, not a request: every tenth tick, same as the
+    -- brief asks. The events above already cover the real refresh triggers.
+    tickCount = tickCount + 1
+    if tickCount >= 10 then
+        tickCount = 0
+        UpdateFriendsBadge()
+        UpdateGuildBadge()
+    end
 end
 
 -- Apply() calls this by exact name, nil-guarded, twice: once at the very top
