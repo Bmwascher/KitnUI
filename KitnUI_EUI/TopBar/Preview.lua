@@ -62,6 +62,10 @@ end
 -- Readouts.lua already duplicates AccentRGB the same way for the same reason.
 local BTN_PAD = 8
 
+-- Duplicates Readouts.lua:71 (SizeClockButton's own CLOCK_PAD) the same way
+-- BTN_PAD above duplicates Bar.lua:99 -- that local is off limits too.
+local CLOCK_PAD = 6
+
 -- Widest-case strings for the two readout slots (Step 2). The 12-hour form is
 -- wider than the 24-hour one; the FPS string is the real readout's own layout
 -- (Readouts.lua:158) with the colour escapes stripped -- they contribute no
@@ -94,24 +98,36 @@ end
 -- Lays out one side panel's launcher slots left to right from `startX`,
 -- mirroring LayoutSide's own arithmetic (Bar.lua:451-473) without calling it.
 -- Returns the panel's own content width (0 when nothing in it is visible).
-local function LayoutLauncherPanel(order, panel, startX, size, spacing)
+-- rowH is the icon row's shared height (Fix 4): every slot in the row
+-- anchors so its own vertical centre sits on the row's centreline, matching
+-- Bar.lua's LayoutSide/LayoutPanels, which hang every button and every
+-- side panel off a shared y (:459, :489-493).
+local function LayoutLauncherPanel(order, panel, startX, size, spacing, rowH)
     local x = 0
+    local yOff = -(rowH - size) / 2
     for _, id in ipairs(order) do
         if Visible(id) then
             local el = ns.TopBar.ById[id]
             local slot = GetSlot(id)
             if not slot._icon then
                 local icon = slot:CreateTexture(nil, "ARTWORK")
-                icon:SetAllPoints()
+                icon:SetPoint("CENTER")
                 slot._icon = icon
             end
             if el.icon then slot._icon:SetTexture(el.icon) end
             slot:SetSize(size, size)
+            -- The real bar sizes the button to size+BTN_PAD but the icon
+            -- texture to size alone (Bar.lua:409-410); `size` here already
+            -- includes BTN_PAD (Layout() passes iconSize), so the icon
+            -- texture is inset by BTN_PAD inside the slot, matching it.
+            local iconDim = size - BTN_PAD
+            if iconDim < 0 then iconDim = 0 end
+            slot._icon:SetSize(iconDim, iconDim)
             slot:ClearAllPoints()
-            slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", startX + x, 0)
+            slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", startX + x, yOff)
             -- Preview-frame-local coordinates. Task 3's hit testing reads
             -- these, exactly as EUI_CooldownManager_Options.lua:14315-14349 does.
-            slot._baseX, slot._baseY = startX + x, 0
+            slot._baseX, slot._baseY = startX + x, yOff
             slot._id, slot._panel = id, panel
             slot:Show()
             x = x + size + spacing
@@ -124,7 +140,12 @@ end
 -- The centre column: just the clock, sized from its own measured text so the
 -- preview never has to read the real bar's clock button (Step 2) -- that
 -- button lives on UIParent, may not exist yet, and may be hidden.
-local function LayoutClock(startX, clockSize)
+--
+-- Split into measure/position (Fix 4): the icon row's shared vertical
+-- centreline needs the clock's height known BEFORE any slot in the row is
+-- anchored, so this only creates the FontString, sets its font/text, and
+-- measures it -- no positioning here.
+local function MeasureClock(clockSize)
     local slot = GetSlot("clock")
     if not slot._text then
         local text = slot:CreateFontString(nil, "OVERLAY")
@@ -140,15 +161,21 @@ local function LayoutClock(startX, clockSize)
     local h = slot._text:GetStringHeight() or 0
     if w <= 0 then w = clockSize end
     if h <= 0 then h = clockSize end
+    return slot, w, h
+end
 
+-- Sizes and anchors the clock slot from its already-measured text metrics
+-- (w, h are the PADDED slot dimensions -- CLOCK_PAD already applied by the
+-- caller, matching SizeClockButton, Readouts.lua:88-89: CLOCK_PAD on both
+-- sides horizontally, half that vertically).
+local function PositionClock(slot, startX, yOff, w, h)
     slot:SetSize(w, h)
     slot:ClearAllPoints()
-    slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", startX, 0)
+    slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", startX, yOff)
     -- Never draggable, so no _baseX/_baseY -- Step 1 scopes those to
     -- draggable slots only.
     slot._id, slot._panel = "clock", "centre"
     slot:Show()
-    return w, h
 end
 
 -- The FPS readout: text under the clock, no drag scripts, and read from the
@@ -190,17 +217,27 @@ local function Layout()
     local sysSize   = ns.TopBar.Get("tbSysSize", 11)
     local order     = ns.TopBar.Order()
 
-    local leftW = LayoutLauncherPanel(order.left, "left", 0, iconSize, spacing)
-
-    local clockW, clockH = 0, 0
+    -- Fix 4: the clock is measured -- never positioned -- before either
+    -- launcher panel, because the row's shared vertical centreline (rowH,
+    -- below) needs every slot's height known before any slot is anchored.
+    local clockSlot, clockW, clockH = nil, 0, 0
     if Visible("clock") then
-        clockW, clockH = LayoutClock(leftW + spacing, clockSize)
+        local textW, textH
+        clockSlot, textW, textH = MeasureClock(clockSize)
+        clockW, clockH = textW + CLOCK_PAD * 2, textH + CLOCK_PAD
+    end
+
+    local iconRowH = math.max(iconSize, clockH)
+
+    local leftW = LayoutLauncherPanel(order.left, "left", 0, iconSize, spacing, iconRowH)
+
+    if clockSlot then
+        PositionClock(clockSlot, leftW + spacing, -(iconRowH - clockH) / 2, clockW, clockH)
     end
 
     local rightW = LayoutLauncherPanel(order.right, "right",
-        leftW + spacing + clockW + spacing, iconSize, spacing)
+        leftW + spacing + clockW + spacing, iconSize, spacing, iconRowH)
 
-    local iconRowH = math.max(iconSize, clockH)
     local fpsH = 0
     if Visible("fps") then
         fpsH = LayoutFps(leftW + spacing + clockW / 2, iconRowH + READOUT_GAP, sysSize)
@@ -288,7 +325,7 @@ function ns.TopBar.PreviewRefresh()
     if not previewFrame then return end
     local h = Layout()
     if EllesmereUI and EllesmereUI.UpdateContentHeaderHeight then
-        EllesmereUI.UpdateContentHeaderHeight(h)
+        EllesmereUI:UpdateContentHeaderHeight(h)
     end
 end
 
