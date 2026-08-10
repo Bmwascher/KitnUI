@@ -58,8 +58,9 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     _, h = W:SectionHeader(parent, "ELEMENTS", y);                                 y = y - h
 
     -- Generated from the registry rather than listed, so adding an element to
-    -- Elements.lua is the only edit an element ever needs. Panel is read-only text
-    -- in stage one; stage two's preview takes over arranging and this text goes.
+    -- Elements.lua is the only edit an element ever needs. Filters out the
+    -- clock (below) and anything whose requires() predicate currently fails,
+    -- leaving the set the checkbox grid below actually builds rows from.
     local rows = {}
     for _, el in ipairs(ns.TopBar.Elements) do
         -- clock is the centre panel's only occupant and cannot be switched off.
@@ -230,6 +231,13 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         visOpen, y = EllesmereUI.BuildLessCommonExpander(parent, y, "kitnuiTbVisibility", "Show Visibility Options")
     end
     if visOpen then
+        -- Both rows of this grid share one splits table: TripleRow draws a
+        -- divider at each region boundary, so two touching rows with
+        -- different splits would show their dividers at different x
+        -- positions -- a visible jog between rows. The keystones label needs
+        -- the wider third slot (below), so both rows use it, not just its own.
+        local VIS_SPLITS = { 0.25, 0.25, 0.5, rowHeight = 36 }
+
         _, h = W:TripleRow(parent, y,
             { type = "checkbox", text = "Hide In Combat",
               tooltip = "Hides the bar the moment you enter combat.",
@@ -243,12 +251,13 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
               tooltip = "Hides the bar while you are in a vehicle.",
               getValue = function() return ns.TopBar.Get("tbHideVehicle", false) end,
               setValue = function(v) ns.TopBar.Set("tbHideVehicle", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-            CB_SPLITS
+            VIS_SPLITS
         );                                                                         y = y - h
 
         -- The keystones label is too long for a 33% column at this width, so
-        -- this row gets its own wider splits and the label takes the wide
-        -- (rightmost) slot instead of a normal third.
+        -- this row -- and the one above it, sharing VIS_SPLITS -- gets a
+        -- wider split, and the label takes the wide (rightmost) slot instead
+        -- of a normal third.
         _, h = W:TripleRow(parent, y,
             { type = "checkbox", text = "Fade Until Moused Over",
               tooltip = "Rests the bar at low visibility until you move your mouse over it.",
@@ -259,7 +268,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
               tooltip = "Hides the bar in a Mythic+ dungeon, a raid, or rated PvP. A normal dungeon or an unrated arena leaves it alone.",
               getValue = function() return ns.TopBar.Get("tbHideSerious", false) end,
               setValue = function(v) ns.TopBar.Set("tbHideSerious", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-            { 0.25, 0.25, 0.5, rowHeight = 36 }
+            VIS_SPLITS
         );                                                                         y = y - h
 
         CloseGrid(y)

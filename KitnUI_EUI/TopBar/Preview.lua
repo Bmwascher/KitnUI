@@ -994,10 +994,10 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     -- Step 4: the hint line, parented to the HEADER frame -- not previewFrame,
     -- not previewWrap -- so it never shrinks with the fit scale and has no
     -- business inside the frame Task 3's drag maths converts cursor
-    -- coordinates against. Anchored off the STAGE's own BOTTOM (never
-    -- scaled), centred to match the centred preview above it, so the gap
-    -- below the preview stays a constant pixel count regardless of the fit
-    -- scale.
+    -- coordinates against. The hint's own TOP is anchored to the STAGE's
+    -- BOTTOM (never scaled), centred to match the centred preview above it,
+    -- so the hint hangs BELOW the stage and the gap stays a constant pixel
+    -- count regardless of the fit scale.
     if not hintText then
         hintText = parent:CreateFontString(nil, "OVERLAY")
         hintText:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
@@ -1007,7 +1007,7 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     end
     hintText:SetParent(parent)
     hintText:ClearAllPoints()
-    hintText:SetPoint("BOTTOM", previewStage, "BOTTOM", 0, -HINT_GAP)
+    hintText:SetPoint("TOP", previewStage, "BOTTOM", 0, -HINT_GAP)
     hintText:Show()
 
     return Layout()
