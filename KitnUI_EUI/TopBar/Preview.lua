@@ -256,6 +256,20 @@ local function FindDragTarget(cx, cy)
     local leftOuter = -spacing * 0.5
     local rightOuter = rightStartX + rightW + spacing * 0.5
 
+    -- Fix round 3, Fix 2: an empty panel draws nothing, so its drop zone is
+    -- only `spacing` wide -- 14 preview-local units at the default
+    -- tbSpacing, 4 at the slider minimum, half of it outside previewFrame's
+    -- own left edge -- and there is no reset-order control anywhere in the
+    -- UI to escape the state Task 4 made legitimate and persistent. Extend
+    -- the panel's own OUTER boundary, and ONLY the outer one (never
+    -- boundaryLC/boundaryCR, which stay exactly as they were), by one
+    -- button footprint -- `size` already includes BTN_PAD -- so an empty
+    -- side offers a target the size of the icon it is missing. A non-empty
+    -- panel's boundaries are untouched: this only fires when the cached span
+    -- for that side is zero.
+    if leftW == 0 then leftOuter = leftOuter - size end
+    if rightW == 0 then rightOuter = rightOuter + size end
+
     local targetPanel
     if localX < boundaryLC then
         if localX < leftOuter then return nil end
@@ -966,6 +980,23 @@ end
 -- the frame does not.
 function ns.TopBar.PreviewRefresh()
     if not previewFrame then return end
+    -- Fix round 3, Fix 1: previewFrame survives leaving the page (its parent
+    -- previewWrap is stashed and hidden by SaveContentHeaderToCache, not
+    -- destroyed -- EllesmereUI.lua:9213), so the nil check above stays true
+    -- for the rest of the session after one visit to the Top Bar page. 23 of
+    -- the 24 callers only fire while the Top Bar page is on screen, but the
+    -- RegAccent callback (Options.lua, registered at file scope) is
+    -- session-scoped and reaches this on every profile apply and every
+    -- spec-driven profile swap -- with the Top Bar page not the mounted one,
+    -- this would resize and re-layout whatever OTHER module's header frame
+    -- currently owns the shared contentHeaderFrame. IsVisible(), not
+    -- IsShown(): it accounts for the whole parent chain, and it is
+    -- previewWrap that SaveContentHeaderToCache hides, not previewFrame's
+    -- own Show flag. False in both bad cases; true in all three legitimate
+    -- ones -- widget setters, FinishDrag, and PreviewRestore, which only
+    -- fires after RestoreContentHeaderFromCache has already shown
+    -- previewWrap again (:9239-9241).
+    if not previewFrame:IsVisible() then return end
     local h = Layout()
     if EllesmereUI and EllesmereUI.UpdateContentHeaderHeight then
         EllesmereUI:UpdateContentHeaderHeight(h)

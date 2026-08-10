@@ -231,9 +231,11 @@ local DEFAULTS = {
         -- entry at all, and which Elements.lua reads back for
         -- ns.TopBar.DEFAULT_ORDER. Registering tbOrder as {} still keeps the
         -- key itself un-strippable while it holds real data: Lite's logout
-        -- strip only deletes an EMPTY sub-table, and an arranged bar's
-        -- tbOrder (left/centre/right all present, at least one non-empty)
-        -- never is.
+        -- strip tests the OUTER tbOrder table's own next() (StripDefaults,
+        -- EllesmereUI_Lite.lua:199), not each panel individually -- so any
+        -- tbOrder holding at least one panel key survives, even one whose
+        -- left/centre/right are all empty arrays. Only a tbOrder with no
+        -- keys at all -- never written to -- gets stripped.
         tbOrder                 = {},
         tbOff                   = {},
         tbIconSize              = 20,

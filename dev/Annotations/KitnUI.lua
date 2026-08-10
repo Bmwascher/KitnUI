@@ -144,7 +144,11 @@ local KitnUIWizard
 ---@field ApplyReadoutFonts fun()
 ---@field UpdateTicker fun()
 ---@field HearthValues fun(): table, table   # hearthValues, hearthOrder
----@field DEFAULT_ORDER table<string, string[]>   # { left = {...}, centre = {"clock"}, right = {...} }, read from ns.EUI_DEFAULTS.tbOrder (Core.lua), the single source
+---@field DEFAULT_ORDER table<string, string[]>   # { left = {...}, centre = {"clock"}, right = {...} }, read from ns.EUI_TB_DEFAULT_ORDER (Core.lua), the single source
 ---@field Elements table[]
 ---@field ById table<string, table>
+---@field AccentRGB fun(): number, number, number   # r, g, b; Bar.lua's file-local, exported for Preview.lua's insert-line colour
+---@field BuildPreviewHeader fun(parent: table, width: number): number   # the header height; the cold-mount builder EllesmereUI:SetContentHeader calls
+---@field PreviewRefresh fun()   # rebuilds the preview's slot rows from current settings; a no-op unless the preview is mounted AND visible
+---@field PreviewRestore fun()   # calls PreviewRefresh after an ordinary page revisit restores the cached header from _pageCache
 local KitnUITopBar
