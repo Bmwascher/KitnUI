@@ -24,6 +24,25 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     local y = yOffset
     local _, h, row
 
+    -- Shared splits for every three-across checkbox grid on this page,
+    -- matching the precedent's own form (EUI_PartyMode_Options.lua:359).
+    local CB_SPLITS = { 0.333, 0.333, 0.334, rowHeight = 36 }
+
+    -- Bottom hairline that closes a TripleRow checkbox grid: TripleRow sets
+    -- `_skipRowDivider` (EllesmereUI_Widgets.lua:4044), so a grid draws no
+    -- divider of its own. Matches EUI_PartyMode_Options.lua:413-419,
+    -- nil-guarded on every EllesmereUI field it touches.
+    local function CloseGrid(yPos)
+        if not (EllesmereUI and EllesmereUI.BORDER_R and EllesmereUI.BORDER_G and EllesmereUI.BORDER_B
+           and EllesmereUI.PanelPP and EllesmereUI.CONTENT_PAD) then return end
+        local PP = EllesmereUI.PanelPP
+        local totalW = parent:GetWidth() - EllesmereUI.CONTENT_PAD * 2
+        local sep = parent:CreateTexture(nil, "ARTWORK", nil, 7)
+        sep:SetColorTexture(EllesmereUI.BORDER_R, EllesmereUI.BORDER_G, EllesmereUI.BORDER_B, 0.02)
+        PP.Size(sep, totalW, 1)
+        PP.Point(sep, "TOPLEFT", parent, "TOPLEFT", EllesmereUI.CONTENT_PAD, yPos + 1)
+    end
+
     _, h = W:SectionHeader(parent, "TOP BAR", y);                                  y = y - h
 
     _, h = W:DualRow(parent, y,
@@ -49,34 +68,53 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
-    for i = 1, #rows, 2 do
-        local leftEl, rightEl = rows[i], rows[i + 1]
-        local rightCfg = { type = "label", text = "" }
-        if rightEl then
-            rightCfg = { type = "toggle", text = rightEl.label,
-                getValue = function() return not ns.TopBar.IsOff(rightEl.id) end,
-                setValue = function(v) ns.TopBar.SetOff(rightEl.id, not v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
-        end
-        _, h = W:DualRow(parent, y,
-            { type = "toggle", text = leftEl.label,
-              getValue = function() return not ns.TopBar.IsOff(leftEl.id) end,
-              setValue = function(v) ns.TopBar.SetOff(leftEl.id, not v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-            rightCfg
-        );                                                                         y = y - h
-
-        -- Sits immediately after whichever row the friends element landed in,
-        -- left or right slot: Task 3 left this out because it has to sit right
-        -- after the friends row, and there was no friends row before Task 5.
-        if leftEl.id == "friends" or (rightEl and rightEl.id == "friends") then
-            _, h = W:DualRow(parent, y,
-                { type = "toggle", text = "Only Friends In World Of Warcraft",
-                  tooltip = "Counts and lists only friends who are actually playing WoW, ignoring anyone online in another Blizzard game.",
-                  getValue = function() return ns.TopBar.Get("tbFriendsInGameOnly") end,
-                  setValue = function(v) ns.TopBar.Set("tbFriendsInGameOnly", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-                { type = "label", text = "" }
-            );                                                                     y = y - h
-        end
+    -- Builds a `{ type = "checkbox", ... }` config for one grid slot. `el` is
+    -- a function PARAMETER, not a closed-over loop variable -- every call
+    -- gets its own fresh binding, so three checkboxes built per row can
+    -- never end up sharing one and all driving the last element.
+    local function ElementCheckboxCfg(el)
+        if not el then return nil end
+        return { type = "checkbox", text = el.label,
+            getValue = function() return not ns.TopBar.IsOff(el.id) end,
+            setValue = function(v)
+                ns.TopBar.SetOff(el.id, not v); ns.TopBar.Apply()
+                if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+            end }
     end
+
+    -- Three-across checkbox grid, TripleRow per precedent
+    -- (EUI_PartyMode_Options.lua:343-419).
+    for i = 1, #rows, 3 do
+        _, h = W:TripleRow(parent, y,
+            ElementCheckboxCfg(rows[i]), ElementCheckboxCfg(rows[i + 1]), ElementCheckboxCfg(rows[i + 2]),
+            CB_SPLITS);                                                            y = y - h
+    end
+    CloseGrid(y)
+
+    -- Moved out of the grid loop: it used to sit immediately after whichever
+    -- row held the friends element, but with three-across packing that
+    -- placement is arbitrary. As its own row directly after the grid's
+    -- closing hairline, it reads as a qualifier on the list above it.
+    _, h = W:Checkbox(parent, "Only Friends In World Of Warcraft", y,
+        function() return ns.TopBar.Get("tbFriendsInGameOnly") end,
+        function(v)
+            ns.TopBar.Set("tbFriendsInGameOnly", v and true or false); ns.TopBar.Apply()
+            if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+        end,
+        "Counts and lists only friends who are actually playing WoW, ignoring anyone online in another Blizzard game."
+    );                                                                             y = y - h
+
+    -- Cross-panel drag can empty one side completely with no other way back.
+    -- This restores ARRANGEMENT only -- it must never touch tbOff, which
+    -- elements are switched on is a separate concern the checkboxes above
+    -- already own.
+    _, h = W:WideButton(parent, "Reset Icon Arrangement", y, function()
+        local d = ns.TopBar.DEFAULT_ORDER
+        if not (d and d.left and d.centre and d.right) then return end
+        ns.TopBar.SetOrder(d.left, d.centre, d.right)
+        ns.TopBar.Apply()
+        if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+    end);                                                                          y = y - h
 
     _, h = W:SectionHeader(parent, "APPEARANCE", y);                               y = y - h
 
@@ -120,6 +158,11 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- reach the swatch and its repaint function built just below it.
     local accentSwatch, updateAccentSwatch
 
+    -- Show Tooltips (2e) rides this row's right half: Use A Custom Accent's
+    -- own right half was an empty filler. Bar.lua's OnEnter handler already
+    -- checks tbTooltips before calling an element's tooltip function; this
+    -- is only the switch that sets it. Last control block in APPEARANCE, per
+    -- the design's control table.
     row, h = W:DualRow(parent, y,
         { type = "toggle", text = "Use A Custom Accent",
           tooltip = "Uses a fixed colour for the bar's accent line instead of following EllesmereUI's own accent.",
@@ -144,7 +187,10 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
               ns.TopBar.Apply()
               if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
           end },
-        { type = "label", text = "" }
+        { type = "toggle", text = "Show Tooltips",
+          tooltip = "Shows a tooltip when you hover a top bar icon.",
+          getValue = function() return ns.TopBar.Get("tbTooltips", true) end,
+          setValue = function(v) ns.TopBar.Set("tbTooltips", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
     );                                                                             y = y - h
 
     local leftRgn = row and row._leftRegion
@@ -174,86 +220,111 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
-    -- Bar.lua's OnEnter handler already checks this flag before calling an
-    -- element's tooltip function; this is only the switch that sets it. Last
-    -- control in APPEARANCE, per the design's control table.
-    _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Show Tooltips",
-          tooltip = "Shows a tooltip when you hover a top bar icon.",
-          getValue = function() return ns.TopBar.Get("tbTooltips", true) end,
-          setValue = function(v) ns.TopBar.Set("tbTooltips", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "label", text = "" }
-    );                                                                             y = y - h
-
     _, h = W:SectionHeader(parent, "VISIBILITY", y);                              y = y - h
 
-    _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Hide In Combat",
-          tooltip = "Hides the bar the moment you enter combat.",
-          getValue = function() return ns.TopBar.Get("tbHideCombat", false) end,
-          setValue = function(v) ns.TopBar.Set("tbHideCombat", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "toggle", text = "Hide In Pet Battles",
-          tooltip = "Hides the bar during a pet battle. On by default, since the bar has nothing useful to show there.",
-          getValue = function() return ns.TopBar.Get("tbHidePetBattle", true) end,
-          setValue = function(v) ns.TopBar.Set("tbHidePetBattle", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
-    );                                                                             y = y - h
+    -- 2f: rarely touched once set -- collapsed by default via the host's own
+    -- expander. Nil-guarded so a host without it still renders every row,
+    -- just always expanded.
+    local visOpen = true
+    if EllesmereUI and EllesmereUI.BuildLessCommonExpander then
+        visOpen, y = EllesmereUI.BuildLessCommonExpander(parent, y, "kitnuiTbVisibility", "Show Visibility Options")
+    end
+    if visOpen then
+        _, h = W:TripleRow(parent, y,
+            { type = "checkbox", text = "Hide In Combat",
+              tooltip = "Hides the bar the moment you enter combat.",
+              getValue = function() return ns.TopBar.Get("tbHideCombat", false) end,
+              setValue = function(v) ns.TopBar.Set("tbHideCombat", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+            { type = "checkbox", text = "Hide In Pet Battles",
+              tooltip = "Hides the bar during a pet battle. On by default, since the bar has nothing useful to show there.",
+              getValue = function() return ns.TopBar.Get("tbHidePetBattle", true) end,
+              setValue = function(v) ns.TopBar.Set("tbHidePetBattle", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+            { type = "checkbox", text = "Hide In Vehicles",
+              tooltip = "Hides the bar while you are in a vehicle.",
+              getValue = function() return ns.TopBar.Get("tbHideVehicle", false) end,
+              setValue = function(v) ns.TopBar.Set("tbHideVehicle", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+            CB_SPLITS
+        );                                                                         y = y - h
 
-    _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Hide In Vehicles",
-          tooltip = "Hides the bar while you are in a vehicle.",
-          getValue = function() return ns.TopBar.Get("tbHideVehicle", false) end,
-          setValue = function(v) ns.TopBar.Set("tbHideVehicle", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "toggle", text = "Hide In Keystones, Raids And Rated PvP",
-          tooltip = "Hides the bar in a Mythic+ dungeon, a raid, or rated PvP. A normal dungeon or an unrated arena leaves it alone.",
-          getValue = function() return ns.TopBar.Get("tbHideSerious", false) end,
-          setValue = function(v) ns.TopBar.Set("tbHideSerious", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
-    );                                                                             y = y - h
+        -- The keystones label is too long for a 33% column at this width, so
+        -- this row gets its own wider splits and the label takes the wide
+        -- (rightmost) slot instead of a normal third.
+        _, h = W:TripleRow(parent, y,
+            { type = "checkbox", text = "Fade Until Moused Over",
+              tooltip = "Rests the bar at low visibility until you move your mouse over it.",
+              getValue = function() return ns.TopBar.Get("tbFade", false) end,
+              setValue = function(v) ns.TopBar.Set("tbFade", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+            nil,
+            { type = "checkbox", text = "Hide In Keystones, Raids And Rated PvP",
+              tooltip = "Hides the bar in a Mythic+ dungeon, a raid, or rated PvP. A normal dungeon or an unrated arena leaves it alone.",
+              getValue = function() return ns.TopBar.Get("tbHideSerious", false) end,
+              setValue = function(v) ns.TopBar.Set("tbHideSerious", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+            { 0.25, 0.25, 0.5, rowHeight = 36 }
+        );                                                                         y = y - h
 
-    _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Fade Until Moused Over",
-          tooltip = "Rests the bar at low visibility until you move your mouse over it.",
-          getValue = function() return ns.TopBar.Get("tbFade", false) end,
-          setValue = function(v) ns.TopBar.Set("tbFade", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "slider", text = "Fade Time", min = 0, max = 2, step = 0.05,
-          tooltip = "How long the fade in and out takes, in seconds.",
-          getValue = function() return ns.TopBar.Get("tbFadeTime", 0.25) end,
-          setValue = function(v) ns.TopBar.Set("tbFadeTime", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
-    );                                                                             y = y - h
+        CloseGrid(y)
+
+        _, h = W:DualRow(parent, y,
+            { type = "slider", text = "Fade Time", min = 0, max = 2, step = 0.05,
+              tooltip = "How long the fade in and out takes, in seconds.",
+              getValue = function() return ns.TopBar.Get("tbFadeTime", 0.25) end,
+              setValue = function(v) ns.TopBar.Set("tbFadeTime", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+            { type = "spacer" }
+        );                                                                         y = y - h
+    end
+    if EllesmereUI and EllesmereUI.FinishLessCommonExpander then
+        y = EllesmereUI.FinishLessCommonExpander(parent, y, "kitnuiTbVisibility", "Show Visibility Options")
+    end
 
     _, h = W:SectionHeader(parent, "CLOCK", y);                                    y = y - h
 
-    _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "24-Hour Clock",
+    _, h = W:TripleRow(parent, y,
+        { type = "checkbox", text = "24-Hour Clock",
           tooltip = "Shows 18:30 rather than 6:30 PM.",
           getValue = function() return ns.TopBar.Get("tbUse24h", true) end,
           setValue = function(v) ns.TopBar.Set("tbUse24h", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "toggle", text = "Server Time",
+        { type = "checkbox", text = "Server Time",
           tooltip = "Shows the realm's time instead of your computer's. Useful when your machine is in a different time zone from your raid.",
           getValue = function() return ns.TopBar.Get("tbServerTime", false) end,
-          setValue = function(v) ns.TopBar.Set("tbServerTime", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
+          setValue = function(v) ns.TopBar.Set("tbServerTime", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+        nil,
+        CB_SPLITS
     );                                                                             y = y - h
+    CloseGrid(y)
 
     _, h = W:SectionHeader(parent, "HEARTHSTONE", y);                              y = y - h
 
-    -- All three dropdowns read the same owned-stone list HearthValues()
-    -- returns: the ownership scan (Elements.lua) is paid once and shared
-    -- here, never rescanned per dropdown.
-    local hearthValues, hearthOrder = ns.TopBar.HearthValues()
+    -- 2f: rarely touched once set -- collapsed by default via the host's own
+    -- expander. Nil-guarded so a host without it still renders every row,
+    -- just always expanded.
+    local hearthOpen = true
+    if EllesmereUI and EllesmereUI.BuildLessCommonExpander then
+        hearthOpen, y = EllesmereUI.BuildLessCommonExpander(parent, y, "kitnuiTbHearth", "Show Hearthstone Options")
+    end
+    if hearthOpen then
+        -- All three dropdowns read the same owned-stone list HearthValues()
+        -- returns: the ownership scan (Elements.lua) is paid once and shared
+        -- here, never rescanned per dropdown.
+        local hearthValues, hearthOrder = ns.TopBar.HearthValues()
 
-    _, h = W:WideDropdown(parent, "Left Click", y, hearthValues,
-        function() return ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft) end,
-        function(v) ns.TopBar.Set("tbHearthLeft", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end,
-        hearthOrder);                                                              y = y - h
+        _, h = W:WideDropdown(parent, "Left Click", y, hearthValues,
+            function() return ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft) end,
+            function(v) ns.TopBar.Set("tbHearthLeft", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end,
+            hearthOrder);                                                          y = y - h
 
-    _, h = W:WideDropdown(parent, "Middle Click", y, hearthValues,
-        function() return ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle) end,
-        function(v) ns.TopBar.Set("tbHearthMiddle", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end,
-        hearthOrder);                                                              y = y - h
+        _, h = W:WideDropdown(parent, "Middle Click", y, hearthValues,
+            function() return ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle) end,
+            function(v) ns.TopBar.Set("tbHearthMiddle", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end,
+            hearthOrder);                                                          y = y - h
 
-    _, h = W:WideDropdown(parent, "Right Click", y, hearthValues,
-        function() return ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight) end,
-        function(v) ns.TopBar.Set("tbHearthRight", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end,
-        hearthOrder);                                                              y = y - h
+        _, h = W:WideDropdown(parent, "Right Click", y, hearthValues,
+            function() return ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight) end,
+            function(v) ns.TopBar.Set("tbHearthRight", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end,
+            hearthOrder);                                                          y = y - h
+    end
+    if EllesmereUI and EllesmereUI.FinishLessCommonExpander then
+        y = EllesmereUI.FinishLessCommonExpander(parent, y, "kitnuiTbHearth", "Show Hearthstone Options")
+    end
 
     return math.abs(y)
 end

@@ -8,8 +8,15 @@ local _, ns = ... ---@type string, KitnUINS
 
 if ns.EUI_INERT then return end
 
-local previewWrap        -- UNSCALED. Carries the CONTENT_PAD inset. See below.
+local previewWrap        -- UNSCALED. Centred on the stage (below); the
+                          -- CONTENT_PAD inset now lives in availW alone, not
+                          -- in this frame's offset. See below.
 local previewFrame       -- module-local. NEVER EllesmereUI._contentHeaderPreview.
+local previewStage       -- UNSCALED. The backdrop the bar centres on, parented
+                          -- to the HEADER frame -- never previewWrap or
+                          -- previewFrame -- so it never inherits the fit scale.
+                          -- Built once in BuildPreviewHeader, exactly as
+                          -- hintText already is.
 local hintText            -- parented to the HEADER frame, never previewFrame or
                           -- previewWrap. Built once in BuildPreviewHeader.
 local availW              -- usable width, cached from the last BuildPreviewHeader
@@ -17,9 +24,12 @@ local availW              -- usable width, cached from the last BuildPreviewHead
                           -- no width argument) can still fit against it.
 
 -- The builder is handed rightW (1005), unpadded. Inset by CONTENT_PAD on each
--- side so the preview lines up with the padded content below it, exactly as the
--- CDM insets its own preview wrapper (EUI_CooldownManager_Options.lua:13952-13965).
--- The `or 10` fallback is the CDM's own idiom, not a guess.
+-- side so the stage -- and the preview centred on it -- lines up with the
+-- padded content below it, exactly as the CDM insets its own preview wrapper
+-- (EUI_CooldownManager_Options.lua:13952-13965). The `or 10` fallback is the
+-- CDM's own idiom, not a guess. previewWrap no longer carries the inset as an
+-- offset; availW alone bounds the stage's own width, so the preview can never
+-- exceed the padded area.
 --
 -- TWO FRAMES, and the split is load-bearing. A SetPoint offset is expressed in
 -- the anchored frame's OWN scaled space, so an inset of 45 on a frame later
@@ -34,7 +44,7 @@ local availW              -- usable width, cached from the last BuildPreviewHead
 -- both ghost followers in the suite divide their offsets by their own scale
 -- (:15049-15051; EllesmereUIBags.lua:3257-3261).
 --
--- So: previewWrap owns the inset and is never scaled; previewFrame owns the
+-- So: previewWrap owns the centring and is never scaled; previewFrame owns the
 -- content and the fit scale, anchored at 0,0 inside the wrapper. NEVER call
 -- SetScale on previewWrap, and NEVER give previewFrame a non-zero offset.
 local function Pad()
@@ -79,6 +89,7 @@ local FPS_STRING       = "999 fps  999 ms"
 -- arithmetic, so any reasonable constant is fine here.
 local READOUT_GAP = 2
 local HINT_GAP    = 6
+local STAGE_PAD_Y = 6      -- breathing room above and below the bar
 
 -- Reused across every PreviewRefresh, keyed by element id, so Task 3's drag
 -- scripts (attached to the Button itself) survive a settings-driven redraw.
@@ -911,14 +922,17 @@ local function Layout()
     end
     previewFrame:SetScale(scale)                        -- the CONTENT frame only
     previewFrame:SetSize(math.max(1, contentW), unscaledH)
-    previewWrap:SetSize(availW, unscaledH * scale)
+    -- The SCALED CONTENT width, not the full availW: centring previewWrap
+    -- (on the stage) only centres the bar if the wrapper is sized to it.
+    previewWrap:SetSize(math.max(1, contentW * scale), unscaledH * scale)
+    previewStage:SetSize(math.max(1, availW), unscaledH * scale + STAGE_PAD_Y * 2)
 
-    -- Step 5: the scaled preview's own contribution, plus the hint line's own
-    -- height and gap, both UNSCALED -- the hint is parented to the header
-    -- frame (Step 4) and never scaled.
+    -- Step 5: the scaled preview's own contribution, the stage's own vertical
+    -- padding, plus the hint line's own height and gap, both UNSCALED -- the
+    -- hint is parented to the header frame (Step 4) and never scaled.
     local hintH = 0
     if hintText then hintH = hintText:GetStringHeight() or 0 end
-    return unscaledH * scale + HINT_GAP + hintH
+    return unscaledH * scale + STAGE_PAD_Y * 2 + HINT_GAP + hintH
 end
 
 -- No _prebuilding guard here, deliberately. EllesmereUI's hidden pre-build pass
@@ -931,11 +945,38 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     local pad = Pad()
     availW = math.max(1, (width or 1) - pad * 2)
 
-    -- previewWrap carries the inset and is NEVER scaled.
+    -- previewWrap is centred on the stage below and is NEVER scaled.
     previewWrap = previewWrap or CreateFrame("Frame", nil, parent)
     previewWrap:SetParent(parent)
+
+    -- The stage: represents the SCREEN the bar sits centred on. Parented
+    -- directly to `parent` -- never into the previewWrap/previewFrame chain
+    -- -- so it never inherits the fit scale. Created once, cached, reused on
+    -- rebuild, exactly as hintText already is.
+    if not previewStage then
+        previewStage = CreateFrame("Frame", nil, parent)
+        if EllesmereUI and EllesmereUI.SolidTex then
+            previewStage._fill = EllesmereUI.SolidTex(previewStage, "BACKGROUND", 0, 0, 0, 0.22)
+            if previewStage._fill then previewStage._fill:SetAllPoints() end
+        end
+        -- Independently guarded from the fill above: a missing border must
+        -- not cost the backdrop.
+        if EllesmereUI and EllesmereUI.MakeBorder and EllesmereUI.BORDER_R and EllesmereUI.BORDER_G
+           and EllesmereUI.BORDER_B and EllesmereUI.PanelPP then
+            EllesmereUI.MakeBorder(previewStage, EllesmereUI.BORDER_R, EllesmereUI.BORDER_G,
+                EllesmereUI.BORDER_B, 0.35, EllesmereUI.PanelPP)
+        end
+    end
+    previewStage:SetParent(parent)
+    -- Lower than previewWrap's, so the stage always draws behind the preview
+    -- regardless of creation order.
+    previewStage:SetFrameLevel(previewWrap:GetFrameLevel() - 1)
+    previewStage:ClearAllPoints()
+    previewStage:SetPoint("TOP", parent, "TOP", 0, 0)
+    previewStage:Show()
+
     previewWrap:ClearAllPoints()
-    previewWrap:SetPoint("TOPLEFT", parent, "TOPLEFT", pad, 0)
+    previewWrap:SetPoint("TOP", previewStage, "TOP", 0, -STAGE_PAD_Y)
     previewWrap:Show()
 
     -- previewFrame is the scaled child. Its offset inside the wrapper is 0,0,
@@ -953,20 +994,20 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     -- Step 4: the hint line, parented to the HEADER frame -- not previewFrame,
     -- not previewWrap -- so it never shrinks with the fit scale and has no
     -- business inside the frame Task 3's drag maths converts cursor
-    -- coordinates against. Anchored off previewWrap's own BOTTOMLEFT (never
-    -- scaled) so the gap below the preview stays a constant pixel count
-    -- regardless of the fit scale, and x-anchored at 0 relative to it, which
-    -- is already Pad() relative to `parent`.
+    -- coordinates against. Anchored off the STAGE's own BOTTOM (never
+    -- scaled), centred to match the centred preview above it, so the gap
+    -- below the preview stays a constant pixel count regardless of the fit
+    -- scale.
     if not hintText then
         hintText = parent:CreateFontString(nil, "OVERLAY")
         hintText:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
-        hintText:SetJustifyH("LEFT")
+        hintText:SetJustifyH("CENTER")
         hintText:SetTextColor(0.6, 0.6, 0.6, 1)
         hintText:SetText("Drag an icon to move it. Drag it across the gap to send it to the other side.")
     end
     hintText:SetParent(parent)
     hintText:ClearAllPoints()
-    hintText:SetPoint("TOPLEFT", previewWrap, "BOTTOMLEFT", 0, -HINT_GAP)
+    hintText:SetPoint("BOTTOM", previewStage, "BOTTOM", 0, -HINT_GAP)
     hintText:Show()
 
     return Layout()
