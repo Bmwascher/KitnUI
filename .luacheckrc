@@ -96,6 +96,9 @@ read_globals = {
     -- state driver Task 8 wires up
     "GameTooltip", "RegisterStateDriver", "UnregisterStateDriver",
 
+    -- Top bar preview (Preview.lua): manual drag threshold and release polling
+    "GetCursorPosition", "IsMouseButtonDown",
+
     -- Top bar: visibility rules (Task 8) -- keystone/serious-content predicate
     "C_ChallengeMode", "C_PvP", "IsArenaSkirmish",
 

@@ -271,6 +271,9 @@ end
 -- pinned it to a fixed colour with Use A Custom Accent above.
 if EllesmereUI and EllesmereUI.RegAccent then
     EllesmereUI.RegAccent({ type = "callback", fn = function()
-        if not ns.TopBar.Get("tbAccentOverride", false) then ns.TopBar.Apply() end
+        if not ns.TopBar.Get("tbAccentOverride", false) then
+            ns.TopBar.Apply()
+            if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+        end
     end })
 end

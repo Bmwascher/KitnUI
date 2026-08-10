@@ -125,6 +125,7 @@ local function AccentRGB()
     end
     return r, g, b
 end
+ns.TopBar.AccentRGB = AccentRGB
 
 -- One texture, vertex colour interpolated: the icon art is a single texture,
 -- not two cross-faded layers, so this cannot be an AnimationGroup.

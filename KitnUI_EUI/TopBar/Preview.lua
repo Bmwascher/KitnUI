@@ -95,6 +95,385 @@ local function GetSlot(id)
     return slot
 end
 
+---------------------------------------------------------------------------------
+-- Task 3: drag to reorder. Only launcher slots (LayoutLauncherPanel, below)
+-- are wired -- the clock and fps slots never call WireDrag. Ported from the
+-- house drag idiom (EUI_CooldownManager_Options.lua, EllesmereUIDataBars_
+-- Options.lua:1236-1276), adapted for two side panels sharing one visual
+-- row instead of one flat array: FindDragTarget below resolves a screen
+-- position to a (panel, index) pair rather than a single array index, which
+-- is what lets a drag cross the centre gap onto the other side.
+---------------------------------------------------------------------------------
+
+local DRAG_THRESHOLD = 3
+
+-- Cached from the last Layout() pass so drag maths never has to re-derive the
+-- row geometry mid-drag. iconSize/spacing/yOff are shared by both panels;
+-- leftEndX/rightStartX are the boundary this file uses to decide which
+-- panel's row a screen position belongs to -- Bar.lua's own layout has no
+-- such boundary to read, because it never needs one.
+local lastIconSize, lastSpacing, lastYOff
+local lastLeftEndX, lastRightStartX
+
+-- Drag state. Set by BeginDrag, read by FindDragTarget/ApplyDragFeedback/
+-- FinishDrag, cleared by FinishDrag.
+local dragSlot, dragId, dragPanel, dragFromIdx
+local dragMode, dragTargetPanel, dragTargetIdx
+local dragGhost
+local insertLine
+
+-- Visible-filtered copy of a stored order array, in the same left-to-right
+-- order LayoutLauncherPanel renders it. Step 5's SpliceWithin is what folds
+-- one of these back into the full stored array without losing a hidden entry.
+local function VisibleIds(arr)
+    local out = {}
+    for _, id in ipairs(arr) do
+        if Visible(id) then out[#out + 1] = id end
+    end
+    return out
+end
+
+-- A plain Frame on UIParent at TOOLTIP strata, one ARTWORK texture at alpha
+-- 0.7, created once and reused. Must be on UIParent, not the preview: the
+-- content header and the scroll frame both clip their children.
+local function EnsureDragGhost()
+    if dragGhost then return dragGhost end
+    local g = CreateFrame("Frame", nil, UIParent)
+    g:SetFrameStrata("TOOLTIP")
+    g:SetAlpha(0.7)
+    local tex = g:CreateTexture(nil, "ARTWORK")
+    tex:SetAllPoints()
+    g._icon = tex
+    g:Hide()
+    dragGhost = g
+    return g
+end
+
+local function EnsureInsertLine()
+    if insertLine then return insertLine end
+    insertLine = previewFrame:CreateTexture(nil, "OVERLAY")
+    insertLine:SetWidth(2)
+    insertLine:Hide()
+    return insertLine
+end
+
+-- Snaps every draggable slot back to its Layout()-assigned position and
+-- hides the insert line. Called before every feedback recompute and once
+-- more on drop, so a cancelled or completed drag never leaves a slot sitting
+-- at a slide offset.
+local function ClearDragFeedback()
+    if insertLine then insertLine:Hide() end
+    for _, slot in pairs(slotPool) do
+        if slot._baseX then
+            slot:ClearAllPoints()
+            slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", slot._baseX, slot._baseY)
+        end
+    end
+end
+
+-- Converts a cursor position into previewFrame-local units through effective
+-- scales, exactly as EUI_CooldownManager_Options.lua:14306-14313 does, then
+-- resolves it to a (mode, panel, index) drop target. cx, cy are already
+-- divided by UIParent's own effective scale by the caller (the drag ticker,
+-- below), matching that reference's own calling convention.
+--
+-- Unlike the reference's single flat array, this bar has two panels
+-- separated by the clock, so the panel has to be chosen first: whichever
+-- side of the gap's midpoint the cursor falls on (leftEndX/rightStartX,
+-- cached from Layout()). Only then does the per-panel swap/insert zone scan
+-- run, scoped to that one panel's own visible slots -- which is what makes a
+-- drop in the middle of the clock gap resolve to "end of the nearer panel"
+-- rather than the reference's own dead-zone fallback of appending past the
+-- last slot in the whole row, which would be wrong here: the two panels are
+-- not one contiguous row of evenly spaced slots the way a single CDM bar is.
+local function FindDragTarget(cx, cy)
+    if not previewFrame then return nil end
+    local pfLeft, pfTop = previewFrame:GetLeft(), previewFrame:GetTop()
+    if not (pfLeft and pfTop) then return nil end
+
+    local pfES = previewFrame:GetEffectiveScale()
+    local uiES = UIParent:GetEffectiveScale()
+    local rawCX = cx * uiES
+    local rawCY = cy * uiES
+    local rawPfL = pfLeft * pfES
+    local rawPfT = pfTop * pfES
+    local localX = (rawCX - rawPfL) / pfES
+    local localY = -((rawPfT - rawCY) / pfES)
+
+    local size = lastIconSize
+    local yOff = lastYOff
+    if not (size and yOff) then return nil end
+    if localY > yOff + size * 0.5 or localY < yOff - size * 1.5 then return nil end
+
+    local leftEndX = lastLeftEndX or 0
+    local rightStartX = lastRightStartX or 0
+    local targetPanel = "left"
+    if localX >= (leftEndX + rightStartX) / 2 then targetPanel = "right" end
+
+    local order = ns.TopBar.Order()
+    local visArr
+    if targetPanel == "left" then visArr = VisibleIds(order.left) else visArr = VisibleIds(order.right) end
+
+    if #visArr == 0 then return "insert", targetPanel, 1 end
+
+    local spacing = lastSpacing or 0
+    local swapZone = size * 0.2
+
+    local firstSlot = slotPool[visArr[1]]
+    if firstSlot and localX < firstSlot._baseX - spacing * 0.5 then
+        return "insert", targetPanel, 1
+    end
+
+    for i = 1, #visArr do
+        local slot = slotPool[visArr[i]]
+        if slot and slot._baseX then
+            local slotL, slotR = slot._baseX, slot._baseX + size
+            local slotCX = slot._baseX + size / 2
+            if localX >= slotL - spacing * 0.5 and localX < slotR + spacing * 0.5 then
+                if visArr[i] ~= dragId and math.abs(localX - slotCX) < swapZone then
+                    return "swap", targetPanel, i
+                elseif localX < slotCX then
+                    return "insert", targetPanel, i
+                else
+                    return "insert", targetPanel, i + 1
+                end
+            end
+        end
+    end
+
+    return "insert", targetPanel, #visArr + 1
+end
+
+-- Slides the target panel's other slots aside for an insert and draws the
+-- accent insert line between the two neighbours it will land between.
+-- Ported from EUI_CooldownManager_Options.lua:14225-14229 (the line) and
+-- :14243-14263 (the slide), scoped to one panel's row. A swap has no cited
+-- visual in either reference file this task points at, so it gets none here
+-- either -- ClearDragFeedback alone is its feedback.
+local function ApplyDragFeedback(mode, targetPanel, targetIdx)
+    ClearDragFeedback()
+    if mode ~= "insert" then return end
+
+    local order = ns.TopBar.Order()
+    local visArr
+    if targetPanel == "left" then visArr = VisibleIds(order.left) else visArr = VisibleIds(order.right) end
+
+    local size = lastIconSize or 0
+    local spacing = lastSpacing or 0
+    local nudge = size + spacing
+
+    for i, id in ipairs(visArr) do
+        local skip = targetPanel == dragPanel and id == dragId
+        if not skip then
+            local slot = slotPool[id]
+            if slot and slot._baseX then
+                local virtualPos = i
+                if targetPanel == dragPanel and i > dragFromIdx then virtualPos = i - 1 end
+                local virtualInsert = targetIdx
+                if targetPanel == dragPanel and targetIdx > dragFromIdx then virtualInsert = targetIdx - 1 end
+                local offX = -nudge
+                if virtualPos >= virtualInsert then offX = nudge end
+                slot:ClearAllPoints()
+                slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", slot._baseX + offX, slot._baseY)
+            end
+        end
+    end
+
+    EnsureInsertLine()
+    local lineX
+    if targetIdx <= 1 then
+        local first = slotPool[visArr[1]]
+        if first then lineX = first._baseX - spacing / 2 else lineX = 0 end
+    elseif targetIdx > #visArr then
+        local last = slotPool[visArr[#visArr]]
+        if last then lineX = last._baseX + size + spacing / 2 else lineX = 0 end
+    else
+        local before = slotPool[visArr[targetIdx - 1]]
+        local after = slotPool[visArr[targetIdx]]
+        if before and after then lineX = (before._baseX + size + after._baseX) / 2 end
+    end
+
+    if lineX then
+        local r, g, b = ns.TopBar.AccentRGB()
+        insertLine:SetColorTexture(r, g, b, 0.9)
+        insertLine:ClearAllPoints()
+        insertLine:SetPoint("TOP", previewFrame, "TOPLEFT", lineX, lastYOff or 0)
+        insertLine:SetPoint("BOTTOM", previewFrame, "TOPLEFT", lineX, (lastYOff or 0) - size)
+        insertLine:Show()
+    else
+        insertLine:Hide()
+    end
+end
+
+-- Step 5's algorithm, in full, verbatim per the brief. `stored` is the full
+-- array (every id, hidden included); `newVisible` is the new VISIBLE
+-- sequence for the same panel, a permutation of stored's own visible subset.
+local function SpliceWithin(stored, newVisible)
+    local out, k = {}, 0
+    for i = 1, #stored do
+        if Visible(stored[i]) then
+            k = k + 1
+            out[i] = newVisible[k] or stored[i]
+        else
+            out[i] = stored[i]
+        end
+    end
+    return out
+end
+
+-- Ends the drag: restores the dragged slot's alpha, hides the ghost and any
+-- slide/line feedback, and -- unless the drop is a no-op -- writes the new
+-- order and redraws. Never moves preview frames directly; Layout() (via
+-- PreviewRefresh) is the only thing that ever sets a slot's real position.
+local function FinishDrag()
+    local self = dragSlot
+    if not self then return end
+    self:SetAlpha(1)
+    if dragGhost then dragGhost:Hide() end
+    ClearDragFeedback()
+
+    if dragMode and dragTargetPanel and dragTargetIdx then
+        local isNoop
+        if dragMode == "swap" then
+            isNoop = dragTargetPanel == dragPanel and dragTargetIdx == dragFromIdx
+        else
+            local eff = dragTargetIdx
+            if dragTargetPanel == dragPanel and eff > dragFromIdx then eff = eff - 1 end
+            isNoop = dragTargetPanel == dragPanel and eff == dragFromIdx
+        end
+
+        if not isNoop then
+            local order = ns.TopBar.Order()
+            local visLeft = VisibleIds(order.left)
+            local visRight = VisibleIds(order.right)
+            local fromArr = visLeft
+            if dragPanel == "right" then fromArr = visRight end
+            local targetArr = visLeft
+            if dragTargetPanel == "right" then targetArr = visRight end
+
+            if dragMode == "swap" then
+                fromArr[dragFromIdx], targetArr[dragTargetIdx] = targetArr[dragTargetIdx], fromArr[dragFromIdx]
+            else
+                local id = table.remove(fromArr, dragFromIdx)
+                local insertAt = dragTargetIdx
+                if dragTargetPanel == dragPanel and insertAt > dragFromIdx then insertAt = insertAt - 1 end
+                if insertAt < 1 then insertAt = 1 end
+                if insertAt > #targetArr + 1 then insertAt = #targetArr + 1 end
+                table.insert(targetArr, insertAt, id)
+            end
+
+            local newLeft = SpliceWithin(order.left, visLeft)
+            local newRight = SpliceWithin(order.right, visRight)
+            ns.TopBar.SetOrder(newLeft, order.centre, newRight)
+            ns.TopBar.Apply()
+            ns.TopBar.PreviewRefresh()
+        end
+    end
+
+    dragSlot, dragId, dragPanel, dragFromIdx = nil, nil, nil, nil
+    dragMode, dragTargetPanel, dragTargetIdx = nil, nil, nil
+end
+
+-- The second OnUpdate (installed on previewFrame by BeginDrag). Polls for
+-- release first -- the hole EllesmereUIDataBars_Options.lua:1262-1266 closes
+-- on the slot's own pending-threshold OnUpdate, this closes on the
+-- drag-in-progress one, so a release anywhere (including outside the
+-- options window) always reaches FinishDrag.
+local function DragTick()
+    if not IsMouseButtonDown("LeftButton") then
+        previewFrame:SetScript("OnUpdate", nil)
+        FinishDrag()
+        return
+    end
+    if not dragGhost then return end
+
+    local cx, cy = GetCursorPosition()
+    local sc = UIParent:GetEffectiveScale()
+    local ucx, ucy = cx / sc, cy / sc
+    local gs = dragGhost:GetScale() or 1
+    dragGhost:ClearAllPoints()
+    dragGhost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", ucx / gs, ucy / gs)
+
+    local mode, tPanel, tIdx = FindDragTarget(ucx, ucy)
+    if mode and tPanel and tIdx then
+        dragMode, dragTargetPanel, dragTargetIdx = mode, tPanel, tIdx
+        ApplyDragFeedback(mode, tPanel, tIdx)
+    else
+        dragMode, dragTargetPanel, dragTargetIdx = nil, nil, nil
+        ClearDragFeedback()
+    end
+end
+
+-- Starts a drag once the slot's own pending-threshold OnUpdate (WireDrag,
+-- below) crosses DRAG_THRESHOLD. Records which panel and visible index the
+-- slot started at, so FinishDrag can tell a same-panel move from a
+-- cross-panel one.
+local function BeginDrag(self)
+    local id, panel = self._id, self._panel
+    if not (id and panel and self._baseX) then return end
+
+    local order = ns.TopBar.Order()
+    local visArr
+    if panel == "left" then visArr = VisibleIds(order.left) else visArr = VisibleIds(order.right) end
+    local idx
+    for i, v in ipairs(visArr) do
+        if v == id then idx = i break end
+    end
+    if not idx then return end
+
+    dragSlot, dragId, dragPanel, dragFromIdx = self, id, panel, idx
+    dragMode, dragTargetPanel, dragTargetIdx = nil, nil, nil
+
+    local ghost = EnsureDragGhost()
+    local fitScale = previewFrame:GetScale() or 1
+    local w, h = self:GetWidth(), self:GetHeight()
+    if not w then w = lastIconSize or 20 end
+    if not h then h = lastIconSize or 20 end
+    ghost:SetSize(w * fitScale, h * fitScale)
+    if self._icon then ghost._icon:SetTexture(self._icon:GetTexture()) end
+    ghost:Show()
+
+    EnsureInsertLine()
+    self:SetAlpha(0.3)
+
+    previewFrame:SetScript("OnUpdate", DragTick)
+end
+
+-- Manual drag detection: a lightweight OnUpdate installed on the slot itself
+-- at OnMouseDown, torn down either by crossing DRAG_THRESHOLD (which hands
+-- off to BeginDrag) or by the button already being up on a later tick --
+-- EllesmereUIDataBars_Options.lua:1262-1266's own guard, which is what stops
+-- a press-and-release-elsewhere from leaking a live OnUpdate when OnMouseUp
+-- never fires on this slot.
+local function WireDrag(slot)
+    slot:SetScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" then return end
+        local cx, cy = GetCursorPosition()
+        self._pendX, self._pendY = cx, cy
+        self:SetScript("OnUpdate", function(s)
+            if not IsMouseButtonDown("LeftButton") then
+                s:SetScript("OnUpdate", nil)
+                s._pendX, s._pendY = nil, nil
+                return
+            end
+            local nx, ny = GetCursorPosition()
+            local dx = nx - (s._pendX or nx)
+            local dy = ny - (s._pendY or ny)
+            if dx * dx + dy * dy >= DRAG_THRESHOLD * DRAG_THRESHOLD then
+                s:SetScript("OnUpdate", nil)
+                s._pendX, s._pendY = nil, nil
+                BeginDrag(s)
+            end
+        end)
+    end)
+    slot:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and self._pendX then
+            self:SetScript("OnUpdate", nil)
+            self._pendX, self._pendY = nil, nil
+        end
+    end)
+end
+
 -- Lays out one side panel's launcher slots left to right from `startX`,
 -- mirroring LayoutSide's own arithmetic (Bar.lua:451-473) without calling it.
 -- Returns the panel's own content width (0 when nothing in it is visible).
@@ -113,6 +492,10 @@ local function LayoutLauncherPanel(order, panel, startX, size, spacing, rowH)
                 local icon = slot:CreateTexture(nil, "ARTWORK")
                 icon:SetPoint("CENTER")
                 slot._icon = icon
+            end
+            if not slot._dragWired then
+                WireDrag(slot)
+                slot._dragWired = true
             end
             if el.icon then slot._icon:SetTexture(el.icon) end
             slot:SetSize(size, size)
@@ -229,14 +612,24 @@ local function Layout()
 
     local iconRowH = math.max(iconSize, clockH)
 
+    -- Task 3: cached for FindDragTarget/ApplyDragFeedback, which run off the
+    -- mouse rather than off a fresh Layout() pass and so need this frozen at
+    -- the values the currently-drawn slots were placed with.
+    lastIconSize = iconSize
+    lastSpacing  = spacing
+    lastYOff     = -(iconRowH - iconSize) / 2
+
     local leftW = LayoutLauncherPanel(order.left, "left", 0, iconSize, spacing, iconRowH)
+    lastLeftEndX = leftW
 
     if clockSlot then
         PositionClock(clockSlot, leftW + spacing, -(iconRowH - clockH) / 2, clockW, clockH)
     end
 
+    local rightStartX = leftW + spacing + clockW + spacing
     local rightW = LayoutLauncherPanel(order.right, "right",
-        leftW + spacing + clockW + spacing, iconSize, spacing, iconRowH)
+        rightStartX, iconSize, spacing, iconRowH)
+    lastRightStartX = rightStartX
 
     local fpsH = 0
     if Visible("fps") then
