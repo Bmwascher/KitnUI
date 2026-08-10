@@ -34,15 +34,17 @@ end
 -- File-local aliases, so the rest of this file reads cleanly.
 local Get, Set = ns.TopBar.Get, ns.TopBar.Set
 
--- Returns three arrays, always populated. An empty stored order means the user
--- has never arranged anything, so the registry default stands.
+-- Returns three arrays, always populated. A MISSING stored panel entry means
+-- the user has never arranged anything, so the registry default stands. An
+-- EMPTY stored panel entry is a deliberate, legitimate layout (Task 4 lets a
+-- drag empty a side) and must stand as empty, not fall back to the default.
 function ns.TopBar.Order()
     local s = S()
     local stored = s and s.tbOrder
     local out = {}
     for _, panel in ipairs({ "left", "centre", "right" }) do
         local a = type(stored) == "table" and stored[panel]
-        if type(a) == "table" and #a > 0 then
+        if type(a) == "table" then
             out[panel] = CopyTable(a)
         else
             out[panel] = CopyTable(ns.TopBar.DEFAULT_ORDER[panel])
