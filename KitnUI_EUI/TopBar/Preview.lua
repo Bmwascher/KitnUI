@@ -129,6 +129,14 @@ local dragMode, dragTargetIdx
 local dragGhost
 local insertLine
 
+-- The slot currently armed by WireDrag's OnMouseDown -- pressed, but not yet
+-- past DRAG_THRESHOLD, so BeginDrag has not run and dragSlot is still nil.
+-- Fix round 2: that slot's own pending OnUpdate cannot tick while
+-- previewFrame is hidden, so CancelDragOnHide has to reach it separately
+-- from dragSlot -- an armed-but-not-dragging press is exactly the case
+-- dragSlot is nil for.
+local pendingSlot
+
 -- The (mode, index) DragTick last actually applied. Skips
 -- ApplyDragFeedback/ClearDragFeedback when the target has not moved since
 -- the previous tick -- EUI_CooldownManager_Options.lua:14443's own
@@ -318,6 +326,19 @@ end
 -- array (every id, hidden included); `newVisible` is the new VISIBLE
 -- sequence for the same panel, a permutation of stored's own visible subset.
 local function SpliceWithin(stored, newVisible)
+    -- ENFORCE the precondition, do not assume it. `Visible` depends on the live
+    -- `el.requires()` predicate, so the visible count at drop time can differ
+    -- from the count when the drag began and cached its array. On a mismatch the
+    -- loop below silently duplicates one id and deletes another through its own
+    -- fallback, and SetOrder writes that to SavedVariables. Refusing is always
+    -- safe: the worst case is a drag that does nothing. This guard would also
+    -- have caught the cross-panel corruption Task 3's review found.
+    local nVis = 0
+    for i = 1, #stored do
+        if Visible(stored[i]) then nVis = nVis + 1 end
+    end
+    if nVis ~= #newVisible then return stored end
+
     local out, k = {}, 0
     for i = 1, #stored do
         if Visible(stored[i]) then
@@ -392,6 +413,11 @@ local function FinishDrag()
     dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = nil, nil, nil, nil, nil
     dragMode, dragTargetIdx = nil, nil
     lastFeedbackMode, lastFeedbackIdx = nil, nil
+    -- Fix round 2, Fix 2: pendingSlot is normally already nil here (the
+    -- threshold handoff clears it before BeginDrag ever runs), but clearing
+    -- it again costs nothing and keeps this function's own end state
+    -- self-contained rather than relying on that ordering elsewhere.
+    pendingSlot = nil
 end
 
 -- The second OnUpdate (installed on previewFrame by BeginDrag). Polls for
@@ -482,10 +508,34 @@ end
 -- stale reorder to SavedVariables minutes after the user actually let go.
 -- This reaches the same end state FinishDrag's no-op path does, but never
 -- calls FinishDrag and so never reaches SetOrder.
+--
+-- Fix round 2: two more cases folded in, in order.
+--
+-- Fix 2 -- a slot can be ARMED (pressed, short of DRAG_THRESHOLD) with no
+-- drag in progress at all: dragSlot is still nil at that point. That slot's
+-- own pending OnUpdate cannot tick while previewFrame is hidden, so it has
+-- to be torn down here too, before the dragSlot check below -- otherwise it
+-- resumes on the next Show against a stale cursor delta from the PREVIOUS
+-- visit, and if the button happens to be down again by then, can cross the
+-- threshold immediately and start a drag the user never began this time.
+--
+-- Fix 3 -- everything past that point (the OnUpdate teardown, the ghost, the
+-- alpha restore, ClearDragFeedback's own loop over every entry in slotPool)
+-- has nothing to undo when no drag is in progress, which is the common case
+-- of simply leaving the page. Return early once the pending tracker is
+-- handled, rather than doing that work on every hide.
 local function CancelDragOnHide()
+    if pendingSlot then
+        pendingSlot:SetScript("OnUpdate", nil)
+        pendingSlot._pendX, pendingSlot._pendY = nil, nil
+        pendingSlot = nil
+    end
+
+    if not dragSlot then return end
+
     if previewFrame then previewFrame:SetScript("OnUpdate", nil) end
     if dragGhost then dragGhost:Hide() end
-    if dragSlot then dragSlot:SetAlpha(1) end
+    dragSlot:SetAlpha(1)
     ClearDragFeedback()
     dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = nil, nil, nil, nil, nil
     dragMode, dragTargetIdx = nil, nil
@@ -507,11 +557,13 @@ local function WireDrag(slot)
         -- watch on top of it.
         if dragSlot then return end
         local cx, cy = GetCursorPosition()
+        pendingSlot = self
         self._pendX, self._pendY = cx, cy
         self:SetScript("OnUpdate", function(s)
             if not IsMouseButtonDown("LeftButton") then
                 s:SetScript("OnUpdate", nil)
                 s._pendX, s._pendY = nil, nil
+                pendingSlot = nil
                 return
             end
             local nx, ny = GetCursorPosition()
@@ -520,6 +572,9 @@ local function WireDrag(slot)
             if dx * dx + dy * dy >= DRAG_THRESHOLD * DRAG_THRESHOLD then
                 s:SetScript("OnUpdate", nil)
                 s._pendX, s._pendY = nil, nil
+                -- Threshold handoff (fix round 2, Fix 2): BeginDrag is about
+                -- to set dragSlot, so this slot is no longer merely "armed".
+                pendingSlot = nil
                 BeginDrag(s)
             end
         end)
@@ -528,6 +583,7 @@ local function WireDrag(slot)
         if button == "LeftButton" and self._pendX then
             self:SetScript("OnUpdate", nil)
             self._pendX, self._pendY = nil, nil
+            pendingSlot = nil
         end
     end)
 end
