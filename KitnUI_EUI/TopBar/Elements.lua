@@ -668,16 +668,20 @@ local function CreatePortalFlyout()
 
     local bg = portalFlyout:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    -- Deliberately NOT the reference's 0.04/0.04/0.06 (NaowhUI_Portals.lua:198).
+    -- Deliberately NOT the reference's 0.04/0.04/0.06 (NaowhUI_Portals.lua:197).
     -- This is Bar.lua's own panel colour (Bar.lua:214, :358): the flyout has to
     -- match the bar it hangs off, and NaowhUI's value matches NaowhUI's bar.
     bg:SetColorTexture(0.03, 0.03, 0.04, 0.95)
 
     -- The host's border, when the host offers it. Same nil-guarded shape the
-    -- reference uses (NaowhUI_Portals.lua:200-201).
+    -- reference uses (NaowhUI_Portals.lua:199-202). Note the colour differs
+    -- between the two call sites on purpose, and the reference does the same:
+    -- the FLYOUT gets a faint white hairline (1,1,1 at 0.06) so the panel edge
+    -- reads against the dark backdrop, while each BUTTON below gets opaque
+    -- black to separate the icons from each other.
     local PP = EllesmereUI and EllesmereUI.PP
     if PP and PP.CreateBorder then
-        PP.CreateBorder(portalFlyout, 0, 0, 0, 1, 1, "OVERLAY", 7)
+        PP.CreateBorder(portalFlyout, 1, 1, 1, 0.06, 1, "OVERLAY", 7)
     end
 
     portalFlyout:SetAttribute("_onstate-combat", [[
@@ -710,7 +714,7 @@ local function CreatePortalFlyout()
             if si and si.iconID then icon:SetTexture(si.iconID) end
             btn.icon = icon
 
-            -- Per button too, matching NaowhUI_Portals.lua:230-232.
+            -- Per button too, opaque black, matching NaowhUI_Portals.lua:230-232.
             if PP and PP.CreateBorder then
                 PP.CreateBorder(btn, 0, 0, 0, 1, 1, "OVERLAY", 7)
             end
