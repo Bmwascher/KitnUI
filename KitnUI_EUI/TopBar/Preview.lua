@@ -96,31 +96,45 @@ local function GetSlot(id)
 end
 
 ---------------------------------------------------------------------------------
--- Task 3: drag to reorder. Only launcher slots (LayoutLauncherPanel, below)
--- are wired -- the clock and fps slots never call WireDrag. Ported from the
--- house drag idiom (EUI_CooldownManager_Options.lua, EllesmereUIDataBars_
--- Options.lua:1236-1276), adapted for two side panels sharing one visual
--- row instead of one flat array: FindDragTarget below resolves a screen
--- position to a (panel, index) pair rather than a single array index, which
--- is what lets a drag cross the centre gap onto the other side.
+-- Task 3: drag to reorder WITHIN a panel. Only launcher slots
+-- (LayoutLauncherPanel, below) are wired -- the clock and fps slots never
+-- call WireDrag. Ported from the house drag idiom
+-- (EUI_CooldownManager_Options.lua, EllesmereUIDataBars_Options.lua:1236-
+-- 1276). A drag is scoped to the panel it started in for its entire life
+-- (dragPanel, fixed by BeginDrag): FindDragTarget below returns nil for any
+-- cursor position outside that panel's own span, including the whole of the
+-- clock gap and the other panel outright, so a drop there simply cancels
+-- the drag. Moving an id to the OTHER panel is Task 4's, not this one's.
 ---------------------------------------------------------------------------------
 
 local DRAG_THRESHOLD = 3
 
--- Cached from the last Layout() pass so drag maths never has to re-derive the
--- row geometry mid-drag. iconSize/spacing/yOff are shared by both panels;
--- leftEndX/rightStartX are the boundary this file uses to decide which
--- panel's row a screen position belongs to -- Bar.lua's own layout has no
--- such boundary to read, because it never needs one.
+-- Cached from the last Layout() pass so drag maths never has to re-derive
+-- the row geometry mid-drag. Shared by both panels -- Layout() lays out both
+-- with the same iconSize/spacing/yOff.
 local lastIconSize, lastSpacing, lastYOff
-local lastLeftEndX, lastRightStartX
 
 -- Drag state. Set by BeginDrag, read by FindDragTarget/ApplyDragFeedback/
--- FinishDrag, cleared by FinishDrag.
-local dragSlot, dragId, dragPanel, dragFromIdx
-local dragMode, dragTargetPanel, dragTargetIdx
+-- FinishDrag, cleared by FinishDrag and by CancelDragOnHide.
+--
+-- dragPanel is fixed for the whole drag and is the ONLY panel a drop can
+-- land in -- this task is "drag to reorder WITHIN a panel"; moving an id
+-- between panels is Task 4's. dragVisArr is a snapshot of dragPanel's own
+-- visible ids, taken once in BeginDrag: nothing else can touch tbOrder while
+-- a drag is in progress, so re-deriving it from ns.TopBar.Order() every tick
+-- would be pure waste -- three CopyTables and a fresh table build, every
+-- frame, for a value that cannot have changed mid-drag.
+local dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr
+local dragMode, dragTargetIdx
 local dragGhost
 local insertLine
+
+-- The (mode, index) DragTick last actually applied. Skips
+-- ApplyDragFeedback/ClearDragFeedback when the target has not moved since
+-- the previous tick -- EUI_CooldownManager_Options.lua:14443's own
+-- early-out. Cleared by BeginDrag, FinishDrag and CancelDragOnHide so a new
+-- drag never early-outs against a stale value left by the last one.
+local lastFeedbackMode, lastFeedbackIdx
 
 -- Visible-filtered copy of a stored order array, in the same left-to-right
 -- order LayoutLauncherPanel renders it. Step 5's SpliceWithin is what folds
@@ -173,21 +187,20 @@ end
 
 -- Converts a cursor position into previewFrame-local units through effective
 -- scales, exactly as EUI_CooldownManager_Options.lua:14306-14313 does, then
--- resolves it to a (mode, panel, index) drop target. cx, cy are already
--- divided by UIParent's own effective scale by the caller (the drag ticker,
--- below), matching that reference's own calling convention.
+-- resolves it to a (mode, index) drop target WITHIN dragPanel. cx, cy are
+-- already divided by UIParent's own effective scale by the caller (the drag
+-- ticker, below), matching that reference's own calling convention.
 --
--- Unlike the reference's single flat array, this bar has two panels
--- separated by the clock, so the panel has to be chosen first: whichever
--- side of the gap's midpoint the cursor falls on (leftEndX/rightStartX,
--- cached from Layout()). Only then does the per-panel swap/insert zone scan
--- run, scoped to that one panel's own visible slots -- which is what makes a
--- drop in the middle of the clock gap resolve to "end of the nearer panel"
--- rather than the reference's own dead-zone fallback of appending past the
--- last slot in the whole row, which would be wrong here: the two panels are
--- not one contiguous row of evenly spaced slots the way a single CDM bar is.
+-- Fix round 1: the target panel is ALWAYS dragPanel -- this task moves an id
+-- within a panel; moving it to the other one is Task 4's. A cursor that is
+-- not over dragPanel's own span (including the whole of the clock gap and
+-- the other panel outright) returns nil, which the caller treats as a
+-- cancelled drag, same as a no-op. dragVisArr is the snapshot BeginDrag took
+-- once at drag start, not a fresh ns.TopBar.Order() call: nothing else can
+-- touch tbOrder mid-drag, so re-deriving it here every tick would only be
+-- three wasted CopyTables a frame.
 local function FindDragTarget(cx, cy)
-    if not previewFrame then return nil end
+    if not (previewFrame and dragPanel and dragVisArr) then return nil end
     local pfLeft, pfTop = previewFrame:GetLeft(), previewFrame:GetTop()
     if not (pfLeft and pfTop) then return nil end
 
@@ -205,24 +218,21 @@ local function FindDragTarget(cx, cy)
     if not (size and yOff) then return nil end
     if localY > yOff + size * 0.5 or localY < yOff - size * 1.5 then return nil end
 
-    local leftEndX = lastLeftEndX or 0
-    local rightStartX = lastRightStartX or 0
-    local targetPanel = "left"
-    if localX >= (leftEndX + rightStartX) / 2 then targetPanel = "right" end
-
-    local order = ns.TopBar.Order()
-    local visArr
-    if targetPanel == "left" then visArr = VisibleIds(order.left) else visArr = VisibleIds(order.right) end
-
-    if #visArr == 0 then return "insert", targetPanel, 1 end
+    local visArr = dragVisArr
+    if #visArr == 0 then return nil end
 
     local spacing = lastSpacing or 0
-    local swapZone = size * 0.2
+    local first = slotPool[visArr[1]]
+    local last = slotPool[visArr[#visArr]]
+    if not (first and first._baseX and last and last._baseX) then return nil end
 
-    local firstSlot = slotPool[visArr[1]]
-    if firstSlot and localX < firstSlot._baseX - spacing * 0.5 then
-        return "insert", targetPanel, 1
+    -- Outside dragPanel's own span (the whole clock gap, and everything past
+    -- it on the other panel) -- not a drop target, cancel the feedback.
+    if localX < first._baseX - spacing * 0.5 or localX > last._baseX + size + spacing * 0.5 then
+        return nil
     end
+
+    local swapZone = size * 0.2
 
     for i = 1, #visArr do
         local slot = slotPool[visArr[i]]
@@ -231,46 +241,45 @@ local function FindDragTarget(cx, cy)
             local slotCX = slot._baseX + size / 2
             if localX >= slotL - spacing * 0.5 and localX < slotR + spacing * 0.5 then
                 if visArr[i] ~= dragId and math.abs(localX - slotCX) < swapZone then
-                    return "swap", targetPanel, i
+                    return "swap", i
                 elseif localX < slotCX then
-                    return "insert", targetPanel, i
+                    return "insert", i
                 else
-                    return "insert", targetPanel, i + 1
+                    return "insert", i + 1
                 end
             end
         end
     end
 
-    return "insert", targetPanel, #visArr + 1
+    return "insert", #visArr + 1
 end
 
--- Slides the target panel's other slots aside for an insert and draws the
--- accent insert line between the two neighbours it will land between.
--- Ported from EUI_CooldownManager_Options.lua:14225-14229 (the line) and
--- :14243-14263 (the slide), scoped to one panel's row. A swap has no cited
--- visual in either reference file this task points at, so it gets none here
--- either -- ClearDragFeedback alone is its feedback.
-local function ApplyDragFeedback(mode, targetPanel, targetIdx)
+-- Slides dragPanel's other slots aside for an insert and draws the accent
+-- insert line between the two neighbours it will land between. Ported from
+-- EUI_CooldownManager_Options.lua:14225-14229 (the line), :14243-14263 (the
+-- slide) and :14451 (the nudge distance -- fix round 1: this used to be
+-- size+spacing, about 6.7x the reference's own value, which shoved the
+-- default 12-icon right panel's leading edge onto the clock). A swap has no
+-- cited visual in either reference file this task points at, so it gets
+-- none here either -- ClearDragFeedback alone is its feedback.
+local function ApplyDragFeedback(mode, targetIdx)
     ClearDragFeedback()
     if mode ~= "insert" then return end
-
-    local order = ns.TopBar.Order()
-    local visArr
-    if targetPanel == "left" then visArr = VisibleIds(order.left) else visArr = VisibleIds(order.right) end
+    if not dragVisArr then return end
+    local visArr = dragVisArr
 
     local size = lastIconSize or 0
     local spacing = lastSpacing or 0
-    local nudge = size + spacing
+    local nudge = math.floor((size + spacing) * 0.15)
 
     for i, id in ipairs(visArr) do
-        local skip = targetPanel == dragPanel and id == dragId
-        if not skip then
+        if id ~= dragId then
             local slot = slotPool[id]
             if slot and slot._baseX then
                 local virtualPos = i
-                if targetPanel == dragPanel and i > dragFromIdx then virtualPos = i - 1 end
+                if i > dragFromIdx then virtualPos = i - 1 end
                 local virtualInsert = targetIdx
-                if targetPanel == dragPanel and targetIdx > dragFromIdx then virtualInsert = targetIdx - 1 end
+                if targetIdx > dragFromIdx then virtualInsert = targetIdx - 1 end
                 local offX = -nudge
                 if virtualPos >= virtualInsert then offX = nudge end
                 slot:ClearAllPoints()
@@ -325,6 +334,11 @@ end
 -- slide/line feedback, and -- unless the drop is a no-op -- writes the new
 -- order and redraws. Never moves preview frames directly; Layout() (via
 -- PreviewRefresh) is the only thing that ever sets a slot's real position.
+--
+-- Fix round 1: dragPanel is the only panel this can ever write to now, so
+-- there is one visible array, not a from/target pair -- a cross-panel move
+-- (and the SpliceWithin length mismatch it produced, silently duplicating
+-- one id and deleting another) is no longer reachable at all.
 local function FinishDrag()
     local self = dragSlot
     if not self then return end
@@ -332,46 +346,52 @@ local function FinishDrag()
     if dragGhost then dragGhost:Hide() end
     ClearDragFeedback()
 
-    if dragMode and dragTargetPanel and dragTargetIdx then
+    if dragMode and dragTargetIdx and dragVisArr then
         local isNoop
         if dragMode == "swap" then
-            isNoop = dragTargetPanel == dragPanel and dragTargetIdx == dragFromIdx
+            isNoop = dragTargetIdx == dragFromIdx
         else
             local eff = dragTargetIdx
-            if dragTargetPanel == dragPanel and eff > dragFromIdx then eff = eff - 1 end
-            isNoop = dragTargetPanel == dragPanel and eff == dragFromIdx
+            if eff > dragFromIdx then eff = eff - 1 end
+            isNoop = eff == dragFromIdx
         end
 
         if not isNoop then
-            local order = ns.TopBar.Order()
-            local visLeft = VisibleIds(order.left)
-            local visRight = VisibleIds(order.right)
-            local fromArr = visLeft
-            if dragPanel == "right" then fromArr = visRight end
-            local targetArr = visLeft
-            if dragTargetPanel == "right" then targetArr = visRight end
+            local visArr = dragVisArr
 
             if dragMode == "swap" then
-                fromArr[dragFromIdx], targetArr[dragTargetIdx] = targetArr[dragTargetIdx], fromArr[dragFromIdx]
+                visArr[dragFromIdx], visArr[dragTargetIdx] = visArr[dragTargetIdx], visArr[dragFromIdx]
             else
-                local id = table.remove(fromArr, dragFromIdx)
+                local id = table.remove(visArr, dragFromIdx)
                 local insertAt = dragTargetIdx
-                if dragTargetPanel == dragPanel and insertAt > dragFromIdx then insertAt = insertAt - 1 end
+                if insertAt > dragFromIdx then insertAt = insertAt - 1 end
                 if insertAt < 1 then insertAt = 1 end
-                if insertAt > #targetArr + 1 then insertAt = #targetArr + 1 end
-                table.insert(targetArr, insertAt, id)
+                if insertAt > #visArr + 1 then insertAt = #visArr + 1 end
+                table.insert(visArr, insertAt, id)
             end
 
-            local newLeft = SpliceWithin(order.left, visLeft)
-            local newRight = SpliceWithin(order.right, visRight)
+            -- Fresh, full (hidden-inclusive) arrays for SpliceWithin -- this
+            -- is a one-time read at drop, not a per-tick one, so it costs
+            -- nothing like what Fix round 1's Fix 4 was about. The panel
+            -- dragPanel did NOT touch is passed straight through unchanged.
+            local order = ns.TopBar.Order()
+            local newLeft, newRight
+            if dragPanel == "left" then
+                newLeft = SpliceWithin(order.left, visArr)
+                newRight = order.right
+            else
+                newLeft = order.left
+                newRight = SpliceWithin(order.right, visArr)
+            end
             ns.TopBar.SetOrder(newLeft, order.centre, newRight)
             ns.TopBar.Apply()
             ns.TopBar.PreviewRefresh()
         end
     end
 
-    dragSlot, dragId, dragPanel, dragFromIdx = nil, nil, nil, nil
-    dragMode, dragTargetPanel, dragTargetIdx = nil, nil, nil
+    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = nil, nil, nil, nil, nil
+    dragMode, dragTargetIdx = nil, nil
+    lastFeedbackMode, lastFeedbackIdx = nil, nil
 end
 
 -- The second OnUpdate (installed on previewFrame by BeginDrag). Polls for
@@ -379,6 +399,12 @@ end
 -- on the slot's own pending-threshold OnUpdate, this closes on the
 -- drag-in-progress one, so a release anywhere (including outside the
 -- options window) always reaches FinishDrag.
+--
+-- Fix round 1: FindDragTarget is cheap now (dragVisArr is a snapshot, not a
+-- fresh Order() call), so it still runs every tick, but ApplyDragFeedback/
+-- ClearDragFeedback -- the ~40 SetPoint calls -- only run when the target
+-- actually changed since the last tick (lastFeedbackMode/lastFeedbackIdx),
+-- matching EUI_CooldownManager_Options.lua:14443's own early-out.
 local function DragTick()
     if not IsMouseButtonDown("LeftButton") then
         previewFrame:SetScript("OnUpdate", nil)
@@ -394,20 +420,24 @@ local function DragTick()
     dragGhost:ClearAllPoints()
     dragGhost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", ucx / gs, ucy / gs)
 
-    local mode, tPanel, tIdx = FindDragTarget(ucx, ucy)
-    if mode and tPanel and tIdx then
-        dragMode, dragTargetPanel, dragTargetIdx = mode, tPanel, tIdx
-        ApplyDragFeedback(mode, tPanel, tIdx)
+    local mode, tIdx = FindDragTarget(ucx, ucy)
+    if mode == lastFeedbackMode and tIdx == lastFeedbackIdx then return end
+    lastFeedbackMode, lastFeedbackIdx = mode, tIdx
+
+    dragMode, dragTargetIdx = mode, tIdx
+    if mode and tIdx then
+        ApplyDragFeedback(mode, tIdx)
     else
-        dragMode, dragTargetPanel, dragTargetIdx = nil, nil, nil
         ClearDragFeedback()
     end
 end
 
 -- Starts a drag once the slot's own pending-threshold OnUpdate (WireDrag,
--- below) crosses DRAG_THRESHOLD. Records which panel and visible index the
--- slot started at, so FinishDrag can tell a same-panel move from a
--- cross-panel one.
+-- below) crosses DRAG_THRESHOLD. Records the panel and visible index the
+-- slot started at, and snapshots that panel's own visible ids once -- the
+-- only read of ns.TopBar.Order() for the rest of the drag; FindDragTarget
+-- and ApplyDragFeedback both reuse dragVisArr instead of re-deriving it
+-- every tick.
 local function BeginDrag(self)
     local id, panel = self._id, self._panel
     if not (id and panel and self._baseX) then return end
@@ -421,8 +451,9 @@ local function BeginDrag(self)
     end
     if not idx then return end
 
-    dragSlot, dragId, dragPanel, dragFromIdx = self, id, panel, idx
-    dragMode, dragTargetPanel, dragTargetIdx = nil, nil, nil
+    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = self, id, panel, idx, visArr
+    dragMode, dragTargetIdx = nil, nil
+    lastFeedbackMode, lastFeedbackIdx = nil, nil
 
     local ghost = EnsureDragGhost()
     local fitScale = previewFrame:GetScale() or 1
@@ -439,6 +470,28 @@ local function BeginDrag(self)
     previewFrame:SetScript("OnUpdate", DragTick)
 end
 
+-- Tears an in-progress drag down WITHOUT writing anything -- called from
+-- previewFrame's OnHide (fix round 1). The host reparents every content-
+-- header child when the user leaves this page or closes the panel
+-- (EllesmereUI.lua:9202-9224, :9313-9322), which can Hide() previewFrame
+-- with the mouse button still down. WoW does not run OnUpdate on a hidden
+-- frame, so an in-progress drag would otherwise freeze mid-air: the ghost
+-- stranded on UIParent at TOOLTIP strata, the dragged slot stuck at alpha
+-- 0.3, and -- on the next visit, when previewFrame shows again and DragTick
+-- fires once more, sees the button already up -- FinishDrag would write a
+-- stale reorder to SavedVariables minutes after the user actually let go.
+-- This reaches the same end state FinishDrag's no-op path does, but never
+-- calls FinishDrag and so never reaches SetOrder.
+local function CancelDragOnHide()
+    if previewFrame then previewFrame:SetScript("OnUpdate", nil) end
+    if dragGhost then dragGhost:Hide() end
+    if dragSlot then dragSlot:SetAlpha(1) end
+    ClearDragFeedback()
+    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = nil, nil, nil, nil, nil
+    dragMode, dragTargetIdx = nil, nil
+    lastFeedbackMode, lastFeedbackIdx = nil, nil
+end
+
 -- Manual drag detection: a lightweight OnUpdate installed on the slot itself
 -- at OnMouseDown, torn down either by crossing DRAG_THRESHOLD (which hands
 -- off to BeginDrag) or by the button already being up on a later tick --
@@ -448,6 +501,11 @@ end
 local function WireDrag(slot)
     slot:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
+        -- Second-drag guard (fix round 1), matching
+        -- EllesmereUIDataBars_Options.lua:1258: a press on another slot
+        -- while one is already dragging must not arm a second pending
+        -- watch on top of it.
+        if dragSlot then return end
         local cx, cy = GetCursorPosition()
         self._pendX, self._pendY = cx, cy
         self:SetScript("OnUpdate", function(s)
@@ -620,7 +678,6 @@ local function Layout()
     lastYOff     = -(iconRowH - iconSize) / 2
 
     local leftW = LayoutLauncherPanel(order.left, "left", 0, iconSize, spacing, iconRowH)
-    lastLeftEndX = leftW
 
     if clockSlot then
         PositionClock(clockSlot, leftW + spacing, -(iconRowH - clockH) / 2, clockW, clockH)
@@ -629,7 +686,6 @@ local function Layout()
     local rightStartX = leftW + spacing + clockW + spacing
     local rightW = LayoutLauncherPanel(order.right, "right",
         rightStartX, iconSize, spacing, iconRowH)
-    lastRightStartX = rightStartX
 
     local fpsH = 0
     if Visible("fps") then
@@ -685,6 +741,10 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     previewFrame:ClearAllPoints()
     previewFrame:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", 0, 0)
     previewFrame:Show()
+    -- Fix round 1: cancels an in-progress drag cleanly if the host hides
+    -- this frame mid-drag (leaving the page, closing the panel) instead of
+    -- letting DragTick freeze and later write a stale reorder.
+    previewFrame:SetScript("OnHide", CancelDragOnHide)
 
     -- Step 4: the hint line, parented to the HEADER frame -- not previewFrame,
     -- not previewWrap -- so it never shrinks with the fit scale and has no
