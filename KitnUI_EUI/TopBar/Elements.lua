@@ -1060,9 +1060,16 @@ ns.TopBar.Elements = {
     },
 }
 
--- Read from the registered default rather than duplicated. Two copies of an
--- ordering drift, and the one that drifts is always the one nobody is looking at.
-ns.TopBar.DEFAULT_ORDER = ns.EUI_DEFAULTS and ns.EUI_DEFAULTS.tbOrder
+-- Read from the hoisted default rather than duplicated. Two copies of an
+-- ordering drift, and the one that drifts is always the one nobody is looking
+-- at. Task 4 Step 3b moved this OFF ns.EUI_DEFAULTS.tbOrder (that key is now
+-- registered as {}, see Core.lua) and onto ns.EUI_TB_DEFAULT_ORDER instead --
+-- same single-source contract, new name. No `and` guard needed here: unlike
+-- the old two-level ns.EUI_DEFAULTS.tbOrder lookup, there is no intermediate
+-- table to be nil against; this file already returned above if Core.lua
+-- itself bailed (EUI_INERT), which is the only way ns.EUI_TB_DEFAULT_ORDER
+-- would be unset.
+ns.TopBar.DEFAULT_ORDER = ns.EUI_TB_DEFAULT_ORDER
 
 ns.TopBar.ById = {}
 for _, el in ipairs(ns.TopBar.Elements) do

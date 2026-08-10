@@ -149,6 +149,28 @@ end
 -- that drove these settings out of the store in the first place. The values are
 -- the OFF state: a default of true would make a switch read on for someone who
 -- never touched it.
+--
+-- Task 4 Step 3b: the real Top Bar order, hoisted OUT of DEFAULTS.profile
+-- (tbOrder registers as {} below) and onto the namespace instead, because a
+-- registered default that is a non-empty array regrows any shorter saved
+-- array back to its own length at the next login -- EllesmereUI Lite's
+-- DeepMergeDefaults tail-fills every missing index
+-- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:174-188).
+-- RemoveId (Preview.lua) is the only code that can shorten a stored panel
+-- array, including to zero, and Task 4's cross-panel drag is the only thing
+-- that calls it -- both would have regrown, duplicating the moved id back
+-- into its old panel. This is still the single source: Elements.lua reads
+-- it back rather than keeping its own copy, and Core.lua loads before
+-- Elements.lua, which is why this has to live here.
+ns.EUI_TB_DEFAULT_ORDER = {
+    left   = { "friends", "guild", "groupfinder", "journal",
+               "achievements", "collections", "toybox" },
+    centre = { "clock" },
+    right  = { "hearthstone", "portals", "home", "vault", "character",
+               "spellbook", "talents", "professions", "volume",
+               "euiconfig", "kitnessentials", "gamemenu" },
+}
+
 local DEFAULTS = {
     profile = {
         -- Lulu
@@ -199,17 +221,20 @@ local DEFAULTS = {
         -- them with force: every write replaces the whole table. Never index into
         -- one to change a single entry.
         tbEnabled               = false,
-        -- The real order, as a literal, because a registered default has to be
-        -- one and Core.lua loads before Elements.lua. This is the single source:
-        -- Elements.lua reads it back rather than keeping its own copy.
-        tbOrder                 = {
-            left   = { "friends", "guild", "groupfinder", "journal",
-                       "achievements", "collections", "toybox" },
-            centre = { "clock" },
-            right  = { "hearthstone", "portals", "home", "vault", "character",
-                       "spellbook", "talents", "professions", "volume",
-                       "euiconfig", "kitnessentials", "gamemenu" },
-        },
+        -- Registered EMPTY, deliberately -- not "the real order, as a literal".
+        -- A registered default that is a non-empty array regrows any shorter
+        -- saved array back to its own length at the next login (Lite's
+        -- DeepMergeDefaults tail-fills every missing index), which would have
+        -- undone Task 4's cross-panel drag the moment it shortened or emptied
+        -- a panel. The real order now lives in ns.EUI_TB_DEFAULT_ORDER, above,
+        -- which Bar.lua's Order() falls back to for a panel with no saved
+        -- entry at all, and which Elements.lua reads back for
+        -- ns.TopBar.DEFAULT_ORDER. Registering tbOrder as {} still keeps the
+        -- key itself un-strippable while it holds real data: Lite's logout
+        -- strip only deletes an EMPTY sub-table, and an arranged bar's
+        -- tbOrder (left/centre/right all present, at least one non-empty)
+        -- never is.
+        tbOrder                 = {},
         tbOff                   = {},
         tbIconSize              = 20,
         tbClockSize             = 24,
