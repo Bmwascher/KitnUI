@@ -11,6 +11,15 @@ local _, ns = ... ---@type string, KitnUINS
 if ns.EUI_INERT then return end
 
 ns.EUIPages["Top Bar"] = function(parent, yOffset)
+    -- The cold mount. getHeaderBuilder (Core.lua) only STASHES the builder for
+    -- the page cache; this call is the one that actually mounts the header.
+    -- During EllesmereUI's hidden pre-build pass SetContentHeader is stubbed to
+    -- a no-op, so this is naturally inert there.
+    if EllesmereUI and EllesmereUI.SetContentHeader
+       and ns.TopBar and ns.TopBar.BuildPreviewHeader then
+        EllesmereUI:SetContentHeader(ns.TopBar.BuildPreviewHeader)
+    end
+
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h, row

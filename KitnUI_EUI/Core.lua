@@ -905,6 +905,20 @@ boot:SetScript("OnEvent", function(self)
             if not ok or type(height) ~= "number" then return math.abs(yOffset) end
             return height
         end,
+        -- Only the Top Bar page has a pinned header. Any other page returns nil
+        -- and EllesmereUI leaves the header area alone for it. This does NOT
+        -- mount anything: SelectPage calls it after the cold build
+        -- (EllesmereUI.lua:10777-10779) only to stash the builder into
+        -- _pageCache (:10787-10792). Options.lua does the mounting.
+        getHeaderBuilder = function(pageName)
+            if pageName ~= "Top Bar" then return nil end
+            return ns.TopBar and ns.TopBar.BuildPreviewHeader
+        end,
+        onPageCacheRestore = function(pageName)
+            if pageName == "Top Bar" and ns.TopBar and ns.TopBar.PreviewRestore then
+                ns.TopBar.PreviewRestore()
+            end
+        end,
     })
 end)
 
