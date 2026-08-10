@@ -964,7 +964,7 @@ ns.TopBar.Elements = {
     homeElement,
     vaultElement,
 
-    Macro("character", "Character panel", Icon("character"), "right",
+    Macro("character", "Character", Icon("character"), "right",
         "/click CharacterMicroButton"),
 
     -- No SpellbookMicroButton exists on Mainline: the 12.0 client folded the
