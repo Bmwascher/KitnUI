@@ -92,7 +92,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     );                                                                             y = y - h
 
     _, h = W:DualRow(parent, y,
-        { type = "slider", text = "FPS/MS Size", min = 6, max = 24, step = 1,
+        { type = "slider", text = "FPS / MS Size", min = 6, max = 24, step = 1,
           tooltip = "Size of the FPS / MS readout text.",
           getValue = function() return ns.TopBar.Get("tbSysSize", 11) end,
           setValue = function(v) ns.TopBar.Set("tbSysSize", v); ns.TopBar.Apply() end },

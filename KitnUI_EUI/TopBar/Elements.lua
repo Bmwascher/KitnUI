@@ -659,12 +659,26 @@ local function CreatePortalFlyout()
         "SecureHandlerStateTemplate")
     portalFlyout:SetSize(w, h)
     portalFlyout:SetFrameStrata("DIALOG")
+    -- Level as well as strata, matching NaowhUI_Portals.lua:191. Strata alone
+    -- leaves the default level inside DIALOG, so another dialog-strata frame
+    -- can draw over the flyout.
+    portalFlyout:SetFrameLevel(100)
     portalFlyout:SetClampedToScreen(true)
     portalFlyout:Hide()
 
     local bg = portalFlyout:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
+    -- Deliberately NOT the reference's 0.04/0.04/0.06 (NaowhUI_Portals.lua:198).
+    -- This is Bar.lua's own panel colour (Bar.lua:214, :358): the flyout has to
+    -- match the bar it hangs off, and NaowhUI's value matches NaowhUI's bar.
     bg:SetColorTexture(0.03, 0.03, 0.04, 0.95)
+
+    -- The host's border, when the host offers it. Same nil-guarded shape the
+    -- reference uses (NaowhUI_Portals.lua:200-201).
+    local PP = EllesmereUI and EllesmereUI.PP
+    if PP and PP.CreateBorder then
+        PP.CreateBorder(portalFlyout, 0, 0, 0, 1, 1, "OVERLAY", 7)
+    end
 
     portalFlyout:SetAttribute("_onstate-combat", [[
         if newstate == "in" then self:Hide() end
@@ -695,6 +709,11 @@ local function CreatePortalFlyout()
             local si = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
             if si and si.iconID then icon:SetTexture(si.iconID) end
             btn.icon = icon
+
+            -- Per button too, matching NaowhUI_Portals.lua:230-232.
+            if PP and PP.CreateBorder then
+                PP.CreateBorder(btn, 0, 0, 0, 1, 1, "OVERLAY", 7)
+            end
 
             local cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
             cooldown:SetAllPoints()
@@ -872,6 +891,9 @@ local function VolumeCancelTicker(self)
     end
 end
 
+-- 0.5s, deliberately slower than WindTools' 0.3s (GameBar.lua:899). The
+-- readout is a whole-number percentage the user is actively dragging; a third
+-- of a second buys nothing visible and costs more ticks.
 local function VolumeStartTicker(btn)
     if btn._volumeTicker then return end
     btn._volumeTicker = C_Timer.NewTicker(0.5, function()
