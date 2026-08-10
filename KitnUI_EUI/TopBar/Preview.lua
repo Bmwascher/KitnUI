@@ -100,32 +100,42 @@ end
 -- (LayoutLauncherPanel, below) are wired -- the clock and fps slots never
 -- call WireDrag. Ported from the house drag idiom
 -- (EUI_CooldownManager_Options.lua, EllesmereUIDataBars_Options.lua:1236-
--- 1276). A drag is scoped to the panel it started in for its entire life
--- (dragPanel, fixed by BeginDrag): FindDragTarget below returns nil for any
--- cursor position outside that panel's own span, including the whole of the
--- clock gap and the other panel outright, so a drop there simply cancels
--- the drag. Moving an id to the OTHER panel is Task 4's, not this one's.
+-- 1276).
+--
+-- Task 4: widened to also allow a drop in the OTHER launcher panel, ported
+-- from EllesmereUIBags.lua's ComputeDropZone (:3154-3205) -- a cursor now
+-- resolves to a (mode, index, panel) triple instead of just (mode, index).
+-- The centre panel (the clock's own domain) and anything outside both
+-- launcher panels still refuse: FindDragTarget returns nil for both, which
+-- FinishDrag treats as a no-op, same as an in-panel cancel.
 ---------------------------------------------------------------------------------
 
 local DRAG_THRESHOLD = 3
 
 -- Cached from the last Layout() pass so drag maths never has to re-derive
 -- the row geometry mid-drag. Shared by both panels -- Layout() lays out both
--- with the same iconSize/spacing/yOff.
+-- with the same iconSize/spacing/yOff. lastLeftW/lastClockStartX/lastClockW/
+-- lastRightStartX/lastRightW (Task 4) are each panel's own content span in
+-- previewFrame-local x, so FindDragTarget can resolve a panel zone even when
+-- that panel is currently empty and has no slot to read a _baseX from.
 local lastIconSize, lastSpacing, lastYOff
+local lastLeftW, lastClockStartX, lastClockW, lastRightStartX, lastRightW
 
 -- Drag state. Set by BeginDrag, read by FindDragTarget/ApplyDragFeedback/
 -- FinishDrag, cleared by FinishDrag and by CancelDragOnHide.
 --
--- dragPanel is fixed for the whole drag and is the ONLY panel a drop can
--- land in -- this task is "drag to reorder WITHIN a panel"; moving an id
--- between panels is Task 4's. dragVisArr is a snapshot of dragPanel's own
--- visible ids, taken once in BeginDrag: nothing else can touch tbOrder while
--- a drag is in progress, so re-deriving it from ns.TopBar.Order() every tick
--- would be pure waste -- three CopyTables and a fresh table build, every
--- frame, for a value that cannot have changed mid-drag.
-local dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr
-local dragMode, dragTargetIdx
+-- dragPanel is fixed for the whole drag: it is the panel the drag STARTED
+-- in, and dragVisArr is a snapshot of that panel's own visible ids (dragged
+-- id included), taken once in BeginDrag. dragOtherVisArr (Task 4) is the
+-- same kind of snapshot for the OTHER panel, which never contains the
+-- dragged id -- so a "swap" target is only ever resolved within dragVisArr,
+-- never dragOtherVisArr (FindDragTarget gates that explicitly). Neither
+-- array is re-derived from ns.TopBar.Order() mid-drag: nothing else can
+-- touch tbOrder while a drag is in progress, so re-deriving either every
+-- tick would be pure waste -- three CopyTables and a fresh table build,
+-- every frame, for a value that cannot have changed mid-drag.
+local dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr, dragOtherVisArr
+local dragMode, dragTargetIdx, dragTargetPanel
 local dragGhost
 local insertLine
 
@@ -137,12 +147,12 @@ local insertLine
 -- dragSlot is nil for.
 local pendingSlot
 
--- The (mode, index) DragTick last actually applied. Skips
+-- The (mode, index, panel) DragTick last actually applied. Skips
 -- ApplyDragFeedback/ClearDragFeedback when the target has not moved since
 -- the previous tick -- EUI_CooldownManager_Options.lua:14443's own
 -- early-out. Cleared by BeginDrag, FinishDrag and CancelDragOnHide so a new
 -- drag never early-outs against a stale value left by the last one.
-local lastFeedbackMode, lastFeedbackIdx
+local lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel
 
 -- Visible-filtered copy of a stored order array, in the same left-to-right
 -- order LayoutLauncherPanel renders it. Step 5's SpliceWithin is what folds
@@ -195,18 +205,26 @@ end
 
 -- Converts a cursor position into previewFrame-local units through effective
 -- scales, exactly as EUI_CooldownManager_Options.lua:14306-14313 does, then
--- resolves it to a (mode, index) drop target WITHIN dragPanel. cx, cy are
--- already divided by UIParent's own effective scale by the caller (the drag
--- ticker, below), matching that reference's own calling convention.
+-- resolves it to a (mode, index, panel) drop target. cx, cy are already
+-- divided by UIParent's own effective scale by the caller (the drag ticker,
+-- below), matching that reference's own calling convention.
 --
--- Fix round 1: the target panel is ALWAYS dragPanel -- this task moves an id
--- within a panel; moving it to the other one is Task 4's. A cursor that is
--- not over dragPanel's own span (including the whole of the clock gap and
--- the other panel outright) returns nil, which the caller treats as a
--- cancelled drag, same as a no-op. dragVisArr is the snapshot BeginDrag took
--- once at drag start, not a fresh ns.TopBar.Order() call: nothing else can
--- touch tbOrder mid-drag, so re-deriving it here every tick would only be
--- three wasted CopyTables a frame.
+-- Task 4: ported from EllesmereUIBags.lua's ComputeDropZone (:3154-3205),
+-- mirrored over three horizontal panels instead of N vertical bag rows. The
+-- x axis is split into left/centre/right zones at the MIDPOINTS of the gaps
+-- between lastLeftW/lastClockStartX+lastClockW/lastRightStartX (Layout()'s
+-- own cached spans, Task 4), not off any one slot's _baseX -- that keeps a
+-- zone resolvable even when its panel is currently empty. The centre zone
+-- (the clock's own domain) and anything past the outer edge of either
+-- launcher panel both return nil -- the Bags refusal path at :3282-3300 --
+-- which the caller treats as a cancelled drag, same as an in-panel no-op.
+--
+-- "swap" is only ever returned for the panel the drag STARTED in (dragPanel):
+-- a swap trades the dragged id for another WITHOUT changing either stored
+-- array's length, which only makes sense within one array. The other panel's
+-- own visible array (dragOtherVisArr) never contains the dragged id, so
+-- without this gate the same distance-from-centre test would spuriously
+-- return "swap" there too -- a mode Step 3's move helpers cannot commit.
 local function FindDragTarget(cx, cy)
     if not (previewFrame and dragPanel and dragVisArr) then return nil end
     local pfLeft, pfTop = previewFrame:GetLeft(), previewFrame:GetTop()
@@ -226,19 +244,38 @@ local function FindDragTarget(cx, cy)
     if not (size and yOff) then return nil end
     if localY > yOff + size * 0.5 or localY < yOff - size * 1.5 then return nil end
 
-    local visArr = dragVisArr
-    if #visArr == 0 then return nil end
-
     local spacing = lastSpacing or 0
+    local leftW = lastLeftW or 0
+    local clockStartX = lastClockStartX or leftW
+    local clockW = lastClockW or 0
+    local rightStartX = lastRightStartX or leftW
+    local rightW = lastRightW or 0
+
+    local boundaryLC = leftW + spacing * 0.5
+    local boundaryCR = clockStartX + clockW + spacing * 0.5
+    local leftOuter = -spacing * 0.5
+    local rightOuter = rightStartX + rightW + spacing * 0.5
+
+    local targetPanel
+    if localX < boundaryLC then
+        if localX < leftOuter then return nil end
+        targetPanel = "left"
+    elseif localX < boundaryCR then
+        return nil -- centre: the clock's own domain, never a drop target
+    elseif localX <= rightOuter then
+        targetPanel = "right"
+    else
+        return nil -- past the right panel's own outer edge
+    end
+
+    local visArr
+    if targetPanel == dragPanel then visArr = dragVisArr else visArr = dragOtherVisArr end
+    if not visArr then return nil end
+    if #visArr == 0 then return "insert", 1, targetPanel end
+
     local first = slotPool[visArr[1]]
     local last = slotPool[visArr[#visArr]]
     if not (first and first._baseX and last and last._baseX) then return nil end
-
-    -- Outside dragPanel's own span (the whole clock gap, and everything past
-    -- it on the other panel) -- not a drop target, cancel the feedback.
-    if localX < first._baseX - spacing * 0.5 or localX > last._baseX + size + spacing * 0.5 then
-        return nil
-    end
 
     local swapZone = size * 0.2
 
@@ -248,66 +285,84 @@ local function FindDragTarget(cx, cy)
             local slotL, slotR = slot._baseX, slot._baseX + size
             local slotCX = slot._baseX + size / 2
             if localX >= slotL - spacing * 0.5 and localX < slotR + spacing * 0.5 then
-                if visArr[i] ~= dragId and math.abs(localX - slotCX) < swapZone then
-                    return "swap", i
+                if targetPanel == dragPanel and visArr[i] ~= dragId and math.abs(localX - slotCX) < swapZone then
+                    return "swap", i, targetPanel
                 elseif localX < slotCX then
-                    return "insert", i
+                    return "insert", i, targetPanel
                 else
-                    return "insert", i + 1
+                    return "insert", i + 1, targetPanel
                 end
             end
         end
     end
 
-    return "insert", #visArr + 1
+    return "insert", #visArr + 1, targetPanel
 end
 
--- Slides dragPanel's other slots aside for an insert and draws the accent
--- insert line between the two neighbours it will land between. Ported from
--- EUI_CooldownManager_Options.lua:14225-14229 (the line), :14243-14263 (the
--- slide) and :14451 (the nudge distance -- fix round 1: this used to be
+-- Slides dragPanel's other slots aside for an in-panel insert and draws the
+-- accent insert line between the two neighbours it will land between. Ported
+-- from EUI_CooldownManager_Options.lua:14225-14229 (the line), :14243-14263
+-- (the slide) and :14451 (the nudge distance -- fix round 1: this used to be
 -- size+spacing, about 6.7x the reference's own value, which shoved the
 -- default 12-icon right panel's leading edge onto the clock). A swap has no
 -- cited visual in either reference file this task points at, so it gets
 -- none here either -- ClearDragFeedback alone is its feedback.
-local function ApplyDragFeedback(mode, targetIdx)
+--
+-- Task 4: targetPanel picks which snapshot to read (dragVisArr for
+-- dragPanel itself, dragOtherVisArr for the panel across the gap). The
+-- slide-aside only ever runs for dragPanel: dragOtherVisArr's ids are not
+-- being reordered relative to each other, only gaining one new neighbour on
+-- commit, so there is nothing there for the slide's virtualPos/virtualInsert
+-- maths (both anchored on dragFromIdx, a position that only means something
+-- within dragPanel's own array) to apply to.
+local function ApplyDragFeedback(mode, targetIdx, targetPanel)
     ClearDragFeedback()
     if mode ~= "insert" then return end
-    if not dragVisArr then return end
-    local visArr = dragVisArr
+    if not targetPanel then return end
+    local visArr
+    if targetPanel == dragPanel then visArr = dragVisArr else visArr = dragOtherVisArr end
+    if not visArr then return end
 
     local size = lastIconSize or 0
     local spacing = lastSpacing or 0
-    local nudge = math.floor((size + spacing) * 0.15)
 
-    for i, id in ipairs(visArr) do
-        if id ~= dragId then
-            local slot = slotPool[id]
-            if slot and slot._baseX then
-                local virtualPos = i
-                if i > dragFromIdx then virtualPos = i - 1 end
-                local virtualInsert = targetIdx
-                if targetIdx > dragFromIdx then virtualInsert = targetIdx - 1 end
-                local offX = -nudge
-                if virtualPos >= virtualInsert then offX = nudge end
-                slot:ClearAllPoints()
-                slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", slot._baseX + offX, slot._baseY)
+    if targetPanel == dragPanel then
+        local nudge = math.floor((size + spacing) * 0.15)
+        for i, id in ipairs(visArr) do
+            if id ~= dragId then
+                local slot = slotPool[id]
+                if slot and slot._baseX then
+                    local virtualPos = i
+                    if i > dragFromIdx then virtualPos = i - 1 end
+                    local virtualInsert = targetIdx
+                    if targetIdx > dragFromIdx then virtualInsert = targetIdx - 1 end
+                    local offX = -nudge
+                    if virtualPos >= virtualInsert then offX = nudge end
+                    slot:ClearAllPoints()
+                    slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", slot._baseX + offX, slot._baseY)
+                end
             end
         end
     end
 
     EnsureInsertLine()
+    local panelStartX = 0
+    if targetPanel == "right" then panelStartX = lastRightStartX or 0 end
     local lineX
-    if targetIdx <= 1 then
+    if #visArr == 0 then
+        lineX = panelStartX
+    elseif targetIdx <= 1 then
         local first = slotPool[visArr[1]]
-        if first then lineX = first._baseX - spacing / 2 else lineX = 0 end
+        if first and first._baseX then lineX = first._baseX - spacing / 2 else lineX = panelStartX end
     elseif targetIdx > #visArr then
         local last = slotPool[visArr[#visArr]]
-        if last then lineX = last._baseX + size + spacing / 2 else lineX = 0 end
+        if last and last._baseX then lineX = last._baseX + size + spacing / 2 else lineX = panelStartX end
     else
         local before = slotPool[visArr[targetIdx - 1]]
         local after = slotPool[visArr[targetIdx]]
-        if before and after then lineX = (before._baseX + size + after._baseX) / 2 end
+        if before and before._baseX and after and after._baseX then
+            lineX = (before._baseX + size + after._baseX) / 2
+        end
     end
 
     if lineX then
@@ -351,15 +406,54 @@ local function SpliceWithin(stored, newVisible)
     return out
 end
 
+-- Task 4, verbatim per the brief. Operate on the STORED arrays directly and
+-- must NEVER be routed through SpliceWithin: a cross-panel move changes
+-- both arrays' visible lengths, and SpliceWithin's length guard above
+-- returns `stored` unchanged on exactly that mismatch, so a cross-panel
+-- drop routed through it would silently do nothing. RemoveId only ever
+-- shortens the SOURCE array by one -- any hidden id after the removed slot
+-- closes up by one index, unavoidable since the array is genuinely
+-- shorter, but harmless since their relative order is untouched. A hidden
+-- id never changes panel: only the dragged id moves, and it is visible by
+-- definition.
+local function RemoveId(arr, id)
+    local out = {}
+    for i = 1, #arr do
+        if arr[i] ~= id then out[#out + 1] = arr[i] end
+    end
+    return out
+end
+
+-- Insert id into `arr` so it becomes the k-th VISIBLE entry. k is 1-based and
+-- comes from the drop position among the target panel's visible slots; a k past
+-- the last visible entry appends.
+local function InsertAtVisible(arr, id, k)
+    local out, seen, placed = {}, 0, false
+    for i = 1, #arr do
+        if Visible(arr[i]) then
+            seen = seen + 1
+            if seen == k and not placed then
+                out[#out + 1] = id
+                placed = true
+            end
+        end
+        out[#out + 1] = arr[i]
+    end
+    if not placed then out[#out + 1] = id end
+    return out
+end
+
 -- Ends the drag: restores the dragged slot's alpha, hides the ghost and any
 -- slide/line feedback, and -- unless the drop is a no-op -- writes the new
 -- order and redraws. Never moves preview frames directly; Layout() (via
 -- PreviewRefresh) is the only thing that ever sets a slot's real position.
 --
--- Fix round 1: dragPanel is the only panel this can ever write to now, so
--- there is one visible array, not a from/target pair -- a cross-panel move
--- (and the SpliceWithin length mismatch it produced, silently duplicating
--- one id and deleting another) is no longer reachable at all.
+-- Task 4: branches on dragTargetPanel == dragPanel. Same-panel keeps Task
+-- 3's own swap/insert-within-visArr logic and SpliceWithin, byte for byte.
+-- Cross-panel (dragMode is always "insert" there -- FindDragTarget never
+-- returns "swap" for the other panel) goes through RemoveId/InsertAtVisible
+-- on the two STORED arrays instead, per the brief's Step 3 -- it is never a
+-- no-op, because landing in a different panel is always a real change.
 local function FinishDrag()
     local self = dragSlot
     if not self then return end
@@ -367,42 +461,65 @@ local function FinishDrag()
     if dragGhost then dragGhost:Hide() end
     ClearDragFeedback()
 
-    if dragMode and dragTargetIdx and dragVisArr then
-        local isNoop
-        if dragMode == "swap" then
-            isNoop = dragTargetIdx == dragFromIdx
-        else
-            local eff = dragTargetIdx
-            if eff > dragFromIdx then eff = eff - 1 end
-            isNoop = eff == dragFromIdx
-        end
-
-        if not isNoop then
-            local visArr = dragVisArr
-
+    if dragMode and dragTargetIdx and dragTargetPanel then
+        if dragTargetPanel == dragPanel then
+            local isNoop
             if dragMode == "swap" then
-                visArr[dragFromIdx], visArr[dragTargetIdx] = visArr[dragTargetIdx], visArr[dragFromIdx]
+                isNoop = dragTargetIdx == dragFromIdx
             else
-                local id = table.remove(visArr, dragFromIdx)
-                local insertAt = dragTargetIdx
-                if insertAt > dragFromIdx then insertAt = insertAt - 1 end
-                if insertAt < 1 then insertAt = 1 end
-                if insertAt > #visArr + 1 then insertAt = #visArr + 1 end
-                table.insert(visArr, insertAt, id)
+                local eff = dragTargetIdx
+                if eff > dragFromIdx then eff = eff - 1 end
+                isNoop = eff == dragFromIdx
             end
 
-            -- Fresh, full (hidden-inclusive) arrays for SpliceWithin -- this
-            -- is a one-time read at drop, not a per-tick one, so it costs
-            -- nothing like what Fix round 1's Fix 4 was about. The panel
-            -- dragPanel did NOT touch is passed straight through unchanged.
+            if not isNoop then
+                local visArr = dragVisArr
+
+                if dragMode == "swap" then
+                    visArr[dragFromIdx], visArr[dragTargetIdx] = visArr[dragTargetIdx], visArr[dragFromIdx]
+                else
+                    local id = table.remove(visArr, dragFromIdx)
+                    local insertAt = dragTargetIdx
+                    if insertAt > dragFromIdx then insertAt = insertAt - 1 end
+                    if insertAt < 1 then insertAt = 1 end
+                    if insertAt > #visArr + 1 then insertAt = #visArr + 1 end
+                    table.insert(visArr, insertAt, id)
+                end
+
+                -- Fresh, full (hidden-inclusive) arrays for SpliceWithin --
+                -- this is a one-time read at drop, not a per-tick one. The
+                -- panel dragPanel did NOT touch is passed straight through
+                -- unchanged.
+                local order = ns.TopBar.Order()
+                local newLeft, newRight
+                if dragPanel == "left" then
+                    newLeft = SpliceWithin(order.left, visArr)
+                    newRight = order.right
+                else
+                    newLeft = order.left
+                    newRight = SpliceWithin(order.right, visArr)
+                end
+                ns.TopBar.SetOrder(newLeft, order.centre, newRight)
+                ns.TopBar.Apply()
+                ns.TopBar.PreviewRefresh()
+            end
+        elseif dragMode == "insert" then
             local order = ns.TopBar.Order()
+            local sourceStored, destStored
+            if dragPanel == "left" then
+                sourceStored, destStored = order.left, order.right
+            else
+                sourceStored, destStored = order.right, order.left
+            end
+
+            sourceStored = RemoveId(sourceStored, dragId)
+            destStored = InsertAtVisible(destStored, dragId, dragTargetIdx)
+
             local newLeft, newRight
             if dragPanel == "left" then
-                newLeft = SpliceWithin(order.left, visArr)
-                newRight = order.right
+                newLeft, newRight = sourceStored, destStored
             else
-                newLeft = order.left
-                newRight = SpliceWithin(order.right, visArr)
+                newLeft, newRight = destStored, sourceStored
             end
             ns.TopBar.SetOrder(newLeft, order.centre, newRight)
             ns.TopBar.Apply()
@@ -410,9 +527,9 @@ local function FinishDrag()
         end
     end
 
-    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = nil, nil, nil, nil, nil
-    dragMode, dragTargetIdx = nil, nil
-    lastFeedbackMode, lastFeedbackIdx = nil, nil
+    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr, dragOtherVisArr = nil, nil, nil, nil, nil, nil
+    dragMode, dragTargetIdx, dragTargetPanel = nil, nil, nil
+    lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel = nil, nil, nil
     -- Fix round 2, Fix 2: pendingSlot is normally already nil here (the
     -- threshold handoff clears it before BeginDrag ever runs), but clearing
     -- it again costs nothing and keeps this function's own end state
@@ -446,13 +563,13 @@ local function DragTick()
     dragGhost:ClearAllPoints()
     dragGhost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", ucx / gs, ucy / gs)
 
-    local mode, tIdx = FindDragTarget(ucx, ucy)
-    if mode == lastFeedbackMode and tIdx == lastFeedbackIdx then return end
-    lastFeedbackMode, lastFeedbackIdx = mode, tIdx
+    local mode, tIdx, tPanel = FindDragTarget(ucx, ucy)
+    if mode == lastFeedbackMode and tIdx == lastFeedbackIdx and tPanel == lastFeedbackPanel then return end
+    lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel = mode, tIdx, tPanel
 
-    dragMode, dragTargetIdx = mode, tIdx
-    if mode and tIdx then
-        ApplyDragFeedback(mode, tIdx)
+    dragMode, dragTargetIdx, dragTargetPanel = mode, tIdx, tPanel
+    if mode and tIdx and tPanel then
+        ApplyDragFeedback(mode, tIdx, tPanel)
     else
         ClearDragFeedback()
     end
@@ -460,17 +577,23 @@ end
 
 -- Starts a drag once the slot's own pending-threshold OnUpdate (WireDrag,
 -- below) crosses DRAG_THRESHOLD. Records the panel and visible index the
--- slot started at, and snapshots that panel's own visible ids once -- the
--- only read of ns.TopBar.Order() for the rest of the drag; FindDragTarget
--- and ApplyDragFeedback both reuse dragVisArr instead of re-deriving it
--- every tick.
+-- slot started at, and snapshots BOTH panels' own visible ids once (Task
+-- 4) -- the only read of ns.TopBar.Order() for the rest of the drag;
+-- FindDragTarget and ApplyDragFeedback both reuse dragVisArr/dragOtherVisArr
+-- instead of re-deriving either every tick.
 local function BeginDrag(self)
     local id, panel = self._id, self._panel
     if not (id and panel and self._baseX) then return end
 
     local order = ns.TopBar.Order()
-    local visArr
-    if panel == "left" then visArr = VisibleIds(order.left) else visArr = VisibleIds(order.right) end
+    local visArr, otherVisArr
+    if panel == "left" then
+        visArr = VisibleIds(order.left)
+        otherVisArr = VisibleIds(order.right)
+    else
+        visArr = VisibleIds(order.right)
+        otherVisArr = VisibleIds(order.left)
+    end
     local idx
     for i, v in ipairs(visArr) do
         if v == id then idx = i break end
@@ -478,8 +601,9 @@ local function BeginDrag(self)
     if not idx then return end
 
     dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = self, id, panel, idx, visArr
-    dragMode, dragTargetIdx = nil, nil
-    lastFeedbackMode, lastFeedbackIdx = nil, nil
+    dragOtherVisArr = otherVisArr
+    dragMode, dragTargetIdx, dragTargetPanel = nil, nil, nil
+    lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel = nil, nil, nil
 
     local ghost = EnsureDragGhost()
     local fitScale = previewFrame:GetScale() or 1
@@ -537,9 +661,9 @@ local function CancelDragOnHide()
     if dragGhost then dragGhost:Hide() end
     dragSlot:SetAlpha(1)
     ClearDragFeedback()
-    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr = nil, nil, nil, nil, nil
-    dragMode, dragTargetIdx = nil, nil
-    lastFeedbackMode, lastFeedbackIdx = nil, nil
+    dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr, dragOtherVisArr = nil, nil, nil, nil, nil, nil
+    dragMode, dragTargetIdx, dragTargetPanel = nil, nil, nil
+    lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel = nil, nil, nil
 end
 
 -- Manual drag detection: a lightweight OnUpdate installed on the slot itself
@@ -742,6 +866,16 @@ local function Layout()
     local rightStartX = leftW + spacing + clockW + spacing
     local rightW = LayoutLauncherPanel(order.right, "right",
         rightStartX, iconSize, spacing, iconRowH)
+
+    -- Task 4: each panel's own content span, cached the same way lastIconSize
+    -- etc. are above -- FindDragTarget's zone boundaries read these instead
+    -- of a slot's own _baseX, so a zone stays resolvable even when its panel
+    -- is currently empty (leftW/rightW == 0).
+    lastLeftW        = leftW
+    lastClockStartX  = leftW + spacing
+    lastClockW       = clockW
+    lastRightStartX  = rightStartX
+    lastRightW       = rightW
 
     local fpsH = 0
     if Visible("fps") then
