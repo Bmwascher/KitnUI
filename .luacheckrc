@@ -70,7 +70,8 @@ read_globals = {
     "FCF_IterateActiveChatWindows", "GetChatWindowInfo",
     "FCF_OpenNewWindow", "FCF_CanOpenNewWindow",
     "FCF_GetNextOpenChatWindowIndex", "FCF_DockFrame",
-    "C_ChatInfo",
+    "C_ChatInfo", "FCF_ResetChatWindows", "FCF_StopDragging",
+    "SetChatColorNameByClass", "FCFDock_SelectWindow", "GENERAL_CHAT_DOCK",
 
     -- Sound
     "PlaySound", "SOUNDKIT",

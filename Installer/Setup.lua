@@ -772,10 +772,16 @@ function ns.FinishInstallation()
 
     -- Chat Setup, same reasoning as the module set above: the opt-in is account
     -- wide but WoW's chat layout is per character, so an alt that only runs
-    -- /kitn load has none of it and needs its own pass. Skipped when the Extras
-    -- button already ran it this session -- the work is idempotent, just wasted.
-    if ns.db.extras and ns.db.extras.chat and ns.RunChatSetup
-        and not (ns.sessionExtras and ns.sessionExtras.chat) then
+    -- /kitn load has none of it and needs its own pass.
+    --
+    -- LOAD MODE ONLY, and that restriction is load-bearing. RunChatSetup resets
+    -- the character's chat windows before rebuilding them, and FinishInstallation
+    -- also ends the install and update runs -- so without this gate every /kitn
+    -- update would silently wipe the chat layout of anyone who once pressed the
+    -- button. Install and update runs reach the Extras page anyway, where
+    -- pressing Chat Setup is the user's own deliberate act.
+    if ns.installerIsLoadMode and ns.db.extras and ns.db.extras.chat
+        and ns.RunChatSetup then
         ns.RunChatSetup()
     end
 

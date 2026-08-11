@@ -87,8 +87,15 @@ function ns.RunOptimize()
     return true
 end
 
--- Chat reconfigure: main-frame position/size, timestamps, CVars, and the docked
--- tab set. Idempotent -- running twice yields the same state.
+-- Chat reconfigure: reset to Blizzard defaults, then rebuild the KitnUI layout
+-- on top -- CVars, name colouring, tabs, message groups and channels.
+--
+-- THE RESET IS THE POINT, and it is why this is deterministic: it wipes any
+-- chat layout already on the character, so the rebuild below is the whole
+-- result rather than a set of edits over whatever was there. That is the same
+-- order atrocityUI uses (References/atrocityUI/Imports/Chat.lua:77). The cost is
+-- real -- a window or channel routing the player made themselves is gone -- and
+-- it is why this lives behind an opt-in button and not in the main install run.
 --
 -- EllesmereUIChat is in ALWAYS_DISABLED (Installer/Setup.lua), so EllesmereUI's
 -- own chat module writes nothing and there is nobody to fight here.
@@ -119,10 +126,10 @@ end
 -- C_ChatInfo.GetChannelShortcutForChannelID turns the ID into whatever the
 -- client calls it. 1 General, 2 Trade, 22 LocalDefense, 42 Services.
 --
--- CHANNELS ARE ONLY EVER ADDED, NEVER CLEARED. Removing one would silence a
--- channel the player is still joined to, with no window left showing it, and a
--- channel the player added themselves is none of the installer's business. A
--- community stream is likewise skipped: it is that player's own membership.
+-- Channels are added, never removed: the reset above has already cleared the
+-- slate, so there is nothing left to take away, and a channel that reappears
+-- afterwards is one the player joined themselves. A community stream is likewise
+-- never routed here: that is the player's own membership.
 local CHAT_WINDOWS = {
     {
         name = "General", dock = 1, reserved = "ChatFrame1",
@@ -224,25 +231,70 @@ local function ApplyChatWindow(entry)
     end
 end
 
+-- pcall-guarded throughout: a CVar name that shifts across builds should cost
+-- the one setting, not the rest of the chat rebuild.
+local CHAT_CVARS = {
+    showTimestamps = "%I:%M %p ",
+    chatStyle = "classic",
+    whisperMode = "inline",
+    chatMouseScroll = "1",
+    chatClassColorOverride = "0",
+    colorChatNamesByClass = "1",
+    wholeChatWindowClickable = "0",
+    speechToText = "0",
+    textToSpeech = "0",
+}
+
+-- Class-coloured player names, per message group. colorChatNamesByClass above is
+-- the master switch; this is the per-group list it reads.
+local CLASS_COLOR_GROUPS = {
+    "SAY", "EMOTE", "YELL", "WHISPER", "PARTY", "PARTY_LEADER",
+    "RAID", "RAID_LEADER", "RAID_WARNING", "INSTANCE_CHAT",
+    "INSTANCE_CHAT_LEADER", "GUILD", "OFFICER",
+    "ACHIEVEMENT", "GUILD_ACHIEVEMENT",
+    "CHANNEL1", "CHANNEL2", "CHANNEL3", "CHANNEL4", "CHANNEL5",
+}
+
 function ns.RunChatSetup()
     local cf = _G.ChatFrame1
     if not cf then return false end
 
-    cf:ClearAllPoints()
-    cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 5)
-    if cf.SetSize then cf:SetSize(420, 205) end
-    if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(cf) end
+    if SetCVar then
+        for name, value in pairs(CHAT_CVARS) do pcall(SetCVar, name, value) end
+    end
+
+    -- Blank slate. Everything below is written onto Blizzard's defaults, so the
+    -- result does not depend on what the character had before.
+    if FCF_ResetChatWindows then FCF_ResetChatWindows() end
+
+    if SetChatColorNameByClass then
+        for _, group in ipairs(CLASS_COLOR_GROUPS) do
+            SetChatColorNameByClass(group, true)
+        end
+    end
 
     for _, entry in ipairs(CHAT_WINDOWS) do
         ApplyChatWindow(entry)
     end
 
-    -- pcall-guarded in case a CVar name shifts across builds.
-    if SetCVar then
-        pcall(SetCVar, "showTimestamps", "%I:%M %p ")
-        pcall(SetCVar, "chatStyle", "classic")
-        pcall(SetCVar, "whisperMode", "inline")
-        pcall(SetCVar, "chatMouseScroll", "1")
+    -- Position and size LAST: the reset above moves ChatFrame1 back to
+    -- Blizzard's default spot, so setting it any earlier would be undone.
+    cf:ClearAllPoints()
+    cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 5)
+    if cf.SetSize then cf:SetSize(420, 205) end
+
+    -- Save every active window's placement and stop it being dragged loose,
+    -- which is what makes the docked strip survive the reload that follows.
+    if FCF_IterateActiveChatWindows then
+        FCF_IterateActiveChatWindows(function(chatFrame)
+            if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(chatFrame) end
+            if FCF_StopDragging then FCF_StopDragging(chatFrame) end
+        end)
+    end
+
+    -- Finish on General rather than whichever tab was made last.
+    if FCFDock_SelectWindow and GENERAL_CHAT_DOCK then
+        FCFDock_SelectWindow(GENERAL_CHAT_DOCK, cf)
     end
 
     return true

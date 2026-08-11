@@ -402,12 +402,14 @@ end
 local function ExtrasPage()
     local f = WF()
     f.SubTitle:SetText("Extras")
-    f.Desc1:SetText("Optional cleanup and quality-of-life tweaks. None are required; they just complete the KitnUI look and feel. Run any of them as many times as you like.")
+    f.Desc1:SetText("Optional cleanup and quality-of-life tweaks. None are required; they just complete the KitnUI look and feel. Run any of them as many times as you like.\n\n" ..
+        ns.Amber("Chat Setup") .. " rebuilds your chat from scratch, so any tabs or channels you set up yourself are replaced.")
     f.Desc2:SetText("")
     f.Desc3:SetText("")
 
     local slot = 1
-    -- Chat Setup: full chat reconfigure (position, font, timestamps, named tabs).
+    -- Chat Setup: resets the chat windows, then rebuilds the KitnUI tab set,
+    -- channels and CVars on top. The reset is why Desc1 above warns about it.
     ns.Wizard:SetOption(slot, "Chat Setup", function()
         if ns.RunChatSetup() then
             if ns.sessionExtras then ns.sessionExtras.chat = true end
