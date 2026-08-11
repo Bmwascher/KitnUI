@@ -34,10 +34,12 @@ end
 ---------------------------------------------------------------------------------
 
 ns.title = "|cffFF008CKitn|r|cffffffffUI|r"
--- TEST: all addon profiles (EllesmereUI + companions) import under this name so
--- testing doesn't overwrite your real "KitnUI" profiles. Revert to "KitnUI"
--- before shipping.
-ns.profileName = "KitnUI - EUI Test"
+-- The ONE definition. Every profile this installer writes -- EllesmereUI and
+-- every companion -- derives its name from here, and the Lulu Edit Mode layout
+-- derives from it too, so this string is the only place the shipped profile name
+-- is decided. It carried a test value through v2 development; if it is ever set
+-- back to one, set it back BEFORE tagging, not after.
+ns.profileName = "KitnUI"
 ns.version = C_AddOns.GetAddOnMetadata(addonName, "Version")
 ns.data = ns.data or {}
 ns.db = nil
