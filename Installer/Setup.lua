@@ -503,6 +503,166 @@ setupFunctions["BuffReminders"] = function(addonKey, import)
 end
 
 ---------------------------------------------------------------------------------
+-- Baganator
+-- Writes a named KitnUI profile into BAGANATOR_CONFIG.Profiles and sets it as the
+-- active profile for this character. Only runs on an explicit install or load
+-- action, never on PLAYER_LOGIN, so changes the user makes inside the profile
+-- survive a reload.
+--
+-- Category groups are decoded from a JSON export string (Baganator's
+-- Customise > Categories > Export) and merged into the profile. Array fields are
+-- converted to the hashmap form Baganator stores internally.
+---------------------------------------------------------------------------------
+
+local function DecodeBaganatorCategories(jsonString)
+    if not C_EncodingUtil or not C_EncodingUtil.DeserializeJSON then
+        return nil, "C_EncodingUtil.DeserializeJSON not available"
+    end
+
+    local success, import = pcall(C_EncodingUtil.DeserializeJSON, jsonString)
+    if not success or type(import) ~= "table" or type(import.categories) ~= "table" then
+        return nil, "invalid Baganator export"
+    end
+
+    local out = {
+        custom_categories = {},
+        category_sections = {},
+        category_modifications = {},
+        category_hidden = {},
+        category_display_order = {},
+        -- Sentinels that stop Baganator from reimporting its stock defaults over
+        -- our data on first boot (CategoryViews/Initialize.lua:144). 999 stays
+        -- above any DefaultImportVersion Baganator will realistically ship.
+        category_default_import = 999,
+        -- Our data is written in the post-migration format; skip the
+        -- MigrateFormat loop (CategoryViews/Initialize.lua:3-77).
+        category_migration = 5,
+    }
+
+    for _, c in ipairs(import.categories) do
+        local source = c.source or c.name
+        out.custom_categories[source] = {
+            name = c.name,
+            search = c.search or "",
+        }
+    end
+
+    for _, m in ipairs(import.modifications or {}) do
+        if m.source then
+            local mod = {}
+            if type(m.priority) == "number" then mod.priority = m.priority end
+            if m.showGroupPrefix ~= nil then mod.showGroupPrefix = m.showGroupPrefix end
+            if m.group then mod.group = m.group end
+            if m.color then mod.color = m.color end
+            if type(m.items) == "table" then
+                mod.addedItems = mod.addedItems or {}
+                for _, itemID in ipairs(m.items) do
+                    mod.addedItems["i:" .. tostring(itemID)] = true
+                end
+            end
+            if type(m.pets) == "table" then
+                mod.addedItems = mod.addedItems or {}
+                for _, petID in ipairs(m.pets) do
+                    mod.addedItems["p:" .. tostring(petID)] = true
+                end
+            end
+            if type(m.hideIn) == "table" then
+                local h = {}
+                for _, key in ipairs(m.hideIn) do
+                    h[key] = true
+                end
+                mod.hideIn = h
+            end
+            out.category_modifications[m.source] = mod
+        end
+    end
+
+    -- Every custom category needs a modifications entry with a priority, matching
+    -- Baganator's own import behaviour.
+    for source in pairs(out.custom_categories) do
+        out.category_modifications[source] = out.category_modifications[source] or { priority = 0 }
+        if out.category_modifications[source].priority == nil then
+            out.category_modifications[source].priority = 0
+        end
+    end
+
+    -- C_EncodingUtil.DeserializeJSON converts numeric-string object keys (e.g.
+    -- "1") into Lua numbers. Baganator looks up sections via the string form
+    -- (derived from display_order entries like "_1"), so coerce keys back to
+    -- strings here.
+    if type(import.sections) == "table" then
+        for id, s in pairs(import.sections) do
+            if type(s) == "table" and type(s.name) == "string" then
+                local entry = { name = s.name }
+                if s.color then entry.color = s.color end
+                out.category_sections[tostring(id)] = entry
+            end
+        end
+    end
+
+    if type(import.hidden) == "table" then
+        for _, source in ipairs(import.hidden) do
+            out.category_hidden[source] = true
+        end
+    end
+
+    if type(import.order) == "table" then
+        for i, entry in ipairs(import.order) do
+            out.category_display_order[i] = entry
+        end
+    end
+
+    return out
+end
+
+setupFunctions["Baganator"] = function(addonKey, import)
+    if import then
+        if not HasData(addonKey) then
+            print(ns.title .. ": No Baganator data found.")
+            return
+        end
+
+        BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
+        BAGANATOR_CONFIG.Profiles = BAGANATOR_CONFIG.Profiles or {}
+
+        local src = ns.data[addonKey]
+        local profile = {}
+
+        -- Copy the non-JSON fields (view modes, seen_welcome) into the profile.
+        for k, v in pairs(src) do
+            if k ~= "categoriesJSON" then
+                profile[k] = type(v) == "table" and CopyTable(v) or v
+            end
+        end
+
+        -- Decode the category groups and merge them into the profile.
+        if type(src.categoriesJSON) == "string" and strtrim(src.categoriesJSON) ~= "" then
+            local decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
+            if decoded then
+                for k, v in pairs(decoded) do
+                    profile[k] = v
+                end
+            else
+                print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
+            end
+        end
+
+        BAGANATOR_CONFIG.Profiles[ns.profileName] = profile
+
+        -- Activate the KitnUI profile for this character (per-character SavedVar).
+        BAGANATOR_CURRENT_PROFILE = ns.profileName
+
+        CompleteSetup(addonKey)
+        return
+    end
+
+    -- Load: activate the existing KitnUI profile for this character.
+    if BAGANATOR_CONFIG and BAGANATOR_CONFIG.Profiles and BAGANATOR_CONFIG.Profiles[ns.profileName] then
+        BAGANATOR_CURRENT_PROFILE = ns.profileName
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Blizzard Cooldown Manager (per-spec)
 ---------------------------------------------------------------------------------
 

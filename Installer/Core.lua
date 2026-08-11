@@ -71,6 +71,7 @@ local addonVersionHeaders = {
     Blizzard_EditMode = "X-EditMode-Version",
     KitnEssentials    = "X-KitnEssentials-Version",
     BuffReminders     = "X-BuffReminders-Version",
+    Baganator         = "X-Baganator-Version",
 }
 -- BLIZZARD CDM IS DELIBERATELY ABSENT, and its TOC header is gone with it. A
 -- single version string cannot describe per-class, per-spec data: it cannot say
@@ -608,12 +609,12 @@ KitnCommands["version"] = function()
     -- Plater is omitted while it is dormant (see the addon step list in
     -- Installer.lua): printing a data version for a profile the installer no
     -- longer offers would advertise something the user cannot get.
-    local order = { "EllesmereUI", "BigWigs", "NSRT", "Blizzard_EditMode", "KitnEssentials", "BuffReminders", "BlizzardCDM" }
+    local order = { "EllesmereUI", "BigWigs", "NSRT", "KitnEssentials", "BuffReminders", "Baganator", "Blizzard_EditMode", "BlizzardCDM" }
     local names = {
         EllesmereUI = "EllesmereUI", Plater = "Plater", BigWigs = "BigWigs",
         NSRT = "Northern Sky Raid Tools", Blizzard_EditMode = "Edit Mode",
         KitnEssentials = "KitnEssentials", BuffReminders = "BuffReminders",
-        BlizzardCDM = "Blizzard CDM",
+        Baganator = "Baganator", BlizzardCDM = "Blizzard CDM",
     }
     for _, key in ipairs(order) do
         -- CDM has no version to print. Reading addonVersions for it here was the

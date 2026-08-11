@@ -230,6 +230,7 @@ local addonSteps = {
     { key = "BigWigs",           display = "BigWigs",                 checkAddon = "BigWigs",              alwaysAvailable = false, desc = "Boss timers and warnings, positioned and styled for KitnUI." },
     { key = "NSRT",              display = "Northern Sky Raid Tools", checkAddon = "NorthernSkyRaidTools", alwaysAvailable = false, desc = "Northern Sky raid tooling: assignments, timers, and note sync." },
     { key = "KitnEssentials",    display = "KitnEssentials",          checkAddon = "KitnEssentials",       alwaysAvailable = false, desc = "Kitn's own quality-of-life addon: cooldowns, dungeon tools, and cleanups." },
+    { key = "Baganator",         display = "Baganator",               checkAddon = "Baganator",            alwaysAvailable = false, desc = "Category-sorted bags and bank, with the KitnUI group layout and search rules." },
     { key = "Blizzard_EditMode", display = "Edit Mode",               checkAddon = "Blizzard_EditMode",    alwaysAvailable = true,  desc = "The KitnUI HUD layout (frame positions) for Blizzard Edit Mode." },
     { key = "BlizzardCDM",       display = "Blizzard CDM",            checkAddon = nil,                    alwaysAvailable = true,  desc = "Per-spec Cooldown Manager layouts for your class." },
 }
@@ -513,9 +514,9 @@ local recapNames = {
     EllesmereUI = "EllesmereUI", Plater = "Plater", BigWigs = "BigWigs",
     NSRT = "Northern Sky Raid Tools", Blizzard_EditMode = "Edit Mode",
     KitnEssentials = "KitnEssentials", BuffReminders = "BuffReminders",
-    BlizzardCDM = "Blizzard CDM",
+    Baganator = "Baganator", BlizzardCDM = "Blizzard CDM",
 }
-local recapOrder = { "EllesmereUI", "Plater", "BuffReminders", "BigWigs", "NSRT", "KitnEssentials", "Blizzard_EditMode", "BlizzardCDM" }
+local recapOrder = { "EllesmereUI", "Plater", "BuffReminders", "BigWigs", "NSRT", "KitnEssentials", "Baganator", "Blizzard_EditMode", "BlizzardCDM" }
 
 local function IsProfileImported(key)
     -- Same per-class reasoning as ns.IsAddonImported: the finish recap describes
