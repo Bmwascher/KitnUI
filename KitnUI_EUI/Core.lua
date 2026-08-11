@@ -258,6 +258,11 @@ local DEFAULTS = {
         tbFade                  = false,
         tbFadeTime              = 0.25,
         tbFriendsInGameOnly     = false,
+        -- Off by default, which is the count this addon already produced: one
+        -- per Battle.net friend. On, it counts every WoW game account that
+        -- friend has online. WindTools ships the same switch defaulted ON
+        -- (References/ElvUI_WindTools-v4.19/Settings/Profile.lua:1319).
+        tbFriendsSubAccounts    = false,
         tbHearthLeft            = "RANDOM",
         tbHearthMiddle          = "6948",
         tbHearthRight           = "140192",

@@ -104,12 +104,28 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
             if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
         end }
 
-    -- One flat list of grid cells, so the qualifier packs with the elements
-    -- instead of the loop having to know about it.
+    -- The second friends qualifier, sitting beside the first. Modelled on
+    -- WindTools' own "Count Sub Accounts" (its Game Bar walks every online WoW
+    -- game account at Modules/Misc/GameBar.lua:605-616), and named the same so
+    -- the two read alike for anyone who has used it there.
+    local FRIENDS_SUBACCOUNTS = { type = "checkbox",
+        text = "Count Sub Accounts",
+        tooltip = "Counts every WoW game account a Battle.net friend has online, rather than counting that friend once. Affects the number under the icon and the list in its tooltip together.",
+        getValue = function() return ns.TopBar.Get("tbFriendsSubAccounts") end,
+        setValue = function(v)
+            ns.TopBar.Set("tbFriendsSubAccounts", v and true or false); ns.TopBar.Apply()
+            if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+        end }
+
+    -- One flat list of grid cells, so the qualifiers pack with the elements
+    -- instead of the loop having to know about them.
     local cells = {}
     for _, el in ipairs(rows) do
         cells[#cells + 1] = ElementCheckboxCfg(el)
-        if el.id == "friends" then cells[#cells + 1] = FRIENDS_QUALIFIER end
+        if el.id == "friends" then
+            cells[#cells + 1] = FRIENDS_QUALIFIER
+            cells[#cells + 1] = FRIENDS_SUBACCOUNTS
+        end
     end
 
     -- Three-across checkbox grid, TripleRow per precedent

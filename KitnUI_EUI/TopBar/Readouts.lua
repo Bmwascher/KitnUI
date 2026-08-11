@@ -302,19 +302,58 @@ end
 -- FriendListDocumentation.lua:602-616) nor BNetGameAccountInfo (.wow-api-reference/
 -- Interface/AddOns/Blizzard_APIDocumentationGenerated/BattleNetDocumentation.lua:
 -- 247-274) marks any field Secret.
+-- One Battle.net friend can be logged into several WoW game accounts at once,
+-- and `accountInfo.gameAccountInfo` describes only the FIRST. tbFriendsSubAccounts
+-- decides which of the two things the badge counts: the friend, or each of that
+-- friend's active WoW accounts. WindTools' Game Bar does the same walk
+-- (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:605-616), though its
+-- own `countSubAccounts` setting is declared and never read in v4.19 -- the
+-- behaviour there is hardcoded on. Neither GetFriendNumGameAccounts nor
+-- GetFriendGameAccountInfo declares SecretReturns
+-- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/
+-- BattleNetDocumentation.lua:68-97); both mark only SecretArguments, which
+-- constrains what may be passed IN and says nothing about the returns.
+--
+-- Returns the number of rows the roster below will list for one friend, so the
+-- badge and the tooltip can never disagree about that friend.
+local function BNetFriendRows(i, inGameOnly, subAccounts)
+    local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
+        and C_BattleNet.GetFriendAccountInfo(i)
+    local gameInfo = accountInfo and accountInfo.gameAccountInfo
+    if not (gameInfo and gameInfo.isOnline) then return 0 end
+
+    if not subAccounts then
+        if inGameOnly and gameInfo.clientProgram ~= "WoW" then return 0 end
+        return 1
+    end
+
+    local n = (C_BattleNet.GetFriendNumGameAccounts and C_BattleNet.GetFriendNumGameAccounts(i)) or 0
+    if n <= 0 then
+        -- No per-account list available: fall back to the primary, which is
+        -- the same row the off state would have counted.
+        if inGameOnly and gameInfo.clientProgram ~= "WoW" then return 0 end
+        return 1
+    end
+
+    local rows = 0
+    for j = 1, n do
+        local sub = C_BattleNet.GetFriendGameAccountInfo and C_BattleNet.GetFriendGameAccountInfo(i, j)
+        if sub and sub.isOnline and (not inGameOnly or sub.clientProgram == "WoW") then
+            rows = rows + 1
+        end
+    end
+    return rows
+end
+
 local function FriendsCount()
     local wowOnline = (C_FriendList and C_FriendList.GetNumOnlineFriends
         and C_FriendList.GetNumOnlineFriends()) or 0
     local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
+    local subAccounts = Get("tbFriendsSubAccounts", ns.EUI_DEFAULTS.tbFriendsSubAccounts) and true or false
     local bnetOnline = 0
     local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
     for i = 1, numBNet do
-        local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
-            and C_BattleNet.GetFriendAccountInfo(i)
-        local gameInfo = accountInfo and accountInfo.gameAccountInfo
-        if gameInfo and gameInfo.isOnline and (not inGameOnly or gameInfo.clientProgram == "WoW") then
-            bnetOnline = bnetOnline + 1
-        end
+        bnetOnline = bnetOnline + BNetFriendRows(i, inGameOnly, subAccounts)
     end
     return wowOnline + bnetOnline
 end
@@ -335,17 +374,40 @@ local function BuildFriendsRoster(tt)
         end
     end
 
+    -- Walks the same two shapes FriendsCount/BNetFriendRows walk, in the same
+    -- order and under the same predicates, so the badge's number is the number
+    -- of lines below it -- up to ROSTER_CAP, which truncates the list only.
+    local subAccounts = Get("tbFriendsSubAccounts", ns.EUI_DEFAULTS.tbFriendsSubAccounts) and true or false
     local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
     for i = 1, numBNet do
         if rows >= ROSTER_CAP then break end
         local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
             and C_BattleNet.GetFriendAccountInfo(i)
         local gameInfo = accountInfo and accountInfo.gameAccountInfo
-        if accountInfo and gameInfo and gameInfo.isOnline
-           and (not inGameOnly or gameInfo.clientProgram == "WoW") then
-            rows = rows + 1
-            local label = gameInfo.characterName or accountInfo.accountName or accountInfo.battleTag
-            tt:AddLine(label or "?", 1, 1, 1)
+        if accountInfo and gameInfo and gameInfo.isOnline then
+            local n = 0
+            if subAccounts and C_BattleNet.GetFriendNumGameAccounts then
+                n = C_BattleNet.GetFriendNumGameAccounts(i) or 0
+            end
+            if n <= 0 then
+                -- Off, or no per-account list: the primary account is the one row.
+                if not inGameOnly or gameInfo.clientProgram == "WoW" then
+                    rows = rows + 1
+                    tt:AddLine(gameInfo.characterName or accountInfo.accountName
+                        or accountInfo.battleTag or "?", 1, 1, 1)
+                end
+            else
+                for j = 1, n do
+                    if rows >= ROSTER_CAP then break end
+                    local sub = C_BattleNet.GetFriendGameAccountInfo
+                        and C_BattleNet.GetFriendGameAccountInfo(i, j)
+                    if sub and sub.isOnline and (not inGameOnly or sub.clientProgram == "WoW") then
+                        rows = rows + 1
+                        tt:AddLine(sub.characterName or accountInfo.accountName
+                            or accountInfo.battleTag or "?", 1, 1, 1)
+                    end
+                end
+            end
         end
     end
 end
