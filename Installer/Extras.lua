@@ -101,12 +101,15 @@ end
 -- own chat module writes nothing and there is nobody to fight here.
 --
 -- FONT FACE AND FONT SIZE ARE DELIBERATELY ABSENT. KitnEssentials' Chat skin
--- owns both -- Modules/Skinning/Chat.lua:2069-2075 applies its own FontFace and
--- FontSize to every chat frame, and :719 secure-hooks FCF_SetChatWindowFontSize
--- so a size written from outside is overwritten anyway. Setting either here
--- would be a fight KitnUI loses, on a setting the player already has a panel
--- for. Tabs, message groups and channels are NOT KitnEssentials' business, which
--- is why they stay below.
+-- owns both: its StyleChat applies its own FontFace and FontSize to every chat
+-- frame, and re-applies them from its own setup pass at login. Setting either
+-- here would be a fight KitnUI loses, on a setting the player already has a
+-- panel for. Note what that does NOT say: KitnEssentials hooks
+-- FCF_SetChatWindowFontSize, but its handler only refreshes the edit box, so a
+-- size written from outside is not corrected on the spot -- it is corrected at
+-- the next setup pass, which for this function is the reload the wizard ends
+-- with. Tabs, message groups and channels are NOT KitnEssentials' business,
+-- which is why they stay below.
 --
 -- Position and size deliberately repeat where the Edit Mode layout in
 -- Data/AddOns/EditMode.lua already puts chat, so the two agree rather than take
@@ -185,7 +188,7 @@ local function FindChatWindow(name)
     local found
     FCF_IterateActiveChatWindows(function(chatFrame, index)
         local windowName = GetChatWindowInfo(index)
-        if windowName and strlower(windowName) == strlower(name) then
+        if type(windowName) == "string" and strlower(windowName) == strlower(name) then
             found = chatFrame
             return true
         end
