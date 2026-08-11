@@ -7,11 +7,10 @@
 
 local addonName, ns = ... ---@type string, KitnUINS
 
--- The forward half of the bridge to KitnUI_EUI, which is a separate addon and so
--- gets a separate namespace table. It reads eight symbols from here (db, data,
--- profileName, title, Red, QueueMessage, EditModeSlotFree, KITN_PINK) through an
--- __index fallthrough, so this must be the SAME table, not a copy: ns.db is not
--- filled until PLAYER_LOGIN and a copy would freeze it empty.
+-- The forward half of the bridge to KitnUI_EUI, which is a separate addon with
+-- its own namespace table and reads this one through an __index fallthrough.
+-- Must be the SAME table, not a copy: ns.db is not filled until PLAYER_LOGIN,
+-- and a copy would freeze it empty.
 _G.KitnUI_Shared = ns
 
 local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
@@ -73,12 +72,11 @@ local addonVersionHeaders = {
     BuffReminders     = "X-BuffReminders-Version",
     Baganator         = "X-Baganator-Version",
 }
--- BLIZZARD CDM IS DELIBERATELY ABSENT, and its TOC header is gone with it. A
--- single version string cannot describe per-class, per-spec data: it cannot say
--- WHICH spec changed, so one edited layout prompts a three-spec player to
--- reimport all three, and it is maintained by hand beside the data, so it lies
--- in both directions when the two drift. CDM answers "is this stale?" by
--- fingerprinting the string it ships instead -- see the block below.
+-- BLIZZARD CDM IS DELIBERATELY ABSENT, and it has no TOC header. One version
+-- string cannot say WHICH spec changed, so a single edited layout would prompt a
+-- three-spec player to reimport all three, and a hand-maintained header lies in
+-- both directions once it drifts from the data. CDM answers "is this stale?" by
+-- fingerprinting the string it ships -- see the block below.
 
 function ns.GetAddonDataVersion(addonKey)
     local header = addonVersionHeaders[addonKey]
@@ -90,22 +88,19 @@ end
 -- Blizzard CDM: content fingerprints instead of a version header
 ---------------------------------------------------------------------------------
 
--- A short token derived from the layout string KitnUI ships for one spec. It is
--- only ever compared against another token this function produced, so it never
--- has to be cryptographic and never leaves SavedVariables.
+-- A short token derived from the layout string KitnUI ships for one spec. Only
+-- ever compared against another token this function produced, so it never has to
+-- be cryptographic and never leaves SavedVariables.
 --
--- Multiply-and-modulo rather than the FNV-1a the reference addon uses: FNV needs
--- bit.bxor, and bitops are forbidden family-wide (../AGENTS.md). Every step here
--- is plain arithmetic. The largest intermediate is (2^32-1)*33+255, about 1.42e11
--- -- far below 2^53, so a double holds it exactly and the result cannot drift.
+-- Multiply-and-modulo, not FNV-1a: FNV needs bit.bxor and bitops are forbidden
+-- family-wide. The largest intermediate is (2^32-1)*33+255, about 1.42e11 --
+-- far below 2^53, so a double holds it exactly and the result cannot drift.
 --
--- THE EMISSION SPLITS h RATHER THAN FORMATTING IT WHOLE. Printing a whole 32-bit
--- value with %x or %d depends on how the host formatter converts a double
--- outside the signed 32-bit range, and nothing available here settles what WoW's
--- Lua does there. Two halves below 2^16 are inside the well-defined range on
--- every runtime, and the split is lossless (hi * 65536 + lo == h), so this costs
--- no hash bits. Length is a third field: two strings that collide on the hash
--- almost certainly differ in length.
+-- THE EMISSION SPLITS h RATHER THAN FORMATTING IT WHOLE. How %d or %x renders a
+-- double outside the signed 32-bit range is host-dependent. Two halves below
+-- 2^16 are well defined everywhere, and the split is lossless
+-- (hi * 65536 + lo == h), so it costs no hash bits. Length is a third field:
+-- two strings that collide on the hash almost certainly differ in length.
 local function Fingerprint(str)
     if type(str) ~= "string" or str == "" then return nil end
 
@@ -116,9 +111,9 @@ local function Fingerprint(str)
     return format("%d-%d-%d", math.floor(h / 65536), h % 65536, #str)
 end
 
--- The storage key. A STRING, so it can never be confused with the plain integer
--- spec indices every earlier build wrote -- which is what makes the migration in
--- GetCDMSpecState safe without any argument about numeric ranges.
+-- The storage key. A STRING, so it can never collide with the plain integer spec
+-- indices older builds wrote -- which is what makes the migration in
+-- GetCDMSpecState safe with no argument about numeric ranges.
 --
 -- Both halves are validated because ns.SetupAddon forwards its variadic argument
 -- straight through, so a caller can reach here with a nil or non-numeric spec.
@@ -129,10 +124,10 @@ function ns.GetCDMKey(classId, specIndex)
     return format("%d:%d", classId, specIndex)
 end
 
--- Memoized because ns.IsAddonImported feeds every sidebar repaint, and without
--- this the class's whole payload would be re-hashed on each one. The cache
--- cannot go stale: ns.data.BlizzardCDM is a table literal built at load time and
--- nothing writes to it, so a shipped string is constant for the session.
+-- Memoized because ns.IsAddonImported feeds every sidebar repaint, which would
+-- otherwise re-hash the class's whole payload each time. The cache cannot go
+-- stale: ns.data.BlizzardCDM is a load-time table literal and nothing writes to
+-- it, so a shipped string is constant for the session.
 local shippedFingerprints = {}
 
 function ns.GetCDMShippedFingerprint(classId, specIndex)
@@ -176,8 +171,7 @@ function ns.GetCDMSpecState(classId, specIndex)
 
     local key = ns.GetCDMKey(classId, specIndex)
     local store = ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM
-    -- An `if`, not `and`/`or`: the value on the right can be nil, which is the
-    -- one shape the project rule forbids collapsing.
+    -- An `if`, not `and`/`or`: the value on the right can be nil.
     local held
     if type(store) == "table" and key then held = store[key] end
 
@@ -187,10 +181,9 @@ function ns.GetCDMSpecState(classId, specIndex)
     return HasLegacyCDMKeys() and "untracked" or "missing"
 end
 
--- THE SINGLE OWNER of every specialization API call on the status surfaces.
--- The CDM page used to resolve the class and the spec count itself, which meant
--- two places guarding the same APIs two different ways. Returns the class id (or
--- nil) and the rows; the import path keeps its own calls, which are not status.
+-- THE SINGLE OWNER of every specialization API call on the status surfaces, so
+-- there is one set of guards rather than one per surface. Returns the class id
+-- (or nil) and the rows. The import path keeps its own calls; it is not status.
 function ns.GetCDMSpecRows()
     local rows = {}
     local _, _, classId = UnitClass("player")
@@ -256,16 +249,14 @@ function ns.SummarizeCDMRows(rows)
 end
 
 -- Should the wizard ask before importing? Pure over its arguments so the same
--- implementation serves both call sites AND the test harness -- a copy of this
--- decision living in a test could pass while the shipped one drifted.
+-- implementation serves both call sites and the test harness.
 --
 -- `snapshot` is the FROZEN pre-session copy of profiles.BlizzardCDM. A nil
 -- specIndex asks "any spec of this class", which is what Import All needs.
 --
--- Legacy keys warn even though they name no class. That over-warns across
+-- Legacy keys warn even though they name no class, so this over-warns across
 -- classes on purpose: the import deletes a matching layout before recreating it,
--- a legacy user may have edited theirs, and over-warning costs a click while
--- under-warning destroys work.
+-- and over-warning costs a click while under-warning destroys work.
 function ns.CDMNeedsOverwriteConfirm(snapshot, classId, specIndex)
     if type(snapshot) ~= "table" then return false end
 
@@ -291,12 +282,10 @@ function ns.GetOutdatedAddons()
     local outdated = {}
     if not ns.db then return outdated end
 
-    -- CDM rides the same list so every consumer downstream is unchanged -- the
-    -- login notification, the update popup, /kitn update's keys and the update
-    -- wizard's page selection all read this one function. Only the RULE differs:
-    -- fingerprints, not a header. isNew is true only when nothing of this class
-    -- is tracked and no legacy key survives, so a player coming back from an
-    -- older build is offered an update rather than announced as new.
+    -- CDM rides the same list so every consumer downstream is unchanged. Only
+    -- the RULE differs: fingerprints, not a header. isNew is true only when
+    -- nothing of this class is tracked and no legacy key survives, so a player
+    -- coming back from an older build is offered an update, not announced as new.
     local cdmSpecs = ns.GetOutdatedCDMSpecs()
     if #cdmSpecs > 0 then
         local everImported = ns.HasCDMForCurrentClass() or HasLegacyCDMKeys()
@@ -315,9 +304,8 @@ function ns.GetOutdatedAddons()
         -- An addon whose payload is empty can never be imported, so reporting it
         -- outdated creates a prompt nothing can clear: the wizard skips a dormant
         -- step when building its pages, the version is never re-stamped, and the
-        -- popup returns on every login. Checked on BOTH branches -- it used to
-        -- guard only the never-imported one, which left a dormant addon with an
-        -- older stored version stuck in exactly that loop.
+        -- popup returns on every login. Checked on BOTH branches -- a dormant
+        -- addon with an older stored version reaches the other one.
         local payload = ns.data[addonKey]
         local emptyPayload = payload == nil
             or (type(payload) == "string" and strtrim(payload) == "")
@@ -334,12 +322,9 @@ function ns.GetOutdatedAddons()
             }
         elseif not hasProfile or not installed then
             -- Covers two cases with one branch: never imported, and imported by
-            -- a build that did not record a version (the Blizzard CDM path did
-            -- not stamp one before 2026.08.11). Both are reported as new because
-            -- there is no old version to name, and the login notification's
-            -- non-new branch concatenates oldVersion with no nil guard.
-            -- Reporting it once is enough: the reimport records a version and
-            -- this stops firing.
+            -- a build that did not record a version. Both report as new because
+            -- there is no old version to name. Reporting it once is enough: the
+            -- reimport records a version and this stops firing.
             outdated[#outdated + 1] = {
                 key = addonKey,
                 newVersion = current,
@@ -350,27 +335,21 @@ function ns.GetOutdatedAddons()
     return outdated
 end
 
--- Blizzard's cap is five layouts PER TYPE, not five in total:
--- EditModeMaxLayoutsPerType is 5, and AreLayoutsOfTypeMaxed compares it against
--- numLayouts[layoutType], so a character at five Account layouts and five
--- Character layouts holds ten. Counting the whole list would refuse a write that
--- would have succeeded and tell the user to delete a layout they do not need to.
+-- Blizzard's cap is five layouts PER TYPE, not five in total, so a character can
+-- hold five Account and five Character layouts. Counting the whole list would
+-- refuse a write that would have succeeded.
 --
--- Every layout KitnUI writes is Account type, because EllesmereUI's importer
--- forces imported.layoutType to Enum.EditModeLayoutType.Account. So only Account
--- layouts are counted here.
+-- Only Account layouts are counted, because EllesmereUI's importer forces every
+-- layout it writes to Enum.EditModeLayoutType.Account.
 --
--- The name match is type-scoped for the same reason. ApplyPresetEditMode de-dupes
--- by NAME across both types, so a CHARACTER layout sharing our name would free a
+-- The name match is type-scoped for the same reason: ApplyPresetEditMode de-dupes
+-- by NAME across both types, so a CHARACTER layout sharing our name frees a
 -- Character slot, not the Account slot we are about to fill. Treating it as a
 -- replacement would let a sixth Account layout through.
 --
--- A layout under KitnUI's OTHER name does not help either: importing the Lulu
--- layout while only the standard one exists still needs a free Account slot.
---
--- Returns true when the write is safe. An unreadable layout list, or an Enum this
--- client does not carry, returns true so a missing API costs the guard and not
--- the feature: ApplyPresetEditMode reports its own failure in that case.
+-- Returns true when the write is safe. An unreadable layout list, or a missing
+-- Enum, also returns true, so a missing API costs the guard and not the feature
+-- -- ApplyPresetEditMode reports its own failure in that case.
 function ns.EditModeSlotFree(layoutName)
     local layouts = C_EditMode and C_EditMode.GetLayouts and C_EditMode.GetLayouts()
     if not (layouts and layouts.layouts) then return true end
@@ -414,13 +393,10 @@ end
 -- Color helpers (also used by Setup.lua / Installer.lua via ns)
 ---------------------------------------------------------------------------------
 
--- Say something to the user across a reload.
---
--- Lulu Mode and the installer both call ReloadUI on the line after they report
--- what they could not do, so those messages were written into a chat frame the
--- client tore down microseconds later. The user flipped a switch, saw the screen
--- reload, and was told nothing. Queue instead of print anywhere a reload follows,
--- and the boot handler prints it on the far side.
+-- Say something to the user across a reload. A print on the line before
+-- ReloadUI goes into a chat frame the client tears down microseconds later, so
+-- queue instead of printing anywhere a reload follows; the boot handler prints
+-- it on the far side.
 function ns.QueueMessage(text)
     if type(text) ~= "string" or not ns.db then return end
     ns.db.pendingMessages = ns.db.pendingMessages or {}
@@ -532,15 +508,15 @@ KitnCommands["dev"] = function()
 end
 
 KitnCommands["reset"] = function()
-    -- Put back everything the config tab is holding down before the snapshots
-    -- go, otherwise they and the switch states die out of step. It refuses in
-    -- combat, and a refusal must abort the whole reset rather than proceeding to
-    -- wipe the saved variables the restore still needs.
-    -- Absence aborts for the same reason a refusal does. KitnUI_EUI is a separate
-    -- addon and can be disabled on its own, and with it goes the only code that
-    -- can put back what its switches are holding down. Wiping the snapshots then
-    -- would strand Lulu's action bars and Edit Mode layout with nothing left to
-    -- reverse them. Refusing out loud beats a reset that looks like it worked.
+    -- Put back everything the config tab is holding down BEFORE the snapshots
+    -- go, or the two die out of step. The teardown refuses in combat, and a
+    -- refusal must abort the whole reset rather than wipe the saved variables
+    -- the restore still needs.
+    --
+    -- Its absence aborts for the same reason. KitnUI_EUI can be disabled on its
+    -- own, and with it goes the only code that can reverse Lulu's action bars
+    -- and Edit Mode layout. Refusing out loud beats a reset that looks like it
+    -- worked.
     if not ns.EUIResetAll then
         print(ns.title .. ": cannot reset while the KitnUI_EUI addon is disabled, because the settings it is holding down could not be put back. Enable it, reload, then try again.")
         return
@@ -549,25 +525,20 @@ KitnCommands["reset"] = function()
 
     -- That teardown queues a line for anything it could NOT put back, and the
     -- queue lives in the very table this function is about to delete. Printing
-    -- here instead does not work either: the reload on the next line destroys
-    -- the chat frame, which is the whole reason QueueMessage exists. So the
-    -- queue is the one thing carried across the wipe, and InitDB rebuilds every
-    -- other key at the next login. Without this a reset that could not restore
-    -- the Edit Mode layout was completely silent, which is the exact failure
-    -- QueueMessage was written to remove.
+    -- here instead does not work: the reload two lines down destroys the chat
+    -- frame. So the queue rides across the wipe, and InitDB rebuilds every other
+    -- key at the next login.
     local carried = ns.db and ns.db.pendingMessages
 
-    -- Lulu's records are debts, not settings. Each one is what a character needs
-    -- to switch its action bars back on or put its Edit Mode layout back, and the
-    -- teardown above can only settle THIS character's: it reads the current
-    -- player's records and nothing else. The wipe below would take an alt's with
-    -- it, leaving that character with the module off, Lulu's layout active, and
-    -- nothing left that knows either — the reset also clears every profile's
-    -- switch block, so the alt does not even come back reading Lulu ON. They ride
-    -- across the wipe for the same reason the queued messages do.
+    -- Lulu's records are debts, not settings: each one is what a character needs
+    -- to switch its action bars back on or put its Edit Mode layout back. The
+    -- teardown above settles only THIS character's. The wipe below would take an
+    -- alt's with it, leaving that character with the module off, Lulu's layout
+    -- active, and nothing left that knows either -- the reset clears every
+    -- profile's switch block too, so the alt does not even come back reading
+    -- Lulu ON. So they ride across the wipe.
     --
-    -- Only records still OWED travel. The teardown clears what it settles, so the
-    -- current character's are already gone unless something refused to apply.
+    -- Only records still OWED travel; the teardown clears what it settles.
     local owed
     local snaps = ns.db and ns.db.euiSnapGlobal
     if type(snaps) == "table" then
@@ -606,9 +577,9 @@ end
 KitnCommands["version"] = function()
     print(string.format("|cffffffffKitnUI version %s|r", ns.version or "?"))
 
-    -- Plater is omitted while it is dormant (see the addon step list in
-    -- Installer.lua): printing a data version for a profile the installer no
-    -- longer offers would advertise something the user cannot get.
+    -- Plater is omitted while it is dormant: printing a data version for a
+    -- profile the installer no longer offers advertises something the user
+    -- cannot get.
     local order = { "EllesmereUI", "BigWigs", "NSRT", "KitnEssentials", "BuffReminders", "Baganator", "Blizzard_EditMode", "BlizzardCDM" }
     local names = {
         EllesmereUI = "EllesmereUI", Plater = "Plater", BigWigs = "BigWigs",
@@ -617,18 +588,16 @@ KitnCommands["version"] = function()
         Baganator = "Baganator", BlizzardCDM = "Blizzard CDM",
     }
     for _, key in ipairs(order) do
-        -- CDM has no version to print. Reading addonVersions for it here was the
-        -- fifth status surface the header removal had to cover: with no header,
-        -- `current` is nil forever and the Outdated branch below becomes
-        -- unreachable, so a stale layout would have read "Imported".
+        -- CDM has no version to print. With no header, `current` is nil forever
+        -- and the Outdated branch below is unreachable, so the generic path
+        -- would report a stale layout as "Imported".
         if key == "BlizzardCDM" then
             local _, rows = ns.GetCDMSpecRows()
             local summary = ns.SummarizeCDMRows(rows)
             -- The colour follows the WORST row, not "has this class imported
             -- anything". ns.HasCDMForCurrentClass answers the import question
-            -- and counts a stale layout as imported, so reading it here painted
-            -- an outdated class green -- the one state this line exists to
-            -- flag -- and painted "1 up to date, 2 not imported" green too.
+            -- and counts a stale layout as imported, so it would paint an
+            -- outdated class green -- the one state this line exists to flag.
             local worst = "none"
             for _, row in ipairs(rows) do
                 if row.state == "stale" then
@@ -731,23 +700,19 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
 
-    -- Drained before the EllesmereUI check below, so a message survives even a
-    -- session where the installer itself is unavailable. Consumed only when it is
-    -- shown, so an interrupted login carries it to the next one. The delay matches
-    -- the login notification further down: printed immediately it lands under the
-    -- client's own startup spam, which is the problem this exists to solve.
+    -- Drained before the EllesmereUI check below, so a message survives a session
+    -- where the installer itself is unavailable. The delay matches the login
+    -- notification further down: printed immediately, it lands under the client's
+    -- own startup output.
     if ns.db.pendingMessages and #ns.db.pendingMessages > 0 then
-        -- Cleared INSIDE the timer, not before it. Clearing first meant a reload
-        -- inside the two-second delay consumed the lines without ever showing
-        -- them, which is the failure the queue exists to prevent.
+        -- Cleared INSIDE the timer. Clearing first lets a reload inside the
+        -- two-second delay consume the lines without ever showing them.
         C_Timer.After(2, function()
             local queued = ns.db and ns.db.pendingMessages
             if not queued or #queued == 0 then return end
             ns.db.pendingMessages = {}
-            -- Blank lines around the block. It lands two seconds into a login,
-            -- packed against the client's own startup output, and without the
-            -- gap it reads as one more line of that rather than as the answer to
-            -- something the user did.
+            -- Blank lines so the block reads as an answer to something the user
+            -- did, not as one more line of the client's startup output.
             print("")
             for _, line in ipairs(queued) do print(line) end
             print("")
@@ -825,10 +790,8 @@ boot:SetScript("OnEvent", function()
                 elseif info.oldVersion and info.newVersion then
                     updated[#updated + 1] = ns.Color(info.key) .. " (v" .. info.oldVersion .. " -> v" .. info.newVersion .. ")"
                 else
-                    -- No versions to name. CDM is the case that exists today: it
-                    -- left the header scheme, so its entry carries specs instead.
-                    -- Naming the key alone beats the nil concatenation this
-                    -- branch used to raise.
+                    -- No versions to name -- CDM's entry carries specs instead,
+                    -- so name the key alone rather than concatenating a nil.
                     updated[#updated + 1] = ns.Color(info.key)
                 end
             end

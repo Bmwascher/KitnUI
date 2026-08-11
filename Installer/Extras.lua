@@ -7,13 +7,8 @@
 
 local _, ns = ... ---@type string, KitnUINS
 
----------------------------------------------------------------------------------
--- Extras: optional, repeatable QoL actions used by the Extras
--- installer page. All idempotent and defensively guarded.
----------------------------------------------------------------------------------
-
--- Hide the minimap buttons of companion addons (extracted from FinishInstallation
--- so the Extras "Clean Icons" button and Finish share one implementation).
+-- Hide the minimap buttons of companion addons. Shared by the Extras "Clean
+-- Icons" button and FinishInstallation.
 function ns.CleanMinimapIcons()
     local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
     if LDBIcon then
@@ -29,10 +24,10 @@ function ns.CleanMinimapIcons()
     end
 end
 
--- "Clean Icons": hide the companion minimap buttons AND surface a copyable link to
--- the replacement icon-texture pack (mirrors AtrocityUI's Clean Icons extra).
--- /latest, not /releases: the plain releases page drops the user on a list they
--- then have to read, and the top entry is not always the one they want.
+-- "Clean Icons": hide the companion minimap buttons AND surface a copyable link
+-- to the replacement icon-texture pack. /latest, not /releases: the releases
+-- page is a list the user then has to read, and the top entry is not always the
+-- one they want.
 local CLEAN_ICONS_URL = "https://github.com/AcidWeb/Clean-Icons-Mechagnome-Edition/releases/latest"
 
 StaticPopupDialogs["KITNUI_CLEANICONS_URL"] = {
@@ -71,14 +66,11 @@ end
 -- Run KitnEssentials' system optimization. Returns false if KitnEssentials isn't
 -- present; KE prints its own summary and owns its own reload prompt.
 --
--- THIS IS THE BALANCED PRESET, which is what this button is meant to be.
--- OptimizeAll is KE's named alias for it and nothing else -- Modules/QoL/
--- Optimize.lua:463-465 is `function OPT:OptimizeAll() self:ApplyPreset("balanced", nil) end`.
--- Deliberately calling the alias rather than ApplyPreset("balanced") directly:
--- OptimizeAll is the entry point KE's own UI uses, so it stays correct if the
--- preset internals move. KE's other preset, Max FPS, is not offered here -- it
--- drops base graphics to raid values everywhere, which is a choice a player
--- should make in KE's own panel rather than have an installer button make.
+-- THIS IS THE BALANCED PRESET. OptimizeAll is KitnEssentials' named alias for
+-- it, and calling the alias rather than the preset directly keeps this correct
+-- if the internals move. The other preset, Max FPS, is not offered here: it
+-- drops base graphics to raid values everywhere, which is a choice for the
+-- player's own panel rather than an installer button.
 function ns.RunOptimize()
     if not (KitnEssentials and KitnEssentials.GetModule) then return false end
     local opt = KitnEssentials:GetModule("Optimize", true)
@@ -90,57 +82,38 @@ end
 -- Chat reconfigure: reset to Blizzard defaults, then rebuild the KitnUI layout
 -- on top -- CVars, name colouring, tabs, message groups and channels.
 --
--- THE RESET IS THE POINT, and it is why this is deterministic: it wipes any
--- chat layout already on the character, so the rebuild below is the whole
--- result rather than a set of edits over whatever was there. That is the same
--- order atrocityUI uses (References/atrocityUI/Imports/Chat.lua:77). The cost is
--- real -- a window or channel routing the player made themselves is gone -- and
--- it is why this lives behind an opt-in button and not in the main install run.
---
--- EllesmereUIChat is in ALWAYS_DISABLED (Installer/Setup.lua), so EllesmereUI's
--- own chat module writes nothing and there is nobody to fight here.
+-- THE RESET IS THE POINT: it wipes any chat layout already on the character, so
+-- the rebuild below is the whole result rather than edits over whatever was
+-- there. The cost is real -- a window or channel the player made themselves is
+-- gone -- which is why this sits behind an opt-in button, not the install run.
 --
 -- FONT FACE AND FONT SIZE ARE DELIBERATELY ABSENT. KitnEssentials' Chat skin
--- owns both: its StyleChat applies its own FontFace and FontSize to every chat
--- frame, and re-applies them from its own setup pass at login. Setting either
--- here would be a fight KitnUI loses, on a setting the player already has a
--- panel for. Note what that does NOT say: KitnEssentials hooks
--- FCF_SetChatWindowFontSize, but its handler only refreshes the edit box, so a
--- size written from outside is not corrected on the spot -- it is corrected at
--- the next setup pass, which for this function is the reload the wizard ends
--- with. Tabs, message groups and channels are NOT KitnEssentials' business,
--- which is why they stay below.
+-- owns both and re-applies them at every login, so writing either here is a
+-- fight KitnUI loses on a setting the player already has a panel for. Tabs,
+-- message groups and channels are not its business, which is why they stay.
 --
--- Position and size deliberately repeat where the Edit Mode layout in
--- Data/AddOns/EditMode.lua already puts chat, so the two agree rather than take
--- turns. Edit Mode owns ChatFrame1's placement in 12.0 -- FCF_Restore
--- PositionAndDimensions early-returns for DEFAULT_CHAT_FRAME -- so this call is
--- the fallback for someone who ran the Extras button without importing the
--- layout, not the authority.
+-- Position and size repeat where the Edit Mode layout already puts chat, so the
+-- two agree rather than take turns. Edit Mode owns ChatFrame1's placement in
+-- 12.0, so the call below is a fallback for someone who ran this button without
+-- importing the layout, not the authority.
 
 -- The docked tab set, left to right, plus one repair entry.
 --
 -- ChatFrame3 (Voice) IS listed, with no dock and no name. FCF_ResetChatWindows
--- clears the message groups of every frame except ChatFrame1
--- (.wow-api-reference/Interface/AddOns/Blizzard_ChatFrameBase/Mainline/
--- FloatingChatFrame.lua:1681-1696), which takes VOICE_TEXT off the Voice tab.
--- Putting it back is all this entry does: no dock, because Voice is undocked by
--- default, and no name, because Blizzard's own name for it is localized and the
--- reset already restored it (FloatingChatFrame.lua:806-812 fills an empty name
--- from the frame ID).
+-- clears the message groups of every frame except ChatFrame1, which takes
+-- VOICE_TEXT off the Voice tab; putting it back is all this entry does. No dock,
+-- because Voice is undocked by default, and no name, because Blizzard's is
+-- localized and the reset already restored it.
 --
--- `groups` are message groups (SAY, GUILD, LOOT) -- global constant names, set
--- wholesale so a second run cannot drift.
+-- `groups` are message groups (SAY, GUILD, LOOT), set wholesale so a second run
+-- cannot drift.
 --
--- `channels` are numbered chat channels, held as Blizzard's zone channel IDs
--- rather than names, because the name is localized and the ID is not:
--- C_ChatInfo.GetChannelShortcutForChannelID turns the ID into whatever the
--- client calls it. 1 General, 2 Trade, 22 LocalDefense, 42 Services.
+-- `channels` are held as Blizzard's zone channel IDs rather than names, because
+-- the name is localized and the ID is not. 1 General, 2 Trade, 22 LocalDefense,
+-- 42 Services.
 --
--- Channels are added, never removed: the reset above has already cleared the
--- slate, so there is nothing left to take away, and a channel that reappears
--- afterwards is one the player joined themselves. A community stream is likewise
--- never routed here: that is the player's own membership.
+-- Channels are added, never removed: the reset has already cleared the slate, so
+-- a channel that reappears afterwards is one the player joined themselves.
 local CHAT_WINDOWS = {
     {
         name = "General", dock = 1, reserved = "ChatFrame1",
@@ -197,9 +170,8 @@ local function FindChatWindow(name)
 end
 
 -- Reserved windows are always the same frame. Everything else is found by name
--- or opened. FCF_OpenNewWindow returns the new frame and its index
--- (FloatingChatFrame.lua:568); the index captured before the call is kept only
--- as a fallback for a build where that return goes away.
+-- or opened. FCF_OpenNewWindow returns the new frame; the index captured before
+-- the call is a fallback for a build where that return goes away.
 local function EnsureChatWindow(entry)
     if entry.reserved then return _G[entry.reserved] end
 
@@ -242,15 +214,12 @@ local function ApplyChatWindow(entry)
     end
 
     -- Normally dead, and kept anyway. FCF_OpenNewWindow already docks what it
-    -- opens, at the END of the strip (FloatingChatFrame.lua:565), so these
-    -- entries land in list order whatever is already docked. The numbers below
-    -- are therefore a relative fallback, not a promise of absolute position:
-    -- Blizzard redocks ChatFrame3 when Speak For Me is active
-    -- (FloatingChatFrame.lua:1676-1679, :1701-1703), which KitnUI's CVar writes
-    -- do not control, and the two new tabs then sit one place further along --
-    -- correctly, since the player really does have a Voice tab. FCF_DockFrame
-    -- returns early on an already-docked frame, so the normal path costs
-    -- nothing.
+    -- opens at the END of the strip, so these entries land in list order. The
+    -- numbers are a relative fallback, not a promise of absolute position:
+    -- Blizzard redocks ChatFrame3 when Speak For Me is active, and the two new
+    -- tabs then sit one place further along -- correctly, since the player
+    -- really does have a Voice tab. FCF_DockFrame returns early on an
+    -- already-docked frame, so the normal path costs nothing.
     if entry.dock and not cf.isDocked and FCF_DockFrame then
         FCF_DockFrame(cf, entry.dock, false)
     end

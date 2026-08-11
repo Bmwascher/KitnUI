@@ -12,8 +12,8 @@ local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 -- Shorthand for the wizard's shared frame (SubTitle / Desc1..3 / Option1..4).
 local function WF() return ns.Wizard.frame end
 
--- Apply a button emphasis variant if the shell supports it (added in the visual
--- pass); a safe no-op until W:SetButtonVariant exists.
+-- Apply a button emphasis variant if the shell supports it; a safe no-op
+-- otherwise.
 local function SetVariant(btn, variant)
     if btn and ns.Wizard.SetButtonVariant then ns.Wizard:SetButtonVariant(btn, variant) end
 end
@@ -84,12 +84,11 @@ function ns.SnapshotProfiles()
     wipe(preSessionProfiles)
     if ns.db and ns.db.profiles then
         for k, v in pairs(ns.db.profiles) do
-            -- BlizzardCDM's entry is a TABLE, and the import writes into that
-            -- same table. Copying the reference would let this session's own
-            -- imports appear in what is supposed to be a frozen picture of the
-            -- database before the wizard opened, so revisiting the CDM page
-            -- would ask to overwrite a layout this run had just created. Copied
-            -- by value for that reason; every other entry is a plain flag.
+            -- BlizzardCDM's entry is a TABLE that the import writes into.
+            -- Copying the reference would let this session's own imports appear
+            -- in what is meant to be a frozen picture, so revisiting the CDM
+            -- page would ask to overwrite a layout this run just created. Every
+            -- other entry is a plain flag.
             if type(v) == "table" then
                 local copy = {}
                 for ik, iv in pairs(v) do copy[ik] = iv end
@@ -166,10 +165,9 @@ end
 -- Real profile lookup: the sidebar shows a completed check only for addons that
 -- are actually imported, not merely stepped past.
 --
--- CDM answers per class. The table being non-empty means some character on this
--- account imported something; it says nothing about the one on screen, and
--- letting it stand would put a completed sidebar check beside page rows reading
--- "not imported".
+-- CDM answers per class. A non-empty table only means some character on this
+-- account imported something, which would put a completed sidebar check beside
+-- page rows reading "not imported".
 function ns.IsAddonImported(addonKey)
     if addonKey == "BlizzardCDM" then return ns.HasCDMForCurrentClass() end
     return (ns.db and ns.db.profiles and ns.db.profiles[addonKey]) ~= nil
@@ -187,8 +185,7 @@ local function ShowLoadStatusAndVersion(addonKey)
     WF().Desc3:SetText(GetVersionLine(addonKey))
 end
 
--- One label per state from ns.GetCDMSpecState. Until fingerprints landed this
--- could only say whether data SHIPPED, never whether the character held it.
+-- One label per state from ns.GetCDMSpecState.
 local cdmStateLabel = {
     nodata    = function() return ns.Red("no data") end,
     missing   = function() return ns.Amber("not imported") end,
@@ -198,7 +195,7 @@ local cdmStateLabel = {
 }
 
 -- Rows come from ns.GetCDMSpecRows, the single owner of the specialization API
--- on the status surfaces, so this no longer resolves the class or spec count.
+-- on the status surfaces.
 local function BuildCDMStatusText(rows)
     local parts = {}
     for _, row in ipairs(rows or {}) do
@@ -214,16 +211,13 @@ end
 
 local addonSteps = {
     { key = "EllesmereUI",       display = "EllesmereUI",             checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. It is ONE profile, not a set: every DPS spec, healer, and the Dark and Colored looks are all baked into it. Switch between them in KitnUI's EllesmereUI tab." },
-    -- PLATER IS DORMANT, NOT REMOVED. Data/AddOns/Plater.lua ships an empty
-    -- string, so offering the step put a tickbox in the wizard whose only
-    -- possible outcome was "No Plater data found." in chat. `dormant` is what
-    -- hides it: the page builder below skips a dormant step when building
-    -- install and update pages, and does NOT skip it when building load pages.
-    -- That asymmetry is the whole point. An install from an older KitnUI has a
-    -- real Plater profile sitting in PlaterDB, and /kitn load on an alt must
-    -- still re-select it -- which it cannot do if the step is absent, because
-    -- both load surfaces iterate this list. Commenting the line out instead of
-    -- flagging it broke exactly that. Remove `dormant` once the data file
+    -- PLATER IS DORMANT, NOT REMOVED. Its data file ships an empty string, so
+    -- offering the step would put a tickbox in the wizard whose only possible
+    -- outcome is "No Plater data found." in chat. `dormant` hides it: the page
+    -- builder below skips a dormant step for install and update pages, and does
+    -- NOT skip it for load pages. That asymmetry is the point -- an install from
+    -- an older KitnUI has a real Plater profile in PlaterDB, and /kitn load on
+    -- an alt must still re-select it. Remove `dormant` once the data file
     -- carries a real export.
     { key = "Plater",            display = "Plater Nameplates",       checkAddon = "Plater",               alwaysAvailable = false, dormant = true, desc = "Curated Plater nameplates tuned to match the KitnUI look." },
     { key = "BuffReminders",     display = "BuffReminders",           checkAddon = "BuffReminders",        alwaysAvailable = false, desc = "Flags missing raid buffs, food, and flasks right on your HUD so you never pull under-prepped." },
@@ -257,9 +251,8 @@ end
 
 local function EllesmereUIPage()
     local f = WF()
-    -- Just the addon name, like every other step page. Those title themselves
-    -- from the step's `display` field; this one is hand-written because it has
-    -- its own page function, so it has to be kept in step by hand.
+    -- Hand-written, unlike the generic pages that title themselves from the
+    -- step's `display` field, so keep the two in step by hand.
     f.SubTitle:SetText("EllesmereUI")
     f.Desc1:SetText(stepDesc("EllesmereUI"))
     ShowStatusAndVersion("EllesmereUI")
@@ -315,11 +308,9 @@ local function EditModePage()
                 PlayInstallSound()
                 HandoffToNext(WF().Option1, CHECK .. " Re-import")
             else
-                -- The setup function already printed the specific reason to chat.
-                -- Keep this generic: a false return also means an EllesmereUI too
-                -- old for the layout importer, combat, an Edit Mode that has not
-                -- populated yet, or a malformed layout string. Naming only the
-                -- layout cap here mislabels all of them.
+                -- Kept generic: the setup function already printed the specific
+                -- reason, and a false return covers several causes that naming
+                -- any one of them would mislabel.
                 WF().Desc2:SetText(ns.Red("Edit Mode import failed. See chat for the reason."))
                 ShowInstallToast("Edit Mode import failed", 1, 0.2, 0.2)
             end
@@ -345,10 +336,7 @@ local function BlizzardCDMPage()
         return
     end
 
-    -- The class id and the rows come from ONE guarded call. This page used to
-    -- resolve both itself, which meant two places guarding the same APIs two
-    -- different ways, and a nil class id failed here before any guard downstream
-    -- could help.
+    -- The class id and the rows come from ONE guarded call.
     local classId, rows = ns.GetCDMSpecRows()
     local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
     if not classId or #rows == 0 or not classData or not next(classData) then
@@ -401,9 +389,9 @@ local function BlizzardCDMPage()
     end
     cdmAllButton:Show()
 
-    -- Per-spec option buttons (Option1..4, with spec icons). The name comes from
-    -- the row, not from a second API call; only the icon is looked up here, and
-    -- it is cosmetic, so a nil falls back to the plain label.
+    -- Per-spec option buttons (Option1..4). The name comes from the row; only
+    -- the icon is looked up here, and it is cosmetic, so a nil falls back to the
+    -- plain label.
     for i = 1, math.min(numSpecs, 4) do
         local row = rows[i]
         local specName = row.specName
@@ -429,13 +417,9 @@ local function BlizzardCDMPage()
                         PlayInstallSound()
                         SetVariant(WF().Next, "primary")
                     else
-                        -- The cause is NOT named here. setupFunctions
-                        -- ["BlizzardCDM"] fails on multiple paths and prints
-                        -- the real reason to chat on every one of them; this
-                        -- branch used to assert the layout limit for all of
-                        -- them, so most read as a wrong diagnosis. Counting
-                        -- the paths in a comment is what rots -- the point is
-                        -- that this branch cannot tell them apart.
+                        -- The cause is NOT named here. The setup function fails
+                        -- on several paths and prints the real reason to chat on
+                        -- every one; this branch cannot tell them apart.
                         WF().Desc2:SetText(ns.Red("Import failed. See chat for the reason."))
                         ShowInstallToast("Import failed!", 1, 0.2, 0.2)
                     end
@@ -519,8 +503,8 @@ local recapNames = {
 local recapOrder = { "EllesmereUI", "Plater", "BuffReminders", "BigWigs", "NSRT", "KitnEssentials", "Baganator", "Blizzard_EditMode", "BlizzardCDM" }
 
 local function IsProfileImported(key)
-    -- Same per-class reasoning as ns.IsAddonImported: the finish recap describes
-    -- the character that just ran the wizard, not the account.
+    -- Per class, like ns.IsAddonImported: the recap describes the character that
+    -- just ran the wizard, not the account.
     if key == "BlizzardCDM" then return ns.HasCDMForCurrentClass() end
     local v = ns.db and ns.db.profiles and ns.db.profiles[key]
     return v and (type(v) ~= "table" or next(v)) and true or false

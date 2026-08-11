@@ -8,12 +8,10 @@
 local _, ns = ... ---@type string, KitnUINS
 
 ---------------------------------------------------------------------------------
--- KitnUI installer wizard, skinned with EllesmereUI's public (ungated) builders:
---   EllesmereUI.SolidTex / MakeBorder / MakeFont / MakeStyledButton /
---   GetAccentColor / PanelPP.
--- Exposes a v1-PluginInstaller-compatible surface so Installer.lua page
--- functions render onto ns.Wizard.frame (SubTitle/Desc1..3/Option1..4) and
--- drive paging via Queue/SetPage/SetOption.
+-- Skinned with EllesmereUI's public builders: SolidTex, MakeBorder, MakeFont,
+-- MakeStyledButton, GetAccentColor, PanelPP. Installer.lua's page functions
+-- render onto ns.Wizard.frame (SubTitle / Desc1..3 / Option1..4) and drive
+-- paging through Queue / SetPage / SetOption.
 ---------------------------------------------------------------------------------
 
 ns.Wizard = ns.Wizard or {}
@@ -32,11 +30,10 @@ local KITN_PINK = { 1, 0, 0.549 }
 -- table has to convert.
 ns.KITN_PINK = KITN_PINK
 
--- Baked KitnUI installer background art (pink panel chrome + cat). Source art is
--- 1412x1114 (KitnUI-EUI-Background.png) with a black margin around a ~1.36:1 pink
--- panel; shipped as an uncompressed TGA (WoW's reliable format). ART_CROP reshapes
--- the view to that panel and crops the margin so the art fills the frame with no
--- stretch; the frame aspect matches. Retune ART_CROP if the art changes.
+-- Baked installer background art: a ~1.36:1 pink panel inside a black margin,
+-- shipped as an uncompressed TGA. ART_CROP drops the margin so the panel fills
+-- the frame with no stretch, and PANEL_W/PANEL_H match that aspect. Retune both
+-- together if the art changes.
 local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.tga"
 local ART_CROP = { 0.065, 0.940, 0.099, 0.916 }  -- left, right, top, bottom (0..1)
 local PANEL_W, PANEL_H = 760, 560                 -- 1.357:1, matches the cropped panel
@@ -459,7 +456,7 @@ local function updateRail()
         if title then
             row.label:SetText(title)
             -- keep the label left of the baked sidebar divider; only the longest
-            -- name (Northern Sky Raid Tools) actually needs the smaller size.
+            -- step names need the smaller size.
             local fp, _, fl = row.label:GetFont()
             if fp then
                 row.label:SetFont(fp, 13, fl)
@@ -499,7 +496,7 @@ local function updateRail()
 end
 
 ---------------------------------------------------------------------------------
--- Paging engine (Queue mirrors the v1 PluginInstaller data shape).
+-- Paging engine.
 ---------------------------------------------------------------------------------
 
 function W:Queue(data)
