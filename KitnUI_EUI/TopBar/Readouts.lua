@@ -1030,9 +1030,11 @@ local function BuildGuildRoster(tt)
         if type(name) == "string" and name ~= "" then
             local r, g, b = ClassColorFromID(info.classID)
             -- ClubMemberPresence: 4 Away, 5 Busy (ClubDocumentation.lua:1674-1675).
+            -- Through StatusTag, the SAME source the friends list uses, so the
+            -- two rosters cannot drift on what away and busy look like. The
+            -- colours are the point: a reader should not have to read the word.
             local presence = Plain(info.presence)
-            local tag = (presence == 4 and "  |cff808080<AFK>|r")
-                or (presence == 5 and "  |cff808080<DND>|r") or ""
+            local tag = StatusTag(presence == 4, presence == 5)
             -- Colour goes INTO the label so the level keeps its gold while the
             -- name takes the class colour; the row itself draws plain.
             roster.Row(RosterLabel(name, info.level, tag, r, g, b), Plain(info.zone), 1, 1, 1)

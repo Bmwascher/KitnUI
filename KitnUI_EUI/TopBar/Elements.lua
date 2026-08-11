@@ -74,8 +74,16 @@ end
 
 -- Is this the same house we already had? Wrapped in pcall because the two GUID
 -- fields are WOWGUIDs, and comparing a Secret value throws rather than
--- answering. A comparison that cannot be made is treated as CHANGED, which
--- costs one extra re-wire and never a missed one.
+-- answering. A comparison that cannot be made is treated as CHANGED: never a
+-- missed re-wire, which is the direction that matters.
+--
+-- State the cost honestly, because the cheerful version of this sentence is
+-- wrong. If the comparison throws it throws on EVERY event, not once. The
+-- button re-requests the list from every hover, unthrottled, so the answer to
+-- every hover would then drive a full Apply() -- exactly the loop this change
+-- test exists to prevent. Correctness survives that (Apply is idempotent and
+-- defers its protected half in combat); the cheapness does not. If the 12.0
+-- semantics ever turn out to throw here, this needs a throttle, not a comment.
 local function SameHouse(a, b)
     if a == nil and b == nil then return true end
     if a == nil or b == nil then return false end

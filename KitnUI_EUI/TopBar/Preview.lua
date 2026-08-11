@@ -587,7 +587,10 @@ local function DragTick()
     end
     if not dragGhost then return end
 
+    -- Guarded like every other API return in this addon. A nil here would reach
+    -- the divide below as an arithmetic error every frame of the drag.
     local cx, cy = GetCursorPosition()
+    if not cx or not cy then return end
     local sc = UIParent:GetEffectiveScale()
     local ucx, ucy = cx / sc, cy / sc
     local gs = dragGhost:GetScale() or 1
@@ -711,7 +714,10 @@ local function WireDrag(slot)
         -- while one is already dragging must not arm a second pending
         -- watch on top of it.
         if dragSlot then return end
+        -- Same guard as the drag loop. Arming the watch without a start point
+        -- would compare against nil on the first movement test.
         local cx, cy = GetCursorPosition()
+        if not cx or not cy then return end
         pendingSlot = self
         self._pendX, self._pendY = cx, cy
         self:SetScript("OnUpdate", function(s)
