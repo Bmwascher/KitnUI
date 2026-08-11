@@ -129,6 +129,19 @@ end
 local fpA = fingerprintOf("a")
 local fpB = fingerprintOf("b")
 local fpAA = fingerprintOf("aa")
+
+-- The vectors themselves. Hand-computed from the seed 5381, the multiplier 33
+-- and the split emission; change any of the three and these fail, which is the
+-- whole point. The long one is 24 bytes, so its running hash wraps the 2^32
+-- modulus many times over, and its expected value was computed by an
+-- INDEPENDENT implementation (.NET System.Numerics.BigInteger), never by the
+-- code under test -- a value read off the implementation proves nothing.
+eq(fpA, "2-46598-1", "golden vector: a")
+eq(fpB, "2-46599-1", "golden vector: b")
+eq(fpAA, "89-30503-2", "golden vector: aa")
+eq(fingerprintOf("KitnUI CDM golden vector"), "16461-8921-24",
+    "golden vector: a 24-byte string, which wraps the modulus")
+
 check(fpA ~= nil, "fingerprint of a single byte is not nil")
 check(fpA ~= fpB, "different one-byte strings differ", fpA .. " vs " .. fpB)
 check(fpA ~= fpAA, "different lengths differ", fpA .. " vs " .. fpAA)

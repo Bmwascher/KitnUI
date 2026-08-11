@@ -620,7 +620,30 @@ KitnCommands["version"] = function()
         if key == "BlizzardCDM" then
             local _, rows = ns.GetCDMSpecRows()
             local summary = ns.SummarizeCDMRows(rows)
-            local color = ns.HasCDMForCurrentClass() and "|cff00FF00" or "|cffFF0000"
+            -- The colour follows the WORST row, not "has this class imported
+            -- anything". ns.HasCDMForCurrentClass answers the import question
+            -- and counts a stale layout as imported, so reading it here painted
+            -- an outdated class green -- the one state this line exists to
+            -- flag -- and painted "1 up to date, 2 not imported" green too.
+            local worst = "none"
+            for _, row in ipairs(rows) do
+                if row.state == "stale" then
+                    worst = "stale"
+                    break
+                elseif row.state == "untracked" or row.state == "missing" then
+                    worst = "partial"
+                elseif row.state == "current" and worst == "none" then
+                    worst = "current"
+                end
+            end
+            local color = "|cff9d9d9d"
+            if worst == "stale" then
+                color = "|cffFF0000"
+            elseif worst == "partial" then
+                color = "|cffFFAA00"
+            elseif worst == "current" then
+                color = "|cff00FF00"
+            end
             print("  " .. names[key] .. ": " .. color .. summary .. "|r |cff9d9d9d(this class)|r")
         else
             local current = ns.GetAddonDataVersion(key)
