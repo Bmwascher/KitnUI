@@ -35,3 +35,11 @@ dev/docs/
 KitnUI_EUI/Media/TopBar/Base/
 KitnUI_EUI/Media/TopBar/Halo/
 KitnUI_EUI/Media/TopBar/Stencil/
+
+
+# The toolchain that PRODUCED those icons: Python plus a PowerShell converter,
+# the source PNGs, the contact sheets and trial renders, and __pycache__. Around
+# 130 files, none of which the addon loads. .pkgmeta already strips dev/ from the
+# shipped zip, so tracking this would grow the repo without ever reaching a
+# player. dev/Annotations/ and dev/README.md stay tracked, as the note above says.
+dev/tools/
