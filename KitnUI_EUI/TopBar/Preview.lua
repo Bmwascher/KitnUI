@@ -92,6 +92,7 @@ local FPS_STRING       = "999 FPS  999 MS"
 -- Vertical gap between the icon row and the FPS text under the clock, and
 -- between the preview and the hint line below it. Not part of any width/scale
 -- arithmetic, so any reasonable constant is fine here.
+local DIVIDER_W   = 2      -- zone divider thickness, in UNSCALED pixels
 local READOUT_GAP = 2
 local HINT_GAP    = 6
 local STAGE_PAD_Y = 6      -- breathing room above and below the bar
@@ -884,14 +885,23 @@ local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
         return
     end
 
+    -- Dark rather than light, so the divider reads as a groove cut into the
+    -- backdrop instead of a line drawn on top of it, and two pixels wide so
+    -- it survives being seen against the busy panel art behind the stage.
+    -- Both are taste values with no other code depending on them.
     local h = math.max(1, rowH * scale)
     for _, tex in ipairs({ dividerL, dividerR }) do
-        tex:SetColorTexture(1, 1, 1, 0.10)
-        tex:SetSize(1, h)
+        tex:SetColorTexture(0, 0, 0, 0.55)
+        tex:SetSize(DIVIDER_W, h)
         tex:ClearAllPoints()
     end
-    dividerL:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryLC * scale, 0)
-    dividerR:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryCR * scale, 0)
+    -- Centred ON the boundary, not started at it: at two pixels wide an
+    -- unshifted line would sit entirely to the right of the line it claims to
+    -- draw, and the claim that the divider IS the drop boundary is the whole
+    -- reason it is placed from FindDragTarget's own arithmetic.
+    local half = DIVIDER_W / 2
+    dividerL:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryLC * scale - half, 0)
+    dividerR:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryCR * scale - half, 0)
     dividerL:Show()
     dividerR:Show()
 end

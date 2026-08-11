@@ -951,11 +951,13 @@ ns.TopBar.Elements = {
     Macro("achievements", "Achievements", Icon("achievements"), "left",
         "/click AchievementMicroButton"),
 
-    Macro("collections", "Collections", Icon("collections"), "left",
-        "/click CollectionsMicroButton"),
-
-    -- Toy Box is a tab inside the same Collections journal as `collections`,
-    -- not its own micro button. Click the micro button to open the journal,
+    -- No `collections` element here. It opened the Collections journal on
+    -- whatever tab was last used, which is the same WINDOW `toybox` opens --
+    -- two icons for one journal. Removed on Kitn's call, and `toybox` is the
+    -- one kept because it lands somewhere definite.
+    --
+    -- Toy Box is a tab inside the Collections journal, not its own micro
+    -- button. Click the micro button to open the journal,
     -- then select the Toy Box tab (index 3, matching
     -- Blizzard_Collections.lua's own titles[3] = TOY_BOX) on the line after:
     -- /click runs its OnClick synchronously, so the journal already exists
@@ -1055,7 +1057,7 @@ ns.TopBar.Elements = {
     -- present here only so the ELEMENTS list picks it up automatically.
     -- Never add "fps" to any tbOrder array — it is not laid out.
     {
-        id = "fps", label = "FPS and latency",
+        id = "fps", label = "FPS and Latency",
         kind = "readout", secure = false,
     },
 }

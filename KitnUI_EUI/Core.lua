@@ -164,7 +164,7 @@ end
 -- Elements.lua, which is why this has to live here.
 ns.EUI_TB_DEFAULT_ORDER = {
     left   = { "friends", "guild", "groupfinder", "journal",
-               "achievements", "collections", "toybox" },
+               "achievements", "toybox" },
     centre = { "clock" },
     right  = { "hearthstone", "portals", "home", "vault", "character",
                "spellbook", "talents", "professions", "volume",
