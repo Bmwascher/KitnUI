@@ -429,10 +429,12 @@ local function BlizzardCDMPage()
                         SetVariant(WF().Next, "primary")
                     else
                         -- The cause is NOT named here. setupFunctions
-                        -- ["BlizzardCDM"] fails on five different paths and
-                        -- prints the real reason to chat on every one of them;
-                        -- this branch used to assert the layout limit for all
-                        -- five, so four of them read as a wrong diagnosis.
+                        -- ["BlizzardCDM"] fails on multiple paths and prints
+                        -- the real reason to chat on every one of them; this
+                        -- branch used to assert the layout limit for all of
+                        -- them, so most read as a wrong diagnosis. Counting
+                        -- the paths in a comment is what rots -- the point is
+                        -- that this branch cannot tell them apart.
                         WF().Desc2:SetText(ns.Red("Import failed. See chat for the reason."))
                         ShowInstallToast("Import failed!", 1, 0.2, 0.2)
                     end
