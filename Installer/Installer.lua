@@ -590,13 +590,25 @@ local function WelcomeLoadPage()
     f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nIt will not reimport anything - just apply existing profiles.")
     f.Desc2:SetText("Click " .. ns.Green("Finish") .. " at the end to reload and apply changes.")
     ns.Wizard:SetOption(1, "Load All", function()
+        -- Refusals are counted, not discarded. KitnUI's own record can say a
+        -- profile is installed while the addon's copy of it has since been
+        -- deleted or reset; that step prints and returns false, and announcing
+        -- "All profiles loaded!" over it would report the one thing that did not
+        -- happen. `== false` because a step that succeeded returns nothing.
+        local refused = 0
         for _, step in ipairs(addonSteps) do
             if ns.db and ns.db.profiles and ns.db.profiles[step.key] and step.key ~= "BlizzardCDM" then
-                ns.SetupAddon(step.key)  -- load mode: activate existing profile, no reimport
+                -- load mode: activate existing profile, no reimport
+                if ns.SetupAddon(step.key) == false then refused = refused + 1 end
             end
         end
-        SuccessToast("All profiles", "loaded!")
-        PlayInstallSound()
+        if refused > 0 then
+            ShowInstallToast(format("%d profile%s could not be loaded - see chat",
+                refused, refused == 1 and "" or "s"), 1, 0.2, 0.2)
+        else
+            SuccessToast("All profiles", "loaded!")
+            PlayInstallSound()
+        end
         SetVariant(WF().Next, "primary")
     end)
     SetVariant(WF().Option1, "primary")
