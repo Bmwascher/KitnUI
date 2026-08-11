@@ -11,8 +11,7 @@ if ns.EUI_INERT then return end
 ns.TopBar = ns.TopBar or {}
 
 -- One file per element, named after the element's own id, so adding an element
--- means adding one texture and nothing else. Verified present for all nineteen
--- icon-drawing elements on 2026-08-09.
+-- means adding one texture and nothing else.
 local ICON_DIR = "Interface\\AddOns\\KitnUI_EUI\\Media\\TopBar\\"
 local function Icon(id)
     return ICON_DIR .. "icon-" .. id .. ".tga"
@@ -42,28 +41,17 @@ end
 -- Home: the one launcher that is not a passthrough. Left click teleports home
 -- via the "teleporthome" secure action type -- three attributes read straight
 -- off the button (house-neighborhood-guid, house-guid, house-plot-id) that the
--- engine itself turns into C_Housing.TeleportHome(...); nothing here calls
--- that protected function directly
--- (.wow-api-reference/Interface/AddOns/Blizzard_FrameXML/SecureTemplates.lua:620-629).
--- Right click opens the housing dashboard through the same helper the game's
--- own Housing micro button uses
--- (.wow-api-reference/Interface/AddOns/Blizzard_MicroMenu/Mainline/MainMenuBarMicroButtons.lua:1012-1020).
+-- engine itself turns into a TeleportHome call; nothing here calls that
+-- protected function directly. Right click opens the housing dashboard through
+-- the same helper the game's own Housing micro button uses.
 --
--- C_Housing.GetPlayerOwnedHouses() is async: it answers through the
--- PLAYER_HOUSE_LIST_UPDATED event, not a return value
--- (.wow-api-reference/Interface/AddOns/Blizzard_HousingDashboard/Blizzard_HousingDashboardHouseInfoContent.lua:101-109).
--- The three field names on each list entry -- neighborhoodGUID, houseGUID,
--- plotID -- are read the same way Blizzard_HousingDashboardHouseUpgrade.lua:362
--- reads them before its own TeleportHome call. WindTools runs this identical
--- pattern already, including taking the first owned house with no further
--- selection UI (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:
--- 1461-1473, 1608-1610, 1647-1648) -- confirmation this addon is genuinely
--- 12.0-compatible, not just a plausible guess at the shape.
+-- C_Housing.GetPlayerOwnedHouses() is ASYNC: it answers through the
+-- PLAYER_HOUSE_LIST_UPDATED event, not a return value. The first owned house is
+-- taken with no further selection UI.
 --
 -- SetAttribute is protected, so cachedHouse is only ever written onto the
--- button from inside HomeAttrs, which WireSecureAttributes (Bar.lua) only
--- ever reaches outside combat: Apply() defers its whole protected half
--- whenever InCombatLockdown() is true.
+-- button from inside HomeAttrs, which Bar.lua only reaches outside combat --
+-- Apply() defers its whole protected half under lockdown.
 local cachedHouse
 
 local function RequestHouseList()
@@ -74,16 +62,14 @@ end
 
 -- Is this the same house we already had? Wrapped in pcall because the two GUID
 -- fields are WOWGUIDs, and comparing a Secret value throws rather than
--- answering. A comparison that cannot be made is treated as CHANGED: never a
--- missed re-wire, which is the direction that matters.
+-- answering. A comparison that cannot be made counts as CHANGED: never a missed
+-- re-wire, which is the direction that matters.
 --
--- State the cost honestly, because the cheerful version of this sentence is
--- wrong. If the comparison throws it throws on EVERY event, not once. The
--- button re-requests the list from every hover, unthrottled, so the answer to
--- every hover would then drive a full Apply() -- exactly the loop this change
--- test exists to prevent. Correctness survives that (Apply is idempotent and
--- defers its protected half in combat); the cheapness does not. If the 12.0
--- semantics ever turn out to throw here, this needs a throttle, not a comment.
+-- The cost, stated plainly: a comparison that throws throws on EVERY event, and
+-- the button re-requests the list from every hover, so every hover would drive a
+-- full Apply(). Correctness survives that -- Apply is idempotent and defers its
+-- protected half in combat -- but the cheapness does not. If 12.0 ever does throw
+-- here, this needs a throttle.
 local function SameHouse(a, b)
     if a == nil and b == nil then return true end
     if a == nil or b == nil then return false end
@@ -109,36 +95,26 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
         house = first
     end
 
-    -- THE FIX, and the whole reason left click did nothing. The house list is
-    -- ASYNC: this event is the answer to a request made earlier. Caching the
-    -- answer is not enough, because the only thing that writes the secure
-    -- attributes is HomeAttrs, and the only thing that calls HomeAttrs is
-    -- WireSecureAttributes, and the only thing that calls THAT is
-    -- ns.TopBar.Apply(), in its protected half. Apply had already run, before
-    -- the answer arrived, and found nothing cached -- so it cleared `type1` and
-    -- never came back. The button then had no secure action at all.
+    -- Caching the answer is NOT enough, and this Apply() call is why. The only
+    -- thing that writes the secure attributes is HomeAttrs, which only
+    -- ns.TopBar.Apply() reaches, in its protected half. Apply runs before the
+    -- async answer arrives, finds nothing cached, clears `type1` and never comes
+    -- back -- leaving the button with no secure action and no message either,
+    -- because HomeOnClick only explains itself while cachedHouse is nil.
     --
-    -- That is also why it failed SILENTLY rather than printing the fallback:
-    -- HomeOnClick only explains itself while `cachedHouse` is nil, and by the
-    -- time the user clicks, it is set. Dead button, empty chat.
-    --
-    -- Apply() is safe to call in combat -- it defers its protected half and
-    -- retries on PLAYER_REGEN_ENABLED -- so no combat gate here.
-    -- The change test is what keeps this cheap: the button's OnEnter re-requests
-    -- the list on every hover, and without it every hover would drive a full
-    -- Apply.
+    -- Apply() is safe to call in combat: it defers its protected half and retries
+    -- on PLAYER_REGEN_ENABLED. The change test is what keeps this cheap, since
+    -- the button re-requests the list on every hover.
     if SameHouse(house, cachedHouse) then return end
     cachedHouse = house
     if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
 end)
 
--- Left click with nothing cached: an insecure fallback that explains why,
--- matching WindTools' own copy for the same state (GameBar.lua:741). Right
--- click always tries the dashboard; ToggleHousingDashboard is itself the
--- combat-agnostic helper Blizzard built for exactly this "call it from
--- outside the Housing addons" case, but the family's own hard rule still
--- applies to the panel toggle underneath it, so it is gated the same way
--- gamemenu gates GameMenuFrame above.
+-- Left click with nothing cached: an insecure fallback that explains why. Right
+-- click always tries the dashboard. ToggleHousingDashboard is the helper
+-- Blizzard built for calling this from outside the Housing addons, but the panel
+-- toggle underneath it is still gated on combat like every other insecure
+-- launcher here.
 local function HomeOnClick(_self, button)
     if button == "RightButton" then
         if InCombatLockdown() then
@@ -151,9 +127,8 @@ local function HomeOnClick(_self, button)
         return
     end
     if button == "LeftButton" and not cachedHouse then
-        -- Split by cause: "no house yet" and "can't fetch mid-fight" are
-        -- different problems with different fixes, and the brief's own copy
-        -- conflated them.
+        -- Split by cause: "no house yet" and "cannot fetch mid-fight" are
+        -- different problems with different fixes.
         if InCombatLockdown() then
             print(ns.title .. ": house data cannot be updated in combat. Try again after this fight.")
         else
@@ -178,29 +153,19 @@ local function HomeAttrs(btn)
         btn:SetAttribute("house-plot-id", nil)
     end
     if not btn._homeWired then
-        -- PostClick, NEVER OnClick. This is a SecureActionButtonTemplate, and
-        -- that template performs its action FROM its OnClick script:
-        -- `<OnClick function="SecureActionButton_OnClick"/>`
-        -- (.wow-api-reference/Interface/AddOns/Blizzard_FrameXML/
-        -- SecureTemplates.xml:8). Assigning our own OnClick REPLACED it, so
-        -- the teleport action never ran at all -- and because our handler only
-        -- explains itself while nothing is cached, a click after the house
-        -- data had arrived did nothing and said nothing.
+        -- PostClick, NEVER OnClick. SecureActionButtonTemplate performs its
+        -- action FROM its own OnClick script, so assigning ours replaces it and
+        -- the teleport never runs. PostClick runs AFTER the secure action,
+        -- alongside it rather than instead of it, which is what Blizzard's own
+        -- action buttons use for insecure follow-up work. Right click still
+        -- reaches it because `type2` is never set.
         --
-        -- Home is the only secure element in this file that wants an insecure
-        -- click behaviour of its own; every other one is a Macro() passthrough
-        -- that sets attributes and leaves the template's script alone. That is
-        -- exactly why home was the only launcher broken.
-        --
-        -- PostClick runs AFTER the secure action, alongside it rather than
-        -- instead of it, which is what Blizzard's own action buttons use for
-        -- insecure follow-up work (Blizzard_ActionBar/Mainline/
-        -- ActionButtonTemplate.xml:178). Right click still reaches it because
-        -- `type2` is never set, so the secure half is a no-op there.
+        -- Home is the only secure element here that wants insecure click
+        -- behaviour of its own; every other is a Macro() passthrough that sets
+        -- attributes and leaves the template's script alone.
         btn:SetScript("PostClick", HomeOnClick)
-        -- Opportunistic refresh on hover, matching WindTools' ButtonOnEnter
-        -- (GameBar.lua:1269-1271). HookScript ADDS to Bar.lua's own OnEnter
-        -- (tint + tooltip) rather than replacing it.
+        -- Opportunistic refresh on hover. HookScript ADDS to Bar.lua's own
+        -- OnEnter (tint + tooltip) rather than replacing it.
         btn:HookScript("OnEnter", function()
             if not InCombatLockdown() then RequestHouseList() end
         end)
@@ -220,17 +185,12 @@ local homeElement = {
 }
 
 ---------------------------------------------------------------------------------
--- Friends: no FriendsMicroButton exists in the Mainline micro menu (confirmed
--- against .wow-api-reference/Interface/AddOns/Blizzard_MicroMenu/Mainline/
--- MainMenuBarMicroButtons.xml, which lists Character/Profession/PlayerSpells/
--- Achievement/QuestLog/Housing/Guild/LFD/Collections/EJ/Help/Store/MainMenu
--- and nothing for friends), so this cannot be a Macro() passthrough the way
--- guild below is. ToggleFriendsFrame is the real global
--- (.wow-api-reference/Interface/AddOns/Blizzard_FriendsFrame/Mainline/
--- FriendsFrame.lua:1416), and it is not protected, so this is an insecure
--- toggle guarded the same way gamemenu and clock are above.
+-- Friends: no FriendsMicroButton exists in the Mainline micro menu, so this
+-- cannot be a Macro() passthrough the way guild below is. ToggleFriendsFrame is
+-- the real global and is not protected, so this is an insecure toggle guarded
+-- like gamemenu and clock.
 --
--- The badge (online count) and the roster tooltip are Readouts.lua's job --
+-- The badge (online count) and the roster tooltip are Readouts.lua's job:
 -- everything with a ticker and cross-element state lives there. This element
 -- only supplies the click and hands the tooltip off.
 local friendsElement = {
@@ -250,10 +210,9 @@ local friendsElement = {
     end,
 }
 
--- Guild: GuildMicroButton DOES exist (Mainline/MainMenuBarMicroButtons.xml:183),
--- so this stays the ordinary Macro() passthrough every other micro-button
--- launcher in this file uses -- only its tooltip is replaced, because Macro()'s
--- own is a one-line label and this one needs the roster.
+-- Guild: GuildMicroButton DOES exist, so this stays the ordinary Macro()
+-- passthrough. Only its tooltip is replaced, because Macro()'s own is a one-line
+-- label and this one needs the roster.
 local guildElement = Macro("guild", "Guild", Icon("guild"), "left",
     "/click GuildMicroButton")
 guildElement.tooltip = function(tt)
@@ -261,12 +220,9 @@ guildElement.tooltip = function(tt)
     if ns.TopBar.GuildTooltip then ns.TopBar.GuildTooltip(tt) end
 end
 
--- Great Vault: WeeklyRewardsFrame is load-on-demand, so opening it goes
--- through WeeklyRewards_ShowUI, the same global the rest of the client uses
--- to load and show it (.wow-api-reference/Interface/AddOns/Blizzard_UIParent/
--- Mainline/UIParent.lua:527-534). Not itself a secure/protected frame, but
--- gated the same way every other insecure launcher in this file is, for the
--- same reason gamemenu is.
+-- Great Vault: WeeklyRewardsFrame is load-on-demand, so opening it goes through
+-- WeeklyRewards_ShowUI, the same global the rest of the client uses. Not itself
+-- protected, but gated on combat like every other insecure launcher here.
 local vaultElement = {
     id = "vault", label = "Great Vault", icon = Icon("vault"), panel = "right",
     kind = "launcher", secure = false,
@@ -287,37 +243,16 @@ local vaultElement = {
 ---------------------------------------------------------------------------------
 -- Hearthstone: three independently-configurable mouse buttons (tbHearthLeft/
 -- Middle/Right), each set to a specific owned stone's item id or "RANDOM".
--- Pinned raw item ids rather than EllesmereUI.ResolveDalaranSlot: that
--- resolver conflates the Dalaran Hearthstone with the Key to the Arcantina
--- and prefers the key, so it can never hand back Dalaran once the key is
--- owned (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI.lua:5691-5696
--- has the two the wrong way round).
+-- Pinned raw item ids rather than EllesmereUI's Dalaran resolver, which
+-- conflates the Dalaran Hearthstone with the Key to the Arcantina and prefers
+-- the key, so it can never hand back Dalaran once the key is owned.
 --
--- HEARTH_IDS is WindTools' own "hearthstones" table
--- (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:114-151), a
--- purpose-built subset of that file's own 51-entry superset
--- (GameBar.lua:153-217) -- not copied wholesale. Left out: the Engineering
--- Wormholes heading (a different mechanic, teleporting to a zone rather than
--- home, and KitnUI's own future portals element's job, not hearthstone's) and
--- the Patch Items heading minus the two ids the design doc's own defaults
--- require. The other three there -- Garrison Hearthstone (110560), Flight
--- Master's Whistle (141605), Translocation Cypher (180817) -- stay out:
--- EllesmereUI's own reverse-engineered model files Garrison Hearthstone in a
--- table explicitly separate from its shared-cooldown pool, "its own cooldown,
--- separate from the shared hearthstone one" (References/EllesmereUI-v8.7.5/
--- EllesmereUIDataBars/EllesmereUIDataBars_Blocks.lua:2468-2478), and neither
--- of the other two appears anywhere in either current 12.0 addon under
--- References/ (both being non-bind-point teleports rather than hearthstones).
---
--- 264367 (Mushroom) and 190237 (Broker Translocation Matrix) are current v4.19
--- WindTools does not know about but a v8.7.5 current-12.0 addon confirms are
--- genuine members of the shared cooldown pool: EllesmereUI's own
--- HEARTHSTONE_IDS (EllesmereUIDataBars_Blocks.lua:2453-2466, "Static
--- hearthstone pool (all expansions) shared by every instance") lists both.
--- 250411 (Timerunner's Hearthstone) was checked and deliberately left out: it
--- appears only in EllesmereUI.lua's separate portal-flyout pool (:5599), not
--- in that shared-cooldown table -- an inconsistency inside EllesmereUI itself
--- that this file is not going to resolve by guessing.
+-- HEARTH_IDS is the shared-cooldown pool only. Deliberately excluded:
+-- Engineering Wormholes (a zone teleport, which is the portals element's job),
+-- Garrison Hearthstone (its own cooldown, separate from the shared pool),
+-- Flight Master's Whistle and Translocation Cypher (not hearthstones), and the
+-- Timerunner's Hearthstone (it appears in a portal-flyout pool but not in any
+-- shared-cooldown table, and this file will not resolve that by guessing).
 local HEARTH_IDS = {
     6948, 54452, 64488, 93672, 142542, 162973, 163045, 165669, 165670, 165802,
     166746, 166747, 168907, 172179, 180290, 182773, 183716, 184353, 188952,
@@ -349,9 +284,7 @@ end
 local randomCache = {}
 
 -- Avoids repeating the immediately previous roll when more than one stone is
--- owned. Bounded at 10 attempts, matching WindTools' own guard against a
--- pathological repeat (GameBar.lua:1732-1745); with only two owned stones the
--- odds of needing anywhere near that many are effectively zero.
+-- owned. Bounded at 10 attempts against a pathological repeat.
 local function PickRandom(slot)
     if #owned == 0 then return 6948 end
     if #owned == 1 then return owned[1] end
@@ -408,10 +341,8 @@ local function RerollAll()
     end
 end
 
--- Toys must be used by name, not item:ID -- item:ID only resolves for
--- something actually in the bags, and a toy fired from the Toy Box, not the
--- bags, is exactly what most of HEARTH_IDS are
--- (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:76-79).
+-- Toys must be used by NAME, not item:ID: item:ID only resolves for something
+-- actually in the bags, and most of HEARTH_IDS are Toy Box entries.
 local function MacroText(id)
     if not id then return "" end
     local toyName = C_ToyBox and C_ToyBox.GetToyInfo and select(2, C_ToyBox.GetToyInfo(id))
@@ -424,17 +355,12 @@ local function StoneLabel(id)
     return hearthValues[tostring(id)] or tostring(id)
 end
 
--- The stone the left click currently resolves to. The tooltip reads THIS
--- id's own cooldown, not an assumed shared one: EllesmereUI's own
--- TRAVEL_EXTRAS table (EllesmereUIDataBars_Blocks.lua:2468-2478) shows the
--- Dalaran Hearthstone (140192) and Key to the Arcantina (253629) -- both
--- valid choices for any of the three slots here -- run on cooldowns separate
--- from the main HEARTHSTONE_IDS pool. Querying the resolved id directly,
--- rather than assuming one shared category, is correct regardless of which
--- pool it actually belongs to; it just means the tooltip only ever reflects
--- the LEFT slot's cooldown, not Middle/Right's, if those differ (matching
--- NaowhUI's own single-id tooltip reading, NaowhUI_TopBar.lua:259-270, which
--- has the same scope).
+-- The stone the left click currently resolves to. The tooltip reads THIS id's
+-- own cooldown rather than an assumed shared one, because the Dalaran
+-- Hearthstone and the Key to the Arcantina -- both valid choices here -- run on
+-- cooldowns separate from the main pool. Querying the resolved id is correct
+-- whichever pool it belongs to; it just means the tooltip reflects the LEFT
+-- slot's cooldown only.
 local _hearthId
 
 local function FmtCD(sec)
@@ -445,10 +371,10 @@ local function FmtCD(sec)
     return format("%d:%02d", sec / 60, sec % 60)
 end
 
--- C_Item.GetItemCooldown's returns carry no SecretReturnsForAspect entry in
--- the generated API docs, unlike a Cooldown WIDGET's own GetCooldownTimes /
--- GetCooldownDuration (those ARE marked Enum.SecretAspect.Cooldown). This
--- reads the item API, never a Cooldown frame, so the arithmetic below is safe.
+-- C_Item.GetItemCooldown's returns carry no SecretReturns marking, unlike a
+-- Cooldown WIDGET's GetCooldownTimes/GetCooldownDuration, which are marked
+-- Enum.SecretAspect.Cooldown. This reads the item API, never a Cooldown frame,
+-- so the arithmetic below is safe.
 local function HearthCooldownRemaining()
     if not _hearthId then return nil end
     if not (C_Item and C_Item.GetItemCooldown) then return nil end
@@ -524,9 +450,8 @@ HearthAttrs = function(btn)
     btn:SetAttribute("macrotext3", MacroText(midID))
 
     if not btn._hearthWired then
-        -- Toy names may not be cached at login, so every click re-resolves
-        -- all three macros fresh rather than trusting whatever Apply() last
-        -- wrote, exactly as NaowhUI_TopBar.lua:616-622 does.
+        -- Toy names may not be cached at login, so every click re-resolves all
+        -- three macros fresh rather than trusting whatever Apply() last wrote.
         btn:SetScript("PreClick", function(self)
             if InCombatLockdown() then
                 DeferHearthRefresh(self)
@@ -536,11 +461,9 @@ HearthAttrs = function(btn)
             HearthAttrs(self)
         end)
 
-        -- Live cooldown countdown while hovering. A dedicated ticker rather
-        -- than Bar.lua's per-second one: this task's files are Elements.lua
-        -- and Options.lua only, and Readouts.lua's own ticker is file-local.
-        -- Started on OnEnter, cancelled on OnLeave, so it never runs while
-        -- nothing is being hovered.
+        -- Live cooldown countdown while hovering, on its own ticker because
+        -- Readouts.lua's is file-local. Started on OnEnter and cancelled on
+        -- OnLeave, so it never runs while nothing is hovered.
         local function CancelHearthTicker(self)
             if self._hearthTicker then
                 self._hearthTicker:Cancel()
@@ -548,13 +471,10 @@ HearthAttrs = function(btn)
             end
         end
         btn:HookScript("OnEnter", function(self)
-            -- Bar.lua's own OnEnter returns before calling el.tooltip when
-            -- tbTooltips is off, but this ticker is wired independently of
-            -- that call, so without the same check here it would spin every
-            -- 0.5s for as long as the pointer sits on the button, unable to
-            -- ever do anything -- gated to match the volume ticker below,
-            -- which gets this for free by starting from inside its own
-            -- tooltip function instead of an OnEnter hook.
+            -- Bar.lua's OnEnter returns before calling el.tooltip when
+            -- tbTooltips is off, but this ticker is wired independently of that
+            -- call, so without the same check it would spin every 0.5s for as
+            -- long as the pointer sits on the button, unable to do anything.
             if not ns.TopBar.Get("tbTooltips", ns.EUI_DEFAULTS.tbTooltips) then return end
             self._hearthTicker = C_Timer.NewTicker(0.5, function()
                 if GameTooltip:IsOwned(self) then
@@ -574,12 +494,10 @@ HearthAttrs = function(btn)
     end
 end
 
--- Nil-guarded: the bar (and this button) may not exist yet -- the feature can
--- be switched off, or ScanOwned's async name/icon callbacks can land before
--- Apply() has ever built anything. Combat-guarded because this writes secure
--- attributes; ScanOwned only ever runs from PLAYER_LOGIN and an item-load
--- callback, neither of which is realistically mid-combat, but the family's
--- own hard rule applies regardless of how unlikely the timing is.
+-- Nil-guarded: the bar (and this button) may not exist yet -- the feature can be
+-- switched off, or ScanOwned's async callbacks can land before Apply() has built
+-- anything. Combat-guarded because this writes secure attributes, unlikely
+-- timing or not.
 local function RefreshHearthButton()
     local btn = _G.KitnUITopBar_hearthstone
     if not btn then return end
@@ -630,21 +548,13 @@ local hearthstoneElement = {
 }
 
 ---------------------------------------------------------------------------------
--- Mythic+ Portals: a secure flyout of this season's dungeon teleports, parented
--- to the portals launcher button. Modelled directly on
--- References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_Portals.lua:178-296, the
--- one current-12.0 addon in References/ that already solves this exact
--- combat-safe-flyout problem.
+-- Mythic+ Portals: a secure flyout of this season's dungeon teleports, anchored
+-- to the portals launcher button.
 --
--- EllesmereUI.SEASON_PORTALS belongs to the host, not to us, and its own
--- comment (EllesmereUI.lua:295-296) says it is updated once per season.
--- Reading it fresh here, on every requires() and CreateFlyout() call, rather
--- than snapshotting it once at file scope the way NaowhUI does (its own
--- comment, Portals.lua:13-14, leans on EllesmereUI being a hard dependency
--- that is already loaded before it), means a season boundary where the
--- host's list is briefly missing or empty degrades to "no portals button"
--- instead of a frozen empty grid baked in at whatever KitnUI_EUI's own load
--- time happened to see.
+-- EllesmereUI.SEASON_PORTALS belongs to the host and moves once per season. Read
+-- fresh on every requires() and CreateFlyout() call rather than snapshotted at
+-- file scope, so a season boundary where the host's list is briefly missing
+-- degrades to "no portals button" instead of a frozen empty grid.
 local function SeasonPortals()
     local EUI = _G.EllesmereUI
     local list = EUI and EUI.SEASON_PORTALS
@@ -656,24 +566,17 @@ local PORTAL_BTN_SIZE, PORTAL_SPACING, PORTAL_PADDING, PORTAL_COLS = 32, 2, 4, 4
 
 local portalFlyout, portalFlyoutBtns
 
--- Desaturates unknown teleports and keeps cooldown swipes current. known
--- comes from C_SpellBook.IsSpellKnown, which carries no secret marker in
--- SpellBookDocumentation.lua:684-699 (unlike the deprecated global
--- IsPlayerSpell NaowhUI's own copy uses, which only exists at all behind the
--- loadDeprecationFallbacks CVar -- Deprecated_SpellBook.lua:4,11-14 -- so it
--- is not safe to depend on here).
+-- Desaturates unknown teleports and keeps cooldown swipes current. `known` comes
+-- from C_SpellBook.IsSpellKnown, which carries no secret marker, rather than the
+-- deprecated IsPlayerSpell global that only exists behind a CVar.
 --
--- C_Spell.GetSpellCooldown IS a secret-value risk: its own doc entry carries
--- SecretWhenCooldownsRestricted = true (SpellDocumentation.lua:249-253), and
--- the SpellCooldownInfo it returns does NOT mark startTime or duration
--- NeverSecret (SpellSharedDocumentation.lua:19-31) -- only isEnabled,
--- isActive and isOnGCD are. So this never compares or does arithmetic on
--- startTime/duration; it branches on isActive (NeverSecret) instead, and
--- hands startTime/duration to Cooldown:SetCooldown untouched -- SetCooldown's
--- own "start"/"duration" arguments are explicitly built to accept secret
--- values (SecretArgumentsAddAspect = { Enum.SecretAspect.Cooldown },
--- FrameAPICooldownDocumentation.lua:280-283): the widget can paint a swipe
--- from an opaque cooldown without this file ever reading the real numbers.
+-- C_Spell.GetSpellCooldown IS a secret-value risk: it is marked
+-- SecretWhenCooldownsRestricted, and the SpellCooldownInfo it returns marks only
+-- isEnabled, isActive and isOnGCD as NeverSecret. So this never compares or does
+-- arithmetic on startTime/duration -- it branches on isActive and hands the two
+-- numbers to Cooldown:SetCooldown untouched, whose own arguments are built to
+-- accept secret values. The widget paints the swipe without this file ever
+-- reading the real numbers.
 local function RefreshPortalButtons()
     if not portalFlyoutBtns then return end
     for _, btn in ipairs(portalFlyoutBtns) do
@@ -710,38 +613,30 @@ local function CreatePortalFlyout()
     local h = PORTAL_PADDING * 2 + PORTAL_BTN_SIZE * rows + PORTAL_SPACING * (rows - 1)
 
     -- SecureHandlerStateTemplate with a CUSTOM state, not "visibility": a
-    -- visibility state driver owns Show/Hide outright, so it would force this
-    -- flyout open again the instant combat ends. This state only ever closes
-    -- it -- on the way out of combat it does nothing, so a flyout the player
-    -- closed (or never opened) stays closed. Exactly
-    -- NaowhUI_Portals.lua:186-209's own shape. Needed at all because this
-    -- frame is about to parent secure buttons: once it does, an ordinary
-    -- Hide() call on it from Lua is protected, the same rule Bar.lua's own
-    -- HideBar() is built around.
+    -- visibility driver owns Show/Hide outright and would force this flyout open
+    -- again the instant combat ends. This state only ever CLOSES it, so a flyout
+    -- the player closed stays closed. Needed at all because this frame is about
+    -- to parent secure buttons, after which an ordinary Hide() from Lua is
+    -- protected -- the same rule Bar.lua's HideBar() is built around.
     portalFlyout = CreateFrame("Frame", "KitnUITopBar_portalsFlyout", UIParent,
         "SecureHandlerStateTemplate")
     portalFlyout:SetSize(w, h)
     portalFlyout:SetFrameStrata("DIALOG")
-    -- Level as well as strata, matching NaowhUI_Portals.lua:191. Strata alone
-    -- leaves the default level inside DIALOG, so another dialog-strata frame
-    -- can draw over the flyout.
+    -- Level as well as strata: strata alone leaves the default level inside
+    -- DIALOG, so another dialog-strata frame can draw over the flyout.
     portalFlyout:SetFrameLevel(100)
     portalFlyout:SetClampedToScreen(true)
     portalFlyout:Hide()
 
     local bg = portalFlyout:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    -- Deliberately NOT the reference's 0.04/0.04/0.06 (NaowhUI_Portals.lua:197).
-    -- This is Bar.lua's own panel colour (Bar.lua:214, :358): the flyout has to
-    -- match the bar it hangs off, and NaowhUI's value matches NaowhUI's bar.
+    -- Bar.lua's own panel colour: the flyout has to match the bar it hangs off.
     bg:SetColorTexture(0.03, 0.03, 0.04, 0.95)
 
-    -- The host's border, when the host offers it. Same nil-guarded shape the
-    -- reference uses (NaowhUI_Portals.lua:199-202). Note the colour differs
-    -- between the two call sites on purpose, and the reference does the same:
-    -- the FLYOUT gets a faint white hairline (1,1,1 at 0.06) so the panel edge
-    -- reads against the dark backdrop, while each BUTTON below gets opaque
-    -- black to separate the icons from each other.
+    -- The host's border, when the host offers it. The colour differs between the
+    -- two call sites on purpose: the FLYOUT gets a faint white hairline so the
+    -- panel edge reads against the dark backdrop, while each BUTTON below gets
+    -- opaque black to separate the icons from each other.
     local PP = EllesmereUI and EllesmereUI.PP
     if PP and PP.CreateBorder then
         PP.CreateBorder(portalFlyout, 1, 1, 1, 0.06, 1, "OVERLAY", 7)
@@ -777,7 +672,7 @@ local function CreatePortalFlyout()
             if si and si.iconID then icon:SetTexture(si.iconID) end
             btn.icon = icon
 
-            -- Per button too, opaque black, matching NaowhUI_Portals.lua:230-232.
+            -- Per button too, opaque black.
             if PP and PP.CreateBorder then
                 PP.CreateBorder(btn, 0, 0, 0, 1, 1, "OVERLAY", 7)
             end
@@ -790,13 +685,11 @@ local function CreatePortalFlyout()
             cooldown:SetDrawEdge(false)
             btn.cooldown = cooldown
 
-            -- AnyUp AND AnyDown, matching NaowhUI_Portals.lua:257, instead of
-            -- Bar.lua's own useOnKeyDown=false fix for the same
-            -- ActionButtonUseKeyDown CVar problem: these buttons are never
-            -- reached by WireSecureAttributes (they are not in
+            -- AnyUp AND AnyDown instead of Bar.lua's useOnKeyDown=false fix for
+            -- the same ActionButtonUseKeyDown CVar problem: these buttons are
+            -- never reached by WireSecureAttributes (they are not in
             -- ns.TopBar.ById), so there is no per-Apply moment to set that
-            -- attribute on them the way Bar.lua does for every registered
-            -- launcher.
+            -- attribute on them.
             btn:RegisterForClicks("AnyUp", "AnyDown")
             btn:SetAttribute("type", "spell")
             btn:SetAttribute("spell", spellID)
@@ -820,9 +713,8 @@ local function CreatePortalFlyout()
     portalFlyout:SetScript("OnEvent", function() RefreshPortalButtons() end)
 
     -- Escape closes it like any other free-floating panel. Nil-guarded: the
-    -- helper is EllesmereUI's own (EllesmereUI.lua:12157, backed by a single
-    -- UISpecialFrames proxy at :12134-12136), not ours, so a future host
-    -- version that renamed or dropped it must not error here.
+    -- helper is the host's, not ours, so a future host version that renamed or
+    -- dropped it must not error here.
     if EllesmereUI and EllesmereUI.RegisterEscapeClose then
         EllesmereUI.RegisterEscapeClose(portalFlyout)
     end
@@ -842,29 +734,21 @@ local function TogglePortalFlyout(anchorBtn)
         return
     end
 
-    -- Wired once per launcher button, the first time it ever opens the
-    -- flyout. HookScript, not SetScript: SetScript would REPLACE whatever
-    -- OnHide handler already lives on this button; HookScript only adds to
-    -- it, so this cannot silently discard behaviour some other file wires
-    -- onto the same frame later. A child's OnHide fires whenever its parent
-    -- is hidden, not only on a direct Hide() call against the child itself,
-    -- so hooking the LAUNCHER button's OnHide catches every path that makes
-    -- the button disappear out from under an open flyout: HideBar() hiding
-    -- the whole bar when tbEnabled goes off, LayoutSide hiding this one
-    -- button when portals is switched off in tbOff, and Task 8's visibility
-    -- work later. In each of those the button is simply gone -- no combat
-    -- transition fires the state driver above, and Escape has nothing left
-    -- to close -- so without this the flyout would sit on screen until the
+    -- Wired once per launcher button, the first time it ever opens the flyout.
+    -- HookScript, not SetScript, so this cannot discard an OnHide handler some
+    -- other file wires onto the same frame. Hooking the LAUNCHER button's OnHide
+    -- catches every path that makes the button disappear out from under an open
+    -- flyout: HideBar() hiding the whole bar, LayoutSide hiding this one button
+    -- when portals is switched off. In each the button is simply gone -- no
+    -- combat transition fires the state driver above, and Escape has nothing
+    -- left to close -- so without this the flyout would sit on screen until the
     -- player entered combat once or reloaded.
     --
     -- This is a hook on the BUTTON, not a reparent of the FLYOUT under it.
-    -- Hiding a parent only hides a child visually; it does not flip the
-    -- child's own IsShown() to false. A flyout reparented under the launcher
-    -- would look closed while still reporting itself open, and would pop
-    -- back into view the instant the button (and the bar) were shown again
-    -- -- the exact bug the custom "combat" state above exists to prevent,
-    -- and what smoke check F3 tests for. Hooking OnHide and calling a real
-    -- Hide() on the flyout itself has no such trap.
+    -- Hiding a parent only hides a child visually; it does not flip the child's
+    -- own IsShown() to false. A reparented flyout would look closed while still
+    -- reporting itself open, and would pop back into view the instant the bar
+    -- was shown again.
     if not anchorBtn._portalFlyoutHideHooked then
         anchorBtn._portalFlyoutHideHooked = true
         anchorBtn:HookScript("OnHide", function()
@@ -895,23 +779,17 @@ local portalsElement = {
         TogglePortalFlyout(self)
     end,
     tooltip = function(tt) tt:AddLine("Mythic+ Portals", 1, 1, 1) end,
-    -- SEASON_PORTALS is EllesmereUI's, and it moves every season. Absent
-    -- entirely rather than a button that opens an empty grid -- the same
-    -- shape kitnessentials below uses for "the dependency is not there right
-    -- now".
+    -- SEASON_PORTALS is the host's, and it moves every season. Absent entirely
+    -- rather than a button that opens an empty grid.
     requires = function() return SeasonPortals() and true or false end,
 }
 
 ---------------------------------------------------------------------------------
--- Volume: left click +10% master volume, right click -10%, middle click
--- toggles mute. Sound_MasterVolume and Sound_EnableAllSound are the same pair
--- WindTools' own volume launcher drives
--- (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:869-916), and
--- both are still live Mainline cvars (Blizzard_SettingsDefinitions_Shared/
--- Audio.lua:388,415). No InCombatLockdown gate, unlike every other launcher
--- in this file: those guard against opening a Blizzard panel mid-fight; this
--- only ever calls SetCVar on an audio cvar, which carries no protected or
--- secure marker in CVarDocumentation.lua and is safe to call at any time.
+-- Volume: left click +10% master volume, right click -10%, middle click toggles
+-- mute. No InCombatLockdown gate, unlike every other launcher in this file:
+-- those guard against opening a Blizzard panel mid-fight; this only ever calls
+-- SetCVar on an audio cvar, which carries no protected or secure marker and is
+-- safe to call at any time.
 local function VolumePercent()
     local v = tonumber(C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("Sound_MasterVolume"))
     return v or 0
@@ -937,20 +815,17 @@ local function VolumeTooltip(tt)
     tt:AddLine("Middle-click: Mute", 1, 1, 1)
 end
 
--- Live percentage while hovered, the same ticker shape HearthTooltip's own
--- uses above (0.5s, IsOwned-guarded, cancelled on OnLeave AND OnHide so a
--- button hidden mid-hover cannot leak the ticker the way Task 6 originally
--- did). volume has no attrs() -- it is not secure -- so there is no per-Apply
--- moment to wire this the way HearthAttrs wires its own ticker; wiring it
--- from inside the tooltip function itself, keyed off the stable button name
--- Bar.lua always creates, reaches the same end state without one.
+-- Live percentage while hovered, the same ticker shape HearthTooltip uses above:
+-- 0.5s, IsOwned-guarded, cancelled on OnLeave AND OnHide so a button hidden
+-- mid-hover cannot leak the ticker. volume has no attrs() -- it is not secure --
+-- so there is no per-Apply moment to wire this; wiring it from inside the
+-- tooltip function, keyed off the stable button name Bar.lua always creates,
+-- reaches the same end state without one.
 --
--- The ticker itself is started here too, synchronously, not only from the
--- OnEnter hook below: a HookScript added while an OnEnter is already running
--- does not fire again for that same hover (the engine has already invoked
--- the handler chain it had when the hover began), so hooking alone is only
--- good enough for OnLeave/OnHide -- later events that have not fired yet --
--- never for a live reading on the very first hover.
+-- The ticker starts from the tooltip function too, not only from the OnEnter
+-- hook below: a HookScript added while an OnEnter is already running does not
+-- fire again for that same hover, so hooking alone is good enough for
+-- OnLeave/OnHide but never for a live reading on the very first hover.
 local function VolumeCancelTicker(self)
     if self._volumeTicker then
         self._volumeTicker:Cancel()
@@ -958,9 +833,8 @@ local function VolumeCancelTicker(self)
     end
 end
 
--- 0.5s, deliberately slower than WindTools' 0.3s (GameBar.lua:899). The
--- readout is a whole-number percentage the user is actively dragging; a third
--- of a second buys nothing visible and costs more ticks.
+-- 0.5s: the readout is a whole-number percentage, so a faster tick buys nothing
+-- visible and costs more work.
 local function VolumeStartTicker(btn)
     if btn._volumeTicker then return end
     btn._volumeTicker = C_Timer.NewTicker(0.5, function()
@@ -1014,17 +888,14 @@ ns.TopBar.Elements = {
     Macro("achievements", "Achievements", Icon("achievements"), "left",
         "/click AchievementMicroButton"),
 
-    -- No `collections` element here. It opened the Collections journal on
-    -- whatever tab was last used, which is the same WINDOW `toybox` opens --
-    -- two icons for one journal. Removed on Kitn's call, and `toybox` is the
-    -- one kept because it lands somewhere definite.
+    -- No `collections` element here: it opened the same WINDOW `toybox` opens,
+    -- on whatever tab was last used. `toybox` is kept because it lands
+    -- somewhere definite.
     --
-    -- Toy Box is a tab inside the Collections journal, not its own micro
-    -- button. Click the micro button to open the journal,
-    -- then select the Toy Box tab (index 3, matching
-    -- Blizzard_Collections.lua's own titles[3] = TOY_BOX) on the line after:
-    -- /click runs its OnClick synchronously, so the journal already exists
-    -- and is shown by the time the second line runs.
+    -- Toy Box is a tab inside the Collections journal, not its own micro button.
+    -- Click the micro button to open the journal, then select tab index 3 on the
+    -- line after: /click runs its OnClick synchronously, so the journal already
+    -- exists by the time the second line runs.
     Macro("toybox", "Toy Box", Icon("toybox"), "left",
         "/click CollectionsMicroButton\n/run CollectionsJournal_SetTab(CollectionsJournal, 3)"),
 
@@ -1036,13 +907,10 @@ ns.TopBar.Elements = {
     Macro("character", "Character", Icon("character"), "right",
         "/click CharacterMicroButton"),
 
-    -- No SpellbookMicroButton exists on Mainline: the 12.0 client folded the
-    -- spellbook into a tab of PlayerSpellsFrame (the same frame `talents`
-    -- opens), reachable only through PlayerSpellsUtil.OpenToSpellBookTab()
-    -- (.wow-api-reference/Interface/AddOns/Blizzard_FrameXMLUtil/Mainline/PlayerSpellsUtil.lua:49).
-    -- The brief's own instruction to verify micro-button names rather than
-    -- trust the table applies here: the table's `/click SpellbookMicroButton`
-    -- would silently do nothing, because that global no longer exists.
+    -- No SpellbookMicroButton exists on Mainline: 12.0 folded the spellbook into
+    -- a tab of PlayerSpellsFrame (the frame `talents` opens), reachable only
+    -- through PlayerSpellsUtil.OpenToSpellBookTab(). A `/click
+    -- SpellbookMicroButton` here would silently do nothing.
     Macro("spellbook", "Spellbook", Icon("spellbook"), "right",
         "/run PlayerSpellsUtil.OpenToSpellBookTab()"),
 
@@ -1081,15 +949,13 @@ ns.TopBar.Elements = {
         tooltip = function(tt) tt:AddLine("Game Menu", 1, 1, 1) end,
     },
 
-    -- Clock: the centre panel's only occupant (DEFAULT_ORDER.centre), never
-    -- switched off, so Options.lua excludes it from the ELEMENTS list by id
-    -- rather than this element declining a toggle. Bar.lua creates its button
-    -- as "KitnUITopBar_clock" the same as any other element; Readouts.lua
-    -- reaches that stable global name to attach the actual time FontString
-    -- and to size it from tbClockSize, since neither the button table nor
-    -- centrePanel is part of this file's interface. Left click opens the
-    -- calendar, middle click reloads; both are insecure (ToggleCalendar and
-    -- ReloadUI need no protection) and refuse in combat like gamemenu above.
+    -- Clock: the centre panel's only occupant, never switched off, so
+    -- Options.lua excludes it from the ELEMENTS list by id rather than this
+    -- element declining a toggle. Bar.lua creates its button as
+    -- "KitnUITopBar_clock" like any other element; Readouts.lua reaches that
+    -- stable global name to attach the time FontString and size it from
+    -- tbClockSize. Left click opens the calendar, middle click reloads; both are
+    -- insecure and refuse in combat like gamemenu above.
     {
         id = "clock", label = "Clock", panel = "centre",
         kind = "readout", secure = false,
@@ -1125,15 +991,10 @@ ns.TopBar.Elements = {
     },
 }
 
--- Read from the hoisted default rather than duplicated. Two copies of an
--- ordering drift, and the one that drifts is always the one nobody is looking
--- at. Task 4 Step 3b moved this OFF ns.EUI_DEFAULTS.tbOrder (that key is now
--- registered as {}, see Core.lua) and onto ns.EUI_TB_DEFAULT_ORDER instead --
--- same single-source contract, new name. No `and` guard needed here: unlike
--- the old two-level ns.EUI_DEFAULTS.tbOrder lookup, there is no intermediate
--- table to be nil against; this file already returned above if Core.lua
--- itself bailed (EUI_INERT), which is the only way ns.EUI_TB_DEFAULT_ORDER
--- would be unset.
+-- Read from the hoisted default rather than duplicated: two copies of an
+-- ordering drift, and the one that drifts is the one nobody is looking at. No
+-- nil guard needed -- this file already returned above if Core.lua bailed
+-- (EUI_INERT), which is the only way ns.EUI_TB_DEFAULT_ORDER would be unset.
 ns.TopBar.DEFAULT_ORDER = ns.EUI_TB_DEFAULT_ORDER
 
 ns.TopBar.ById = {}

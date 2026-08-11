@@ -25,26 +25,16 @@ local availW              -- usable width, cached from the last BuildPreviewHead
                           -- call so a settings-driven PreviewRefresh (which gets
                           -- no width argument) can still fit against it.
 
--- The builder is handed rightW (1005), unpadded. Inset by CONTENT_PAD on each
--- side so the stage -- and the preview centred on it -- lines up with the
--- padded content below it, exactly as the CDM insets its own preview wrapper
--- (EUI_CooldownManager_Options.lua:13952-13965). The `or 10` fallback is the
--- CDM's own idiom, not a guess. previewWrap no longer carries the inset as an
--- offset; availW alone bounds the stage's own width, so the preview can never
--- exceed the padded area.
+-- The builder is handed the panel width, unpadded. Inset by CONTENT_PAD on each
+-- side so the stage -- and the preview centred on it -- lines up with the padded
+-- content below it. previewWrap does not carry the inset as an offset; availW
+-- alone bounds the stage's width, so the preview can never exceed the padded
+-- area.
 --
 -- TWO FRAMES, and the split is load-bearing. A SetPoint offset is expressed in
 -- the anchored frame's OWN scaled space, so an inset of 45 on a frame later
 -- scaled to 0.65 renders at about 29 px and the preview drifts 16 px left of the
--- controls below it -- silently, because nothing clips. The CDM solves it the
--- same way: an unscaled `wrapper` anchored at PAD holding a separately scaled
--- `pf` (EUI_CooldownManager_Options.lua:13962-13975 -- read to the END of that
--- range: pf is created parented to `parent` at :13968 and only becomes the
--- wrapper's content at :13975 via sf:SetScrollChild(pf). KitnUI parents
--- previewFrame to previewWrap directly instead; it needs no scroll frame).
--- The same semantics are why
--- both ghost followers in the suite divide their offsets by their own scale
--- (:15049-15051; EllesmereUIBags.lua:3257-3261).
+-- controls below it -- silently, because nothing clips.
 --
 -- So: previewWrap owns the centring and is never scaled; previewFrame owns the
 -- content and the fit scale, anchored at 0,0 inside the wrapper. NEVER call
@@ -60,8 +50,8 @@ end
 -- preview lives inside an options window and must never own a secure frame.
 ---------------------------------------------------------------------------------
 
--- The same predicate LayoutSide uses (Bar.lua:456), so the preview and the
--- real bar can never disagree about what is shown.
+-- The same predicate LayoutSide uses, so the preview and the real bar can never
+-- disagree about what is shown.
 local function Visible(id)
     local el = ns.TopBar.ById[id]
     if not el then return false end
@@ -70,23 +60,21 @@ local function Visible(id)
     return true
 end
 
--- Duplicates Bar.lua:99 rather than reading it: that local is off limits, and
--- Readouts.lua already duplicates AccentRGB the same way for the same reason.
+-- Duplicates Bar.lua's own BTN_PAD rather than reading it: that local is file-
+-- scoped there, and Readouts.lua duplicates AccentRGB the same way.
 local BTN_PAD = 8
 
--- Duplicates Readouts.lua:71 (SizeClockButton's own CLOCK_PAD) the same way
--- BTN_PAD above duplicates Bar.lua:99 -- that local is off limits too.
+-- Duplicates SizeClockButton's CLOCK_PAD in Readouts.lua, same reason.
 local CLOCK_PAD = 6
 
--- Widest-case strings for the two readout slots (Step 2). The 12-hour form is
--- wider than the 24-hour one; the FPS string is the real readout's own layout
--- (Readouts.lua:158) with the colour escapes stripped -- they contribute no
--- width.
+-- Widest-case strings for the two readout slots. The 12-hour form is wider than
+-- the 24-hour one; the FPS string is the real readout's layout with the colour
+-- escapes stripped, since those contribute no width.
 local CLOCK_STRING_24H = "23:59"
 local CLOCK_STRING_12H = "12:59 PM"
 -- Widest plausible readout, used to MEASURE the fps slot. Must keep the same
--- case as the real string Readouts.lua:158 builds, or the measurement is of a
--- string the bar never draws.
+-- case as the real string Readouts.lua builds, or the measurement is of a string
+-- the bar never draws.
 local FPS_STRING       = "999 FPS  999 MS"
 
 -- Vertical gap between the icon row and the FPS text under the clock, and
@@ -97,9 +85,9 @@ local READOUT_GAP = 2
 local HINT_GAP    = 6
 local STAGE_PAD_Y = 6      -- breathing room above and below the bar
 
--- Reused across every PreviewRefresh, keyed by element id, so Task 3's drag
--- scripts (attached to the Button itself) survive a settings-driven redraw.
--- This must never destroy and recreate the frame an id already owns.
+-- Reused across every PreviewRefresh, keyed by element id, so the drag scripts
+-- (attached to the Button itself) survive a settings-driven redraw. This must
+-- never destroy and recreate the frame an id already owns.
 local slotPool = {}
 
 local function GetSlot(id)
@@ -113,67 +101,55 @@ local function GetSlot(id)
 end
 
 ---------------------------------------------------------------------------------
--- Task 3: drag to reorder WITHIN a panel. Only launcher slots
--- (LayoutLauncherPanel, below) are wired -- the clock and fps slots never
--- call WireDrag. Ported from the house drag idiom
--- (EUI_CooldownManager_Options.lua, EllesmereUIDataBars_Options.lua:1236-
--- 1276).
---
--- Task 4: widened to also allow a drop in the OTHER launcher panel, ported
--- from EllesmereUIBags.lua's ComputeDropZone (:3154-3205) -- a cursor now
--- resolves to a (mode, index, panel) triple instead of just (mode, index).
--- The centre panel (the clock's own domain) and anything outside both
--- launcher panels still refuse: FindDragTarget returns nil for both, which
--- FinishDrag treats as a no-op, same as an in-panel cancel.
+-- Drag to reorder within a panel, or across to the other launcher panel. Only
+-- launcher slots (LayoutLauncherPanel, below) are wired -- the clock and fps
+-- slots never call WireDrag. A cursor resolves to a (mode, index, panel) triple.
+-- The centre panel (the clock's own domain) and anything outside both launcher
+-- panels refuse: FindDragTarget returns nil for both, which FinishDrag treats as
+-- a no-op, same as an in-panel cancel.
 ---------------------------------------------------------------------------------
 
 local DRAG_THRESHOLD = 3
 
--- Cached from the last Layout() pass so drag maths never has to re-derive
--- the row geometry mid-drag. Shared by both panels -- Layout() lays out both
--- with the same iconSize/spacing/yOff. lastLeftW/lastClockStartX/lastClockW/
--- lastRightStartX/lastRightW (Task 4) are each panel's own content span in
--- previewFrame-local x, so FindDragTarget can resolve a panel zone even when
--- that panel is currently empty and has no slot to read a _baseX from.
+-- Cached from the last Layout() pass so drag maths never has to re-derive the
+-- row geometry mid-drag. Shared by both panels -- Layout() lays out both with
+-- the same iconSize/spacing/yOff. The five span values below are each panel's
+-- own content span in previewFrame-local x, so FindDragTarget can resolve a
+-- panel zone even when that panel is empty and has no slot to read a _baseX
+-- from.
 local lastIconSize, lastSpacing, lastYOff
 local lastLeftW, lastClockStartX, lastClockW, lastRightStartX, lastRightW
 
 -- Drag state. Set by BeginDrag, read by FindDragTarget/ApplyDragFeedback/
 -- FinishDrag, cleared by FinishDrag and by CancelDragOnHide.
 --
--- dragPanel is fixed for the whole drag: it is the panel the drag STARTED
--- in, and dragVisArr is a snapshot of that panel's own visible ids (dragged
--- id included), taken once in BeginDrag. dragOtherVisArr (Task 4) is the
--- same kind of snapshot for the OTHER panel, which never contains the
--- dragged id -- so a "swap" target is only ever resolved within dragVisArr,
--- never dragOtherVisArr (FindDragTarget gates that explicitly). Neither
--- array is re-derived from ns.TopBar.Order() mid-drag: nothing else can
--- touch tbOrder while a drag is in progress, so re-deriving either every
--- tick would be pure waste -- three CopyTables and a fresh table build,
--- every frame, for a value that cannot have changed mid-drag.
+-- dragPanel is fixed for the whole drag: it is the panel the drag STARTED in,
+-- and dragVisArr is a snapshot of that panel's visible ids (dragged id
+-- included), taken once in BeginDrag. dragOtherVisArr is the same kind of
+-- snapshot for the OTHER panel, which never contains the dragged id -- so a
+-- "swap" target is only ever resolved within dragVisArr. Neither array is
+-- re-derived from ns.TopBar.Order() mid-drag: nothing else can touch tbOrder
+-- while a drag is in progress, so re-deriving them every tick would be waste.
 local dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr, dragOtherVisArr
 local dragMode, dragTargetIdx, dragTargetPanel
 local dragGhost
 local insertLine
 
 -- The slot currently armed by WireDrag's OnMouseDown -- pressed, but not yet
--- past DRAG_THRESHOLD, so BeginDrag has not run and dragSlot is still nil.
--- Fix round 2: that slot's own pending OnUpdate cannot tick while
--- previewFrame is hidden, so CancelDragOnHide has to reach it separately
--- from dragSlot -- an armed-but-not-dragging press is exactly the case
--- dragSlot is nil for.
+-- past DRAG_THRESHOLD, so BeginDrag has not run and dragSlot is still nil. That
+-- slot's pending OnUpdate cannot tick while previewFrame is hidden, so
+-- CancelDragOnHide has to reach it separately from dragSlot.
 local pendingSlot
 
 -- The (mode, index, panel) DragTick last actually applied. Skips
--- ApplyDragFeedback/ClearDragFeedback when the target has not moved since
--- the previous tick -- EUI_CooldownManager_Options.lua:14443's own
--- early-out. Cleared by BeginDrag, FinishDrag and CancelDragOnHide so a new
+-- ApplyDragFeedback/ClearDragFeedback when the target has not moved since the
+-- previous tick. Cleared by BeginDrag, FinishDrag and CancelDragOnHide so a new
 -- drag never early-outs against a stale value left by the last one.
 local lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel
 
--- Visible-filtered copy of a stored order array, in the same left-to-right
--- order LayoutLauncherPanel renders it. Step 5's SpliceWithin is what folds
--- one of these back into the full stored array without losing a hidden entry.
+-- Visible-filtered copy of a stored order array, in the same left-to-right order
+-- LayoutLauncherPanel renders it. SpliceWithin folds one of these back into the
+-- full stored array without losing a hidden entry.
 local function VisibleIds(arr)
     local out = {}
     for _, id in ipairs(arr) do
@@ -221,27 +197,21 @@ local function ClearDragFeedback()
 end
 
 -- Converts a cursor position into previewFrame-local units through effective
--- scales, exactly as EUI_CooldownManager_Options.lua:14306-14313 does, then
--- resolves it to a (mode, index, panel) drop target. cx, cy are already
--- divided by UIParent's own effective scale by the caller (the drag ticker,
--- below), matching that reference's own calling convention.
+-- scales, then resolves it to a (mode, index, panel) drop target. cx, cy are
+-- already divided by UIParent's effective scale by the caller (the drag ticker,
+-- below).
 --
--- Task 4: ported from EllesmereUIBags.lua's ComputeDropZone (:3154-3205),
--- mirrored over three horizontal panels instead of N vertical bag rows. The
--- x axis is split into left/centre/right zones at the MIDPOINTS of the gaps
--- between lastLeftW/lastClockStartX+lastClockW/lastRightStartX (Layout()'s
--- own cached spans, Task 4), not off any one slot's _baseX -- that keeps a
--- zone resolvable even when its panel is currently empty. The centre zone
--- (the clock's own domain) and anything past the outer edge of either
--- launcher panel both return nil -- the Bags refusal path at :3282-3300 --
--- which the caller treats as a cancelled drag, same as an in-panel no-op.
+-- The x axis is split into left/centre/right zones at the MIDPOINTS of the gaps
+-- between Layout()'s cached panel spans, not off any one slot's _baseX -- that
+-- keeps a zone resolvable even when its panel is empty. The centre zone (the
+-- clock's own domain) and anything past the outer edge of either launcher panel
+-- both return nil, which the caller treats as a cancelled drag.
 --
--- "swap" is only ever returned for the panel the drag STARTED in (dragPanel):
--- a swap trades the dragged id for another WITHOUT changing either stored
--- array's length, which only makes sense within one array. The other panel's
--- own visible array (dragOtherVisArr) never contains the dragged id, so
--- without this gate the same distance-from-centre test would spuriously
--- return "swap" there too -- a mode Step 3's move helpers cannot commit.
+-- "swap" is only ever returned for the panel the drag STARTED in: a swap trades
+-- the dragged id for another WITHOUT changing either stored array's length,
+-- which only makes sense within one array. dragOtherVisArr never contains the
+-- dragged id, so without this gate the distance-from-centre test would
+-- spuriously return "swap" there too -- a mode the move helpers cannot commit.
 local function FindDragTarget(cx, cy)
     if not (previewFrame and dragPanel and dragVisArr) then return nil end
     local pfLeft, pfTop = previewFrame:GetLeft(), previewFrame:GetTop()
@@ -273,17 +243,14 @@ local function FindDragTarget(cx, cy)
     local leftOuter = -spacing * 0.5
     local rightOuter = rightStartX + rightW + spacing * 0.5
 
-    -- Fix round 3, Fix 2: an empty panel draws nothing, so its drop zone is
-    -- only `spacing` wide -- 14 preview-local units at the default
-    -- tbSpacing, 4 at the slider minimum, half of it outside previewFrame's
-    -- own left edge -- and there is no reset-order control anywhere in the
-    -- UI to escape the state Task 4 made legitimate and persistent. Extend
-    -- the panel's own OUTER boundary, and ONLY the outer one (never
-    -- boundaryLC/boundaryCR, which stay exactly as they were), by one
-    -- button footprint -- `size` already includes BTN_PAD -- so an empty
-    -- side offers a target the size of the icon it is missing. A non-empty
-    -- panel's boundaries are untouched: this only fires when the cached span
-    -- for that side is zero.
+    -- An empty panel draws nothing, so its drop zone would be only `spacing`
+    -- wide -- 14 preview-local units at the default tbSpacing, 4 at the slider
+    -- minimum, half of it outside previewFrame's own left edge -- and an
+    -- all-icons-on-one-side layout is legitimate and persistent. Extend the
+    -- panel's OUTER boundary, and ONLY the outer one, by one button footprint
+    -- (`size` already includes BTN_PAD) so an empty side offers a target the
+    -- size of the icon it is missing. This only fires when the cached span for
+    -- that side is zero.
     if leftW == 0 then leftOuter = leftOuter - size end
     if rightW == 0 then rightOuter = rightOuter + size end
 
@@ -331,21 +298,16 @@ local function FindDragTarget(cx, cy)
 end
 
 -- Slides dragPanel's other slots aside for an in-panel insert and draws the
--- accent insert line between the two neighbours it will land between. Ported
--- from EUI_CooldownManager_Options.lua:14225-14229 (the line), :14243-14263
--- (the slide) and :14451 (the nudge distance -- fix round 1: this used to be
--- size+spacing, about 6.7x the reference's own value, which shoved the
--- default 12-icon right panel's leading edge onto the clock). A swap has no
--- cited visual in either reference file this task points at, so it gets
--- none here either -- ClearDragFeedback alone is its feedback.
+-- accent insert line between the two neighbours it will land between. The nudge
+-- distance is deliberately small: a full size+spacing nudge shoved the default
+-- 12-icon right panel's leading edge onto the clock. A swap gets no visual at
+-- all -- ClearDragFeedback alone is its feedback.
 --
--- Task 4: targetPanel picks which snapshot to read (dragVisArr for
--- dragPanel itself, dragOtherVisArr for the panel across the gap). The
--- slide-aside only ever runs for dragPanel: dragOtherVisArr's ids are not
--- being reordered relative to each other, only gaining one new neighbour on
--- commit, so there is nothing there for the slide's virtualPos/virtualInsert
--- maths (both anchored on dragFromIdx, a position that only means something
--- within dragPanel's own array) to apply to.
+-- targetPanel picks which snapshot to read. The slide-aside only ever runs for
+-- dragPanel: dragOtherVisArr's ids are not being reordered relative to each
+-- other, only gaining one new neighbour on commit, so there is nothing there for
+-- the virtualPos/virtualInsert maths (both anchored on dragFromIdx, a position
+-- that only means something within dragPanel's own array) to apply to.
 local function ApplyDragFeedback(mode, targetIdx, targetPanel)
     ClearDragFeedback()
     if mode ~= "insert" then return end
@@ -408,17 +370,16 @@ local function ApplyDragFeedback(mode, targetIdx, targetPanel)
     end
 end
 
--- Step 5's algorithm, in full, verbatim per the brief. `stored` is the full
--- array (every id, hidden included); `newVisible` is the new VISIBLE
--- sequence for the same panel, a permutation of stored's own visible subset.
+-- Folds a reordered visible sequence back into the full stored array. `stored`
+-- is every id, hidden included; `newVisible` is the new VISIBLE sequence for the
+-- same panel, a permutation of stored's own visible subset.
 local function SpliceWithin(stored, newVisible)
     -- ENFORCE the precondition, do not assume it. `Visible` depends on the live
     -- `el.requires()` predicate, so the visible count at drop time can differ
     -- from the count when the drag began and cached its array. On a mismatch the
     -- loop below silently duplicates one id and deletes another through its own
     -- fallback, and SetOrder writes that to SavedVariables. Refusing is always
-    -- safe: the worst case is a drag that does nothing. This guard would also
-    -- have caught the cross-panel corruption Task 3's review found.
+    -- safe: the worst case is a drag that does nothing.
     local nVis = 0
     for i = 1, #stored do
         if Visible(stored[i]) then nVis = nVis + 1 end
@@ -437,16 +398,14 @@ local function SpliceWithin(stored, newVisible)
     return out
 end
 
--- Task 4, verbatim per the brief. Operate on the STORED arrays directly and
--- must NEVER be routed through SpliceWithin: a cross-panel move changes
--- both arrays' visible lengths, and SpliceWithin's length guard above
--- returns `stored` unchanged on exactly that mismatch, so a cross-panel
--- drop routed through it would silently do nothing. RemoveId only ever
--- shortens the SOURCE array by one -- any hidden id after the removed slot
--- closes up by one index, unavoidable since the array is genuinely
--- shorter, but harmless since their relative order is untouched. A hidden
--- id never changes panel: only the dragged id moves, and it is visible by
--- definition.
+-- Cross-panel moves operate on the STORED arrays directly and must NEVER be
+-- routed through SpliceWithin: such a move changes both arrays' visible lengths,
+-- and SpliceWithin's length guard above returns `stored` unchanged on exactly
+-- that mismatch, so the drop would silently do nothing. RemoveId only shortens
+-- the SOURCE array by one -- any hidden id after the removed slot closes up by
+-- one index, unavoidable since the array is genuinely shorter, but harmless
+-- since their relative order is untouched. A hidden id never changes panel: only
+-- the dragged id moves, and it is visible by definition.
 local function RemoveId(arr, id)
     local out = {}
     for i = 1, #arr do
@@ -479,12 +438,12 @@ end
 -- order and redraws. Never moves preview frames directly; Layout() (via
 -- PreviewRefresh) is the only thing that ever sets a slot's real position.
 --
--- Task 4: branches on dragTargetPanel == dragPanel. Same-panel keeps Task
--- 3's own swap/insert-within-visArr logic and SpliceWithin, byte for byte.
--- Cross-panel (dragMode is always "insert" there -- FindDragTarget never
--- returns "swap" for the other panel) goes through RemoveId/InsertAtVisible
--- on the two STORED arrays instead, per the brief's Step 3 -- it is never a
--- no-op, because landing in a different panel is always a real change.
+-- Branches on dragTargetPanel == dragPanel. Same-panel uses the
+-- swap/insert-within-visArr logic and SpliceWithin. Cross-panel (dragMode is
+-- always "insert" there -- FindDragTarget never returns "swap" for the other
+-- panel) goes through RemoveId/InsertAtVisible on the two STORED arrays instead,
+-- and is never a no-op, because landing in a different panel is always a real
+-- change.
 local function FinishDrag()
     local self = dragSlot
     if not self then return end
@@ -517,10 +476,9 @@ local function FinishDrag()
                     table.insert(visArr, insertAt, id)
                 end
 
-                -- Fresh, full (hidden-inclusive) arrays for SpliceWithin --
-                -- this is a one-time read at drop, not a per-tick one. The
-                -- panel dragPanel did NOT touch is passed straight through
-                -- unchanged.
+                -- Fresh, full (hidden-inclusive) arrays for SpliceWithin: a
+                -- one-time read at drop, not a per-tick one. The panel dragPanel
+                -- did NOT touch is passed straight through unchanged.
                 local order = ns.TopBar.Order()
                 local newLeft, newRight
                 if dragPanel == "left" then
@@ -561,24 +519,20 @@ local function FinishDrag()
     dragSlot, dragId, dragPanel, dragFromIdx, dragVisArr, dragOtherVisArr = nil, nil, nil, nil, nil, nil
     dragMode, dragTargetIdx, dragTargetPanel = nil, nil, nil
     lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel = nil, nil, nil
-    -- Fix round 2, Fix 2: pendingSlot is normally already nil here (the
-    -- threshold handoff clears it before BeginDrag ever runs), but clearing
-    -- it again costs nothing and keeps this function's own end state
-    -- self-contained rather than relying on that ordering elsewhere.
+    -- pendingSlot is normally already nil here (the threshold handoff clears it
+    -- before BeginDrag runs), but clearing it again costs nothing and keeps this
+    -- function's end state self-contained.
     pendingSlot = nil
 end
 
 -- The second OnUpdate (installed on previewFrame by BeginDrag). Polls for
--- release first -- the hole EllesmereUIDataBars_Options.lua:1262-1266 closes
--- on the slot's own pending-threshold OnUpdate, this closes on the
--- drag-in-progress one, so a release anywhere (including outside the
--- options window) always reaches FinishDrag.
+-- release first, so a release anywhere -- including outside the options window,
+-- where OnMouseUp never fires on the slot -- always reaches FinishDrag.
 --
--- Fix round 1: FindDragTarget is cheap now (dragVisArr is a snapshot, not a
--- fresh Order() call), so it still runs every tick, but ApplyDragFeedback/
--- ClearDragFeedback -- the ~40 SetPoint calls -- only run when the target
--- actually changed since the last tick (lastFeedbackMode/lastFeedbackIdx),
--- matching EUI_CooldownManager_Options.lua:14443's own early-out.
+-- FindDragTarget is cheap (dragVisArr is a snapshot, not a fresh Order() call),
+-- so it runs every tick, but ApplyDragFeedback/ClearDragFeedback -- the ~40
+-- SetPoint calls -- only run when the target actually changed since the last
+-- tick.
 local function DragTick()
     if not IsMouseButtonDown("LeftButton") then
         previewFrame:SetScript("OnUpdate", nil)
@@ -609,12 +563,10 @@ local function DragTick()
     end
 end
 
--- Starts a drag once the slot's own pending-threshold OnUpdate (WireDrag,
--- below) crosses DRAG_THRESHOLD. Records the panel and visible index the
--- slot started at, and snapshots BOTH panels' own visible ids once (Task
--- 4) -- the only read of ns.TopBar.Order() for the rest of the drag;
--- FindDragTarget and ApplyDragFeedback both reuse dragVisArr/dragOtherVisArr
--- instead of re-deriving either every tick.
+-- Starts a drag once the slot's own pending-threshold OnUpdate (WireDrag, below)
+-- crosses DRAG_THRESHOLD. Records the panel and visible index the slot started
+-- at, and snapshots BOTH panels' visible ids once -- the only read of
+-- ns.TopBar.Order() for the rest of the drag.
 local function BeginDrag(self)
     local id, panel = self._id, self._panel
     if not (id and panel and self._baseX) then return end
@@ -655,33 +607,24 @@ local function BeginDrag(self)
 end
 
 -- Tears an in-progress drag down WITHOUT writing anything -- called from
--- previewFrame's OnHide (fix round 1). The host reparents every content-
--- header child when the user leaves this page or closes the panel
--- (EllesmereUI.lua:9202-9224, :9313-9322), which can Hide() previewFrame
--- with the mouse button still down. WoW does not run OnUpdate on a hidden
--- frame, so an in-progress drag would otherwise freeze mid-air: the ghost
--- stranded on UIParent at TOOLTIP strata, the dragged slot stuck at alpha
--- 0.3, and -- on the next visit, when previewFrame shows again and DragTick
--- fires once more, sees the button already up -- FinishDrag would write a
--- stale reorder to SavedVariables minutes after the user actually let go.
--- This reaches the same end state FinishDrag's no-op path does, but never
--- calls FinishDrag and so never reaches SetOrder.
+-- previewFrame's OnHide. The host reparents every content-header child when the
+-- user leaves this page or closes the panel, which can Hide() previewFrame with
+-- the mouse button still down. WoW does not run OnUpdate on a hidden frame, so
+-- an in-progress drag would otherwise freeze mid-air: the ghost stranded on
+-- UIParent at TOOLTIP strata, the dragged slot stuck at alpha 0.3, and -- on the
+-- next visit, when DragTick fires once more and sees the button already up --
+-- FinishDrag would write a stale reorder to SavedVariables minutes after the
+-- user actually let go. This reaches the same end state FinishDrag's no-op path
+-- does, but never calls FinishDrag and so never reaches SetOrder.
 --
--- Fix round 2: two more cases folded in, in order.
+-- The pendingSlot teardown comes FIRST, before the dragSlot check: a slot can be
+-- ARMED (pressed, short of DRAG_THRESHOLD) with no drag in progress, and its
+-- pending OnUpdate cannot tick while previewFrame is hidden. Left alone it
+-- resumes on the next Show against a stale cursor delta from the PREVIOUS visit,
+-- and can cross the threshold immediately and start a drag the user never began.
 --
--- Fix 2 -- a slot can be ARMED (pressed, short of DRAG_THRESHOLD) with no
--- drag in progress at all: dragSlot is still nil at that point. That slot's
--- own pending OnUpdate cannot tick while previewFrame is hidden, so it has
--- to be torn down here too, before the dragSlot check below -- otherwise it
--- resumes on the next Show against a stale cursor delta from the PREVIOUS
--- visit, and if the button happens to be down again by then, can cross the
--- threshold immediately and start a drag the user never began this time.
---
--- Fix 3 -- everything past that point (the OnUpdate teardown, the ghost, the
--- alpha restore, ClearDragFeedback's own loop over every entry in slotPool)
--- has nothing to undo when no drag is in progress, which is the common case
--- of simply leaving the page. Return early once the pending tracker is
--- handled, rather than doing that work on every hide.
+-- Everything past that point has nothing to undo when no drag is in progress,
+-- which is the common case of simply leaving the page, so return early.
 local function CancelDragOnHide()
     if pendingSlot then
         pendingSlot:SetScript("OnUpdate", nil)
@@ -700,19 +643,16 @@ local function CancelDragOnHide()
     lastFeedbackMode, lastFeedbackIdx, lastFeedbackPanel = nil, nil, nil
 end
 
--- Manual drag detection: a lightweight OnUpdate installed on the slot itself
--- at OnMouseDown, torn down either by crossing DRAG_THRESHOLD (which hands
--- off to BeginDrag) or by the button already being up on a later tick --
--- EllesmereUIDataBars_Options.lua:1262-1266's own guard, which is what stops
--- a press-and-release-elsewhere from leaking a live OnUpdate when OnMouseUp
--- never fires on this slot.
+-- Manual drag detection: a lightweight OnUpdate installed on the slot itself at
+-- OnMouseDown, torn down either by crossing DRAG_THRESHOLD (which hands off to
+-- BeginDrag) or by the button already being up on a later tick. That second
+-- teardown is what stops a press-and-release-elsewhere from leaking a live
+-- OnUpdate when OnMouseUp never fires on this slot.
 local function WireDrag(slot)
     slot:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
-        -- Second-drag guard (fix round 1), matching
-        -- EllesmereUIDataBars_Options.lua:1258: a press on another slot
-        -- while one is already dragging must not arm a second pending
-        -- watch on top of it.
+        -- Second-drag guard: a press on another slot while one is already
+        -- dragging must not arm a second pending watch on top of it.
         if dragSlot then return end
         -- Same guard as the drag loop. Arming the watch without a start point
         -- would compare against nil on the first movement test.
@@ -737,8 +677,8 @@ local function WireDrag(slot)
             if dx * dx + dy * dy >= DRAG_THRESHOLD * DRAG_THRESHOLD then
                 s:SetScript("OnUpdate", nil)
                 s._pendX, s._pendY = nil, nil
-                -- Threshold handoff (fix round 2, Fix 2): BeginDrag is about
-                -- to set dragSlot, so this slot is no longer merely "armed".
+                -- Threshold handoff: BeginDrag is about to set dragSlot, so
+                -- this slot is no longer merely "armed".
                 pendingSlot = nil
                 BeginDrag(s)
             end
@@ -754,12 +694,10 @@ local function WireDrag(slot)
 end
 
 -- Lays out one side panel's launcher slots left to right from `startX`,
--- mirroring LayoutSide's own arithmetic (Bar.lua:451-473) without calling it.
--- Returns the panel's own content width (0 when nothing in it is visible).
--- rowH is the icon row's shared height (Fix 4): every slot in the row
--- anchors so its own vertical centre sits on the row's centreline, matching
--- Bar.lua's LayoutSide/LayoutPanels, which hang every button and every
--- side panel off a shared y (:459, :489-493).
+-- mirroring LayoutSide's arithmetic without calling it. Returns the panel's own
+-- content width (0 when nothing in it is visible). rowH is the icon row's shared
+-- height: every slot anchors so its vertical centre sits on the row's
+-- centreline, matching the real bar, which hangs every button off a shared y.
 local function LayoutLauncherPanel(order, panel, startX, size, spacing, rowH)
     local x = 0
     local yOff = -(rowH - size) / 2
@@ -778,17 +716,15 @@ local function LayoutLauncherPanel(order, panel, startX, size, spacing, rowH)
             end
             if el.icon then slot._icon:SetTexture(el.icon) end
             slot:SetSize(size, size)
-            -- The real bar sizes the button to size+BTN_PAD but the icon
-            -- texture to size alone (Bar.lua:409-410); `size` here already
-            -- includes BTN_PAD (Layout() passes iconSize), so the icon
+            -- The real bar sizes the button to size+BTN_PAD but the icon texture
+            -- to size alone; `size` here already includes BTN_PAD, so the icon
             -- texture is inset by BTN_PAD inside the slot, matching it.
             local iconDim = size - BTN_PAD
             if iconDim < 0 then iconDim = 0 end
             slot._icon:SetSize(iconDim, iconDim)
             slot:ClearAllPoints()
             slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", startX + x, yOff)
-            -- Preview-frame-local coordinates. Task 3's hit testing reads
-            -- these, exactly as EUI_CooldownManager_Options.lua:14315-14349 does.
+            -- Preview-frame-local coordinates, read by the drag hit testing.
             slot._baseX, slot._baseY = startX + x, yOff
             slot._id, slot._panel = id, panel
             slot:Show()
@@ -800,13 +736,12 @@ local function LayoutLauncherPanel(order, panel, startX, size, spacing, rowH)
 end
 
 -- The centre column: just the clock, sized from its own measured text so the
--- preview never has to read the real bar's clock button (Step 2) -- that
--- button lives on UIParent, may not exist yet, and may be hidden.
+-- preview never has to read the real bar's clock button -- that button lives on
+-- UIParent, may not exist yet, and may be hidden.
 --
--- Split into measure/position (Fix 4): the icon row's shared vertical
--- centreline needs the clock's height known BEFORE any slot in the row is
--- anchored, so this only creates the FontString, sets its font/text, and
--- measures it -- no positioning here.
+-- Split into measure/position: the icon row's shared vertical centreline needs
+-- the clock's height known BEFORE any slot in the row is anchored, so this only
+-- creates the FontString, sets its font and text, and measures it.
 local function MeasureClock(clockSize)
     local slot = GetSlot("clock")
     if not slot._text then
@@ -826,23 +761,22 @@ local function MeasureClock(clockSize)
     return slot, w, h
 end
 
--- Sizes and anchors the clock slot from its already-measured text metrics
--- (w, h are the PADDED slot dimensions -- CLOCK_PAD already applied by the
--- caller, matching SizeClockButton, Readouts.lua:88-89: CLOCK_PAD on both
--- sides horizontally, half that vertically).
+-- Sizes and anchors the clock slot from its already-measured text metrics (w, h
+-- are the PADDED slot dimensions -- CLOCK_PAD already applied by the caller,
+-- matching SizeClockButton: CLOCK_PAD on both sides horizontally, half that
+-- vertically).
 local function PositionClock(slot, startX, yOff, w, h)
     slot:SetSize(w, h)
     slot:ClearAllPoints()
     slot:SetPoint("TOPLEFT", previewFrame, "TOPLEFT", startX, yOff)
-    -- Never draggable, so no _baseX/_baseY -- Step 1 scopes those to
-    -- draggable slots only.
+    -- Never draggable, so no _baseX/_baseY: those are for draggable slots only.
     slot._id, slot._panel = "clock", "centre"
     slot:Show()
 end
 
 -- The FPS readout: text under the clock, no drag scripts, and read from the
--- registry by id rather than from any order array -- it has no panel field
--- and is never in tbOrder (Elements.lua:1057-1060).
+-- registry by id rather than from any order array -- it has no panel field and
+-- is never in tbOrder.
 local function LayoutFps(centerX, topY, sysSize)
     local slot = GetSlot("fps")
     if not slot._text then
@@ -866,26 +800,23 @@ local function LayoutFps(centerX, topY, sysSize)
     return h
 end
 
--- The two zone dividers: one between the left launcher panel and the clock,
--- one between the clock and the right panel. They show the user where the
--- three drag zones actually are, which is why they are placed on
--- FindDragTarget's OWN boundaries (boundaryLC/boundaryCR, :267-268) rather
--- than merely near them -- a divider drawn anywhere else would be a picture
--- of a rule the drop test does not follow.
+-- The two zone dividers: one between the left launcher panel and the clock, one
+-- between the clock and the right panel. They show the user where the three drag
+-- zones actually are, which is why they are placed on FindDragTarget's OWN
+-- boundaries rather than merely near them -- a divider drawn anywhere else would
+-- be a picture of a rule the drop test does not follow.
 --
--- Parented to previewWrap, which is UNSCALED, and given the boundary
--- positions converted into wrap space. A DIVIDER_W-wide line on previewFrame
--- would be that many units in CONTENT space and would shrink by the fit scale,
--- losing about a third of its width at the worst case; this one stays exactly
--- DIVIDER_W physical pixels at any scale.
+-- Parented to previewWrap, which is UNSCALED, and given the boundary positions
+-- converted into wrap space. A DIVIDER_W-wide line on previewFrame would be that
+-- many units in CONTENT space and would shrink by the fit scale; this one stays
+-- exactly DIVIDER_W physical pixels at any scale.
 --
--- Hidden entirely when the clock is not drawn: with no centre occupant there
--- is nothing between the two panels worth marking off. Note that the two
--- boundaries do NOT collapse in that case -- with `clockW` zero they still sit
--- `spacing` apart (:271-272), leaving a narrow dead band that FindDragTarget
--- still refuses as centre. Drawing two lines a hair apart around an invisible
--- clock would describe that band accurately and read as a defect, which is the
--- real reason to hide them.
+-- Hidden entirely when the clock is not drawn: with no centre occupant there is
+-- nothing between the two panels worth marking off. The two boundaries do NOT
+-- collapse in that case -- with `clockW` zero they still sit `spacing` apart,
+-- leaving a narrow dead band FindDragTarget still refuses as centre. Two lines a
+-- hair apart around an invisible clock would describe that band accurately and
+-- read as a defect, which is the real reason to hide them.
 local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
     if not previewWrap then return end
     if not dividerL then
@@ -901,12 +832,11 @@ local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
     end
 
     -- Dark rather than light, so the divider reads as a groove cut into the
-    -- backdrop instead of a line drawn on top of it, and two pixels wide so
-    -- it survives being seen against the busy panel art behind the stage.
-    -- Both are taste values with no other code depending on them.
-    -- Written out rather than looped over a table literal: Layout() runs on
-    -- every settings change and every drop, and this file keeps its allocation
-    -- discipline explicit elsewhere.
+    -- backdrop instead of a line drawn on top of it, and two pixels wide so it
+    -- stays visible against the busy panel art behind the stage. Both are taste
+    -- values with no other code depending on them. Written out rather than
+    -- looped over a table literal, since Layout() runs on every settings change
+    -- and every drop.
     local h = math.max(1, rowH * scale)
     dividerL:SetColorTexture(0, 0, 0, 0.55)
     dividerL:SetSize(DIVIDER_W, h)
@@ -926,8 +856,8 @@ local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
 end
 
 -- The whole layout pass: slot rows, the fit scale, and the hint line. Returns
--- the total header height in the PARENT's coordinate space (Step 5). Shared
--- by BuildPreviewHeader (the cold mount) and PreviewRefresh (every later
+-- the total header height in the PARENT's coordinate space. Shared by
+-- BuildPreviewHeader (the cold mount) and PreviewRefresh (every later
 -- settings-driven redraw) so there is exactly one place that computes it.
 local function Layout()
     for _, slot in pairs(slotPool) do slot:Hide() end
@@ -938,9 +868,9 @@ local function Layout()
     local sysSize   = ns.TopBar.Get("tbSysSize", 11)
     local order     = ns.TopBar.Order()
 
-    -- Fix 4: the clock is measured -- never positioned -- before either
-    -- launcher panel, because the row's shared vertical centreline (rowH,
-    -- below) needs every slot's height known before any slot is anchored.
+    -- The clock is measured -- never positioned -- before either launcher panel,
+    -- because the row's shared vertical centreline needs every slot's height
+    -- known before any slot is anchored.
     local clockSlot, clockW, clockH = nil, 0, 0
     if Visible("clock") then
         local textW, textH
@@ -950,9 +880,9 @@ local function Layout()
 
     local iconRowH = math.max(iconSize, clockH)
 
-    -- Task 3: cached for FindDragTarget/ApplyDragFeedback, which run off the
-    -- mouse rather than off a fresh Layout() pass and so need this frozen at
-    -- the values the currently-drawn slots were placed with.
+    -- Cached for FindDragTarget/ApplyDragFeedback, which run off the mouse
+    -- rather than off a fresh Layout() pass and so need this frozen at the
+    -- values the currently-drawn slots were placed with.
     lastIconSize = iconSize
     lastSpacing  = spacing
     lastYOff     = -(iconRowH - iconSize) / 2
@@ -967,10 +897,9 @@ local function Layout()
     local rightW = LayoutLauncherPanel(order.right, "right",
         rightStartX, iconSize, spacing, iconRowH)
 
-    -- Task 4: each panel's own content span, cached the same way lastIconSize
-    -- etc. are above -- FindDragTarget's zone boundaries read these instead
-    -- of a slot's own _baseX, so a zone stays resolvable even when its panel
-    -- is currently empty (leftW/rightW == 0).
+    -- Each panel's own content span, cached the same way lastIconSize is above.
+    -- FindDragTarget's zone boundaries read these instead of a slot's own
+    -- _baseX, so a zone stays resolvable even when its panel is empty.
     lastLeftW        = leftW
     lastClockStartX  = leftW + spacing
     lastClockW       = clockW
@@ -985,10 +914,9 @@ local function Layout()
     local unscaledH = iconRowH
     if fpsH > 0 then unscaledH = unscaledH + READOUT_GAP + fpsH end
 
-    -- Step 3: fit to width when it overflows, with no floor. contentW is the
-    -- laid-out width from above. Default it BEFORE any use: the division
-    -- below is guarded by its own `if`, but SetSize is not, and
-    -- SetSize(nil, h) is a hard Lua error rather than a no-op.
+    -- Fit to width when it overflows, with no floor. Default contentW BEFORE any
+    -- use: the division below is guarded by its own `if`, but SetSize is not,
+    -- and SetSize(nil, h) is a hard Lua error rather than a no-op.
     local laidOutWidth = leftW + spacing + clockW + spacing + rightW
     local contentW = laidOutWidth or 0
     local scale = 1
@@ -1003,25 +931,24 @@ local function Layout()
     previewStage:SetSize(math.max(1, availW), unscaledH * scale + STAGE_PAD_Y * 2)
 
     -- After previewWrap is sized, because the dividers anchor to it. The two
-    -- expressions are FindDragTarget's boundaryLC/boundaryCR verbatim
-    -- (:267-268), read off the same cached spans it reads.
+    -- expressions are FindDragTarget's boundaryLC/boundaryCR verbatim, read off
+    -- the same cached spans it reads.
     LayoutDividers(leftW + spacing * 0.5,
         lastClockStartX + clockW + spacing * 0.5,
         iconRowH, scale, clockSlot and true or false)
 
-    -- Step 5: the scaled preview's own contribution, the stage's own vertical
-    -- padding, plus the hint line's own height and gap, both UNSCALED -- the
-    -- hint is parented to the header frame (Step 4) and never scaled.
+    -- The scaled preview's own contribution, the stage's vertical padding, plus
+    -- the hint line's height and gap, both UNSCALED -- the hint is parented to
+    -- the header frame and never scaled.
     local hintH = 0
     if hintText then hintH = hintText:GetStringHeight() or 0 end
     return unscaledH * scale + STAGE_PAD_Y * 2 + HINT_GAP + hintH
 end
 
--- No _prebuilding guard here, deliberately. EllesmereUI's hidden pre-build pass
--- stubs every content-header method to a no-op for the duration of each call
--- (EllesmereUI_GlobalSearch.lua:328-332, :584-592) and calls buildPage directly
--- rather than SelectPage (:544), so this function is unreachable during the
--- pass. A guard would be dead code.
+-- No _prebuilding guard here, deliberately. The host's hidden pre-build pass
+-- stubs every content-header method to a no-op for the duration of each call and
+-- calls buildPage directly rather than SelectPage, so this function is
+-- unreachable during the pass. A guard would be dead code.
 function ns.TopBar.BuildPreviewHeader(parent, width)
     if not parent then return 0 end
     local pad = Pad()
@@ -1032,9 +959,9 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     previewWrap:SetParent(parent)
 
     -- The stage: represents the SCREEN the bar sits centred on. Parented
-    -- directly to `parent` -- never into the previewWrap/previewFrame chain
-    -- -- so it never inherits the fit scale. Created once, cached, reused on
-    -- rebuild, exactly as hintText already is.
+    -- directly to `parent` -- never into the previewWrap/previewFrame chain --
+    -- so it never inherits the fit scale. Created once, cached, reused on
+    -- rebuild, as hintText is.
     if not previewStage then
         previewStage = CreateFrame("Frame", nil, parent)
         if EllesmereUI and EllesmereUI.SolidTex then
@@ -1068,26 +995,23 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     previewFrame:ClearAllPoints()
     previewFrame:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", 0, 0)
     previewFrame:Show()
-    -- Fix round 1: cancels an in-progress drag cleanly if the host hides
-    -- this frame mid-drag (leaving the page, closing the panel) instead of
-    -- letting DragTick freeze and later write a stale reorder.
+    -- Cancels an in-progress drag cleanly if the host hides this frame mid-drag
+    -- (leaving the page, closing the panel) instead of letting DragTick freeze
+    -- and later write a stale reorder.
     previewFrame:SetScript("OnHide", CancelDragOnHide)
 
-    -- Step 4: the hint line, parented to the HEADER frame -- not previewFrame,
-    -- not previewWrap -- so it never shrinks with the fit scale and has no
-    -- business inside the frame Task 3's drag maths converts cursor
-    -- coordinates against. The hint's own TOP is anchored to the STAGE's
-    -- BOTTOM (never scaled), centred to match the centred preview above it,
-    -- so the hint hangs BELOW the stage and the gap stays a constant pixel
-    -- count regardless of the fit scale.
+    -- The hint line, parented to the HEADER frame -- not previewFrame, not
+    -- previewWrap -- so it never shrinks with the fit scale and has no business
+    -- inside the frame the drag maths converts cursor coordinates against. Its
+    -- TOP anchors to the STAGE's BOTTOM (never scaled), centred to match the
+    -- preview above it, so the gap stays a constant pixel count at any scale.
     if not hintText then
         hintText = parent:CreateFontString(nil, "OVERLAY")
         hintText:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
         hintText:SetJustifyH("CENTER")
         hintText:SetTextColor(0.6, 0.6, 0.6, 1)
-        -- Short on purpose. The two zone dividers (LayoutDividers) now show
-        -- the sides and the centre, so the sentence no longer has to explain
-        -- them.
+        -- Short on purpose: the two zone dividers show the sides and the
+        -- centre, so the sentence does not have to explain them.
         hintText:SetText("Drag an icon to arrange the bar however you like.")
     end
     hintText:SetParent(parent)
@@ -1098,30 +1022,23 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
     return Layout()
 end
 
--- Rebuilds the slot rows from current settings. Options.lua's slider and
--- toggle setters call this directly after Apply() (Step 6); Tasks 3 and 4
--- call it after every drop. Must return immediately when previewFrame is
--- nil: a host without EllesmereUI.SetContentHeader builds the page and fires
--- its setters while the header never mounted, so this function exists and
--- the frame does not.
+-- Rebuilds the slot rows from current settings. Options.lua's slider and toggle
+-- setters call this directly after Apply(); the drag code calls it after every
+-- drop. Must return immediately when previewFrame is nil: a host without
+-- EllesmereUI.SetContentHeader builds the page and fires its setters while the
+-- header never mounted, so this function exists and the frame does not.
 function ns.TopBar.PreviewRefresh()
     if not previewFrame then return end
-    -- Fix round 3, Fix 1: previewFrame survives leaving the page (its parent
-    -- previewWrap is stashed and hidden by SaveContentHeaderToCache, not
-    -- destroyed -- EllesmereUI.lua:9213), so the nil check above stays true
-    -- for the rest of the session after one visit to the Top Bar page. 23 of
-    -- the 24 callers only fire while the Top Bar page is on screen, but the
-    -- RegAccent callback (Options.lua, registered at file scope) is
-    -- session-scoped and reaches this on every profile apply and every
-    -- spec-driven profile swap -- with the Top Bar page not the mounted one,
-    -- this would resize and re-layout whatever OTHER module's header frame
-    -- currently owns the shared contentHeaderFrame. IsVisible(), not
-    -- IsShown(): it accounts for the whole parent chain, and it is
-    -- previewWrap that SaveContentHeaderToCache hides, not previewFrame's
-    -- own Show flag. False in both bad cases; true in all three legitimate
-    -- ones -- widget setters, FinishDrag, and PreviewRestore, which only
-    -- fires after RestoreContentHeaderFromCache has already shown
-    -- previewWrap again (:9239-9241).
+    -- previewFrame survives leaving the page (the host stashes and hides its
+    -- parent previewWrap rather than destroying it), so the nil check above
+    -- stays true for the rest of the session after one visit to the Top Bar
+    -- page. Almost every caller only fires while that page is on screen, but the
+    -- accent callback in Options.lua is session-scoped and reaches this on every
+    -- profile apply and every spec-driven profile swap -- with the Top Bar page
+    -- not the mounted one, this would resize and re-layout whatever OTHER
+    -- module's header frame currently owns the shared content header.
+    -- IsVisible(), not IsShown(): it accounts for the whole parent chain, and it
+    -- is previewWrap the host hides, not previewFrame's own Show flag.
     if not previewFrame:IsVisible() then return end
     local h = Layout()
     if EllesmereUI and EllesmereUI.UpdateContentHeaderHeight then
@@ -1129,10 +1046,10 @@ function ns.TopBar.PreviewRefresh()
     end
 end
 
--- Revisiting a page does NOT rebuild it: SelectPage takes a fast path
--- (EllesmereUI.lua:10714-10743) that only re-runs refreshList closures and then
--- calls this. Task 3's drag scripts live on frames that survive the cache, so
--- this only has to redraw; it must not rebuild the slots.
+-- Revisiting a page does NOT rebuild it: the host takes a fast path that only
+-- re-runs refreshList closures and then calls this. The drag scripts live on
+-- frames that survive the cache, so this only has to redraw; it must not rebuild
+-- the slots.
 function ns.TopBar.PreviewRestore()
     ns.TopBar.PreviewRefresh()
 end

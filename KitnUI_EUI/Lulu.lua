@@ -13,22 +13,15 @@ if ns.EUI_INERT then return end
 local ACTION_BARS = "EllesmereUIActionBars"
 
 -- BOTH of Lulu's records are per character, because both of the things they
--- describe are.
---
--- An addon's enable state is per character (Installer/Setup.lua:663 says so, and
--- Blizzard's own addon list has a per-character selector at
--- .wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:651-652).
--- Which Edit Mode layout is ACTIVE is per character too: the layout definitions
--- are account-wide, but Blizzard builds the list for the current player
--- (.wow-api-reference/Interface/AddOns/Blizzard_EditMode/Shared/EditModeManager.lua:7-8)
--- and Installer/Setup.lua:319-327 already calls activating one "on this
--- character".
+-- describe are: an addon's enable state is per character, and so is which Edit
+-- Mode layout is ACTIVE (the definitions are account-wide, but Blizzard builds
+-- the list for the current player).
 --
 -- One shared record would let an alt undo with a layout it never had, and let
 -- whichever character undid first take the record away from every other.
 --
--- The key is the player GUID, which is the value Blizzard's own selector passes
--- to these same addon functions (AddonList.lua:651-652).
+-- The key is the player GUID, the same value Blizzard's own addon-list selector
+-- passes to these functions.
 local function LuluCharacter()
     if not UnitGUID then return nil end
     local guid = UnitGUID("player")
@@ -84,8 +77,7 @@ end
 -- Which layout is active now, in a form that survives the list being reordered.
 --
 -- C_EditMode.GetLayouts returns SAVED layouts only, while its activeLayout field
--- indexes the presets-first COMBINED list, so the two need reconciling. That is
--- the same convention Installer/Setup.lua:327 already uses.
+-- indexes the presets-first COMBINED list, so the two need reconciling.
 --
 -- A preset is recorded as its INDEX: presets come first and their count is fixed,
 -- so those indices cannot shift. A saved layout is recorded as its NAME, because
@@ -106,13 +98,10 @@ local function ActiveEditModeLayout()
     local entry = info.layouts[info.activeLayout - presets]
     if type(entry) ~= "table" or type(entry.layoutName) ~= "string" then return nil end
 
-    -- Override layouts (Plunderstorm and its kin) need no handling here. Blizzard
-    -- keeps the active override in overrideLayoutInfo, which is a separate field
-    -- from the saved list this reads, and prefers it only inside its own
-    -- GetActiveLayoutInfo
-    -- (.wow-api-reference/Interface/AddOns/Blizzard_EditMode/Shared/EditModeManager.lua:1402-1426).
-    -- So an override never reaches this line, and what is recorded is the ordinary
-    -- layout underneath it, which is the one worth going back to anyway.
+    -- Override layouts (Plunderstorm and its kin) need no handling. Blizzard keeps
+    -- the active override in a separate field from the saved list this reads, so
+    -- an override never reaches this line and what is recorded is the ordinary
+    -- layout underneath it -- the one worth going back to anyway.
     return entry.layoutName
 end
 
@@ -166,15 +155,11 @@ local function LuluLayoutRecord()
     return saved.prev
 end
 
--- Every message here is QUEUED, never printed. Both callers reload immediately
+-- Every message here is QUEUED, never printed: both callers reload immediately
 -- afterwards, so a print lands in a chat frame the client destroys before the
--- user can read it: they flip the switch, the screen reloads, and nothing ever
--- explains why the layout did not change. ns.QueueMessage prints on the far side.
---
--- Every one of them reports something that did NOT happen, so every one is red.
--- They arrive two seconds into a login, in the middle of the client's own
--- startup spam, and a plain white line there reads as more spam and is scrolled
--- past. The whole point of queueing was that the user sees it.
+-- user can read it. Every one reports something that did NOT happen, so every
+-- one is red -- they arrive in the middle of the client's own startup output,
+-- where a plain white line reads as more of it and is scrolled past.
 local function ApplyEditModeLayout(on)
     if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then return end
 
@@ -193,10 +178,9 @@ local function ApplyEditModeLayout(on)
             return
         end
         -- Somewhere to write the way back, secured BEFORE the layout moves.
-        -- UnitGUID is declared nilable
-        -- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitDocumentation.lua:1209-1222),
-        -- and a layout swapped with nowhere to record what it replaced is a
-        -- layout the switch can never undo. Skipping is recoverable; that is not.
+        -- UnitGUID is declared nilable, and a layout swapped with nowhere to
+        -- record what it replaced can never be undone. Skipping is recoverable;
+        -- that is not.
         local guid = LuluCharacter()
         local saved = guid and ns.EUISnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
         if not saved then
@@ -205,10 +189,9 @@ local function ApplyEditModeLayout(on)
         end
 
         -- Read BEFORE the import, because ApplyPresetEditMode overwrites
-        -- info.activeLayout on its way out and never reads it back
-        -- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:4979-4983).
-        -- Committed only AFTER the import succeeds: recording a layout to go back
-        -- to, for a switch that never happened, is worse than recording nothing.
+        -- info.activeLayout on its way out. Committed only AFTER the import
+        -- succeeds: recording a layout to go back to, for a switch that never
+        -- happened, is worse than recording nothing.
         local current = ActiveEditModeLayout()
 
         if not EllesmereUI.ApplyPresetEditMode(data, name) then
@@ -226,11 +209,10 @@ local function ApplyEditModeLayout(on)
     end
 
     -- Turning Lulu OFF puts back the layout that was active before Lulu replaced
-    -- it, whatever that was. Kitn's in-game test on 2026-08-08 is why: the old
-    -- code restored KitnUI's OWN layout and only if the Edit Mode install step had
-    -- been run, so a user who skipped that step was left in Lulu's layout with no
-    -- way out through the switch. What the ON path replaced is what the OFF path
-    -- owes back — no more, and no less.
+    -- it, whatever that was. Restoring KitnUI's OWN layout instead leaves a user
+    -- who skipped the Edit Mode install step stuck in Lulu's layout with no way
+    -- out through the switch. What the ON path replaced is what the OFF path owes
+    -- back -- no more, and no less.
     local guid = LuluCharacter()
     local saved = guid and ns.EUIPeekSnapGlobal(LuluSnapKey("luluEditModeLayout", guid))
     local record = saved and saved.prev
@@ -290,13 +272,12 @@ local function ApplyEditModeLayout(on)
         return
     end
 
-    -- Still gated on the install step, for the reason it always was — writing
-    -- KitnUI's layout over the arrangement of someone who never asked for it
-    -- would be worse than leaving Edit Mode alone.
+    -- Still gated on the install step: writing KitnUI's layout over the
+    -- arrangement of someone who never asked for it would be worse than leaving
+    -- Edit Mode alone.
     --
-    -- Emptiness tested exactly as the ON path and EditModeWarning test it. A bare
-    -- type check let an empty string reach the importer, which is both a pointless
-    -- call and a forecast the popup would have got wrong.
+    -- Emptiness tested exactly as the ON path and EditModeWarning test it, so the
+    -- popup's forecast and this outcome cannot disagree.
     local installed = ns.db and ns.db.profiles and ns.db.profiles["Blizzard_EditMode"]
     local standard = ns.data and ns.data.Blizzard_EditMode
     if not installed or type(standard) ~= "string" or strtrim(standard) == "" then
@@ -323,15 +304,9 @@ end
 -- Lulu's action bar half is confined to the character that flipped the switch.
 --
 -- Leaving the character argument off these calls does NOT mean "this character":
--- it means the whole account. Enum.AddOnEnableState carries a "Some" value
--- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua:431-433),
--- which can only describe an aggregate across characters, and Blizzard's own
--- account-wide sweep is the same call with no character
--- (.wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:810) while
--- every per-character path in that file passes one (:568-571, :959-961). Without
--- this, turning Lulu Mode on for one character would switch EllesmereUI's action
--- bars off for alts who never asked for it, and a module enabled on two of five
--- characters would come back enabled on all five.
+-- it means the whole account. Without it, turning Lulu Mode on for one character
+-- switches EllesmereUI's action bars off for alts who never asked, and a module
+-- enabled on two of five characters comes back enabled on all five.
 
 -- Whether Lulu Mode is what is holding the module off for THIS character right
 -- now, and so whether there is anything of KitnUI's to offer to undo.
@@ -379,15 +354,12 @@ local function ApplyActionBarModule(on)
         if saved.prev == nil then
             local ok, state = pcall(C_AddOns.GetAddOnEnableState, ACTION_BARS, guid)
             if not (ok and type(state) == "number") then return end
-            -- Blizzard's own test for enabled, from
-            -- .wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:188.
-            --
-            -- Already off, by the user's own hand or by an earlier pass: Lulu has
-            -- nothing to switch and nothing to remember. Recording "it was off"
-            -- is what poisoned the next apply — the record outlived its purpose,
-            -- the user switched the module back on in the meantime, and record-once
-            -- then refused to update it, so Lulu switched the module off and would
-            -- not switch it back. A record now exists ONLY where Lulu owes one.
+            -- Blizzard's own test for enabled. Already off, by the user's hand or
+            -- by an earlier pass, means Lulu has nothing to switch and nothing to
+            -- remember: recording "it was off" outlives its purpose, and
+            -- record-once then refuses to update it if the user switches the
+            -- module back on, so Lulu would switch it off and never switch it
+            -- back. A record exists ONLY where Lulu owes one.
             if state <= Enum.AddOnEnableState.None then return end
             saved.prev = true
         end
@@ -416,9 +388,8 @@ ns.LuluApplyActionBars = ApplyActionBarModule
 
 -- What the Edit Mode step is about to do, worked out BEFORE the popup so the
 -- user can act on it while acting is still cheap. Told only afterwards, the way
--- out of a full layout list was: toggle on, reload, read the message, delete a
--- layout, toggle off, reload, toggle on, reload. Three reloads to land one
--- layout. Cancelling on a warning costs none.
+-- out of a full layout list costs three reloads; cancelling on a warning costs
+-- none.
 --
 -- Returns a sentence to append to the popup, or nil when the step will run. The
 -- popup text is the forecast and ApplyEditModeLayout is the outcome, so both read
@@ -549,30 +520,23 @@ end)
 -- let the switch lie.
 --
 -- Driven by a STATE MISMATCH, not by watching for an off-to-on transition. The
--- normal import path never shows a transition to watch: EllesmereUI's own import
--- button calls ReloadUI the moment it finishes
--- (References/EllesmereUI-v8.7.5/EllesmereUI/EUI__General_Options.lua:5099-5129),
--- so the client is gone before the debounced reconcile runs, and at the next
--- login the imported ON state is simply the state this addon starts in. The
--- mismatch survives that reload and is what the user actually needs telling
--- about: Lulu recorded ON while the action bar module it switches off is still
--- loaded means its reload-only halves were never applied.
+-- normal import path shows no transition to watch: EllesmereUI reloads the moment
+-- its import finishes, so at the next login the imported ON state is simply the
+-- state this addon starts in. The mismatch survives that reload -- Lulu reading
+-- ON while the action bar module it switches off is still loaded means its
+-- reload-only halves were never applied.
 --
--- BOTH directions are prompted, because the switch can lie both ways. Kitn's
--- in-game test on 2026-08-08 found the reverse: switch to a profile whose Lulu is
--- OFF and the minimap goes back to square, because that half re-applies without a
--- reload, while the action bars stay Blizzard's and Lulu's Edit Mode layout stays
--- active. The profile says no Lulu and two thirds of Lulu is on screen. This file
--- previously dismissed that state as the moment between the toggle and its
--- reload, which was wrong: a profile switch reaches it with no reload coming.
+-- BOTH directions are prompted, because the switch can lie both ways. Switch to a
+-- profile whose Lulu is OFF and the minimap goes back to square, because that
+-- half re-applies without a reload, while the action bars stay Blizzard's and
+-- Lulu's Edit Mode layout stays active: the profile says no Lulu and two thirds
+-- of Lulu is on screen, with no reload coming.
 --
--- The reverse direction is GUARDED on Lulu's own records, and asks about each half
+-- The reverse direction is GUARDED on Lulu's own records and asks about each half
 -- separately. The action bars record says whether the module was switched ON
--- before Lulu touched it, so someone who had EllesmereUI's action bars off already
--- is never offered them back: nothing of KitnUI's is holding those down. The Edit
--- Mode record is asked on its own, because that exact user still has Lulu's layout
--- active with the switch reading off, and gating the whole prompt on the action
--- bars left them with no way to say so.
+-- before Lulu touched it, so someone who had them off already is never offered
+-- them back. The Edit Mode record is asked on its own, because that same user
+-- still has Lulu's layout active with the switch reading off.
 local ACTION_BARS_LOADED_UNKNOWN = "unknown"
 
 local function ActionBarsLoaded()
@@ -601,13 +565,12 @@ end
 -- to go: held any longer it becomes a claim on a state the user now owns, and the
 -- next time they switch the module off themselves KitnUI offers to reverse them.
 --
--- EllesmereUI's own profile import is how this happens in practice. It enables
--- every module in the suite for the WHOLE account
--- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:5266-5285),
--- so one character installing pays every other character's debt without either
--- addon knowing. The rule is written here rather than after the import for that
--- reason: what matters is the state, not which of several routes produced it, and
--- only the character whose record it is can see its own module.
+-- EllesmereUI's own profile import is how this happens in practice: it enables
+-- every module in the suite for the WHOLE account, so one character installing
+-- pays every other character's debt without either addon knowing. The rule lives
+-- here rather than after the import because what matters is the state, not which
+-- route produced it, and only the character whose record it is can see its own
+-- module.
 --
 -- Not while Lulu is ON: that state is the "apply" mismatch, the record still
 -- describes the true original, and the reload is about to switch the module off
@@ -749,27 +712,22 @@ function ns.LuluReconcile()
         preferredIndex = 3,
     }
 
-    -- Latched on the SHOWN dialog, never on the attempt. StaticPopup_Show returns
-    -- nil when every dialog frame is already taken
-    -- (.wow-api-reference/Interface/AddOns/Blizzard_StaticPopup/StaticPopup.lua:366-370),
-    -- and latching on that would spend the user's only notice on a prompt they
-    -- never saw.
+    -- Latched on the SHOWN dialog, never on the attempt: StaticPopup_Show returns
+    -- nil when every dialog frame is already taken, and latching on that would
+    -- spend the user's only notice on a prompt they never saw.
     if not StaticPopup_Show("KITNUI_LULU_IMPORTED") then return end
     promptedForMismatch = kind
 end
 
 -- Called by ns.EUIResetAll, which reloads straight afterwards. The re-apply
--- registry handles the minimap; these two are the parts a reload is required for,
--- and leaving them behind would strand the action bars off and the Lulu layout
--- active with the switch reading off and no record of either.
--- Keyed on the RECORDS, not on the switch. Keying on the switch missed the exact
--- state the undo prompt exists for: the user switches to a profile whose Lulu
--- reads off while Lulu is still applied, declines or ignores the prompt, and runs
--- /kitn reset. The switch says off, so the teardown skipped, and the caller then
--- nils KitnUIDB and takes both records with it — leaving the action bars off and
--- the Lulu layout active with nothing left that knows how to undo either.
+-- registry handles the minimap; these two are the parts a reload is required for.
 --
--- The records answer the real question: is there anything of ours still applied.
+-- Keyed on the RECORDS, not on the switch, because the switch misses the exact
+-- state the undo prompt exists for: the user switches to a profile whose Lulu
+-- reads off while Lulu is still applied, ignores the prompt, and runs /kitn
+-- reset. The switch says off, the teardown skips, and the caller then nils
+-- KitnUIDB and takes both records with it. The records answer the real question:
+-- is there anything of ours still applied.
 local function LuluApplied()
     if ns.LuluEnabled and ns.LuluEnabled() then return true end
     if LuluOwnsActionBars() then return true end
