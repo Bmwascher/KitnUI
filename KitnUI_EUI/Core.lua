@@ -312,14 +312,24 @@ end
 -- it, re-applying after a profile switch would snapshot KitnUI's own forced
 -- value over the user's original and make the switch unrestorable.
 --
+-- `claiming` is what makes that guard trustworthy. A note may only be created by
+-- a USER ACTION, never by a re-apply, because only at the click can this addon
+-- honestly say "this was the value before I touched it". Switch states live in
+-- the EllesmereUI profile and notes live here, so copying a profile carries the
+-- switch and leaves the note behind; the re-apply that follows would otherwise
+-- record KitnUI's own forced value as the user's original. Unclaimed and no note
+-- means write NOTHING, not merely record nothing -- forcing a value we cannot
+-- give back is the state this guard exists to prevent.
+--
 -- STANDING RULE for every page built on this store, including the ones a later
 -- plan adds: no two controls may hold down the same EllesmereUI key. The second
 -- one to record would capture the first one's forced value as the original, and
 -- whichever is switched off last would restore the wrong thing. If two controls
 -- genuinely need the same key, they have to become one control.
-function ns.EUIOverride(tbl, saved, key, value)
+function ns.EUIOverride(tbl, saved, key, value, claiming)
     if not (tbl and saved and key) then return end
     if saved.prev == nil then
+        if not claiming then return end
         local current = tbl[key]
         if current == nil then current = ns.EUI_ABSENT end
         saved.prev = current

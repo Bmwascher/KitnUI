@@ -45,9 +45,9 @@ end
 -- The minimap is the only part that applies without a reload, so it is the only
 -- part that snapshots. The other two are reversed by re-enabling the addon and
 -- re-activating the standard layout.
-local function ApplyMinimapShape(on)
+local function ApplyMinimapShape(on, claiming)
     local saved
-    if on then
+    if on and claiming then
         saved = ns.EUISnap("lulu", "minimapShape")
     else
         saved = ns.EUIPeekSnap("lulu", "minimapShape")
@@ -59,7 +59,7 @@ local function ApplyMinimapShape(on)
     if type(minimap) ~= "table" then return end
 
     if on then
-        ns.EUIOverride(minimap, saved, "shape", "circle")
+        ns.EUIOverride(minimap, saved, "shape", "circle", claiming)
     else
         ns.EUIRestore(minimap, saved, "shape")
     end
@@ -489,7 +489,7 @@ function ns.SetLuluMode(on)
             end
             local s = ns.EUISettings()
             s.lulu = on and true or false
-            ApplyMinimapShape(on)
+            ApplyMinimapShape(on, true)
             ApplyEditModeLayout(on)
             ApplyActionBarModule(on)
             ReloadUI()
@@ -512,12 +512,13 @@ end
 -- Only the minimap re-asserts on a profile switch. The module state and the Edit
 -- Mode layout are not profile-scoped and would need a reload to change anyway.
 ns.EUIRegisterReapply(function()
-    ApplyMinimapShape(ns.LuluEnabled())
+    ApplyMinimapShape(ns.LuluEnabled(), false)
 end)
 
--- Lulu's other two halves need a reload, so an imported profile that turns it on
--- leaves the switch reading ON with only the minimap applied. Prompt rather than
--- let the switch lie.
+-- An imported profile that turns Lulu on leaves the switch reading ON with NONE
+-- of its three parts applied: two need a reload, and the minimap needs a claim
+-- the re-apply is not allowed to make. Accepting the prompt applies all three.
+-- Prompt rather than let the switch lie.
 --
 -- Driven by a STATE MISMATCH, not by watching for an off-to-on transition. The
 -- normal import path shows no transition to watch: EllesmereUI reloads the moment
@@ -645,7 +646,11 @@ function ns.LuluReconcile()
     local text, apply
     if kind == "apply" then
         apply = true
-        text = ns.title .. ": Lulu Mode is on, but two of its three parts are not.\n\nEllesmereUI's action bars still need to switch off so Blizzard's own bars return, and Lulu's Edit Mode layout still needs to apply. Both need a reload. Do that now?"
+        -- Count-free on purpose. A count here is a promise about the screen, and
+        -- two states defeat it: the import can carry the minimap blob so that half
+        -- already looks applied, and a live note under this profile name lets the
+        -- re-apply legitimately re-assert it.
+        text = ns.title .. ": Lulu Mode is on, but it is not applied.\n\nApplying it needs a reload. Do that now?"
     else
         apply = false
         -- Named half by half, because either can be in force without the other.
@@ -699,6 +704,13 @@ function ns.LuluReconcile()
                 return
             end
 
+            -- The minimap belongs here too, and it CLAIMS. Accepting this prompt
+            -- is a user action, which is the only thing allowed to record an
+            -- original. Without it the minimap half would never apply on an
+            -- imported profile: the re-apply refuses to claim, and CurrentMismatch
+            -- reads only the action bar module and the layout record, so once
+            -- those two are settled the prompt never asks again.
+            ApplyMinimapShape(apply, true)
             ApplyEditModeLayout(apply)
             ApplyActionBarModule(apply)
             ReloadUI()

@@ -138,16 +138,16 @@ local function CdmBars()
     return bars
 end
 
-local function ApplyOne(bar, saved, key, value, on)
+local function ApplyOne(bar, saved, key, value, on, claiming)
     if not saved then return end
     if on then
-        ns.EUIOverride(bar, saved, key, value)
+        ns.EUIOverride(bar, saved, key, value, claiming)
     else
         ns.EUIRestore(bar, saved, key)
     end
 end
 
-local function ApplyCdm(on)
+local function ApplyCdm(on, claiming)
     local bars = CdmBars()
     if not bars then return end
 
@@ -163,23 +163,23 @@ local function ApplyCdm(on)
         if write or (not on and type(bar) == "table") then
             local snapKey = BarSnapKey(bar, i, "showTooltip")
             local saved
-            if write then
+            if write and claiming then
                 saved = ns.EUISnap("beginner", snapKey)
             else
                 saved = ns.EUIPeekSnap("beginner", snapKey)
             end
-            ApplyOne(bar, saved, "showTooltip", true, on)
+            ApplyOne(bar, saved, "showTooltip", true, on, claiming)
 
             if not on or not IsBuffBar(bar) then
                 for _, key in ipairs(CDM_KEYBIND_ORDER) do
                     local k = BarSnapKey(bar, i, key)
                     local rec
-                    if write then
+                    if write and claiming then
                         rec = ns.EUISnap("beginner", k)
                     else
                         rec = ns.EUIPeekSnap("beginner", k)
                     end
-                    ApplyOne(bar, rec, key, CDM_KEYBIND[key], on)
+                    ApplyOne(bar, rec, key, CDM_KEYBIND[key], on, claiming)
                 end
             end
         end
@@ -240,10 +240,18 @@ end
 --
 -- ns.EUI_ABSENT is not needed on this path. Normalize never returns nil; it
 -- returns "always" for a settings table with nothing set.
-local function ApplyVisibility(settings, saved, VC, on)
+-- The claim guard is re-implemented here for the same reason the record-once is:
+-- this path never reaches ns.EUIOverride. Returning BEFORE Normalize matters,
+-- not just before the record -- Normalize calls ApplyMode on every branch and so
+-- rewrites the six-field model, which would leave a value forced with nothing
+-- recorded to give back.
+local function ApplyVisibility(settings, saved, VC, on, claiming)
     if not saved then return end
     if on then
-        if saved.prev == nil then saved.prev = VC.Normalize(settings) end
+        if saved.prev == nil then
+            if not claiming then return end
+            saved.prev = VC.Normalize(settings)
+        end
         VC.ApplyMode(settings, "always")
     else
         RestoreVisibility(settings, saved, VC.ApplyMode)
@@ -342,7 +350,7 @@ local function RestoreStoredActionBars()
     if _G._EAB_Apply then pcall(_G._EAB_Apply) end
 end
 
-local function ApplyActionBars(on)
+local function ApplyActionBars(on, claiming)
     -- The live profile is the only route that can apply a change without a
     -- reload, so it is always preferred. Lulu Mode switches this module off,
     -- which is what makes the lookup fail, and the OFF path still owes the user
@@ -368,12 +376,12 @@ local function ApplyActionBars(on)
         local settings = bars[key]
         if type(settings) == "table" then
             local hideRec
-            if on then
+            if on and claiming then
                 hideRec = ns.EUISnap("beginner", key .. "\31hideKeybind")
             else
                 hideRec = ns.EUIPeekSnap("beginner", key .. "\31hideKeybind")
             end
-            ApplyOne(settings, hideRec, "hideKeybind", false, on)
+            ApplyOne(settings, hideRec, "hideKeybind", false, on, claiming)
 
             -- Bar visibility is skipped ENTIRELY, and not even snapshotted, when
             -- the module's own compat layer is missing. That layer is the only
@@ -388,12 +396,12 @@ local function ApplyActionBars(on)
             -- nothing can be lost, and a later upgrade starts clean.
             if VC then
                 local visRec
-                if on then
+                if on and claiming then
                     visRec = ns.EUISnap("beginner", key .. "\31barVisibility")
                 else
                     visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
                 end
-                ApplyVisibility(settings, visRec, VC, on)
+                ApplyVisibility(settings, visRec, VC, on, claiming)
             elseif not on then
                 -- Asymmetric, deliberately. Turning ON writes nothing without the
                 -- compat layer, so there is nothing to record. Turning OFF can
@@ -409,9 +417,9 @@ local function ApplyActionBars(on)
     if _G._EAB_Apply then pcall(_G._EAB_Apply) end
 end
 
-local function ApplyBeginner(on)
-    ApplyCdm(on)
-    ApplyActionBars(on)
+local function ApplyBeginner(on, claiming)
+    ApplyCdm(on, claiming)
+    ApplyActionBars(on, claiming)
 end
 
 -- Off is stored as an explicit false, never by deleting the key. Under the
@@ -424,8 +432,8 @@ local function SetBeginnerMode(on)
     if not s then return end
     s.beginner = on and true or false
 
-    if not RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled()) end) then
-        print(ns.title .. ": Beginner Mode applies when you leave combat.")
+    if not RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled(), true) end) then
+        print(ns.title .. ": Beginner Mode is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it - toggle it again afterwards.")
     end
 end
 
@@ -434,8 +442,14 @@ end
 -- true then. Sharing RunOutOfCombat with the toggle also shares its one pending
 -- slot, so a profile switch mid-fight supersedes a toggle made earlier in that
 -- same fight and the last state wins.
+--
+-- The CLAIM is captured, not re-read, and it is lost with the closure it rides
+-- in. A profile, import, deletion or spec change during the same fight replaces
+-- the toggle's claiming closure with this one, which then finds no note and
+-- writes nothing. That is why the toggle's message no longer promises: the state
+-- is recoverable with one more toggle, but it is not what the user asked for.
 ns.EUIRegisterReapply(function()
-    RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled()) end)
+    RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled(), false) end)
 end)
 
 ---------------------------------------------------------------------------------

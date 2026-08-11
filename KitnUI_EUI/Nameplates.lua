@@ -117,14 +117,14 @@ end
 
 -- showTargetArrows is a plain boolean with no companion fields, so unlike the
 -- Gameplay page's barVisibility the ordinary trio is exactly right here.
-local function ApplyEUIArrowSuppression(on)
+local function ApplyEUIArrowSuppression(on, claiming)
     local prof = ns.EUIProfile(NAMEPLATES)
     if not prof then return end
 
-    -- Peek on the off path: EUISnap would seed a record in every profile of a
-    -- user who never turned the arrows on.
+    -- Peek on the off path, and on any path that is not a claim: EUISnap would
+    -- seed a record in every profile of a user who never turned the arrows on.
     local saved
-    if on then
+    if on and claiming then
         saved = ns.EUISnap("nameplates", "euiArrows")
     else
         saved = ns.EUIPeekSnap("nameplates", "euiArrows")
@@ -132,7 +132,7 @@ local function ApplyEUIArrowSuppression(on)
     if not saved then return end
 
     if on then
-        ns.EUIOverride(prof, saved, "showTargetArrows", false)
+        ns.EUIOverride(prof, saved, "showTargetArrows", false, claiming)
     else
         ns.EUIRestore(prof, saved, "showTargetArrows")
     end
@@ -324,7 +324,7 @@ end
 -- Called by BOTH the toggle and the re-apply. `announce` is true only for the
 -- toggle: the re-apply fires at login and on profile changes with nobody there to
 -- read a message.
-local function ApplyArrows(announce)
+local function ApplyArrows(announce, claiming)
     if not CanDraw() then
         -- Hand EllesmereUI's arrows BACK rather than merely declining to
         -- re-assert. Suppressing them while drawing nothing is the worst state
@@ -343,11 +343,13 @@ local function ApplyArrows(announce)
         return
     end
 
-    ApplyEUIArrowSuppression(ns.NameplateArrowsEnabled())
+    ApplyEUIArrowSuppression(ns.NameplateArrowsEnabled(), claiming)
     UpdateArrows()
 end
 
-ns.EUIRegisterReapply(function() ApplyArrows(false) end)
+-- Both arguments explicit: the first is `announce`, the second the claim. A
+-- re-apply is never a claim.
+ns.EUIRegisterReapply(function() ApplyArrows(false, false) end)
 
 ---------------------------------------------------------------------------------
 -- Events
@@ -381,7 +383,7 @@ ev:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_ENTERING_WORLD" then
         -- Plates are rebuilt on a zone change, and EllesmereUINameplates has
         -- certainly loaded by now.
-        ApplyArrows(false)
+        ApplyArrows(false, false)
         return
     end
     if event == "NAME_PLATE_UNIT_ADDED" or event == "NAME_PLATE_UNIT_REMOVED" then
@@ -432,7 +434,7 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
           setValue = function(v)
               local s = ns.EUISettings()
               if s then s.npArrows = v and true or false end
-              ApplyArrows(true)
+              ApplyArrows(true, true)
           end },
         { type = "toggle", text = "Additive Glow",
           tooltip = "Makes the arrows glow rather than sit flat. Turn it off if they wash out against a bright background.",

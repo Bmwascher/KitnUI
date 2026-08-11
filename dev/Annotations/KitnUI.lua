@@ -38,7 +38,7 @@
 ---@field EUIPeekSnap fun(section: string, key: string): table|nil
 ---@field EUISnapGlobal fun(key: string): table|nil
 ---@field EUIPeekSnapGlobal fun(key: string): table|nil
----@field EUIOverride fun(tbl: table, saved: table, key: string, value: any)
+---@field EUIOverride fun(tbl: table, saved: table, key: string, value: any, claiming: boolean|nil)
 ---@field EUIRestore fun(tbl: table, saved: table, key: string)
 ---@field EUIRegisterReapply fun(fn: function)
 ---@field EUIQueueReapply fun()

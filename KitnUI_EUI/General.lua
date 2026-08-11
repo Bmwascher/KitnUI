@@ -341,10 +341,10 @@ end
 
 -- Half one: the colour. This snapshot holds a TABLE, not a scalar, so it cannot
 -- go through ns.EUIOverride and ns.EUIRestore, which write a single key.
-local function ApplyAccentColor()
+local function ApplyAccentColor(claiming)
     local on = AccentEnabled()
     local saved
-    if on then
+    if on and claiming then
         saved = ns.EUISnap("accent", "color")
     else
         saved = ns.EUIPeekSnap("accent", "color")
@@ -359,7 +359,12 @@ local function ApplyAccentColor()
     if on then
         -- Record once, by value. SetActiveProfileAccent replaces the custom
         -- table rather than mutating it, so the reference stays valid.
+        --
+        -- Same claim rule as ns.EUIOverride, spelled out again because this
+        -- record-once is inline: a note may only be created by a user action, so
+        -- an unclaimed re-apply with no note writes nothing at all.
         if saved.prev == nil then
+            if not claiming then return end
             local current = profile.euiAccent
             if current == nil then
                 saved.prev = ns.EUI_ABSENT
@@ -385,10 +390,10 @@ local function ApplyAccentColor()
 end
 
 -- Half two: the scoping.
-local function ApplyAccentScope()
+local function ApplyAccentScope(claiming)
     local on = AccentEnabled()
     local saved
-    if on then
+    if on and claiming then
         saved = ns.EUISnap("accent", "scope")
     else
         saved = ns.EUIPeekSnap("accent", "scope")
@@ -409,7 +414,7 @@ local function ApplyAccentScope()
             local slot = entry.folder .. "." .. entry.key
             saved.keys[slot] = saved.keys[slot] or {}
             if on then
-                ns.EUIOverride(target, saved.keys[slot], entry.key, false)
+                ns.EUIOverride(target, saved.keys[slot], entry.key, false, claiming)
             else
                 ns.EUIRestore(target, saved.keys[slot], entry.key)
             end
@@ -421,16 +426,21 @@ local function ApplyAccentScope()
     -- snapshot must NOT be profile-keyed. Filed under one profile it would be
     -- invisible from every other, leaving the forced value with nothing to
     -- restore it.
+    --
+    -- It follows the claim anyway, even though a root key cannot arrive unowned
+    -- by being copied. An accent switch that is unowned for its profile-keyed
+    -- half must not be owning for this one: turning it off would then restore
+    -- here and not there, which is a half-restore.
     if _G.EllesmereUIDB then
         local popup
-        if on then
+        if on and claiming then
             popup = ns.EUISnapGlobal("popupMenuButtonTextColorMode")
         else
             popup = ns.EUIPeekSnapGlobal("popupMenuButtonTextColorMode")
         end
         if popup then
             if on then
-                ns.EUIOverride(EllesmereUIDB, popup, "popupMenuButtonTextColorMode", "native")
+                ns.EUIOverride(EllesmereUIDB, popup, "popupMenuButtonTextColorMode", "native", claiming)
             else
                 ns.EUIRestore(EllesmereUIDB, popup, "popupMenuButtonTextColorMode")
             end
@@ -445,12 +455,15 @@ end
 
 -- Colour first, then scoping: the scoping pass refreshes the same modules the
 -- colour change affects, so doing it in this order costs one refresh, not two.
-local function ApplyAccent()
-    ApplyAccentColor()
-    ApplyAccentScope()
+local function ApplyAccent(claiming)
+    ApplyAccentColor(claiming)
+    ApplyAccentScope(claiming)
 end
 
-ns.EUIRegisterReapply(ApplyAccent)
+-- Wrapped rather than registered bare. A bare registration would hand the
+-- registry's own arguments straight through as the claim, so the day the
+-- registry starts passing one, every re-apply silently becomes a claim.
+ns.EUIRegisterReapply(function() ApplyAccent(false) end)
 
 ---------------------------------------------------------------------------------
 -- Page
@@ -513,7 +526,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
         AccentEnabled,
         function(v)
             SetAccentEnabled(v)
-            ApplyAccent()
+            ApplyAccent(true)
         end,
         "Sets EllesmereUI's accent to KitnUI pink for this profile, and stops that accent tinting quest tracker headers, the Mythic+ timer, the damage meter and the Friends tab.");
                                                                                    y = y - h
