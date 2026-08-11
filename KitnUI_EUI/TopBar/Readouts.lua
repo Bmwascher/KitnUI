@@ -285,10 +285,22 @@ end
 -- off. Shown-state at take time is what settles it, below.
 ---------------------------------------------------------------------------------
 
--- Not a boolean. Each held key records whether the frame was VISIBLE when we
--- took it, so the restore can give back only what it actually took. Both values
+-- Not a boolean. Each held key records what the HOST last wanted -- "shown" or
+-- "hidden" -- so the restore gives back only what it actually took. Both values
 -- are truthy, so "are we holding this" is still a plain test.
 local minimapTaken = {}
+
+-- Set only across a Hide this file issues. The Hide hook below must tell the
+-- host switching a readout OFF apart from us holding it down, and those are the
+-- same call. Without this flag one of the two has to be guessed, and guessing
+-- wrong in either direction is a wrong frame on the user's minimap.
+local minimapOurHide = {}
+
+local function TakeMinimapFrame(key, f)
+    minimapOurHide[key] = true
+    f:Hide()
+    minimapOurHide[key] = nil
+end
 
 local function SuppressMinimapFrame(key, on)
     local f = _G[key]
@@ -304,18 +316,30 @@ local function SuppressMinimapFrame(key, on)
             -- wants it. Record that before hiding it again, so a frame switched
             -- ON while we hold it is still given back when we let go.
             minimapTaken[key] = "shown"
-            self:Hide()
+            TakeMinimapFrame(key, self)
+        end)
+        -- The mirror of the Show hook, and the reason the flag above exists.
+        -- EllesmereUI's disabled branches call Hide() straight out
+        -- (EllesmereUIMinimap.lua:4674-4678, :4944-4946), so a readout switched
+        -- OFF while we are holding it looks like nothing at all from here -- and
+        -- the release would then hand back a frame the user had just turned off.
+        hooksecurefunc(f, "Hide", function()
+            if minimapTaken[key] and not minimapOurHide[key] then
+                minimapTaken[key] = "hidden"
+            end
         end)
     end
     if on then
         if not minimapTaken[key] then
             minimapTaken[key] = f:IsShown() and "shown" or "hidden"
-            f:Hide()
+            TakeMinimapFrame(key, f)
         end
     elseif minimapTaken[key] then
-        -- Give back only what we took, which now means what was actually on
-        -- screen. A frame the host had already hidden goes back hidden.
+        -- Give back only what we took, which means what the host last wanted. A
+        -- frame it had already hidden, or hid while we held it, goes back hidden.
         local wasShown = (minimapTaken[key] == "shown")
+        -- Cleared BEFORE the Show, so the Show hook above reads us as no longer
+        -- holding it and lets the frame through.
         minimapTaken[key] = nil
         if wasShown then f:Show() end
     end
@@ -335,6 +359,20 @@ end
 -- exactly what we took and no more, so both host switches on returns two and
 -- both off returns none. Picking one for the player would mean overruling a
 -- configuration this addon does not own, which is the one thing it may not do.
+-- A frame that does not exist yet cannot be hooked, and that is the hole this
+-- closes. `SuppressMinimapFrame` returns early on a nil global, so a readout the
+-- user enables for the FIRST TIME while we are already suppressing gets created,
+-- published and shown by the host (EllesmereUIMinimap.lua:4574, :4801) with
+-- nothing on our side watching it -- and it then sits on the minimap beside
+-- ours. EllesmereUI publishes its minimap apply as a bridge for exactly this
+-- kind of thing (EllesmereUIMinimap.lua:5426), so re-running the pass after it
+-- catches the new frame on its first apply.
+--
+-- Hooked LAZILY rather than at file load: the bridge is assigned during the
+-- minimap module's own init, and this file cannot assume that has happened yet.
+-- The flag makes every later pass a single table read.
+local minimapApplyHooked
+
 local function RefreshMinimapSuppression()
     local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
     local ourClock = barFrame and barFrame:IsShown() and not ns.TopBar.IsOff("clock")
@@ -342,6 +380,17 @@ local function RefreshMinimapSuppression()
     SuppressMinimapFrame("_EBS_ClockBg", ourClock and true or false)
     SuppressMinimapFrame("_EBS_FpsBg", ourFps)
     ns.TopBar.SuppressEUIFps(ourFps)
+
+    if not minimapApplyHooked and _G._EMM_ApplyMinimap then
+        minimapApplyHooked = true
+        -- Re-enter on the NEXT frame, never inline: this hook fires from inside
+        -- the host's own apply, and hiding a frame it is still setting up would
+        -- have us fighting the rest of that pass. C_Timer.After(0, ...) lets the
+        -- apply finish and reads the result.
+        hooksecurefunc("_EMM_ApplyMinimap", function()
+            C_Timer.After(0, RefreshMinimapSuppression)
+        end)
+    end
 end
 
 -- THE FPS/MS READOUT FOLLOWS THE BAR, and follows it from here rather than from
