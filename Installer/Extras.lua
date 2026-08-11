@@ -31,7 +31,9 @@ end
 
 -- "Clean Icons": hide the companion minimap buttons AND surface a copyable link to
 -- the replacement icon-texture pack (mirrors AtrocityUI's Clean Icons extra).
-local CLEAN_ICONS_URL = "https://github.com/AcidWeb/Clean-Icons-Mechagnome-Edition/releases"
+-- /latest, not /releases: the plain releases page drops the user on a list they
+-- then have to read, and the top entry is not always the one they want.
+local CLEAN_ICONS_URL = "https://github.com/AcidWeb/Clean-Icons-Mechagnome-Edition/releases/latest"
 
 StaticPopupDialogs["KITNUI_CLEANICONS_URL"] = {
     text = "|cffFF008CKitn|r|cffffffffUI:|r Clean Icons\n\nCopy the link (Ctrl+C) and install it like any addon to replace the default icon borders:",
@@ -68,6 +70,15 @@ end
 
 -- Run KitnEssentials' system optimization. Returns false if KitnEssentials isn't
 -- present; KE prints its own summary and owns its own reload prompt.
+--
+-- THIS IS THE BALANCED PRESET, which is what this button is meant to be.
+-- OptimizeAll is KE's named alias for it and nothing else -- Modules/QoL/
+-- Optimize.lua:463-465 is `function OPT:OptimizeAll() self:ApplyPreset("balanced", nil) end`.
+-- Deliberately calling the alias rather than ApplyPreset("balanced") directly:
+-- OptimizeAll is the entry point KE's own UI uses, so it stays correct if the
+-- preset internals move. KE's other preset, Max FPS, is not offered here -- it
+-- drops base graphics to raid values everywhere, which is a choice a player
+-- should make in KE's own panel rather than have an installer button make.
 function ns.RunOptimize()
     if not (KitnEssentials and KitnEssentials.GetModule) then return false end
     local opt = KitnEssentials:GetModule("Optimize", true)

@@ -178,7 +178,7 @@ end
 ---------------------------------------------------------------------------------
 
 local addonSteps = {
-    { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Dark and Colored are a preset inside KitnUI's EllesmereUI tab." },
+    { key = "EllesmereUI",       display = "EllesmereUI",             checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. It is ONE profile, not a set: every DPS spec, healer, and the Dark and Colored looks are all baked into it. Switch between them in KitnUI's EllesmereUI tab." },
     -- PLATER IS DORMANT, NOT REMOVED. Data/AddOns/Plater.lua ships an empty
     -- string, so offering the step here put a tickbox in the wizard whose only
     -- possible outcome was "No Plater data found." in chat. Hidden by taking it
@@ -218,7 +218,10 @@ end
 
 local function EllesmereUIPage()
     local f = WF()
-    f.SubTitle:SetText("EllesmereUI Profile")
+    -- Just the addon name, like every other step page. Those title themselves
+    -- from the step's `display` field; this one is hand-written because it has
+    -- its own page function, so it has to be kept in step by hand.
+    f.SubTitle:SetText("EllesmereUI")
     f.Desc1:SetText(stepDesc("EllesmereUI"))
     ShowStatusAndVersion("EllesmereUI")
     -- Bail out before the success feedback when the import fails, so a failure
@@ -539,7 +542,7 @@ end
 
 local function EllesmereUILoadPage()
     local f = WF()
-    f.SubTitle:SetText("EllesmereUI Profile")
+    f.SubTitle:SetText("EllesmereUI")
     f.Desc1:SetText("Activate the EllesmereUI profile on this character.")
     ShowLoadStatusAndVersion("EllesmereUI")
     ns.Wizard:SetOption(1, "Load Profile", function()
