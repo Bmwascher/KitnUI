@@ -258,6 +258,88 @@ function ns.TopBar.SuppressEUIFps(on)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Suppress EllesmereUI's MINIMAP clock and FPS/MS while this bar is showing its
+-- own, and hand them straight back when it is not -- including when the bar is
+-- hidden by a visibility rule inside a key or a raid, which is the case the
+-- plain enabled/off test above cannot see.
+--
+-- Same trade as SuppressEUIFps: hide the FRAME, never write EllesmereUI's own
+-- `clockMode` or `showFPS`. Those live in the minimap module's database
+-- (EUI_Minimap_Options.lua:1107, :1417), which rides EllesmereUI's profile
+-- export and its Spec Overrides engine, so writing them on every instance entry
+-- and exit would churn a database this addon does not own.
+--
+-- Reachable at all only because the minimap module publishes both frames as
+-- globals immediately before showing them
+-- (References/EllesmereUI-v8.7.5/EllesmereUIMinimap/EllesmereUIMinimap.lua:4625,
+-- :4937). Both are file-local otherwise. A frame that was never created --
+-- Clock Style already None, or Show FPS/MS already off -- leaves its global nil,
+-- which reads correctly here as "nothing to suppress".
+---------------------------------------------------------------------------------
+
+local minimapTaken = {}
+
+local function SuppressMinimapFrame(key, on)
+    local f = _G[key]
+    if not f then return end
+    if not f._kitnSuppressHook then
+        f._kitnSuppressHook = true
+        -- EllesmereUI re-shows these on its own refresh, so a one-shot Hide is
+        -- undone by the next options change or minimap redraw. The hook makes
+        -- the suppression stick without polling for it.
+        hooksecurefunc(f, "Show", function(self)
+            if minimapTaken[key] then self:Hide() end
+        end)
+    end
+    if on then
+        if not minimapTaken[key] then
+            minimapTaken[key] = true
+            f:Hide()
+        end
+    elseif minimapTaken[key] then
+        -- Give back only what we took. Known edge, bounded and self-healing: if
+        -- the user turns that minimap element off WHILE we are suppressing it,
+        -- EllesmereUI hides it itself, our hook never fires (it watches Show,
+        -- not Hide), and this restore shows it once. EllesmereUI's next minimap
+        -- refresh re-asserts its own setting and takes it away again.
+        minimapTaken[key] = nil
+        f:Show()
+    end
+end
+
+-- Derived from what is ACTUALLY on screen rather than from the visibility
+-- rules, so it stays correct however those rules change. Two different frames
+-- decide it, because the two readouts do not hide together: the clock rides the
+-- bar, which the state driver hides, while the FPS readout is parented to
+-- UIParent and stays up (Bar.lua:604-630 registers the driver on `bar` alone).
+local function RefreshMinimapSuppression()
+    local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
+    local ourClock = barFrame and barFrame:IsShown() and not ns.TopBar.IsOff("clock")
+    local ourFps   = sysFrame and sysFrame:IsShown()
+    SuppressMinimapFrame("_EBS_ClockBg", ourClock and true or false)
+    SuppressMinimapFrame("_EBS_FpsBg", ourFps and true or false)
+end
+
+local minimapVisHooked
+function ns.TopBar.RefreshEUIMinimap()
+    -- Hooked lazily: the bar frame does not exist until the feature is first
+    -- enabled, and HookScript ADDS to whatever Bar.lua already set.
+    if not minimapVisHooked then
+        local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
+        if barFrame then
+            minimapVisHooked = true
+            barFrame:HookScript("OnShow", RefreshMinimapSuppression)
+            barFrame:HookScript("OnHide", RefreshMinimapSuppression)
+            if sysFrame then
+                sysFrame:HookScript("OnShow", RefreshMinimapSuppression)
+                sysFrame:HookScript("OnHide", RefreshMinimapSuppression)
+            end
+        end
+    end
+    RefreshMinimapSuppression()
+end
+
 -- Re-assert the hide after anything that might restore EllesmereUI's own
 -- counter. Profile and spec switches are already covered: they run through
 -- Bar.lua's re-apply registration, which reaches Apply() -> UpdateTicker()
@@ -560,9 +642,12 @@ end
 -- again per game account (isGameAFK/isGameBusy); the character friend list
 -- reports it on the friend. Either source counts, because a friend flagged away
 -- in the app and a friend flagged away in game are the same fact to a reader.
+-- Yellow for away, red for busy, rather than one grey for both. They mean
+-- different things -- "back shortly" against "do not contact me" -- and a
+-- reader scanning a roster should not have to read the word to tell which.
 local function StatusTag(afk, dnd)
-    if afk then return "  |cff808080<AFK>|r" end
-    if dnd then return "  |cff808080<DND>|r" end
+    if afk then return "  |cffffe000<AFK>|r" end
+    if dnd then return "  |cffff2020<DND>|r" end
     return ""
 end
 
@@ -1023,6 +1108,9 @@ function ns.TopBar.UpdateTicker()
         if showSys then sysFrame:Show() else sysFrame:Hide() end
     end
     ns.TopBar.SuppressEUIFps(showSys)
+    -- After sysFrame's own Show/Hide above, so the first pass reads the state
+    -- this Apply just set rather than the previous one.
+    ns.TopBar.RefreshEUIMinimap()
 end
 
 ---------------------------------------------------------------------------------
