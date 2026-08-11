@@ -269,7 +269,8 @@ if EllesmereUI and EllesmereUI._applyFPSCounter then
 end
 
 ---------------------------------------------------------------------------------
--- Friends, guild and vault badges. Counts render unconditionally; the roster
+-- Friends and guild badges, and the Great Vault tooltip. Counts render
+-- unconditionally; the roster
 -- NAME LISTS are gated behind RosterReadable() -- Task 5's own floor, not a
 -- ceiling: in combat or inside a protected instance the badge keeps counting
 -- but the tooltip stops listing names.
@@ -441,34 +442,18 @@ end
 
 -- Great Vault: C_WeeklyRewards.GetActivities() returns nothing useful before
 -- a fresh character's first weekly reset, so every field is nil-checked
--- before use. "Done" is progress >= threshold, matching Blizzard's own
+-- before use. Neither WeeklyRewardActivityInfo nor its fields are marked
+-- Secret in the generated docs (WeeklyRewardsDocumentation.lua:311-326),
+-- which is what lets the values below be read and formatted directly.
+--
+-- There used to be a VaultCounts() beside this, feeding an R/D/W badge under
+-- the icon. The badge was removed on Kitn's call: the tooltip already says
+-- everything it said, in words, with the actual progress numbers. Its
+-- "done" test was progress >= threshold, matching Blizzard's own
 -- WeeklyRewardsMixin (.wow-api-reference/Interface/AddOns/
--- Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua:412). Neither
--- WeeklyRewardActivityInfo nor its fields are marked Secret in the generated
--- docs (WeeklyRewardsDocumentation.lua:311-326).
-local function VaultCounts()
-    local activities = C_WeeklyRewards and C_WeeklyRewards.GetActivities and C_WeeklyRewards.GetActivities()
-    if type(activities) ~= "table" then return nil end
-    local raidDone, dungeonDone, worldDone = 0, 0, 0
-    local any = false
-    for _, info in ipairs(activities) do
-        if type(info) == "table" and info.type and info.progress and info.threshold then
-            any = true
-            if info.progress >= info.threshold then
-                if info.type == Enum.WeeklyRewardChestThresholdType.Raid then
-                    raidDone = raidDone + 1
-                elseif info.type == Enum.WeeklyRewardChestThresholdType.Activities then
-                    dungeonDone = dungeonDone + 1
-                elseif info.type == Enum.WeeklyRewardChestThresholdType.World then
-                    worldDone = worldDone + 1
-                end
-            end
-        end
-    end
-    if not any then return nil end
-    return raidDone, dungeonDone, worldDone
-end
-
+-- Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua:412) -- recorded here in
+-- case a badge is ever wanted back.
+--
 -- Elements.lua's vault element hands its tooltip straight here.
 function ns.TopBar.VaultTooltip(tt)
     if not tt then return end
@@ -495,7 +480,7 @@ end
 -- did not ask for one.
 local BADGE_SIZE = 10
 
-local friendsText, guildText, vaultText
+local friendsText, guildText
 
 local function UpdateFriendsBadge()
     if not friendsText then return end
@@ -514,32 +499,20 @@ local function UpdateGuildBadge()
     if ok then guildText:SetText(tostring(count)) end
 end
 
-local function UpdateVaultText()
-    if not vaultText then return end
-    local raidDone, dungeonDone, worldDone = VaultCounts()
-    if not raidDone then
-        vaultText:SetText("|cff808080--|r")
-        return
-    end
-    local accentHex = Hex(AccentRGB())
-    vaultText:SetText(format("|cff%sR|r%d |cff%sD|r%d |cff%sW|r%d",
-        accentHex, raidDone, accentHex, dungeonDone, accentHex, worldDone))
-end
-
 -- Refresh triggers: the events that actually change these counts, plus a
--- belt-and-braces re-render every tenth Tick() below.
+-- belt-and-braces re-render every tenth Tick() below. WEEKLY_REWARDS_UPDATE
+-- was registered here for the vault badge and went with it: the vault
+-- tooltip reads GetActivities() at the moment it opens, so it needs no
+-- event to stay current.
 local badgeWatcher = CreateFrame("Frame")
 badgeWatcher:RegisterEvent("FRIENDLIST_UPDATE")
 badgeWatcher:RegisterEvent("BN_FRIEND_INFO_CHANGED")
 badgeWatcher:RegisterEvent("GUILD_ROSTER_UPDATE")
-badgeWatcher:RegisterEvent("WEEKLY_REWARDS_UPDATE")
 badgeWatcher:SetScript("OnEvent", function(_, event)
     if event == "FRIENDLIST_UPDATE" or event == "BN_FRIEND_INFO_CHANGED" then
         UpdateFriendsBadge()
     elseif event == "GUILD_ROSTER_UPDATE" then
         UpdateGuildBadge()
-    elseif event == "WEEKLY_REWARDS_UPDATE" then
-        UpdateVaultText()
     end
 end)
 
@@ -550,12 +523,12 @@ end)
 -- tbClockSize/tbSysSize and refreshes their text immediately, so the size
 -- sliders and the 24h/server-time toggles all take effect live.
 --
--- friendsText/guildText/vaultText follow the identical lazy pattern. guild's
+-- friendsText/guildText follow the identical lazy pattern. guild's
 -- button is secure (Macro()'s SecureActionButtonTemplate), but the lazy
 -- creation below only ever fires the FIRST time it sees a non-nil button --
 -- which is always inside the same Apply() call that Bar.lua's EnsureCreated
 -- just built it in, already past that call's own InCombatLockdown() gate.
--- After that first call friendsText/guildText/vaultText are never nil again,
+-- After that first call friendsText/guildText are never nil again,
 -- so the branch never re-executes where combat could matter.
 ---------------------------------------------------------------------------------
 
@@ -590,15 +563,8 @@ function ns.TopBar.ApplyReadoutFonts()
         UpdateGuildBadge()
     end
 
-    local vaultBtn = _G.KitnUITopBar_vault
-    if vaultBtn and not vaultText then
-        vaultText = vaultBtn:CreateFontString(nil, "OVERLAY")
-        vaultText:SetPoint("BOTTOM", vaultBtn, "BOTTOM", 0, -2)
-    end
-    if vaultText then
-        vaultText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
-        UpdateVaultText()
-    end
+    -- No vault block here. The Great Vault icon carries no badge; its tooltip
+    -- is the whole readout.
 
     if sysText then
         sysText:SetFont(STANDARD_TEXT_FONT, Get("tbSysSize", ns.EUI_DEFAULTS.tbSysSize), "OUTLINE")
