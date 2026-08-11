@@ -506,6 +506,14 @@ local function HideBar()
     -- would call bar:Show() right back on the next tick otherwise.
     UnregisterStateDriver(bar, "visibility")
     bar:Hide()
+    -- The readout carries the same driver (see ApplyVisibility), so it needs the
+    -- same release. Leaving one registered on a switched-off bar would let the
+    -- next 0.2s tick show the readout again on its own.
+    local sys = _G.KitnUITopBarSys
+    if sys then
+        UnregisterStateDriver(sys, "visibility")
+        sys:Hide()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -614,6 +622,20 @@ function ns.TopBar.ApplyVisibility()
     if not ns.TopBar.Enabled() then return end
     ApplyFade()
 
+    -- The FPS/MS readout follows the SAME rule as the bar. It is parented to
+    -- UIParent rather than to the bar, so nothing made it hide alongside one
+    -- until this: inside a key or a raid the bar went and the readout stayed,
+    -- which is the one place the two visibly disagreed. Reached by its global
+    -- name, the way Teardown already reaches it -- the frame itself is local to
+    -- Readouts.lua.
+    --
+    -- Driven rather than hidden in Lua, and driven with the SAME conditional
+    -- string, so the two are evaluated by one mechanism on one tick. Hiding it
+    -- from a Lua hook on the bar's OnHide would have been a second rule that
+    -- has to be kept in step with the first.
+    local sys = _G.KitnUITopBarSys
+    local fpsOn = not ns.TopBar.IsOff("fps")
+
     local cond = BuildConditional()
     if cond == "show" then
         -- No driver needed for a plain "show": Blizzard's own 0.2s tick
@@ -622,11 +644,27 @@ function ns.TopBar.ApplyVisibility()
         if InCombatLockdown() then DeferVisibility() return end
         UnregisterStateDriver(bar, "visibility")
         bar:Show()
+        if sys then
+            UnregisterStateDriver(sys, "visibility")
+            -- Show only if the element is on: the driver is what was hiding it,
+            -- and dropping the driver must not overrule the user's own switch.
+            if fpsOn then sys:Show() else sys:Hide() end
+        end
         return
     end
 
     if InCombatLockdown() then DeferVisibility() return end
     RegisterStateDriver(bar, "visibility", cond)
+    if sys then
+        if fpsOn then
+            RegisterStateDriver(sys, "visibility", cond)
+        else
+            -- A driver on a switched-off readout would show it again the moment
+            -- its condition passed, so take the driver away and keep it hidden.
+            UnregisterStateDriver(sys, "visibility")
+            sys:Hide()
+        end
+    end
 end
 
 -- Re-evaluates on its own trigger events rather than waiting for the next
@@ -760,9 +798,14 @@ function ns.TopBar.Teardown()
     if ns.TopBar.SuppressEUIFps then ns.TopBar.SuppressEUIFps(false) end
 
     -- 2. The FPS readout frame is local to Readouts.lua; reach it by its
-    -- global name the same way SuppressEUIFps reaches EUI_FPSCounter.
+    -- global name the same way SuppressEUIFps reaches EUI_FPSCounter. Release
+    -- its visibility driver before hiding it, or the driver shows it straight
+    -- back on its next tick.
     local sysFrame = _G.KitnUITopBarSys
-    if sysFrame then sysFrame:Hide() end
+    if sysFrame then
+        UnregisterStateDriver(sysFrame, "visibility")
+        sysFrame:Hide()
+    end
 
     -- 3. Protected: the bar parents secure buttons, so hiding it is protected
     -- too. The only caller (ns.EUIResetAll) already refuses in combat before

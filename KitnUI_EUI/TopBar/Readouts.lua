@@ -309,16 +309,22 @@ local function SuppressMinimapFrame(key, on)
 end
 
 -- Derived from what is ACTUALLY on screen rather than from the visibility
--- rules, so it stays correct however those rules change. Two different frames
--- decide it, because the two readouts do not hide together: the clock rides the
--- bar, which the state driver hides, while the FPS readout is parented to
--- UIParent and stays up (Bar.lua:604-630 registers the driver on `bar` alone).
+-- rules, so it stays correct however those rules change. Two frames decide it
+-- rather than one because the two readouts are separate frames -- the clock
+-- rides the bar and the FPS readout is parented to UIParent -- even though
+-- ApplyVisibility now drives both off the same conditional.
+--
+-- EllesmereUI's standalone FPS counter is handed back here too, on the same
+-- shown-state test. Keying it to the on/off switch instead would leave the
+-- player with no counter at all inside a key, which is the whole point of
+-- giving these back.
 local function RefreshMinimapSuppression()
     local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
     local ourClock = barFrame and barFrame:IsShown() and not ns.TopBar.IsOff("clock")
-    local ourFps   = sysFrame and sysFrame:IsShown()
+    local ourFps   = sysFrame and sysFrame:IsShown() and true or false
     SuppressMinimapFrame("_EBS_ClockBg", ourClock and true or false)
-    SuppressMinimapFrame("_EBS_FpsBg", ourFps and true or false)
+    SuppressMinimapFrame("_EBS_FpsBg", ourFps)
+    ns.TopBar.SuppressEUIFps(ourFps)
 end
 
 local minimapVisHooked
@@ -346,7 +352,10 @@ end
 -- below on every one of them.
 if EllesmereUI and EllesmereUI._applyFPSCounter then
     hooksecurefunc(EllesmereUI, "_applyFPSCounter", function()
-        ns.TopBar.SuppressEUIFps(ns.TopBar.Enabled() and not ns.TopBar.IsOff("fps"))
+        -- Shown-state, not the on/off switch: our readout can be switched on and
+        -- still be hidden by a visibility rule, and in that case the host's
+        -- counter is the one that should be up.
+        ns.TopBar.SuppressEUIFps(sysFrame and sysFrame:IsShown() and true or false)
     end)
 end
 
@@ -1099,17 +1108,21 @@ function ns.TopBar.UpdateTicker()
         ticker = C_Timer.NewTicker(1, Tick)
     end
 
-    -- fps's own visibility, and EllesmereUI's counter suppression, track the
-    -- same enabled/off state. This runs on every Apply(), including the
-    -- profile- and spec-switch reapply Bar.lua already wires up, and neither
-    -- line touches anything protected.
+    -- This runs on every Apply(), including the profile- and spec-switch reapply
+    -- Bar.lua already wires up, and nothing below touches anything protected.
     local showSys = ns.TopBar.Enabled() and not ns.TopBar.IsOff("fps")
-    if sysFrame then
-        if showSys then sysFrame:Show() else sysFrame:Hide() end
-    end
-    ns.TopBar.SuppressEUIFps(showSys)
-    -- After sysFrame's own Show/Hide above, so the first pass reads the state
-    -- this Apply just set rather than the previous one.
+    -- HIDE ONLY. The readout now rides the bar's visibility driver
+    -- (Bar.lua ApplyVisibility), and that driver is the only thing allowed to
+    -- show it. This line runs in Apply's first half, which still executes in
+    -- combat, while ApplyVisibility sits in the second half behind the combat
+    -- gate -- so a Show() here would pop the readout back up mid-fight inside a
+    -- key or a raid, where the driver had already hidden it, and nothing would
+    -- take it away again until the next state change. Hiding is always safe:
+    -- the switch being off outranks every visibility rule.
+    if sysFrame and not showSys then sysFrame:Hide() end
+    -- Both suppressions run from here, off what is actually on screen. After
+    -- the Hide above, so the first pass reads the state this Apply just set
+    -- rather than the previous one.
     ns.TopBar.RefreshEUIMinimap()
 end
 
