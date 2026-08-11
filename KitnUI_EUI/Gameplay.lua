@@ -13,13 +13,12 @@ if ns.EUI_INERT then return end
 local CDM = "EllesmereUICooldownManager"
 local ACTION_BARS = "EllesmereUIActionBars"
 
--- The action bars Beginner Mode holds visible. Kitn's call, 2026-08-07: bars 1,
--- 2, 3 and 5 are the ones KitnUI's own layout puts on screen. Not every bar,
--- because forcing all eight would reveal bars the profile deliberately hides.
+-- The action bars Beginner Mode holds visible: the ones KitnUI's own layout puts
+-- on screen. Not every bar, because forcing all eight would reveal bars the
+-- profile deliberately hides.
 --
 -- Keys, not numbers: EllesmereUI's registry names bar 1 "MainBar" and the rest
--- "Bar<n>" (EllesmereUIActionBars.lua:180-186), so bar 5 is "Bar5" and there is
--- no "Bar1".
+-- "Bar<n>", so bar 5 is "Bar5" and there is no "Bar1".
 local AB_KEYS = { "MainBar", "Bar2", "Bar3", "Bar5" }
 
 -- Written to every non-buff bar. showTooltip is deliberately NOT in here; it
@@ -48,17 +47,15 @@ end
 -- Combat deferral
 ---------------------------------------------------------------------------------
 
--- Deferred rather than refused. The two appearance refusals in General.lua give
--- their reason as the write landing while the repaint does not, which argues for
--- deferring as long as BOTH defer together. Nothing about Beginner Mode needs the
--- user standing there.
+-- Deferred rather than refused: nothing about Beginner Mode needs the user
+-- standing there, as long as the write and the repaint defer together.
 --
--- It cannot simply run under lockdown either: barVisibility feeds secure
--- visibility drivers, and _EAB_Apply half applies in combat rather than failing.
--- ApplyAll reads InCombatLockdown once and gates the enable/disable pass, the
--- layout, the borders and the shapes behind it, but ApplyFontsForBar sits outside
--- that gate and is what applies hideKeybind. So a combat call repaints the
--- keybind text while the visibility work is skipped, silently.
+-- It cannot simply run under lockdown either. barVisibility feeds secure
+-- visibility drivers, and EllesmereUI's action bar apply HALF applies in combat
+-- rather than failing: its own lockdown gate covers the enable pass, the layout,
+-- the borders and the shapes, but the font pass that applies the keybind sits
+-- outside it. A combat call repaints the keybind text and silently skips the
+-- visibility work.
 local pending
 local combatWatcher
 
@@ -92,16 +89,14 @@ end
 -- Which bars get the treatment
 ---------------------------------------------------------------------------------
 
--- EllesmereUI's own predicate, replicated because IsBarBuffFamily and
--- ResolveBarType are both module-local. The live field wins and the key is only a
--- fallback for profiles written before barType existed, which is the order
--- EllesmereUI resolves them in. A bar whose type resolves to nil is NOT a buff
--- bar, so it gets the treatment, matching what EllesmereUI's own callers do.
+-- EllesmereUI's own predicate, replicated because its helpers are module-local.
+-- The live field wins and the key is only a fallback for profiles written before
+-- barType existed, which is EllesmereUI's own resolution order. A bar whose type
+-- resolves to nil is NOT a buff bar, matching what its callers do.
 --
--- custom_buff is folded in because EllesmereUI folds it in: its own migration
--- rewrites those bars to "buffs" once per profile. Reading the pre-migration
--- docstring instead would put keybinds on aura icons in the window before that
--- migration runs.
+-- custom_buff is folded in because EllesmereUI's own migration rewrites those
+-- bars to "buffs" once per profile; without it, keybinds land on aura icons in
+-- the window before that migration runs.
 local function IsBuffBar(bar)
     if type(bar) ~= "table" then return false end
     if bar.key == "__ghost_cd" then return false end
@@ -190,9 +185,8 @@ local function ApplyCdm(on)
         end
     end
 
-    -- EllesmereUI's own spec-override system names this function as the module's
-    -- refresh, so it is the same entry point EllesmereUI uses when it rewrites
-    -- these same keys.
+    -- The same entry point EllesmereUI's own spec-override system uses when it
+    -- rewrites these keys.
     if _G._ECME_Apply then pcall(_G._ECME_Apply) end
 end
 
@@ -220,12 +214,10 @@ end
 -- mode: the module's own ApplyMode where it is reachable, the ported copy where
 -- the module is unloaded.
 --
--- Expanding is unconditionally right here because there is exactly ONE writer.
--- Only the compat branch ever records a visibility snapshot, so every record
--- holds a mode that VC.Normalize produced, and the forced state it is undoing was
--- always written by ApplyMode. Earlier versions of this file had a second writer
--- and spent four review rounds failing to tell the two records apart; the fix in
--- the end was to stop having two.
+-- Expanding is unconditionally right because there is exactly ONE writer. Only
+-- the compat branch ever records a visibility snapshot, so every record holds a
+-- mode Normalize produced, and the forced state it undoes was written by
+-- ApplyMode. Do not add a second writer.
 local function RestoreVisibility(settings, saved, expand)
     if not saved or saved.prev == nil then return end
     -- Defensive only. Normalize never returns nil, so the sentinel cannot be
@@ -258,19 +250,17 @@ local function ApplyVisibility(settings, saved, VC, on)
     end
 end
 
--- VisibilityCompat.ApplyMode, ported field for field from
--- References/EllesmereUI-v8.7.5/EllesmereUIActionBars/EllesmereUIActionBars.lua:270-292,
--- for the one case where the live one cannot be reached: the module is switched
--- off, so it is not loaded, while the values KitnUI forced are still in its saved
--- settings and still have to come back out. Writing the mode string on its own
--- there would leave a mouseover bar at alpha 0 and mouseoverEnabled true, so the
--- bar reads "always" and stays invisible.
+-- EllesmereUI's VisibilityCompat.ApplyMode, ported field for field, for the one
+-- case where the live one cannot be reached: the module is switched off, so it
+-- is not loaded, while the values KitnUI forced are still in its saved settings
+-- and still have to come back out. Writing the mode string alone there would
+-- leave a mouseover bar at alpha 0 with mouseoverEnabled true, so the bar reads
+-- "always" and stays invisible.
 --
--- Duplicated logic, and the reason it is worth it: this is a pure rewrite of six
--- fields on a table the caller hands in, with no addon state behind it, and the
--- alternative is a restore that cannot happen at all. It drifts if EllesmereUI
--- changes the field set, which is why the live layer is still preferred wherever
--- it exists and this runs nowhere else.
+-- Duplicated logic, worth it because the alternative is a restore that cannot
+-- happen at all: a pure rewrite of six fields on a table the caller hands in,
+-- with no addon state behind it. It drifts if EllesmereUI changes the field set,
+-- which is why the live layer is preferred wherever it exists.
 local function ApplyModeStored(settings, mode)
     if not settings then return end
 
@@ -294,42 +284,34 @@ local function ApplyModeStored(settings, mode)
     settings.combatShowEnabled = (mode == "in_combat")
 end
 
--- The OFF path for a module that is not loaded, kept entirely separate from the
--- live one because the table it works on is not the same kind of table.
+-- The OFF path for a module that is not loaded, kept separate from the live one
+-- because the table it works on is not the same kind of table.
 --
 -- EllesmereUI writes a DEFAULTS-STRIPPED copy of every loaded module's profile at
--- logout: any value equal to its registered default is deleted, and a sub-table
--- that empties out under a string key is deleted with it
--- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:193-205, written
--- back at :363-375). Beginner Mode forces barVisibility "always" and hideKeybind
--- false, and those ARE this module's defaults
--- (References/EllesmereUI-v8.7.5/EllesmereUIActionBars/EllesmereUIActionBars.lua:527-539),
--- so the very reload that Lulu Mode triggers can strip the bar table KitnUI wrote
--- into, and `bars` along with it. Treating a missing container as nothing to do
--- would silently skip the restore in exactly the case this function exists for
--- and let the following /kitn reset delete the only record of the originals.
+-- logout: a value equal to its registered default is deleted, and a sub-table
+-- that empties out goes with it. Beginner Mode forces barVisibility "always" and
+-- hideKeybind false, and those ARE the module's defaults, so the very reload
+-- Lulu Mode triggers can strip the bar table KitnUI wrote into. Treating a
+-- missing container as nothing to do would skip the restore in exactly the case
+-- this function exists for.
 --
--- So containers are rebuilt, but only where a snapshot says this bar was actually
--- held down. Building one for a bar with no record would invent settings the user
--- never had; DeepMergeDefaults fills the rest in when the module next loads.
--- A snapshot record that is CURRENTLY holding a value down, as opposed to one
--- that merely exists. ns.EUIRestore clears .prev and deliberately leaves the
--- record table behind (KitnUI_EUI/Core.lua:299-311), and ns.EUISnap reuses it
--- (:234-241), so a bar Beginner Mode held down and released in some earlier
--- session still has truthy record tables with nothing in them. Reading existence
--- as activity would rebuild containers for a bar that needs nothing.
+-- So containers are rebuilt, but only where a snapshot says the bar was actually
+-- held down. Building one for a bar with no record would invent settings the
+-- user never had.
+--
+-- ActiveSnap tests for a record CURRENTLY holding a value down, not one that
+-- merely exists: ns.EUIRestore clears .prev and leaves the record table behind,
+-- so a bar released in an earlier session still has a truthy but empty record.
 local function ActiveSnap(key)
     local rec = ns.EUIPeekSnap("beginner", key)
     if rec and rec.prev ~= nil then return rec end
     return nil
 end
 
--- Reached whenever the live lookup fails, which is normally because Lulu Mode
--- switched the module off. It is also correct in the rarer case where the module
--- IS loaded and only the lookup failed, on an EllesmereUI with neither GetAddon
--- nor an exposed _dbRegistry: ns.EUIStoredProfile returns the very table NewDB
--- handed that module (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:268-273),
--- so the write still lands on the live settings even there.
+-- Reached whenever the live lookup fails, normally because Lulu Mode switched the
+-- module off. Also correct in the rarer case where the module IS loaded and only
+-- the lookup failed: ns.EUIStoredProfile returns the very table NewDB handed that
+-- module, so the write still lands on the live settings.
 local function RestoreStoredActionBars()
     local profile = ns.EUIStoredProfile(ACTION_BARS)
     if not profile then return end
@@ -352,12 +334,11 @@ local function RestoreStoredActionBars()
         end
     end
 
-    -- The module is normally unloaded here, so this is normally absent. It is not
-    -- always: an ordinary Beginner Mode toggle restores immediately without a
-    -- reload, and on an EllesmereUI whose live lookup fails while the module is
-    -- loaded this path runs with the frames on screen. Skipping the repaint there
-    -- would leave the bars wearing Beginner Mode's look with the switch reading
-    -- off (References/EllesmereUI-v8.7.5/EllesmereUIActionBars/EllesmereUIActionBars.lua:12422).
+    -- Normally absent, because the module is normally unloaded here. Not always:
+    -- an ordinary toggle restores without a reload, and a failed live lookup on a
+    -- loaded module runs this path with the frames on screen. Skipping the
+    -- repaint there would leave the bars wearing Beginner Mode's look with the
+    -- switch reading off.
     if _G._EAB_Apply then pcall(_G._EAB_Apply) end
 end
 
@@ -397,18 +378,14 @@ local function ApplyActionBars(on)
             -- Bar visibility is skipped ENTIRELY, and not even snapshotted, when
             -- the module's own compat layer is missing. That layer is the only
             -- thing that can write the six-field visibility model correctly, and
-            -- the hand-written substitute this file used to carry produced four
-            -- consecutive data-loss defects in review: two writers meant two record
-            -- shapes, nothing said which writer made a given record, and every
-            -- attempt to infer it broke on some sequence of version changes with
-            -- Beginner Mode left on. One writer is the only version of this that
-            -- cannot lose a setting.
+            -- a second writer means two record shapes with nothing to say which
+            -- writer made a given record. One writer is the only version of this
+            -- that cannot lose a setting.
             --
-            -- What that costs, on an EllesmereUI that has to predate
-            -- VisibilityCompat: Beginner Mode does not force bars visible there.
-            -- The keybind half above and the whole Cooldown Manager half still
-            -- apply. Nothing is written, so nothing can be lost, and a later
-            -- upgrade starts clean.
+            -- The cost, on an EllesmereUI predating that layer: Beginner Mode
+            -- does not force bars visible there. The keybind half above and the
+            -- whole Cooldown Manager half still apply. Nothing is written, so
+            -- nothing can be lost, and a later upgrade starts clean.
             if VC then
                 local visRec
                 if on then
@@ -420,12 +397,9 @@ local function ApplyActionBars(on)
             elseif not on then
                 -- Asymmetric, deliberately. Turning ON writes nothing without the
                 -- compat layer, so there is nothing to record. Turning OFF can
-                -- still OWE a restore that a compat layer recorded before the user
-                -- downgraded, and refusing it would strand all six forced fields
-                -- while /kitn reset destroys the one snapshot that knows the
-                -- original mode. The ported ApplyMode expands it, for the same
-                -- reason the unloaded path uses it: the record is a mode either
-                -- way, and only the live layer is missing.
+                -- still OWE a restore recorded before the user downgraded, and
+                -- refusing it would strand all six forced fields while /kitn
+                -- reset destroys the snapshot that knows the original mode.
                 local visRec = ns.EUIPeekSnap("beginner", key .. "\31barVisibility")
                 RestoreVisibility(settings, visRec, ApplyModeStored)
             end
@@ -469,13 +443,10 @@ end)
 ---------------------------------------------------------------------------------
 
 -- EllesmereUI only reparents its OWN icons under ECME_CDMBar_<key>; Blizzard's
--- real cooldown icons stay under the *CooldownViewer frames, because EllesmereUI's
--- taint rules forbid reparenting a Blizzard frame. Both have to be recognised or
--- the switch misses the cooldowns it is named for.
---
--- Comparing frame identity against _ECME_GetBarFrame instead cannot work: the
--- Blizzard icons are re-anchored and never reparented, so their parent chain
--- never reaches a bar frame.
+-- real cooldown icons stay under the *CooldownViewer frames, because reparenting
+-- a Blizzard frame would taint it. Both have to be recognised, and matching on
+-- frame identity cannot work: the Blizzard icons are re-anchored, never
+-- reparented, so their parent chain never reaches a bar frame.
 local CDM_PREFIX, CDM_PREFIX_LEN = "ECME_CDMBar_", 12
 
 local function OwnedByCooldownBar(tooltip)
@@ -514,9 +485,9 @@ end
 
 -- Its own login frame, not the page builder and not Core.lua's boot frame.
 -- buildPage runs lazily on first panel open, so installing there would leave
--- suppression dead after every reload until the user opened the panel; Core's
--- boot frame returns early when EllesmereUI is missing, and this hook has no
--- EllesmereUI dependency. Login rather than file scope because the handler reads
+-- suppression dead after every reload until the user opened the panel, and
+-- Core's boot frame returns early when EllesmereUI is missing, which this hook
+-- does not need. Login rather than file scope because the handler reads
 -- ns.EUISettings, which needs ns.db.
 local tooltipBoot = CreateFrame("Frame")
 tooltipBoot:RegisterEvent("PLAYER_LOGIN")

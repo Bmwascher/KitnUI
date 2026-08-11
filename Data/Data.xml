@@ -9,6 +9,7 @@
     <Script file="AddOns\EditMode.lua" />
     <Script file="AddOns\KitnEssentials.lua" />
     <Script file="AddOns\BuffReminders.lua" />
+    <Script file="AddOns\Baganator.lua" />
 
     <!-- Per-class data -->
     <Script file="Classes\BlizzardCDM.lua" />

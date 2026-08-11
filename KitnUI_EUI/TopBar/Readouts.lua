@@ -67,8 +67,6 @@ end
 
 local clockText
 
--- NaowhUI's own clock button padding:
--- References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:51.
 local CLOCK_PAD = 6
 
 -- The clock button cannot be sized from tbIconSize like the launchers: its
@@ -84,8 +82,7 @@ function ns.TopBar.SizeClockButton()
     -- Padding is asymmetric on purpose: a full CLOCK_PAD on each side
     -- horizontally, half that vertically. The bar's height is driven by the
     -- tallest panel, so vertical padding on the clock pushes the whole bar
-    -- taller, while horizontal padding only widens the centre panel. NaowhUI
-    -- pads horizontally and not at all vertically for the same reason.
+    -- taller, while horizontal padding only widens the centre panel.
     btn:SetSize(clockText:GetStringWidth() + CLOCK_PAD * 2,
                 clockText:GetStringHeight() + CLOCK_PAD)
 end
@@ -138,10 +135,8 @@ local function ApplyReadoutPosition()
         sysFrame:SetPoint(pos.point or "TOP", UIParent, pos.relPoint or "TOP", pos.x or 0, pos.y or 0)
         return
     end
-    -- Default: two pixels below the bar, matching
-    -- References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:525.
-    -- Anchoring against a hidden bar resolves normally, so this stays put
-    -- even while a later visibility rule hides it.
+    -- Default: two pixels below the bar. Anchoring against a hidden bar resolves
+    -- normally, so this stays put even while a visibility rule hides it.
     local barFrame = ns.TopBar.Frame()
     if barFrame then
         sysFrame:SetPoint("TOP", barFrame, "BOTTOM", 0, -2)
@@ -174,10 +169,9 @@ local function UpdateSys()
 end
 
 ---------------------------------------------------------------------------------
--- The FPS/latency tooltip. The memory scan is a frame spike, so it is
--- throttled to once every 30 seconds, reusing one table and one hoisted
--- comparator so a rescan allocates nothing. NaowhUI throttles it for the
--- same reason.
+-- The FPS/latency tooltip. The memory scan is a frame spike, so it is throttled
+-- to once every 30 seconds, reusing one table and one hoisted comparator so a
+-- rescan allocates nothing.
 ---------------------------------------------------------------------------------
 
 local _memTable, _lastMemScan = {}, 0
@@ -205,8 +199,7 @@ local function ShowSysTooltip(owner)
         _lastMemScan = now
         UpdateAddOnMemoryUsage()
         local count = 0
-        -- GetAddOnMemoryUsage takes the addon NAME in 12.0, not the index —
-        -- confirmed against .wow-api-reference/Interface/AddOns/Blizzard_AddOnList/AddonList.lua:866.
+        -- GetAddOnMemoryUsage takes the addon NAME in 12.0, not the index.
         for i = 1, C_AddOns.GetNumAddOns() do
             local name, title = C_AddOns.GetAddOnInfo(i)
             local mem = name and GetAddOnMemoryUsage(name)
@@ -280,20 +273,17 @@ end
 -- plain enabled/off test above cannot see.
 --
 -- Same trade as SuppressEUIFps: hide the FRAME, never write EllesmereUI's own
--- `clockMode` or `showFPS`. Those live in the minimap module's database
--- (EUI_Minimap_Options.lua:1107, :1417), which rides EllesmereUI's profile
--- export and its Spec Overrides engine, so writing them on every instance entry
--- and exit would churn a database this addon does not own.
+-- `clockMode` or `showFPS`. Those live in the minimap module's database, which
+-- rides EllesmereUI's profile export and its Spec Overrides engine, so writing
+-- them on every instance entry and exit would churn a database this addon does
+-- not own.
 --
 -- Reachable at all only because the minimap module publishes both frames as
--- globals immediately before showing them
--- (References/EllesmereUI-v8.7.5/EllesmereUIMinimap/EllesmereUIMinimap.lua:4626,
--- :4937). Both are file-local otherwise.
+-- globals immediately before showing them. Both are file-local otherwise.
 --
--- A GLOBAL THAT IS NIL IS NOT THE SAME AS A SETTING THAT IS OFF, and reading it
--- that way was a real defect. Those two assignments happen only on the ENABLED
--- branch, but nothing ever clears them: the disabled branch merely hides a frame
--- the global still points at (EllesmereUIMinimap.lua:4674-4678, :4944-4946). So
+-- A GLOBAL THAT IS NIL IS NOT THE SAME AS A SETTING THAT IS OFF. Those two
+-- assignments happen only on the host's ENABLED branch, but nothing ever clears
+-- them: its disabled branch merely hides a frame the global still points at. So
 -- the global is nil only for a frame that was never enabled in this session, and
 -- a frame the host has since switched off still answers here. Taking that frame
 -- and then handing it back would put a clock on the minimap the user had turned
@@ -334,10 +324,10 @@ local function SuppressMinimapFrame(key, on)
             TakeMinimapFrame(key, self)
         end)
         -- The mirror of the Show hook, and the reason the flag above exists.
-        -- EllesmereUI's disabled branches call Hide() straight out
-        -- (EllesmereUIMinimap.lua:4674-4678, :4944-4946), so a readout switched
-        -- OFF while we are holding it looks like nothing at all from here -- and
-        -- the release would then hand back a frame the user had just turned off.
+        -- EllesmereUI's disabled branches call Hide() straight out, so a readout
+        -- switched OFF while we are holding it looks like nothing at all from
+        -- here -- and the release would then hand back a frame the user had just
+        -- turned off.
         hooksecurefunc(f, "Hide", function()
             if minimapTaken[key] and not minimapOurHide[key] then
                 minimapTaken[key] = "hidden"
@@ -366,37 +356,32 @@ end
 -- and the FPS readout is parented to UIParent and follows the bar (below).
 --
 -- HOW MANY FPS COUNTERS THE PLAYER ENDS UP WITH IS ELLESMEREUI'S ANSWER, NOT
--- OURS. It ships TWO independent ones, a minimap readout
--- (References/EllesmereUI-v8.7.5/EllesmereUIMinimap/EUI_Minimap_Options.lua:1411)
--- and a standalone counter
--- (References/EllesmereUI-v8.7.5/EllesmereUIQoL/EUI_QoL_Options.lua:945), each
--- with its own switch. When ours is up we take both; when ours goes we give back
--- exactly what we took and no more, so both host switches on returns two and
--- both off returns none. Picking one for the player would mean overruling a
--- configuration this addon does not own, which is the one thing it may not do.
--- A frame that does not exist yet cannot be hooked, and that is the hole this
--- closes. `SuppressMinimapFrame` returns early on a nil global, so a readout the
--- user enables for the FIRST TIME while we are already suppressing gets created,
--- published and shown by the host (EllesmereUIMinimap.lua:4574, :4801) with
--- nothing on our side watching it -- and it then sits on the minimap beside
--- ours. EllesmereUI publishes its minimap apply as a bridge for exactly this
--- kind of thing (EllesmereUIMinimap.lua:5426), so re-running the pass after it
--- catches the new frame on its first apply.
+-- OURS. It ships TWO independent ones, a minimap readout and a standalone
+-- counter, each with its own switch. When ours is up we take both; when ours
+-- goes we give back exactly what we took and no more, so both host switches on
+-- returns two and both off returns none. Picking one for the player would mean
+-- overruling a configuration this addon does not own.
+--
+-- A frame that does not exist yet cannot be hooked, and that is the hole the
+-- bridge hook below closes. `SuppressMinimapFrame` returns early on a nil
+-- global, so a readout the user enables for the FIRST TIME while we are already
+-- suppressing gets created, published and shown by the host with nothing on our
+-- side watching it, and it then sits on the minimap beside ours. EllesmereUI
+-- publishes its minimap apply as a bridge for exactly this kind of thing, so
+-- re-running the pass after it catches the new frame on its first apply.
 --
 -- Hooked LAZILY rather than at file load: the bridge is assigned during the
 -- minimap module's own init, and this file cannot assume that has happened yet.
 -- The flag makes every later pass a single table read.
 --
--- THE BRIDGE ALONE IS NOT ENOUGH, and the reason generalises. hooksecurefunc
--- wraps a GLOBAL, so it only ever sees calls made THROUGH that global; the
--- host's own internal calls to the same function go straight past it. That is
--- reachable today: in combat the host's apply refuses outright and merely
--- queues (EllesmereUIMinimap.lua:4056-4058), so our hook fires with nothing
--- built yet; when the fight ends the host's own frame calls ApplyAll()
--- (:233-239), which calls its LOCAL ApplyMinimap upvalue (:5194-5195) rather
--- than the published bridge. The readout the user enabled mid-fight is created
--- there, our hook never fires again, and nothing else reconciles -- so it would
--- sit beside ours for good. The regen retry below is what closes that.
+-- THE BRIDGE ALONE IS NOT ENOUGH. hooksecurefunc wraps a GLOBAL, so it only ever
+-- sees calls made THROUGH that global; the host's own internal calls to the same
+-- function go straight past it. That is reachable today: in combat the host's
+-- apply refuses outright and merely queues, so our hook fires with nothing built
+-- yet; when the fight ends the host calls its LOCAL apply upvalue rather than
+-- the published bridge. The readout the user enabled mid-fight is created there,
+-- our hook never fires again, and nothing else reconciles -- so it would sit
+-- beside ours for good. The regen retry below is what closes that.
 local minimapApplyHooked
 local minimapRegenFrame
 -- Forward-declared: the retry frame's handler calls it, and it is defined below.
@@ -504,21 +489,18 @@ end
 
 ---------------------------------------------------------------------------------
 -- Friends and guild badges, and the Great Vault tooltip. Counts render
--- unconditionally; the roster
--- NAME LISTS are gated behind RosterReadable() -- Task 5's own floor, not a
--- ceiling: in combat or inside a protected instance the badge keeps counting
--- but the tooltip stops listing names.
+-- unconditionally; the roster NAME LISTS are gated behind RosterReadable(): in
+-- combat or inside a protected instance the badge keeps counting but the tooltip
+-- stops listing names.
 ---------------------------------------------------------------------------------
 
 -- The name lists come from C_Club, whose member APIs are marked
--- SecretInChatMessagingLockdown (ClubDocumentation.lua). That predicate is
--- defined at SecretPredicatesDocumentation.lua:53-55 as covering encounter,
--- challenge mode and PvP restrictions AND "when the player is on a
--- communication-restricted map such as a dungeon or raid" -- with no combat
--- requirement in that last clause. EllesmereUI.InProtectedInstance() is
--- narrower than that: it wants combat as well for raid and pvp, and Challenge
--- Mode for party. So test the instance type directly and keep the host's
--- helper as an additional trigger rather than the only one.
+-- SecretInChatMessagingLockdown. That predicate covers encounter, challenge mode
+-- and PvP restrictions AND "when the player is on a communication-restricted map
+-- such as a dungeon or raid", with no combat requirement in that last clause.
+-- EllesmereUI.InProtectedInstance() is narrower: it wants combat as well for
+-- raid and pvp, and Challenge Mode for party. So test the instance type directly
+-- and keep the host's helper as an additional trigger rather than the only one.
 local RESTRICTED_INSTANCE = { party = true, raid = true, pvp = true, arena = true }
 
 local function RosterReadable()
@@ -530,23 +512,17 @@ local function RosterReadable()
     return true
 end
 
--- WoW friends are always playing WoW by definition -- only a Battle.net
--- friend's CURRENT game needs checking against tbFriendsInGameOnly. Neither
--- FriendInfo (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/
--- FriendListDocumentation.lua:602-616) nor BNetGameAccountInfo (.wow-api-reference/
--- Interface/AddOns/Blizzard_APIDocumentationGenerated/BattleNetDocumentation.lua:
--- 247-274) marks any field Secret.
+-- WoW friends are always playing WoW by definition -- only a Battle.net friend's
+-- CURRENT game needs checking against tbFriendsInGameOnly. Neither FriendInfo
+-- nor BNetGameAccountInfo marks any field Secret.
+--
 -- One Battle.net friend can be logged into several WoW game accounts at once,
--- and `accountInfo.gameAccountInfo` describes only the FIRST. tbFriendsSubAccounts
--- decides which of the two things the badge counts: the friend, or each of that
--- friend's active WoW accounts. WindTools' Game Bar does the same walk
--- (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:605-616), though its
--- own `countSubAccounts` setting is declared and never read in v4.19 -- the
--- behaviour there is hardcoded on. Neither GetFriendNumGameAccounts nor
--- GetFriendGameAccountInfo declares SecretReturns
--- (.wow-api-reference/Interface/AddOns/Blizzard_APIDocumentationGenerated/
--- BattleNetDocumentation.lua:68-97); both mark only SecretArguments, which
--- constrains what may be passed IN and says nothing about the returns.
+-- and `accountInfo.gameAccountInfo` describes only the FIRST.
+-- tbFriendsSubAccounts decides which of the two things the badge counts: the
+-- friend, or each of that friend's active WoW accounts. Neither
+-- GetFriendNumGameAccounts nor GetFriendGameAccountInfo declares SecretReturns;
+-- both mark only SecretArguments, which constrains what may be passed IN and
+-- says nothing about the returns.
 --
 -- Returns `accountInfo` and the LIST of game accounts this friend contributes,
 -- in render order. The badge sums the list lengths and the roster renders the
@@ -554,10 +530,8 @@ end
 -- one walk with two consumers.
 --
 -- tbFriendsSubAccounts expands a friend into their WoW accounts, and ONLY their
--- WoW accounts -- that is what the switch says and what WindTools' own counter
--- does (GameBar.lua:605-616 tallies `numWoWOnline` on `clientProgram == "WoW"`).
--- Counting a friend's Heroes session as a second "sub account" would be a
--- different promise than the one on the switch.
+-- WoW accounts -- that is what the switch says. Counting a friend's Heroes
+-- session as a second "sub account" would be a different promise.
 --
 -- A friend with NO WoW account online is not erased by that filter: the switch
 -- has nothing to expand for them, so they fall through to the single row the
@@ -602,23 +576,20 @@ end
 -- Class colour for the two rosters, and the guard that makes reading these
 -- fields safe.
 --
--- ClubMemberInfo marks only `isSelf` and `faction` NeverSecret
--- (ClubDocumentation.lua:1798, :1827). Every OTHER field of that structure may
--- therefore arrive as a Secret value. A Secret cannot be used as a table key
--- and cannot be concatenated -- both throw -- so nothing reaches a LOOKUP, a
--- CONCATENATION or a FORMAT without passing Plain() first.
+-- ClubMemberInfo marks only `isSelf` and `faction` NeverSecret. Every OTHER
+-- field of that structure may therefore arrive as a Secret value. A Secret
+-- cannot be used as a table key and cannot be concatenated -- both throw -- so
+-- nothing reaches a LOOKUP, a CONCATENATION or a FORMAT without passing Plain()
+-- first.
 --
--- State the rule's reach exactly, because an overstated one stops being
--- checkable. Plain() guards the UNSAFE OPERATIONS above, not every read. Plain
--- truth-tests (`if info.name then`) and equality tests against a literal
--- (`clientProgram == "WoW"`) are left raw, and deliberately: on the BNet and
--- FriendList paths the fields involved declare no Secret marking at all
--- (FriendListDocumentation.lua:602-616, BattleNetDocumentation.lua:247-274).
--- The guild path is stricter still and does not rely on this at all: `name` is
--- the one field there that can genuinely be Secret, and it goes through Plain()
--- BEFORE it is tested, so no raw truth-test on the guild path can ever see one.
--- What a Secret does under a bare truth-test is NOT decidable from the static
--- reference, which is exactly why nothing here is load-bearing on it.
+-- Plain() guards the UNSAFE OPERATIONS above, not every read. Plain truth-tests
+-- (`if info.name then`) and equality tests against a literal (`clientProgram ==
+-- "WoW"`) are left raw, deliberately: on the BNet and FriendList paths the
+-- fields involved declare no Secret marking at all. The guild path is stricter
+-- still: `name` is the one field there that can genuinely be Secret, and it goes
+-- through Plain() BEFORE it is tested, so no raw truth-test on the guild path
+-- can ever see one. What a Secret does under a bare truth-test is NOT decidable
+-- from the static reference, which is why nothing here depends on it.
 ---------------------------------------------------------------------------------
 
 local function Plain(v)
@@ -628,10 +599,8 @@ local function Plain(v)
 end
 
 -- The exact path: classID -> classFile -> RAID_CLASS_COLORS. Guild members and
--- Battle.net friends both carry a numeric classID
--- (ClubDocumentation.lua:1808, BattleNetDocumentation.lua:263), and
--- C_CreatureInfo.GetClassInfo declares no SecretReturns
--- (CreatureInfoDocumentation.lua:11-24), so no locale guessing is involved.
+-- Battle.net friends both carry a numeric classID, and C_CreatureInfo
+-- .GetClassInfo declares no SecretReturns, so no locale guessing is involved.
 local function ClassColorFromID(classID)
     classID = Plain(classID)
     if type(classID) ~= "number" then return nil end
@@ -644,15 +613,13 @@ local function ClassColorFromID(classID)
 end
 
 -- The inexact path, and the only one available for a plain WoW friend:
--- FriendInfo carries `className` and nothing else about class
--- (FriendListDocumentation.lua:608), and that string is LOCALISED. Reversing
--- the client's own localised tables is the standard answer and is correct in
--- every language the client ships, because both sides come from the same
--- client. It can fail only where a locale gives two DIFFERENT classes the same
--- word, and the map below is built so that such a word resolves to no colour
--- at all rather than to whichever class was absorbed last. A plain white name
--- is a fallback a reader can ignore; a confidently wrong class colour is one
--- they would act on.
+-- FriendInfo carries `className` and nothing else about class, and that string
+-- is LOCALISED. Reversing the client's own localised tables is correct in every
+-- language the client ships, because both sides come from the same client. It
+-- can fail only where a locale gives two DIFFERENT classes the same word, and
+-- the map below is built so that such a word resolves to no colour at all rather
+-- than to whichever class was absorbed last. A plain white name is a fallback a
+-- reader can ignore; a confidently wrong class colour is one they would act on.
 --
 -- The two source tables are keyed by classFile and both contain every class,
 -- so the SAME classFile appearing in both is the ordinary case and must not
@@ -695,12 +662,11 @@ end
 
 local ROSTER_CAP = 40
 
--- Both rosters render as two-column rows and both overflow the same way, so
--- the row writer and the overflow line live here once. Counting CONTINUES past
--- the cap rather than breaking, which is what lets the trailing line say how
--- many were left out instead of the list simply stopping. NaowhUI's own bar
--- does the same (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:
--- 322-327, :346).
+-- Both rosters render as two-column rows and both overflow the same way, so the
+-- row writer and the overflow line live here once. Counting CONTINUES past the
+-- cap rather than breaking, which is what lets the trailing line say how many
+-- were left out instead of the list simply stopping.
+--
 -- Rows are COLLECTED and only drawn by Finish, because grouping cannot be done
 -- while writing: a heading has to be printed before rows that are not known to
 -- exist until the whole walk is done. Guild rows pass no group and land in one
@@ -767,9 +733,8 @@ end
 -- greys out a level the client considers trivial. That difficulty test is
 -- relative to THIS client's own max level, so it mislabels a friend who is at
 -- the cap of a DIFFERENT WoW version -- a Season of Discovery or Anniversary
--- character at their own max shows as trivial grey. Kitn saw exactly that in
--- the reference list. One colour is right in every version; a clever one is
--- right only in ours.
+-- character at their own max shows as trivial grey. One colour is right in every
+-- version; a clever one is right only in ours.
 local LEVEL_HEX = "ffd100"
 
 -- "|cffffd10090|r  Kitnpriest <AFK>". Level first so the names line up in a
@@ -806,14 +771,13 @@ end
 
 -- Group headings for the friends list, so the versions do not interleave.
 --
--- WoW projects come from `wowProjectID`, whose constants Blizzard defines in
--- its own Constants.lua (MAINLINE 1, CLASSIC 2, WOWLABS 3, BURNING_CRUSADE 5,
--- WRATH 11, CATACLYSM 14, MISTS 19). **Season of Discovery and the Anniversary
--- realms have no id of their own** -- they run on Classic Era and report
--- `WOW_PROJECT_CLASSIC` like any other Classic Era realm, so they group
--- together under one heading. Splitting them further would mean pattern
--- matching a rich-presence string, which is the guesswork the reference list's
--- own mislabelling comes from.
+-- WoW projects come from `wowProjectID`, whose constants Blizzard defines in its
+-- own Constants.lua (MAINLINE 1, CLASSIC 2, WOWLABS 3, BURNING_CRUSADE 5, WRATH
+-- 11, CATACLYSM 14, MISTS 19). Season of Discovery and the Anniversary realms
+-- have NO id of their own -- they run on Classic Era and report
+-- `WOW_PROJECT_CLASSIC` like any other Classic Era realm, so they group together
+-- under one heading. Splitting them further would mean pattern matching a
+-- rich-presence string, which is guesswork.
 local WOW_PROJECT_NAMES = {
     [1]  = "WoW",
     [2]  = "WoW Classic",
@@ -826,10 +790,8 @@ local WOW_PROJECT_NAMES = {
 
 -- Non-WoW clients, by the program code Battle.net reports. The codes are
 -- Blizzard's own and are not localised; the names here are the only part a
--- reader sees. Matches the reference addon's table
--- (References/ElvUI_WindTools-v4.19/Modules/Social/FriendList.lua:43-57) so a
--- user of both sees one vocabulary. An unlisted code falls back to the code
--- itself, which is ugly but honest and names the gap.
+-- reader sees. An unlisted code falls back to the code itself, which is ugly but
+-- honest and names the gap.
 local CLIENT_NAMES = {
     APP  = "Battle.net App",  BSAp = "Battle.net App",
     WTCG = "Hearthstone",     Hero = "Heroes of the Storm",
@@ -851,11 +813,9 @@ local function BNetRow(roster, acc, ga)
     -- the right instead of an area they do not have.
     --
     -- richPresence, NOT clientProgram. `clientProgram` is a program identifier
-    -- such as "Hero" or "CLNT" (Blizzard_SharedXML/AccountUtil.lua:1-4), fit
-    -- for keying an icon and not for showing a person. Blizzard's own friends
-    -- list renders rich presence in that slot
-    -- (Blizzard_FriendsFrame/Mainline/FriendsFrame.lua:1888-1894), which is
-    -- already localised and already says what they are doing.
+    -- such as "Hero" or "CLNT", fit for keying an icon and not for showing a
+    -- person. Blizzard's own friends list renders rich presence in that slot,
+    -- which is already localised and already says what they are doing.
     local isWoW = Plain(ga.clientProgram) == "WoW"
     local r, g, b
     local right
@@ -946,18 +906,13 @@ function ns.TopBar.FriendsTooltip(tt)
     if ok and shown == 0 then tt:AddLine("No friends online", 0.6, 0.6, 0.6) end
 end
 
--- GetNumGuildMembers has no generated-doc entry (it predates the C_
--- namespace and is never exposed through one), but it is not on the
--- deprecated-fallback list either (.wow-api-reference/Interface/AddOns/
--- Blizzard_DeprecatedHousingCatalog/../Blizzard_DeprecatedGuildScript/
--- Deprecated_GuildScript.lua), and two live Mainline files still call it
--- directly and compare its return with `==` (Blizzard_Calendar/Mainline/
--- Blizzard_Calendar.lua:4139, Blizzard_MailFrame/MailFrame.lua:59) -- an
--- ordinary comparison a Secret value could not survive, so its return is
--- provably not Secret even without a machine-readable doc entry. The second
--- return being the ONLINE count is corroborated by WindTools' own working
--- 12.0 code (References/ElvUI_WindTools-v4.19/Modules/Misc/GameBar.lua:699),
--- not independently provable from this reference alone.
+-- GetNumGuildMembers has no generated-doc entry (it predates the C_ namespace),
+-- but it is not on the deprecated-fallback list either, and live Mainline files
+-- still call it directly and compare its return with `==` -- an ordinary
+-- comparison a Secret value could not survive, so its return is provably not
+-- Secret even without a machine-readable doc entry. The second return being the
+-- ONLINE count is taken from working 12.0 code elsewhere, not provable from the
+-- reference alone.
 local function GuildCount()
     if not (IsInGuild and IsInGuild()) then return 0 end
     if not GetNumGuildMembers then return 0 end
@@ -965,21 +920,15 @@ local function GuildCount()
     return online or 0
 end
 
--- The roster LIST has no legacy equivalent left to read: GetGuildRosterInfo
--- does not exist anywhere in this reference (checked across the whole live
--- tree), which the deprecation file above does not explain either -- it was
--- evidently removed outright, not routed through a fallback. The only path
--- left is C_Club, which is what Blizzard's own guild roster now uses
--- (.wow-api-reference/Interface/AddOns/Blizzard_Communities/
--- CommunitiesMemberList.lua:342-354): C_Club.GetGuildClubId(), then
--- CommunitiesUtil's own wrappers (.wow-api-reference/Interface/AddOns/
--- Blizzard_FrameXMLUtil/CommunitiesUtil.lua:109-146 -- always loaded, no
--- LoadOnDemand in Blizzard_FrameXMLUtil's own .toc, the same file spellbook's
--- PlayerSpellsUtil already relies on above). GetMemberInfo and GetClubMembers
--- are both marked SecretInChatMessagingLockdown in the generated docs
--- (ClubDocumentation.lua:433-448, 611-626) -- a combat-adjacent restriction
--- distinct from ordinary Secret Values but handled the same way here: never
--- called unless RosterReadable() already said yes.
+-- The roster LIST has no legacy equivalent left to read: GetGuildRosterInfo does
+-- not exist anywhere in the 12.0 reference and is not on the deprecation list
+-- either, so it was removed outright rather than routed through a fallback. The
+-- only path left is C_Club, which is what Blizzard's own guild roster now uses:
+-- C_Club.GetGuildClubId(), then CommunitiesUtil's wrappers (always loaded, no
+-- LoadOnDemand). GetMemberInfo and GetClubMembers are both marked
+-- SecretInChatMessagingLockdown -- a combat-adjacent restriction distinct from
+-- ordinary Secret Values but handled the same way here: never called unless
+-- RosterReadable() already said yes.
 local guildLastRequest = 0
 local function RequestGuildRoster()
     local now = GetTime()
@@ -1007,12 +956,10 @@ local function BuildGuildRoster(tt)
     local online = CommunitiesUtil.GetOnlineMembers(infos)
     if type(online) ~= "table" then return end
 
-    -- The guild header: name, then YOUR rank in it, then the message of the
-    -- day. GetGuildInfo is an old global with no generated-doc entry, so both
-    -- of its returns go through Plain() like every other roster read rather
-    -- than being trusted on the strength of its age. Its second return is the
-    -- rank name (.wow-api-reference/Interface/AddOns/Blizzard_UIPanels_Game/
-    -- Mainline/TabardFrame.lua:78).
+    -- The guild header: name, then YOUR rank in it, then the message of the day.
+    -- GetGuildInfo is an old global with no generated-doc entry, so both of its
+    -- returns go through Plain() like every other roster read rather than being
+    -- trusted on the strength of its age. Its second return is the rank name.
     local gname, grank
     if GetGuildInfo then
         local n, r = GetGuildInfo("player")
@@ -1021,11 +968,10 @@ local function BuildGuildRoster(tt)
     if type(gname) == "string" and gname ~= "" then tt:AddLine(gname, 0.1, 1, 0.1) end
     if type(grank) == "string" and grank ~= "" then tt:AddLine(grank, 1, 0.82, 0) end
 
-    -- GetGuildRosterMOTD is deprecated to C_GuildInfo.GetMOTD
-    -- (Blizzard_DeprecatedGuildScript/Deprecated_GuildScript.lua:19), so call
-    -- the new name and fall back rather than the other way round. Wrapped
-    -- because a long message would otherwise force the whole tooltip to that
-    -- width, and a guild message of the day is routinely a paragraph.
+    -- GetGuildRosterMOTD is deprecated to C_GuildInfo.GetMOTD, so call the new
+    -- name and fall back rather than the other way round. Wrapped because a long
+    -- message would otherwise force the whole tooltip to that width, and a guild
+    -- message of the day is routinely a paragraph.
     local motd
     if C_GuildInfo and C_GuildInfo.GetMOTD then motd = Plain(C_GuildInfo.GetMOTD())
     elseif GetGuildRosterMOTD then motd = Plain(GetGuildRosterMOTD()) end
@@ -1044,10 +990,9 @@ local function BuildGuildRoster(tt)
         local name = info and Plain(info.name)
         if type(name) == "string" and name ~= "" then
             local r, g, b = ClassColorFromID(info.classID)
-            -- ClubMemberPresence: 4 Away, 5 Busy (ClubDocumentation.lua:1674-1675).
-            -- Through StatusTag, the SAME source the friends list uses, so the
-            -- two rosters cannot drift on what away and busy look like. The
-            -- colours are the point: a reader should not have to read the word.
+            -- ClubMemberPresence: 4 Away, 5 Busy. Through StatusTag, the SAME
+            -- source the friends list uses, so the two rosters cannot drift on
+            -- what away and busy look like.
             local presence = Plain(info.presence)
             local tag = StatusTag(presence == 4, presence == 5)
             -- Colour goes INTO the label so the level keeps its gold while the
@@ -1074,19 +1019,15 @@ function ns.TopBar.GuildTooltip(tt)
     if ok and shown == 0 then tt:AddLine("No guild members online", 0.6, 0.6, 0.6) end
 end
 
--- Great Vault: C_WeeklyRewards.GetActivities() returns nothing useful before
--- a fresh character's first weekly reset, so every field is nil-checked
--- before use. Neither WeeklyRewardActivityInfo nor its fields are marked
--- Secret in the generated docs (WeeklyRewardsDocumentation.lua:311-326),
--- which is what lets the values below be read and formatted directly.
+-- Great Vault: C_WeeklyRewards.GetActivities() returns nothing useful before a
+-- fresh character's first weekly reset, so every field is nil-checked before
+-- use. Neither WeeklyRewardActivityInfo nor its fields are marked Secret, which
+-- is what lets the values below be read and formatted directly.
 --
--- There used to be a VaultCounts() beside this, feeding an R/D/W badge under
--- the icon. The badge was removed on Kitn's call: the tooltip already says
--- everything it said, in words, with the actual progress numbers. Its
--- "done" test was progress >= threshold, matching Blizzard's own
--- WeeklyRewardsMixin (.wow-api-reference/Interface/AddOns/
--- Blizzard_WeeklyRewards/Blizzard_WeeklyRewards.lua:412) -- recorded here in
--- case a badge is ever wanted back.
+-- There is deliberately no R/D/W badge under the icon: the tooltip already says
+-- everything it would, in words, with the actual progress numbers. If one is
+-- ever wanted back, the "done" test is progress >= threshold, matching
+-- Blizzard's own WeeklyRewardsMixin.
 --
 -- Elements.lua's vault element hands its tooltip straight here.
 function ns.TopBar.VaultTooltip(tt)
@@ -1109,9 +1050,7 @@ function ns.TopBar.VaultTooltip(tt)
     end
 end
 
--- Badge FontStrings. Fixed size, matching TWEEN_TIME/CLOCK_PAD's own
--- precedent elsewhere in this file: not exposed as a setting because Task 5
--- did not ask for one.
+-- Badge FontStrings. Fixed size, like CLOCK_PAD above: not exposed as a setting.
 local BADGE_SIZE = 10
 
 local friendsText, guildText
@@ -1134,10 +1073,9 @@ local function UpdateGuildBadge()
 end
 
 -- Refresh triggers: the events that actually change these counts, plus a
--- belt-and-braces re-render every tenth Tick() below. WEEKLY_REWARDS_UPDATE
--- was registered here for the vault badge and went with it: the vault
--- tooltip reads GetActivities() at the moment it opens, so it needs no
--- event to stay current.
+-- belt-and-braces re-render every tenth Tick() below. No WEEKLY_REWARDS_UPDATE
+-- here: the vault tooltip reads GetActivities() at the moment it opens, so it
+-- needs no event to stay current.
 local badgeWatcher = CreateFrame("Frame")
 badgeWatcher:RegisterEvent("FRIENDLIST_UPDATE")
 badgeWatcher:RegisterEvent("BN_FRIEND_INFO_CHANGED")
@@ -1223,8 +1161,8 @@ local function Tick()
     if not (barFrame and barFrame:IsShown()) then return end
     UpdateClock()
 
-    -- Belt-and-braces re-render, not a request: every tenth tick, same as the
-    -- brief asks. The events above already cover the real refresh triggers.
+    -- Belt-and-braces re-render, not a request: every tenth tick. The events
+    -- above already cover the real refresh triggers.
     tickCount = tickCount + 1
     if tickCount >= 10 then
         tickCount = 0
@@ -1245,8 +1183,7 @@ function ns.TopBar.UpdateTicker()
     -- Start only when there is something to update.
     --
     -- The `sysText` half of both gates is belt and braces: this file creates
-    -- sysText eagerly at load, so it is never nil in practice. The plan wrote
-    -- these guards for a lazily-created readout, and they are kept because the
+    -- sysText eagerly at load, so it is never nil in practice. Kept because the
     -- cost is a nil check and the alternative is a ticker calling into a frame
     -- that a future refactor made lazy again. Do not read them as evidence that
     -- sysText can currently be nil.
@@ -1285,12 +1222,11 @@ local function RegisterSysUnlock()
             noResize = true,
             isHidden = function() return not ns.TopBar.Enabled() or ns.TopBar.IsOff("fps") end,
             -- Deliberately does NOT create. EllesmereUI's ApplySavedPositions
-            -- calls every registered element's getFrame unconditionally on
-            -- login and every zone change, before its own combat gate and
-            -- without consulting isHidden (EUI_UnlockMode.lua:4271-4276).
-            -- sysFrame already exists unconditionally above (it carries no
-            -- secure template, so eager creation costs nothing); this just
-            -- hands it back, or nil if that creation somehow never ran.
+            -- calls every registered element's getFrame unconditionally on login
+            -- and every zone change, before its own combat gate and without
+            -- consulting isHidden. sysFrame already exists unconditionally above
+            -- (it carries no secure template, so eager creation costs nothing);
+            -- this just hands it back.
             getFrame = function() return sysFrame end,
             getSize = function()
                 if not sysFrame then return 1, 1 end

@@ -24,14 +24,12 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     local y = yOffset
     local _, h, row
 
-    -- Shared splits for every three-across checkbox grid on this page,
-    -- matching the precedent's own form (EUI_PartyMode_Options.lua:359).
+    -- Shared splits for every three-across checkbox grid on this page.
     local CB_SPLITS = { 0.333, 0.333, 0.334, rowHeight = 36 }
 
-    -- Bottom hairline that closes a TripleRow checkbox grid: TripleRow sets
-    -- `_skipRowDivider` (EllesmereUI_Widgets.lua:4044), so a grid draws no
-    -- divider of its own. Matches EUI_PartyMode_Options.lua:413-419,
-    -- nil-guarded on every EllesmereUI field it touches.
+    -- Bottom hairline that closes a TripleRow checkbox grid: TripleRow skips its
+    -- own row divider, so a grid draws none. Nil-guarded on every EllesmereUI
+    -- field it touches.
     local function CloseGrid(yPos)
         if not (EllesmereUI and EllesmereUI.BORDER_R and EllesmereUI.BORDER_G and EllesmereUI.BORDER_B
            and EllesmereUI.PanelPP and EllesmereUI.CONTENT_PAD) then return end
@@ -89,12 +87,11 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- grid, because its requires() failed, means no qualifier either -- which
     -- is how it behaved before the grid existed.
     --
-    -- The tooltip rides a hit frame anchored to the slot's generic label
-    -- (EllesmereUI_Widgets.lua:4089-4107), and the checkbox branch HIDES that
-    -- label (:4261) while drawing its own. The hit frame is a separate frame
-    -- and is not hidden with it, so the tooltip still works, but its hover
-    -- area sits over the box and the start of the text rather than the whole
-    -- label. Search indexing is unaffected (:4050-4052).
+    -- The tooltip rides a hit frame anchored to the slot's generic label, and
+    -- the checkbox branch hides that label while drawing its own. The hit frame
+    -- is separate and is not hidden with it, so the tooltip still works, but its
+    -- hover area covers the box and the start of the text rather than the whole
+    -- label.
     local FRIENDS_QUALIFIER = { type = "checkbox",
         text = "Only Friends In World Of Warcraft",
         tooltip = "Counts and lists only friends who are actually playing WoW, ignoring anyone online in another Blizzard game.",
@@ -104,10 +101,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
             if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
         end }
 
-    -- The second friends qualifier, sitting beside the first. Modelled on
-    -- WindTools' own "Count Sub Accounts" (its Game Bar walks every online WoW
-    -- game account at Modules/Misc/GameBar.lua:605-616), and named the same so
-    -- the two read alike for anyone who has used it there.
+    -- The second friends qualifier, sitting beside the first.
     local FRIENDS_SUBACCOUNTS = { type = "checkbox",
         text = "Count Sub Accounts",
         tooltip = "Counts every WoW game account a Battle.net friend has online, rather than counting that friend once. Only WoW accounts are expanded: a friend playing something else still counts once. Affects the number under the icon and the list in its tooltip together.",
@@ -128,8 +122,6 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
-    -- Three-across checkbox grid, TripleRow per precedent
-    -- (EUI_PartyMode_Options.lua:343-419).
     for i = 1, #cells, 3 do
         _, h = W:TripleRow(parent, y,
             cells[i], cells[i + 1], cells[i + 2],
@@ -184,18 +176,15 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
           setValue = function(v) ns.TopBar.Set("tbBackdrop", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
     );                                                                             y = y - h
 
-    -- The swatch rides this toggle's row rather than taking one of its own:
-    -- DualRow has no colour entry type. The setter is the seeding one from
-    -- Task 2: turning the override on captures the live accent first, so the
-    -- colour does not jump. Forward-declared so the setter, built first, can
-    -- reach the swatch and its repaint function built just below it.
+    -- The swatch rides this toggle's row rather than taking one of its own,
+    -- because DualRow has no colour entry type. The setter seeds from the live
+    -- accent when the override is turned on, so the colour does not jump.
+    -- Forward-declared so the setter, built first, can reach the swatch and its
+    -- repaint function built just below.
     local accentSwatch, updateAccentSwatch
 
-    -- Show Tooltips (2e) rides this row's right half: Use A Custom Accent's
-    -- own right half was an empty filler. Bar.lua's OnEnter handler already
-    -- checks tbTooltips before calling an element's tooltip function; this
-    -- is only the switch that sets it. Last control block in APPEARANCE, per
-    -- the design's control table.
+    -- Show Tooltips rides this row's right half. Bar.lua's OnEnter handler
+    -- already checks tbTooltips; this is only the switch that sets it.
     row, h = W:DualRow(parent, y,
         { type = "toggle", text = "Use A Custom Accent",
           tooltip = "Uses a fixed colour for the bar's accent line instead of following EllesmereUI's own accent.",
@@ -255,8 +244,8 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "VISIBILITY", y);                              y = y - h
 
-    -- 2f: rarely touched once set -- collapsed by default via the host's own
-    -- expander. Nil-guarded so a host without it still renders every row,
+    -- Rarely touched once set, so collapsed by default behind the host's own
+    -- expander. Nil-guarded so a host without one still renders every row,
     -- just always expanded.
     local visOpen = true
     if EllesmereUI and EllesmereUI.BuildLessCommonExpander then
@@ -286,10 +275,8 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
             VIS_SPLITS
         );                                                                         y = y - h
 
-        -- The keystones label is too long for a 33% column at this width, so
-        -- this row -- and the one above it, sharing VIS_SPLITS -- gets a
-        -- wider split, and the label takes the wide (rightmost) slot instead
-        -- of a normal third.
+        -- The keystones label is too long for a 33% column at this width, so it
+        -- takes the wide rightmost slot.
         _, h = W:TripleRow(parent, y,
             { type = "checkbox", text = "Fade Until Moused Over",
               tooltip = "Rests the bar at low visibility until you move your mouse over it.",
@@ -335,8 +322,8 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "HEARTHSTONE", y);                              y = y - h
 
-    -- 2f: rarely touched once set -- collapsed by default via the host's own
-    -- expander. Nil-guarded so a host without it still renders every row,
+    -- Rarely touched once set, so collapsed by default behind the host's own
+    -- expander. Nil-guarded so a host without one still renders every row,
     -- just always expanded.
     local hearthOpen = true
     if EllesmereUI and EllesmereUI.BuildLessCommonExpander then

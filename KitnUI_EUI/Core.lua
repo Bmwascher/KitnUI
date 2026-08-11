@@ -8,16 +8,15 @@ local _, ns = ... ---@type string, KitnUINS
 
 -- Read-through to KitnUI's namespace. Resolution happens per read, so symbols
 -- KitnUI fills late (ns.db is not populated until PLAYER_LOGIN) resolve the
--- moment they exist rather than at load. Writes stay local by design: anything
--- this addon defines is its own. The trap that implies is that assigning a name
--- KitnUI also owns would shadow it silently for this addon only.
--- Without it this addon has no ns.title, no ns.db and no ns.data, and every file
--- after this one uses all three at load. Say so once and load nothing: a KitnUI
--- old enough to satisfy the folder dependency but too old to publish the bridge
--- is a version mismatch the user can fix, and a stack of Lua errors at every
--- login would not tell them that. EUI_INERT is set before the return because the
--- files after this one read it to stop as well; the print prefix is spelled out
--- because ns.title is one of the things that is missing.
+-- moment they exist. Writes stay local: anything this addon defines is its own,
+-- and assigning a name KitnUI also owns would shadow it silently here.
+--
+-- Without the bridge this addon has no ns.title, no ns.db and no ns.data, and
+-- every file after this one uses all three at load. Say so once and load
+-- nothing: a stack of Lua errors would not tell the user it is a version
+-- mismatch they can fix. EUI_INERT is set before the return because the later
+-- files read it to stop as well, and the print prefix is spelled out because
+-- ns.title is one of the missing things.
 local core = _G.KitnUI_Shared
 if not core then
     ns.EUI_INERT = true
@@ -36,8 +35,7 @@ ns.EUI_MODULE_KEY = "KitnUI"
 -- a page never edits this file. Order is separate because the router is keyed.
 ns.EUIPages = ns.EUIPages or {}
 -- Top Bar goes last because it configures KitnUI's own frame, while the three
--- above it configure EllesmereUI. It held a "Coming soon" placeholder until the
--- real page replaced it.
+-- above it configure EllesmereUI.
 ns.EUIPageOrder = { "General", "Gameplay", "Nameplates", "Top Bar" }
 
 ---------------------------------------------------------------------------------
@@ -106,16 +104,15 @@ local function ActiveProfileName()
     return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
 end
 
--- The same table ns.EUIProfile returns, read straight out of EllesmereUI's saved
--- variables instead of out of its live registry. A module that is switched off is
--- in neither, but its settings are still filed under the active profile and are
--- still what it will read the next time it loads: NewDB does not create them, it
--- finds them (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:265-273).
+-- The same table ns.EUIProfile returns, read out of EllesmereUI's saved
+-- variables instead of its live registry. A module that is switched off is in
+-- neither registry, but its settings are still filed under the active profile
+-- and are still what it reads the next time it loads.
 --
--- This exists for one job, undoing a value KitnUI forced into a module that has
--- since been switched off. Nothing else should prefer it: while the module is
--- loaded ns.EUIProfile returns the very same table AND the module's own helpers
--- are reachable, and only that route can apply a change without a reload.
+-- This exists for one job: undoing a value KitnUI forced into a module that has
+-- since been switched off. Nothing else should prefer it -- while the module is
+-- loaded, ns.EUIProfile returns the same table AND the module's own helpers are
+-- reachable, and only that route can apply a change without a reload.
 function ns.EUIStoredProfile(folder)
     if not folder then return nil end
     local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
@@ -136,32 +133,19 @@ end
 -- through Lite._dbRegistry, so an addon outside the registry can appear in the
 -- list and still export nothing.
 --
--- Commit 0a4835e moved these OUT of that store because EllesmereUI's spec
--- override engine was nilling them on every reload. That diagnosis was right and
--- the conclusion was too broad: a removal marker self-heals against a REGISTERED
--- DEFAULT (HasRegisteredDefault walks db._profileDefaults), and the only reason a
--- third party has none is that it passed none. NaowhUI passes { profile = {} },
--- which is why it needs a hand-maintained sync pass. We pass real defaults
--- instead, and the engine leaves us alone.
+-- EVERY switch key must appear here. EllesmereUI's spec override engine deletes
+-- a key it has no REGISTERED DEFAULT for on the next reload, so a key missing
+-- from this table does not survive. The values are the OFF state: a default of
+-- true would make a switch read on for someone who never touched it.
 --
--- EVERY switch key must appear here. A key missing from this table is a key the
--- override engine is free to delete on the next reload, which is exactly the bug
--- that drove these settings out of the store in the first place. The values are
--- the OFF state: a default of true would make a switch read on for someone who
--- never touched it.
---
--- Task 4 Step 3b: the real Top Bar order, hoisted OUT of DEFAULTS.profile
--- (tbOrder registers as {} below) and onto the namespace instead, because a
--- registered default that is a non-empty array regrows any shorter saved
--- array back to its own length at the next login -- EllesmereUI Lite's
--- DeepMergeDefaults tail-fills every missing index
--- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Lite.lua:174-188).
--- RemoveId (Preview.lua) is the only code that can shorten a stored panel
--- array, including to zero, and Task 4's cross-panel drag is the only thing
--- that calls it -- both would have regrown, duplicating the moved id back
--- into its old panel. This is still the single source: Elements.lua reads
--- it back rather than keeping its own copy, and Core.lua loads before
--- Elements.lua, which is why this has to live here.
+-- The real Top Bar order lives HERE rather than in DEFAULTS.profile (where
+-- tbOrder registers as {}), because a registered default that is a non-empty
+-- array regrows any shorter saved array back to its own length at the next
+-- login -- Lite's DeepMergeDefaults tail-fills every missing index. Preview's
+-- cross-panel drag can shorten a panel array, including to zero, and both would
+-- have regrown, duplicating the moved id back into its old panel. Still the
+-- single source: Elements.lua reads it back rather than keeping its own copy,
+-- and Core.lua loads first, which is why it has to live here.
 ns.EUI_TB_DEFAULT_ORDER = {
     left   = { "friends", "guild", "groupfinder", "journal",
                "achievements", "toybox" },
@@ -179,30 +163,16 @@ local DEFAULTS = {
         beginner                = false,
         hideAllTooltipsInCombat = false,
         hideCdmTooltipsInCombat = false,
-        -- General. A plain on/off value. It was `accent = { pink = false }` until
-        -- 2026-08-09, and the switch wrote into that sub-table in place.
-        --
-        -- WHAT IS PROVEN, measured in Kitn's client on EllesmereUI 8.7.7: the
-        -- value was live in the store at the instant of a reload, absent from the
-        -- saved file immediately after, and every scalar switch in the same block
-        -- survived that same save. Making this one key a scalar fixed it.
-        --
-        -- WHAT IS NOT PROVEN is the mechanism, and an earlier version of this
-        -- comment claimed one. Reading Lite 8.7.5 under References/ says it
-        -- cannot happen: DeepMergeDefaults builds a FRESH sub-table, so writing
-        -- in place should never reach the registered default that the logout
-        -- strip compares against. The installed 8.7.7 copy has a byte-identical
-        -- StripDefaults and logout handler, so the difference is somewhere
-        -- neither the cross-vendor reviewer nor I have read. Do not trust the
-        -- withdrawn "shared table" story.
-        --
-        -- What survives that uncertainty is the rule: a scalar cannot be reached
-        -- this way at all, because assigning one writes a key on the settings
-        -- table and never touches the defaults table. The arrow colour below
-        -- stays a table safely for the same reason — its setter REPLACES the
-        -- table instead of writing into it. Both of those shapes are verified in
-        -- game. An in-place write into a table-valued default is the one shape
-        -- that is not, so nothing here uses it.
+        -- General. A SCALAR, and that is load-bearing. As a nested table whose
+        -- sub-key the switch wrote in place, this value was live in the store at
+        -- the instant of a reload and gone from the saved file straight after,
+        -- while every scalar switch in the same block survived. The mechanism was
+        -- never established; the rule is what holds. A scalar cannot be reached
+        -- that way, because assigning one writes a key on the settings table and
+        -- never touches the defaults table. The arrow colour below stays a table
+        -- safely for the same reason: its setter REPLACES the table rather than
+        -- writing into it. An in-place write into a table-valued default is the
+        -- one shape that is unverified, so nothing here uses it.
         accentPink              = false,
         -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
         -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
@@ -221,21 +191,13 @@ local DEFAULTS = {
         -- them with force: every write replaces the whole table. Never index into
         -- one to change a single entry.
         tbEnabled               = false,
-        -- Registered EMPTY, deliberately -- not "the real order, as a literal".
-        -- A registered default that is a non-empty array regrows any shorter
-        -- saved array back to its own length at the next login (Lite's
-        -- DeepMergeDefaults tail-fills every missing index), which would have
-        -- undone Task 4's cross-panel drag the moment it shortened or emptied
-        -- a panel. The real order now lives in ns.EUI_TB_DEFAULT_ORDER, above,
-        -- which Bar.lua's Order() falls back to for a panel with no saved
-        -- entry at all, and which Elements.lua reads back for
-        -- ns.TopBar.DEFAULT_ORDER. Registering tbOrder as {} still keeps the
-        -- key itself un-strippable while it holds real data: Lite's logout
-        -- strip tests the OUTER tbOrder table's own next() (StripDefaults,
-        -- EllesmereUI_Lite.lua:199), not each panel individually -- so any
-        -- tbOrder holding at least one panel key survives, even one whose
-        -- left/centre/right are all empty arrays. Only a tbOrder with no
-        -- keys at all -- never written to -- gets stripped.
+        -- Registered EMPTY, deliberately. The real order lives in
+        -- ns.EUI_TB_DEFAULT_ORDER above, for the regrow reason stated there.
+        -- Registering {} still keeps the key un-strippable while it holds real
+        -- data: Lite's logout strip tests the OUTER tbOrder table's own next(),
+        -- not each panel, so any tbOrder holding at least one panel key survives
+        -- -- even one whose left/centre/right are all empty. Only a tbOrder that
+        -- was never written to gets stripped.
         tbOrder                 = {},
         tbOff                   = {},
         tbIconSize              = 20,
@@ -258,10 +220,8 @@ local DEFAULTS = {
         tbFade                  = false,
         tbFadeTime              = 0.25,
         tbFriendsInGameOnly     = false,
-        -- Off by default, which is the count this addon already produced: one
-        -- per Battle.net friend. On, it counts every WoW game account that
-        -- friend has online. WindTools ships the same switch defaulted ON
-        -- (References/ElvUI_WindTools-v4.19/Settings/Profile.lua:1319).
+        -- Off counts one per Battle.net friend; on counts every WoW game account
+        -- that friend has online.
         tbFriendsSubAccounts    = false,
         tbHearthLeft            = "RANDOM",
         tbHearthMiddle          = "6948",
@@ -509,40 +469,33 @@ local function OnProfileDeleted(name)
     ns.EUIQueueReapply()
 end
 
--- The switch states now live in EllesmereUIDB, one block per profile; only the
--- snapshots recording what those switches overrode still live in KitnUIDB. The
--- caller nils KitnUIDB, so the snapshots die when it does. What still has
--- to be handled is the OTHER side: EllesmereUI is left holding whatever KitnUI
--- forced into it, and once the snapshots are gone nothing remembers the
--- originals. So the reset turns every switch off FIRST and lets each page's own
--- re-apply put the originals back while the snapshots are still there.
+-- The switch states live in EllesmereUIDB, one block per profile; the snapshots
+-- recording what those switches overrode live in KitnUIDB, which the caller nils
+-- straight after this returns. So the reset turns every switch off FIRST and
+-- lets each page's re-apply put the originals back while the snapshots still
+-- exist -- otherwise EllesmereUI is left holding forced values with nothing that
+-- remembers the originals.
 --
--- Two things this has to cover beyond the active profile:
---   * Lulu Mode's module disable and Edit Mode layout are not in the re-apply
---     registry, because reversing them needs a reload. Reset reloads anyway.
---   * Every profile's switch block is cleared, not just the active one's. The
---     active profile goes through db:ResetProfile so the live db.profile
---     reference stays valid; every other profile's block is deleted outright,
---     safe because nothing holds a reference to it until a profile switch, at
---     which point RepointAllDBs re-points and re-merges the defaults. The
---     snapshots stay a separate store in KitnUIDB; the caller nilling that
---     file is what clears those.
+-- Two things this covers beyond the active profile:
+--   * Lulu Mode's module disable and Edit Mode layout, which are not in the
+--     re-apply registry because reversing them needs a reload. Reset reloads.
+--   * Every profile's switch block. The active one goes through db:ResetProfile
+--     so the live db.profile reference stays valid; the rest are deleted
+--     outright, safe because nothing holds a reference until a profile switch,
+--     at which point RepointAllDBs re-points and re-merges the defaults.
 --
--- And one thing it deliberately does NOT cover, stated here because losing the
--- statement would make it look like an oversight. A value forced into a
--- NON-active EllesmereUI profile stays forced. The re-apply registry only ever
--- reaches the live profile, and that profile's snapshots die with KitnUIDB, so
--- nothing is left that knows the original. Reaching further would mean walking
+-- And one thing it deliberately does NOT cover: a value forced into a NON-active
+-- profile stays forced. The re-apply registry only reaches the live profile, and
+-- that profile's snapshots die with KitnUIDB. Reaching further would mean walking
 -- every profile through every page's restore with the db object pointed
--- somewhere it is not, which is a larger and riskier job than the case is worth.
+-- somewhere it is not, which is larger and riskier than the case is worth.
 --
 -- Everything runs synchronously, because the caller nils KitnUIDB straight after
 -- and a debounced pass would fire into the wreckage.
 --
--- Returns false and does nothing in combat. The Lulu teardown reverses an Edit
+-- Returns false and does nothing in combat: the Lulu teardown reverses an Edit
 -- Mode layout, and ApplyPresetEditMode refuses in combat, so a reset typed
--- mid-fight would reload with the Lulu layout still active and the switch
--- already cleared.
+-- mid-fight would reload with the Lulu layout active and the switch cleared.
 function ns.EUIResetAll()
     if InCombatLockdown() then
         print(ns.title .. ": Cannot reset during combat. Try again after this fight.")
@@ -564,11 +517,10 @@ function ns.EUIResetAll()
         return false
     end
 
-    -- Show EllesmereUI's own FPS counter and clear KitnUI's own bar before
-    -- anything else is torn down (Task 9). Both refusal gates above have
-    -- already passed at this point, so this only runs on a reset that is
-    -- actually happening. Nil-guarded and pcall'd: KitnUI_EUI/TopBar/ may be
-    -- absent or failed to load, and this function must not throw.
+    -- Give EllesmereUI's own FPS counter back and clear KitnUI's bar before
+    -- anything else is torn down. Both refusal gates above have passed, so this
+    -- only runs on a reset that is really happening. Nil-guarded and pcall'd:
+    -- TopBar/ may be absent, and this function must not throw.
     if ns.TopBar and ns.TopBar.Teardown then pcall(ns.TopBar.Teardown) end
 
     if ns.LuluTearDown then pcall(ns.LuluTearDown) end
@@ -589,15 +541,11 @@ function ns.EUIResetAll()
         pcall(fn)
     end
 
-    -- Every OTHER profile's block, dropped whole. Until 2026-08-07 the caller
-    -- nilling KitnUIDB did this for free; now those blocks live in
-    -- EllesmereUIDB and would survive a reset, leaving their switches reading ON
+    -- Every OTHER profile's block, dropped whole. These live in EllesmereUIDB
+    -- and would otherwise survive the reset, leaving their switches reading ON
     -- with no snapshots anywhere.
     --
-    -- The active profile is identified by table IDENTITY rather than by name.
-    -- Both EllesmereUIDB.activeProfile and db._profileName track the active
-    -- profile and RepointAllDBs keeps them in step, but comparing against the
-    -- live db.profile pointer is what the loop actually needs to know: skip the
+    -- The active profile is identified by table IDENTITY, not by name: skip the
     -- one table the db object is currently holding, whatever it is called. That
     -- cannot go stale, so no name source has to be trusted.
     --
@@ -613,15 +561,13 @@ function ns.EUIResetAll()
                     profile.addons.KitnUI_EUI = nil
                 end
 
-                -- The pre-0a4835e key, swept unconditionally. It is never the live
-                -- store, so no identity test applies, and the migration cannot be
-                -- relied on to have removed it: EllesmereUI passes unknown addon
-                -- keys straight through an import
-                -- (References/EllesmereUI-v8.7.5/EllesmereUI/EllesmereUI_Profiles.lua:128-136,
-                -- copied at :3029-3031), so importing an old profile reintroduces
-                -- one long after the migration has stamped. Left here it would
-                -- outlive this reset, which also nils KitnUIDB and the stamp with
-                -- it, and the next login would migrate those stale switches back
+                -- The retired key, swept unconditionally. It is never the live
+                -- store, and the migration cannot be relied on to have removed
+                -- it: EllesmereUI passes unknown addon keys straight through an
+                -- import, so importing an old profile reintroduces one long
+                -- after the migration has stamped. Left here it would outlive
+                -- this reset -- which also nils KitnUIDB and the stamp with it --
+                -- and the next login would migrate those stale switches back
                 -- into the profile the user just reset.
                 profile.addons.KitnUIEUI = nil
             end
@@ -637,12 +583,12 @@ end
 
 -- EllesmereUI:RegisterModule whitelists its callers: it reads debugstack, pulls
 -- the "AddOns/<folder>/" segment out of the caller's path, and drops the call
--- unless that folder is one of its own twenty. The guard reads
--- `if callerFolder and not ALLOWED[callerFolder]`, so it fails OPEN when no
--- folder can be extracted. A loadstring chunk has no file path, so the call
--- lands. This is a deliberate bypass of a deliberate gate. EllesmereUI can close
--- it in one line, which is why every step is guarded and why losing the tab must
--- never break the installer.
+-- unless that folder is one of its own. The guard fails OPEN when no folder can
+-- be extracted, and a loadstring chunk has no file path, so the call lands.
+--
+-- This is a deliberate bypass of a deliberate gate. EllesmereUI can close it in
+-- one line, which is why every step is guarded and why losing the tab must never
+-- break the installer.
 local function RegisterModule(config)
     if not (_G.EllesmereUI and EllesmereUI.RegisterModule) then return end
 
@@ -724,26 +670,22 @@ end
 ---------------------------------------------------------------------------------
 
 -- Switch states used to live in KitnUIDB.euiSettings, keyed by EllesmereUI
--- profile name (commit 0a4835e). They now live in the profile itself. This moves
--- them once.
+-- profile name. They now live in the profile itself. This moves them once.
 --
 -- Guarded on a version stamp rather than on the destination being empty: with
--- registered defaults the destination is NEVER empty, so emptiness cannot be the
--- condition.
+-- registered defaults the destination is NEVER empty.
 --
--- KitnUIDB.euiSettings is left in place rather than deleted. If this migration is
--- wrong we want the evidence, and a stale table in our own saved variables costs
--- a few bytes. A later release drops it.
+-- KitnUIDB.euiSettings is left in place rather than deleted, so a wrong
+-- migration leaves evidence. A later release drops it.
 --
--- The pre-0a4835e block is NOT left in place, because it is not ours. It sits in
--- EllesmereUI's profile, so it rides every exported profile forever, and worse:
--- /kitn reset nils KitnUIDB and takes the version stamp below with it, so the
--- next login re-runs this migration and re-imports those stale switch states
--- over the reset the user just asked for.
--- 2 since 2026-08-09: the accent switch stopped being a nested table, so its old
--- value has to fold forward and the dead key has to go. Re-running version 1's
--- work is harmless — every write it makes is guarded on the destination key being
--- absent.
+-- The retired block in EllesmereUI's profile is NOT left in place, because it is
+-- not ours: it would ride every exported profile forever, and /kitn reset nils
+-- KitnUIDB and the version stamp with it, so the next login would re-run this
+-- migration and re-import those stale switches over the reset the user asked for.
+--
+-- Version 2 folds the accent switch forward from its retired nested shape.
+-- Re-running version 1's work is harmless: every write is guarded on the
+-- destination key being absent.
 local MIGRATION_VERSION = 2
 
 local function MigrateSettingsForward()
@@ -754,11 +696,10 @@ local function MigrateSettingsForward()
     if type(profiles) ~= "table" then return end
 
     local old = ns.db.euiSettings
-    -- The pre-0a4835e key had no underscore, so it is a different key from the
-    -- one we write now and would otherwise be stranded. Swept here too.
-    -- type-checked, not just truthy: a malformed profile whose addons field is
-    -- not a table would otherwise error on the index and abort the whole
-    -- migration at whichever profile pairs() reached first.
+    -- The retired key had no underscore, so it is a different key from the one
+    -- written now and would otherwise be stranded. Type-checked rather than just
+    -- truthy: a malformed profile whose addons field is not a table would error
+    -- on the index and abort the whole migration.
     local function LegacyBlock(profile)
         local addons = profile.addons
         local b = type(addons) == "table" and addons.KitnUIEUI
@@ -819,37 +760,25 @@ end
 -- The accent switch's retired nested shape, folded forward and then DELETED.
 --
 -- Deliberately NOT part of the version-stamped migration above, and not a
--- once-per-login pass either. A profile imported at any point afterwards brings
--- the old key with it — EllesmereUI copies an addon block through an import
--- unchanged — and by then a one-time pass has long since stamped itself done.
--- Registered with the re-apply registry instead, which fires on a profile
--- switch, a spec switch and a profile apply, plus once at login — that last one
--- only on an EllesmereUI complete enough to build the tab, which is the only
--- state where anything reads the switch anyway. Registered from THIS file, so it
--- runs before General.lua's accent apply: the registry runs in registration
--- order and Core.lua loads first.
+-- once-per-login pass either: a profile imported at any point afterwards brings
+-- the old key with it, and by then a one-time pass has long since stamped itself
+-- done. Registered with the re-apply registry instead, which fires on a profile
+-- switch, a spec switch, a profile apply, and once at login. Registered from
+-- THIS file so it runs before General.lua's accent apply -- the registry runs in
+-- registration order and Core.lua loads first.
 --
--- When both keys are present, ON wins from EITHER of them. Neither key can be
--- trusted alone. Yielding to the scalar would read a defaulted false as a
--- deliberate choice and throw the real setting away, because EllesmereUI merges
--- that default in before this ever runs — on import through ApplyProfileData, at
--- login through EUISettingsDB. Overwriting the scalar outright would throw away
--- a choice made by hand on an intermediate build that let both keys coexist.
--- Taking ON from either side is the one rule that loses nothing real, because
--- the default injection can only ever supply OFF, so an ON is always somebody's
--- decision. Only a deliberate OFF beside a retired ON is unrecoverable, and that
--- is unrecoverable in principle: it is byte-identical to the default.
+-- When both keys are present, ON wins from EITHER of them, because neither can
+-- be trusted alone. Yielding to the scalar would read a merged-in default false
+-- as a deliberate choice; overwriting the scalar would throw away a choice made
+-- by hand while both keys coexisted. Taking ON from either side loses nothing
+-- real, because the default injection can only ever supply OFF, so an ON is
+-- always somebody's decision. A deliberate OFF beside a retired ON is
+-- unrecoverable in principle: it is byte-identical to the default.
 --
--- Going forward the pair cannot outlive a deliberate click, but this function is
--- not what guarantees that. Two earlier versions of this comment claimed it was,
--- each on a different wrong ground. The tab is NOT absent while the fold is
--- pending: the queue is debounced by 0.1s and RegisterModule below returns
--- synchronously. And the import is NOT always followed by a reload:
--- EllesmereUI.ImportProfileSilent hands control back without one, and our own
--- installer calls it that way. What actually holds the line is General.lua's
--- setter, which clears the retired key itself.
+-- What keeps the pair from reappearing is General.lua's setter, which clears the
+-- retired key itself. This function only cleans up what arrives from outside.
 --
--- Deleting rather than ignoring is the point. EllesmereUI's logout pass only
+-- Deleting rather than ignoring is the point: EllesmereUI's logout pass only
 -- touches keys it has a registered default for, so a key it does not know is
 -- kept forever and rides every exported profile out into the world.
 local function FoldRetiredAccentKey()
@@ -882,20 +811,16 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
 
-    -- ABOVE the capability guard, deliberately. Migration depends on none of the
-    -- things that guard protects: it needs ns.db and EllesmereUIDB.profiles and
-    -- nothing else. Below the guard it would be skipped on an EllesmereUI that has
-    -- Lite.NewDB but no config panel, and the legacy block would then sit
-    -- unconsumed while /kitn reset still works, because the export frame publishes
-    -- EUIResetAll whether or not this handler returned early. Reset would open the
-    -- new store, read a defaulted lulu = false, skip the teardown, and then delete
-    -- the one record that said Lulu was on, stranding its action bars and layout
-    -- with nothing left to restore them.
+    -- ABOVE the capability guard, deliberately. Migration needs only ns.db and
+    -- EllesmereUIDB.profiles. Below the guard it would be skipped on an
+    -- EllesmereUI that has Lite.NewDB but no config panel, leaving the legacy
+    -- block unconsumed while /kitn reset still works -- reset would read a
+    -- defaulted lulu = false, skip the teardown, and delete the one record that
+    -- said Lulu was on.
     --
-    -- Ordered before the db is registered either way, so the defaults merge sees
-    -- migrated values rather than bare defaults. ns.db is filled by
-    -- Installer/Core.lua, whose PLAYER_LOGIN handler is registered first (its frame
-    -- is created at KitnUI load time, before this addon loads) and has already run.
+    -- Before the db is registered either way, so the defaults merge sees migrated
+    -- values. ns.db is already filled: Installer/Core.lua's PLAYER_LOGIN handler
+    -- is registered first, at KitnUI load time.
     MigrateSettingsForward()
 
     if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
@@ -937,11 +862,10 @@ boot:SetScript("OnEvent", function(self)
             if not ok or type(height) ~= "number" then return math.abs(yOffset) end
             return height
         end,
-        -- Only the Top Bar page has a pinned header. Any other page returns nil
-        -- and EllesmereUI leaves the header area alone for it. This does NOT
-        -- mount anything: SelectPage calls it after the cold build
-        -- (EllesmereUI.lua:10777-10779) only to stash the builder into
-        -- _pageCache (:10787-10792). Options.lua does the mounting.
+        -- Only the Top Bar page has a pinned header; any other page returns nil
+        -- and EllesmereUI leaves the header area alone. This does NOT mount
+        -- anything -- SelectPage calls it after the cold build only to stash the
+        -- builder in its page cache. Options.lua does the mounting.
         getHeaderBuilder = function(pageName)
             if pageName ~= "Top Bar" then return nil end
             return ns.TopBar and ns.TopBar.BuildPreviewHeader
@@ -972,32 +896,25 @@ KitnCommands["config"] = KitnCommands["options"]
 -- Reverse bridge
 ---------------------------------------------------------------------------------
 
--- KitnUI proper calls these six: EUIResetAll from Installer/Core.lua's reset,
--- ApplyLook and LuluLayoutName from Setup.lua's profile writes, LuluEnabled and
--- LuluApplyActionBars from Setup.lua's EllesmereUI module pass. Every call site
--- nil-guards, so a symbol missing here fails SILENTLY — which is exactly what
--- happened to LuluApplyActionBars when it was added to Lulu.lua and not to this
--- list, and the installer's action bars step quietly did nothing for a commit.
--- Naming them in one list is what is supposed to stop that. Keep this list and
--- the table in the spec in step.
+-- The names KitnUI proper calls back into this addon. Every call site
+-- nil-guards, so a symbol MISSING FROM THIS LIST fails silently and the feature
+-- it drives simply does nothing. That has shipped once. Add the name here in the
+-- same commit that defines it.
 --
 -- The read-through metatable above is one-way: KitnUI_EUI reads KitnUI's
--- namespace, but anything this addon defines stays in this addon's table until
--- it is copied back here.
+-- namespace, but anything this addon defines stays local until it is copied back
+-- here.
 local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar" }
 
--- Its own frame, deliberately. Core's main boot handler returns early when
--- EllesmereUI is too old to have RegisterModule or Widgets, and none of these
--- needs EllesmereUI: the reapply registry they depend on is populated at
--- file scope. Publishing behind that guard would leave /kitn reset with no
--- teardown on exactly the configuration where forced values from a previous
--- session are still held down. Gameplay.lua's tooltip hook uses its own frame
--- for the same reason and says so.
+-- Its own frame, deliberately. The main boot handler above returns early when
+-- EllesmereUI is too old for RegisterModule or Widgets, and none of these
+-- exports needs EllesmereUI. Publishing behind that guard would leave /kitn
+-- reset with no teardown on exactly the configuration where forced values from a
+-- previous session are still held down.
 --
--- Login rather than file scope because all but EUIResetAll live in General.lua,
--- Lulu.lua and TopBar/Elements.lua, which EUITab.xml loads AFTER this file. Copy
--- by value is safe: none of them is ever reassigned after definition, and TopBar
--- is a table whose reference is copied once and then only added to.
+-- Login rather than file scope because all but EUIResetAll live in files
+-- EUITab.xml loads AFTER this one. Copy by value is safe: none is ever
+-- reassigned, and TopBar is a table copied once and then only added to.
 local exportBoot = CreateFrame("Frame")
 exportBoot:RegisterEvent("PLAYER_LOGIN")
 exportBoot:SetScript("OnEvent", function(self)

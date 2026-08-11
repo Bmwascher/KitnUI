@@ -6,17 +6,13 @@
 local _, ns = ... ---@type string, KitnUINS
 ns.data = ns.data or {}
 
--- DORMANT. This file still loads and setupFunctions["Plater"] in
--- Installer/Setup.lua is still wired, but the installer no longer OFFERS Plater:
--- its step is commented out of the addon list in Installer/Installer.lua. The
--- whole path is kept rather than deleted because the SavedVariables shape it
--- writes -- PlaterDB.profiles / profileKeys, and the DecompressData round trip
--- -- was expensive to work out and is not worth rediscovering.
+-- DORMANT: the payload is empty, so the installer skips the step. The import
+-- path is kept wired because the SavedVariables shape it writes was expensive to
+-- work out.
 --
--- TO BRING IT BACK: paste a real export below, then uncomment the Plater line in
--- Installer/Installer.lua's addonSteps and put "Plater" back in the /kitn version
--- order in Installer/Core.lua. Bump X-Plater-Version in KitnUI.toc at the same
--- time, or existing installs will never be prompted to import it.
---
--- Export from: Plater Options > Profiles > Export Profile (current profile)
+-- TO BRING IT BACK: paste a real export below (Plater Options > Profiles >
+-- Export Profile), drop `dormant` from the Plater step in
+-- Installer/Installer.lua, put "Plater" back in the /kitn version order in
+-- Installer/Core.lua, and bump X-Plater-Version in KitnUI.toc -- without the
+-- bump, existing installs are never prompted to import it.
 ns.data.Plater = [[]]

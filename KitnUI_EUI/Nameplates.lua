@@ -4,13 +4,10 @@
 -- ║           while switched on.                                 ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
--- This page does NOT clear the bar the other pages clear. EllesmereUI's own
--- target arrows already have 16 styles, a scale, a colour picker, class colour,
--- and automatic dodging of auras, the cast icon, the raid marker and the
--- classification icon. Ours has one style and a manual gap.
---
--- Kitn was shown that and chose to build it anyway, wanting KitnUI's own art and
--- the geometry controls of an old Plater indicator. It is off by default, so a
+-- EllesmereUI's own target arrows already have 16 styles, a scale, a colour
+-- picker, class colour, and automatic dodging of auras, the cast icon, the raid
+-- marker and the classification icon. These have one style and a manual gap, and
+-- exist for KitnUI's own art plus direct geometry controls. Off by default, so a
 -- user who does nothing keeps EllesmereUI's arrows exactly as they are.
 
 local _, ns = ... ---@type string, KitnUINS
@@ -28,15 +25,11 @@ local ARROW_TEX = "Interface\\AddOns\\KitnUI_EUI\\Media\\Nameplates\\DoubleArrow
 -- defaults are derived against.
 local DEFAULT_BAR_H = 17
 
--- The art is 64x64 but the chevron only occupies part of it. Measured from the
--- file's alpha channel on 2026-08-07: opaque pixels run x 12..52 and y 4..59, so
--- 41x56 of 64x64, leaving 12 transparent columns on the left and 11 on the right.
---
--- Uncropped, that padding is why a Side Gap of 0 did not touch the plate and why
--- the arrows looked soft: about a third of the width the user set was invisible,
--- and the visible chevron was drawn from far fewer source pixels than its box
--- suggested. Cropping to the measured box makes the Width slider mean the width
--- of the ARROW rather than the width of its box.
+-- The art is 64x64 but the chevron only occupies x 12..52 and y 4..59, measured
+-- from the file's alpha channel. Uncropped, that padding makes a Side Gap of 0
+-- not touch the plate and the arrows look soft, because about a third of the
+-- width the user set is invisible. Cropping to the measured box makes the Width
+-- slider mean the width of the ARROW rather than the width of its box.
 local CROP_L, CROP_R = 12 / 64, 53 / 64
 local CROP_T, CROP_B = 4 / 64, 60 / 64
 
@@ -84,9 +77,8 @@ end
 ---------------------------------------------------------------------------------
 
 -- C_NamePlate.GetNamePlateForUnit returns BLIZZARD's nameplate, which has no
--- .health, and writing our own keys onto it would taint it (EllesmereUI says so
--- itself in EllesmereUINameplates.lua:91-93). EllesmereUI's plate is its own
--- pooled frame, reachable only through the namespace it exports.
+-- .health, and writing our own keys onto it would taint it. EllesmereUI's plate
+-- is its own pooled frame, reachable only through the namespace it exports.
 local function CanDraw()
     local NS = _G.EllesmereNameplates_NS
     return type(NS) == "table" and type(NS.plates) == "table"
@@ -179,9 +171,9 @@ local function EnsureArrows(plate)
         end
     end
 
-    -- NO anchor and NO size at creation. EllesmereUI's own comment is explicit
-    -- that this is the safe creation state, because an unanchored hidden texture
-    -- has no rect and draws nothing. The first position pass gives them both.
+    -- NO anchor and NO size at creation: an unanchored hidden texture has no rect
+    -- and draws nothing, which is the safe creation state. The first position
+    -- pass gives them both.
     plate._kitnArrowL = parent:CreateTexture(nil, "OVERLAY")
     plate._kitnArrowL:SetTexture(ARROW_TEX)
     plate._kitnArrowL:Hide()
@@ -222,7 +214,7 @@ end
 
 -- Fully anchored TOP+BOTTOM with a separate width, never single-point plus size:
 -- inside 12.1's aspect-restricted plate subtree a single-point rect renders
--- displaced, and EllesmereUI's own arrows are positioned this way for that reason.
+-- displaced.
 --
 -- The rendered height is barH + 2*dy and the centre sits at the bar's centre plus
 -- npArrowY whatever dy is, because the two offsets are symmetric. So a wrong barH
@@ -231,10 +223,9 @@ local function PositionArrows(plate, t, gapL, gapR)
     local PP = _G.EllesmereUI and EllesmereUI.PP
     if not (PP and PP.Point and PP.Width) then return end
 
-    -- Rounded to whole pixels. A half-pixel offset lands the texture between
-    -- screen pixels and the arrow renders soft, which is what an odd difference
-    -- between arrow height and bar height produces every time. EllesmereUI rounds
-    -- its own arrow geometry the same way.
+    -- Rounded to whole pixels: a half-pixel offset lands the texture between
+    -- screen pixels and the arrow renders soft, which an odd difference between
+    -- arrow height and bar height produces every time.
     local dy  =  math.floor((t.npArrowH - HealthBarHeight()) / 2 + 0.5)
     local lox = -math.floor(gapL + t.npArrowW / 2 + 0.5)
     local rox =  math.floor(gapR + t.npArrowW / 2 + 0.5)

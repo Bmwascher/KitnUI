@@ -19,20 +19,17 @@ if ns.EUI_INERT then return end
 local UNIT_KEYS = { "player", "target", "targettarget", "focus", "focustarget", "pet", "boss" }
 
 -- Every text slot stores its colour flag next to a content key naming what the
--- slot renders, so the slot showing the name is discoverable instead of
+-- slot renders, so the slot showing the name is discoverable rather than
 -- guessable. Writing a slot that shows something else would tint text that is
 -- not a name.
 --
--- Unit frames render text through TWO independent sets of slots: the four
--- in-frame ones, and the three on the optional Bottom Text Bar. Each set has its
--- own content and colour keys, and a profile that uses the bar shows its name
--- there, so writing only the in-frame set left the name the user actually sees
--- on whatever colour it already had. Same shape as the raid frames' top name
--- bar, which was already handled.
+-- Unit frames render text through TWO independent sets: the four in-frame slots
+-- and the three on the optional Bottom Text Bar. A profile using the bar shows
+-- its name there, so both sets have to be written.
 --
 -- `bar` marks the Bottom Text Bar slots so the read-back can ignore them while
--- the bar is switched off. They are still WRITTEN either way, so the look
--- survives the user turning the bar on later.
+-- the bar is off. They are still WRITTEN either way, so the look survives the
+-- user turning the bar on later.
 local TEXT_SLOTS = {
     { content = "leftTextContent",   color = "leftTextClassColor"   },
     { content = "centerTextContent", color = "centerTextClassColor" },
@@ -43,15 +40,12 @@ local TEXT_SLOTS = {
     { content = "btbRightContent",   color = "btbRightClassColor",  bar = true },
 }
 
--- Four content values put the name in a slot, not one: ContentToTag builds a
--- string containing [eui-name] for each of these. Testing only for "name"
--- silently skipped any profile that shows the level or the current target
--- beside it.
+-- Four content values put the name in a slot, not one: EllesmereUI builds a tag
+-- string containing [eui-name] for each of these. Testing only for "name" skips
+-- any profile that shows the level or the current target beside it.
 --
--- "both" is deliberately absent. It resolves to "[curhpshort] | [eui-perhp]%",
--- so it is both HEALTH formats and never a name, and the shipped defaults put it
--- on the right slot of every frame. Treating it as a name tinted the health
--- numbers class-coloured.
+-- "both" is deliberately absent: it resolves to two HEALTH formats and never a
+-- name, and the shipped defaults put it on the right slot of every frame.
 local NAME_CONTENT = {
     name         = true,
     nametotarget = true,
@@ -93,18 +87,12 @@ local RAID_NAME_KEYS = { "nameColorMode", "topNameBarTextColorMode" }
 
 -- Party frames honour these twins only once the user decouples the matching
 -- colour section, so they are written when present and never created. Creating
--- one would decouple a section the user chose to leave joined, which is exactly
--- how EllesmereUI's own dark mode provider treats party_healthColorMode.
+-- one would decouple a section the user chose to leave joined.
 local RAID_NAME_PARTY_KEYS = { "party_nameColorMode", "party_topNameBarTextColorMode" }
 
 -- Which of the two name renderers is on screen, for the raid keys (prefix "")
--- or the party twins (prefix "party_"). A twin is treated as governing whenever
--- it EXISTS. That is an approximation: EllesmereUI honours a twin only while
--- that section is decoupled, so a twin sitting on a synced section is read here
--- while governing nothing. Its own re-sync deletes the section's twins first, so
--- it does not create that case; an imported profile can. The approximation
--- applies to the bar-state twin read here exactly as it does to the colour
--- twins. See the limit noted above MatchesLook.
+-- or the party twins (prefix "party_"). A twin counts as governing whenever it
+-- EXISTS, which is an approximation -- see the limits noted above MatchesLook.
 local function LiveRaidNameKey(rf, prefix)
     local enabled = rf[prefix .. "topNameBarEnabled"]
     if enabled == nil then enabled = rf.topNameBarEnabled end
@@ -112,19 +100,14 @@ local function LiveRaidNameKey(rf, prefix)
     return prefix .. "nameColorMode"
 end
 
--- The class resource bar is its own dark mode group and always has been.
--- EllesmereUI's Fonts & Colors page carries two master switches, one for Unit
--- Frames plus Raid Frames and one for the resource bar alone, because people
--- mix the two on purpose. The appearance preset follows that split: it owns the
--- frames and leaves the bar to the switch below, so choosing a look never
--- repaints a bar the user set up separately.
+-- The class resource bar is its own dark mode group. EllesmereUI splits it out
+-- because people mix the two on purpose, so the appearance preset owns the
+-- frames and leaves the bar to its own switch below.
 local function NotResourceBars(p) return p.id ~= "resourceBars" end
 local function IsResourceBars(p) return p.id == "resourceBars" end
 
--- IsDarkModeAllOn answers "are they all on", so it cannot tell "all off" apart
--- from "some on". The selector needs both answers, so read the providers
--- directly. This is the same list IsDarkModeAllOn walks, and each provider
--- knows its own module's storage shape.
+-- IsDarkModeAllOn answers "are they all on", so it cannot tell "all off" from
+-- "some on". The selector needs both, so read the same providers directly.
 --
 -- Returns true when every provider in the group is on, false when every one is
 -- off, and nil when they disagree or cannot be read. nil is a real answer: it
@@ -183,19 +166,16 @@ local function ApplyLook(key)
         end
         -- Two refreshers, both required. ReloadFrames rebuilds the frames, but
         -- the unit NAME is rendered by its own pass and keeps the colour it was
-        -- last painted with, so a look change left names class-coloured with
-        -- everything else already switched. EllesmereUI's own spec-override
-        -- refresh map names both functions for this module for the same reason.
+        -- last painted with, so without the second call a look change leaves
+        -- names class-coloured with everything else already switched.
         if _G._EUF_ReloadFrames then pcall(_G._EUF_ReloadFrames) end
         if _G._EUF_RefreshUnitNames then pcall(_G._EUF_RefreshUnitNames) end
     end
 
     -- Two name renderers, only one live at a time: the top name bar suppresses
-    -- the in-frame name while it is enabled. Both are written so the look
-    -- survives the user turning that bar on later. Their custom colours are NOT
-    -- written: both already default to white, and overwriting would discard a
-    -- colour the user picked on purpose. MatchesLook reads back whichever of the
-    -- two is on screen: see its comment.
+    -- the in-frame name while enabled. Both are written so the look survives the
+    -- user turning that bar on later. Their custom colours are NOT written: both
+    -- default to white, and overwriting would discard a deliberate choice.
     local rf = ns.EUIProfile("EllesmereUIRaidFrames")
     if rf then
         for _, k in ipairs(RAID_NAME_KEYS) do
@@ -212,33 +192,16 @@ end
 
 -- True only when every value this look writes currently holds that look's value,
 -- with one deliberate exception: a text renderer that is switched off is written
--- but not read back, because letting text nobody can see decide Custom reports a
--- mismatch the user cannot act on. That is the unit frames' Bottom Text Bar slots
--- while bottomTextBar is false.
+-- but not read back, because letting invisible text decide Custom reports a
+-- mismatch the user cannot act on. The raid frames follow the same rule through
+-- LiveRaidNameKey, which reads whichever of their two renderers is on screen.
 --
--- The raid frames are not an exception to that rule, they are the same rule: they
--- have two name renderers rather than a switch, so the read follows whichever one
--- is on screen. See LiveRaidNameKey.
---
--- Both party twins are written when present, but only the LIVE one is read back,
--- and picking that one by whether the twin EXISTS is an approximation of what
--- EllesmereUI does, which is to honour a twin only while its section is
--- decoupled. Two states slip through it, both label-only:
---
---   * A twin sitting on a synced section is read while governing nothing.
---     EllesmereUI's own re-sync deletes a section's twins before syncing, so its
---     interface never creates this; an imported profile can.
---   * Party and raid can be reading DIFFERENT renderers. Decouple the top name
---     bar for party alone, switch it off there, and leave the text section
---     joined: party then shows its in-frame name governed by the joined
---     nameColorMode, while the raid bar is on so this reads the joined
---     topNameBarTextColorMode and never looks at the key party is using. That
---     one IS reachable through EllesmereUI's options.
---
--- No apply can produce either: an apply writes every key involved, so the header
--- is only ever wrong about an edit made by hand afterwards. Exact gating would
--- cost one lookup on rf.partySyncSections per key, and it is not done because
--- the whole residual is a wrong word in a header nobody is steering by.
+-- Two label-only states slip through the party-twin approximation: a twin on a
+-- synced section is read while governing nothing, and party and raid can end up
+-- reading different renderers. Neither is reachable by an apply, which writes
+-- every key involved, so the header is only ever wrong about a later hand edit.
+-- Exact gating would cost a partySyncSections lookup per key and is not worth it
+-- for one wrong word in a header.
 --
 -- A module that cannot be reached is skipped rather than counted as a mismatch,
 -- so a user who disabled Raid Frames still sees Dark or Coloured instead of a
@@ -302,11 +265,10 @@ end
 -- not the page's.
 ns.ApplyLook = ApplyLook
 
--- Refused in combat because a look is not one write. It flips dark mode across
--- two modules, rewrites the unit frame colour flags, rewrites the raid frame
--- name mode, and asks three different refreshers to repaint. Anything that
--- defers under lockdown leaves the stored values ahead of what is on screen,
--- and the user is left looking at a half-applied look mid-fight.
+-- Refused in combat because a look is not one write: it flips dark mode across
+-- two modules, rewrites the unit and raid frame colour flags, and asks three
+-- refreshers to repaint. Anything that defers under lockdown leaves the stored
+-- values ahead of the screen, half-applied mid-fight.
 local function PickLook(key)
     if InCombatLockdown() then
         print(ns.title .. ": Appearance cannot be changed in combat.")
@@ -360,20 +322,17 @@ local ACCENT_KEYS = {
 local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 140 / 255
 
 -- Read and write the switch directly on the settings table, never through a
--- sub-table. This switch used to be a sub-table written in place, and in that
--- shape it was the only one that did not survive a reload. Why that shape and no
--- other is unexplained — see the DEFAULTS comment in Core.lua, which separates
--- the measurement from the mechanism. Keep away from the shape regardless.
+-- sub-table: in that shape it was the only switch that did not survive a reload.
+-- See the DEFAULTS comment in Core.lua.
 local function AccentEnabled()
     local s = ns.EUISettings()
     return s.accentPink and true or false
 end
 
--- The retired key is cleared here as well as in Core.lua's fold, so that a
--- deliberate click always ends the ambiguity locally. The fold alone is not
--- enough: it is debounced, and EllesmereUI.ImportProfileSilent hands control back
--- without reloading — our own installer calls it that way — so a block carrying
--- both keys can sit in front of the user for the length of the debounce.
+-- The retired key is cleared here as well as in Core.lua's fold, so a deliberate
+-- click always ends the ambiguity locally. The fold alone is not enough: it is
+-- debounced, and an import can hand control back without a reload, so a block
+-- carrying both keys can sit in front of the user for that long.
 local function SetAccentEnabled(v)
     local s = ns.EUISettings()
     s.accentPink = v and true or false
@@ -458,11 +417,10 @@ local function ApplyAccentScope()
         end
     end
 
-    -- The popup and menu element colour lives on the EllesmereUIDB ROOT, not in
-    -- a profile, so its snapshot must not be profile-keyed. Filed under a
-    -- profile it would be invisible from every other one: switching profile
-    -- would leave the forced value in place with nothing to restore, and turning
-    -- the switch on again would record our own forced value as the original.
+    -- The popup and menu element colour lives on the EllesmereUIDB ROOT, so its
+    -- snapshot must NOT be profile-keyed. Filed under one profile it would be
+    -- invisible from every other, leaving the forced value with nothing to
+    -- restore it.
     if _G.EllesmereUIDB then
         local popup
         if on then
@@ -505,7 +463,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
 
     -- The header carries the current look because the widget factory has no
     -- label row. SectionHeader passes its text through EllesmereUI.L, and a
-    -- composed string is simply not in the localisation table, so it comes back
+    -- composed string is not in the localisation table, so it comes back
     -- unchanged.
     local lookHeader
     lookHeader, h = W:SectionHeader(parent, "APPEARANCE (" .. LookStateText() .. ")", y)
@@ -513,10 +471,10 @@ ns.EUIPages["General"] = function(parent, yOffset)
 
     -- EllesmereUI caches a built page and re-shows the same wrapper rather than
     -- running the builder again, so a look changed from EllesmereUI's own
-    -- options left this header naming the look the user had abandoned until a
-    -- reload. Showing the wrapper fires OnShow on its children, which is the one
-    -- moment the page is guaranteed to be back on screen. Hooked, not set, so a
-    -- handler EllesmereUI adds to its own widget later still runs.
+    -- options would leave this header naming the abandoned look until a reload.
+    -- Showing the wrapper fires OnShow on its children, which is the one moment
+    -- the page is guaranteed back on screen. Hooked, not set, so a handler
+    -- EllesmereUI adds later still runs.
     if lookHeader and lookHeader._label then
         lookHeader:HookScript("OnShow", function()
             lookHeader._label:SetText("APPEARANCE (" .. LookStateText() .. ")")
