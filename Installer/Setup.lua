@@ -593,14 +593,19 @@ setupFunctions["Baganator"] = function(addonKey, import)
         -- a profile written without its category groups is a broken bag display
         -- -- and writing one would replace a good existing profile, activate it,
         -- and stamp the install as done.
-        local decoded
-        if type(src.categoriesJSON) == "string" and strtrim(src.categoriesJSON) ~= "" then
-            local err
-            decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
-            if not decoded then
-                print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
-                return false
-            end
+        -- A missing or blank categoriesJSON is refused too, not skipped. HasData
+        -- only proves the payload table is non-empty, so an edit that emptied
+        -- this one field would otherwise sail past the decode and write exactly
+        -- the profile this gate exists to prevent.
+        if type(src.categoriesJSON) ~= "string" or strtrim(src.categoriesJSON) == "" then
+            print(ns.title .. ": Baganator category data is missing from this build.")
+            return false
+        end
+
+        local decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
+        if not decoded then
+            print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
+            return false
         end
 
         BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
@@ -615,10 +620,8 @@ setupFunctions["Baganator"] = function(addonKey, import)
             end
         end
 
-        if decoded then
-            for k, v in pairs(decoded) do
-                profile[k] = v
-            end
+        for k, v in pairs(decoded) do
+            profile[k] = v
         end
 
         BAGANATOR_CONFIG.Profiles[ns.profileName] = profile
@@ -630,10 +633,15 @@ setupFunctions["Baganator"] = function(addonKey, import)
         return
     end
 
-    -- Load: activate the existing KitnUI profile for this character.
+    -- Load: activate the existing KitnUI profile for this character. Says so when
+    -- there is nothing to activate, matching the import branch's own failure
+    -- paths -- a silent no-op reads as a load that worked.
     if BAGANATOR_CONFIG and BAGANATOR_CONFIG.Profiles and BAGANATOR_CONFIG.Profiles[ns.profileName] then
         BAGANATOR_CURRENT_PROFILE = ns.profileName
+        return
     end
+    print(ns.title .. ": No Baganator profile to load. Install it first.")
+    return false
 end
 
 ---------------------------------------------------------------------------------

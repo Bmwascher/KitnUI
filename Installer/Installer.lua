@@ -623,7 +623,12 @@ local function SimpleLoadPage(addonKey, displayName)
         f.Desc1:SetText("Activate the " .. ns.Color(displayName) .. " profile on this character.")
         ShowLoadStatusAndVersion(addonKey)
         ns.Wizard:SetOption(1, "Load", function()
-            ns.SetupAddon(addonKey)
+            -- `== false` for the same reason the install page uses it: a loader
+            -- that succeeded returns nothing, so only an explicit refusal counts.
+            if ns.SetupAddon(addonKey) == false then
+                ShowInstallToast(displayName .. " load failed", 1, 0.2, 0.2)
+                return
+            end
             WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
             SuccessToast(displayName, "loaded!")
             PlayInstallSound()
