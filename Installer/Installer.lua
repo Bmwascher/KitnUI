@@ -661,7 +661,12 @@ local function EditModeLoadPage()
     f.Desc1:SetText("Load the " .. ns.Color("KitnUI") .. " Edit Mode layout on this character.")
     ShowLoadStatusAndVersion("Blizzard_EditMode")
     ns.Wizard:SetOption(1, "Load", function()
-        ns.SetupAddon("Blizzard_EditMode")
+        -- `== false`, same as every other load page. This one used to discard the
+        -- answer entirely and toast "loaded!" whatever happened.
+        if ns.SetupAddon("Blizzard_EditMode") == false then
+            ShowInstallToast("Edit Mode load failed", 1, 0.2, 0.2)
+            return
+        end
         WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
         SuccessToast("Edit Mode", "loaded!")
         PlayInstallSound()

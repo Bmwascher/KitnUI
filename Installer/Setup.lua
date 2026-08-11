@@ -15,6 +15,23 @@ local IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
 
 local setupFunctions = {}
 
+-- THE RETURN CONTRACT, which every setup function below and every caller in
+-- Installer.lua obeys:
+--
+--   Success returns NOTHING.
+--   A refusal PRINTS why, then returns an explicit `false`.
+--
+-- Callers must test `== false`, never `not`. A successful call usually returns
+-- nil, so a plain truth test would report every success as a failure. This is
+-- what stops the wizard toasting "loaded!" over a step that did nothing.
+--
+-- FOUR producers return `true` on success instead, and that is deliberate:
+-- EllesmereUI in both modes, Edit Mode install, and CDM install. Their callers at
+-- Installer.lua:263, :312, :379 and :419 test truthiness and depend on it. Do not
+-- harmonise them.
+--
+-- One case is neither: NSRT's load path returns nothing because it has nothing to
+-- do -- it is account-wide with no profile to activate -- and that is success.
 function ns.SetupAddon(addonKey, import, ...)
     local fn = setupFunctions[addonKey]
     if not fn then
@@ -111,6 +128,22 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
         -- Re-assert the disable set here so a caller that never reaches Finish
         -- still gets it. Idempotent, so the Finish-time pass is unaffected.
         ns.ApplyEUIModuleSet()
+    else
+        -- Load only. EllesmereUI.SetProfile returns silently when the named
+        -- profile is gone, and this function returns true unconditionally below,
+        -- so without this check a user whose profile was deleted is told it
+        -- loaded. The import branch above has just created the profile, so it
+        -- must not run this.
+        local profiles = _G.EllesmereUIDB and EllesmereUIDB.profiles
+        if type(profiles) ~= "table" or not profiles[ns.profileName] then
+            print(ns.title .. ": The KitnUI EllesmereUI profile is not installed.")
+            return false
+        end
+
+        if not EllesmereUI.SetProfile then
+            print(ns.title .. ": Your EllesmereUI cannot switch profiles. Please update EllesmereUI.")
+            return false
+        end
     end
 
     if EllesmereUI.SetProfile then EllesmereUI.SetProfile(ns.profileName) end
@@ -144,19 +177,19 @@ setupFunctions["Plater"] = function(addonKey, import)
     if import then
         if not HasData("Plater") then
             print(ns.title .. ": No Plater data found.")
-            return
+            return false
         end
 
         local profileString = ns.data.Plater
         if not Plater or not Plater.DecompressData then
             print(ns.title .. ": Plater not loaded.")
-            return
+            return false
         end
 
         local profileData = Plater.DecompressData(profileString, "print")
         if not profileData then
             print(ns.title .. ": Failed to decompress Plater profile.")
-            return
+            return false
         end
 
         PlaterDB = PlaterDB or {}
@@ -171,7 +204,22 @@ setupFunctions["Plater"] = function(addonKey, import)
         return
     end
 
-    if not PlaterDB or not PlaterDB.profiles or not PlaterDB.profiles[ns.profileName] then return end
+    -- Two separate refusals, because they are two different problems and the user
+    -- can act on each. The profile itself lives in PlaterDB.profiles; only its
+    -- activation is character-keyed, so "not installed" is the honest wording.
+    if not PlaterDB or not PlaterDB.profiles or not PlaterDB.profiles[ns.profileName] then
+        print(ns.title .. ": The KitnUI Plater profile is not installed.")
+        return false
+    end
+
+    -- The method, not just the tables above it. Reaching SetProfile through a
+    -- Plater that is not there throws, and the Load All loop has no pcall, so a
+    -- throw here would also skip every step after this one.
+    if not Plater or not Plater.db or not Plater.db.SetProfile then
+        print(ns.title .. ": Plater is not loaded.")
+        return false
+    end
+
     PlaterDB["profileKeys"] = PlaterDB["profileKeys"] or {}
     PlaterDB["profileKeys"][UnitName("player") .. " - " .. GetRealmName()] = ns.profileName
     Plater.db:SetProfile(ns.profileName)
@@ -229,7 +277,12 @@ setupFunctions["BigWigs"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No BigWigs data found. Add your profile data to Data.lua.")
-            return
+            return false
+        end
+
+        if not (BigWigsAPI and BigWigsAPI.RegisterProfile) then
+            print(ns.title .. ": BigWigs is not loaded.")
+            return false
         end
 
         BigWigsAPI.RegisterProfile(ns.title, ns.data[addonKey], ns.profileName, function(success)
@@ -241,13 +294,44 @@ setupFunctions["BigWigs"] = function(addonKey, import)
                 -- from offering BigWigs again on every later run.
                 ImportBigWigsBosses()
                 CompleteSetup(addonKey)
+            else
+                -- Printed, not returned. RegisterProfile is asynchronous: the
+                -- enclosing setup function returned long before the player
+                -- answered, so this outcome cannot ride the return value, and the
+                -- toast helpers are local to Installer.lua and unreachable here.
+                -- A printed line is the whole of what is available, and without it
+                -- declining the prompt is completely silent.
+                --
+                -- `else`, deliberately, rather than testing the argument against
+                -- false. The `== false` convention is KitnUI's own producer
+                -- contract; what BigWigs passes here is its business, and a
+                -- decline delivered as nil must print too.
+                print(ns.title .. ": The BigWigs profile was not imported.")
             end
         end)
         return
     end
 
-    if not BigWigs3DB or not BigWigs3DB.profiles or not BigWigs3DB.profiles[ns.profileName] then return end
-    local db = LibStub("AceDB-3.0"):New(BigWigs3DB)
+    if not BigWigs3DB or not BigWigs3DB.profiles or not BigWigs3DB.profiles[ns.profileName] then
+        print(ns.title .. ": The KitnUI BigWigs profile is not installed.")
+        return false
+    end
+
+    -- Optional lookup: a missing library returns nil rather than raising. Then
+    -- the object and the method, because the old one-liner dereferenced three
+    -- things it had never checked.
+    local AceDB = LibStub and LibStub("AceDB-3.0", true)
+    if not (AceDB and type(AceDB.New) == "function") then
+        print(ns.title .. ": AceDB-3.0 is not available, so the BigWigs profile cannot be selected.")
+        return false
+    end
+
+    local db = AceDB:New(BigWigs3DB)
+    if not (db and db.SetProfile) then
+        print(ns.title .. ": Could not open the BigWigs profile database.")
+        return false
+    end
+
     db:SetProfile(ns.profileName)
 end
 
@@ -393,6 +477,12 @@ setupFunctions["NSRT"] = function(addonKey, import)
     -- character's active stored profile partial; accepted risk, the same
     -- unprotected path NSRT's own UI takes, and only reachable when NSRT
     -- itself is already broken.)
+    --
+    -- This path used to be a deliberate no-op that returned nothing, because
+    -- NSRT was account-wide with no per-character profile to activate. v2.0.1
+    -- rebuilt the import on NSAPI's profile support, so there IS now something
+    -- to do on load and a missing profile is a real refusal. The old carve-out
+    -- is retired, not overlooked.
     if not NSRT.Profiles[ns.profileName] then
         print(ns.title .. ": No NSRT profile found. Run the installer first.")
         return false
@@ -460,16 +550,31 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
 
     -- Load: activate the existing layout on this character. The index is the
     -- preset count plus the layout's position in the saved list.
-    if not (C_EditMode and C_EditMode.GetLayouts) then return end
+    if not (C_EditMode and C_EditMode.GetLayouts) then
+        print(ns.title .. ": Edit Mode is not available right now. Open Edit Mode once, then try again.")
+        return false
+    end
+
     local layouts = C_EditMode.GetLayouts()
-    if not (layouts and layouts.layouts) then return end
+    if not (layouts and layouts.layouts) then
+        print(ns.title .. ": Could not read your Edit Mode layouts.")
+        return false
+    end
+
     local _, wantedLayout = editModeTarget()
     for i, v in ipairs(layouts.layouts) do
         if v.layoutName == wantedLayout then
             C_EditMode.SetActiveLayout(Enum.EditModePresetLayoutsMeta.NumValues + i)
+            -- Success. Returns nothing, per the contract at the top of this file.
             return
         end
     end
+
+    -- Falling off the loop is the one a user actually hits: the layout was
+    -- deleted or renamed. Name it, so they know what to look for.
+    print(ns.title .. ": The Edit Mode layout \"" .. tostring(wantedLayout)
+        .. "\" was not found. Re-run the installer's Edit Mode step to recreate it.")
+    return false
 end
 
 ---------------------------------------------------------------------------------
@@ -480,24 +585,24 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No KitnEssentials data found.")
-            return
+            return false
         end
 
         if not IsAddOnLoaded("KitnEssentials") then
             print(ns.title .. ": KitnEssentials is not loaded.")
-            return
+            return false
         end
 
         local API = _G.KitnEssentialsAPI
         if not API or not API.DecodeProfileString then
             print(ns.title .. ": KitnEssentials API not available.")
-            return
+            return false
         end
 
         local profileData = API:DecodeProfileString(ns.data[addonKey])
         if not profileData or not next(profileData) then
             print(ns.title .. ": KitnEssentials decode failed.")
-            return
+            return false
         end
 
         KitnEssentialsDB = KitnEssentialsDB or {}
@@ -508,8 +613,13 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
         KitnEssentialsDB.profileKeys = KitnEssentialsDB.profileKeys or {}
         KitnEssentialsDB.profileKeys[charKey] = ns.profileName
 
+        -- The method too, not just the table holding it. This is a SKIP, not a
+        -- refusal: the profile data is already written above and the profileKeys
+        -- entry activates it anyway, so a missing method costs nothing here, while
+        -- a throw would land between the write and CompleteSetup and leave an
+        -- installed profile with no ledger entry.
         local KE_addon = _G.KitnEssentials
-        if KE_addon and KE_addon.db then
+        if KE_addon and KE_addon.db and KE_addon.db.SetProfile then
             KE_addon.db:SetProfile(ns.profileName)
         end
 
@@ -518,9 +628,22 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
     end
 
     local API = _G.KitnEssentialsAPI
-    if API and API.SetProfile then
-        API:SetProfile(ns.profileName)
+    if not API or not API.SetProfile then
+        print(ns.title .. ": KitnEssentials is not loaded.")
+        return false
     end
+
+    -- Checking the API is not enough. KitnEssentialsAPI:SetProfile hands straight
+    -- to AceDB, which CREATES a profile that does not exist, so a user whose
+    -- profile was deleted would get an empty one silently rebuilt and be told it
+    -- loaded. This reads the same key the install path writes above.
+    if not KitnEssentialsDB or not KitnEssentialsDB.profiles
+        or not KitnEssentialsDB.profiles[ns.profileName] then
+        print(ns.title .. ": The KitnUI KitnEssentials profile is not installed.")
+        return false
+    end
+
+    API:SetProfile(ns.profileName)
 end
 
 ---------------------------------------------------------------------------------
@@ -531,18 +654,21 @@ setupFunctions["BuffReminders"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No BuffReminders data found.")
-            return
+            return false
         end
 
         if not IsAddOnLoaded("BuffReminders") then
             print(ns.title .. ": BuffReminders is not loaded.")
-            return
+            return false
         end
 
+        -- SetProfile as well as Import: the success branch below calls it, and
+        -- checking only the method we happen to name first is how an unguarded
+        -- call gets in.
         local BR = _G.BuffReminders
-        if not BR or not BR.Import then
+        if not BR or not BR.Import or not BR.SetProfile then
             print(ns.title .. ": BuffReminders API not available.")
-            return
+            return false
         end
 
         local success, err = BR:Import(ns.data[addonKey], ns.profileName)
@@ -551,14 +677,20 @@ setupFunctions["BuffReminders"] = function(addonKey, import)
             CompleteSetup(addonKey)
         else
             print(ns.title .. ": BuffReminders import failed - " .. (err or "unknown error"))
+            -- Inside the else, because the return below is shared with the success
+            -- branch. Moving it down there would refuse every working install.
+            return false
         end
         return
     end
 
     local BR = _G.BuffReminders
-    if BR and BR.SetProfile then
-        BR:SetProfile(ns.profileName)
+    if not BR or not BR.SetProfile then
+        print(ns.title .. ": BuffReminders is not loaded.")
+        return false
     end
+
+    BR:SetProfile(ns.profileName)
 end
 
 ---------------------------------------------------------------------------------
@@ -751,7 +883,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
 
         if not specString or strtrim(specString) == "" then
             print(ns.title .. ": No CDM data for this spec. Add your layout string to Data.lua.")
-            return
+            return false
         end
 
         -- Both resolved BEFORE the layout manager is touched. Importing first
@@ -766,13 +898,13 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
 
         if not CooldownViewerSettings or not CooldownViewerSettings.GetLayoutManager then
             print(ns.title .. ": Blizzard Cooldown Manager is not available. Enable it in Settings > Gameplay > Combat.")
-            return
+            return false
         end
 
         local lm = CooldownViewerSettings:GetLayoutManager()
         if not lm then
             print(ns.title .. ": Could not get CDM Layout Manager.")
-            return
+            return false
         end
 
         local specName = select(2, GetSpecializationInfoForClassID(classId, specIndex)) or ("Spec" .. specIndex)

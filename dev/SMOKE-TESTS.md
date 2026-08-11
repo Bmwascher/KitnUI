@@ -27,7 +27,7 @@ an agent.**
 | Item | Branch | Built | Reviewed | In-game |
 |---|---|---|---|---|
 | 1. Unowned switch | `feature/unowned-switch` | yes, `dfc9833` | Sol PASS, Fable PASS | **PENDING** |
-| 2. Refusal contract for the remaining loaders | `feature/unowned-switch` | not started | — | — |
+| 2. Every loader says when it refused | `feature/unowned-switch` | yes | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | — | not started | — | — |
 
 ## Shared tools
@@ -161,4 +161,74 @@ Kitn, record the outcome here.
 - Pass A:
 - Pass B:
 - Check 13:
+- Notes:
+
+---
+
+# Item 2 — Every loader says when it refused
+
+**Plan:** `dev/docs/superpowers/plans/2026-08-11-refusal-contract.md` (local only).
+**Status: awaiting Kitn.**
+
+## What changed and why it needs testing
+
+The installer announced success over steps that silently did nothing. Eight of the
+nine setup functions never signalled a refusal, one wizard page threw the answer
+away and toasted "loaded!" regardless, and four third-party API calls raised a Lua
+error instead of refusing. The Load All loop has no `pcall`, so one of those errors
+also skipped every step after it.
+
+Now: success returns nothing, a refusal prints why and returns `false`, and the
+wizard counts it. Two carve-outs stay as they were, and both would look like bugs
+if you did not know: **NSRT's load does nothing and that is success** (it is
+account-wide with no profile), and **BigWigs' install still toasts before you
+answer its prompt**, because that call is asynchronous and always has been.
+
+## Read this before starting
+
+Most of these need an addon DISABLED and a reload, because the whole item is about
+what happens when something is absent.
+
+**Do not use Plater for the disable checks.** Plater is dormant with an empty
+payload, so a fresh character can never record it in the ledger, Load All skips it,
+and the check would be unrunnable rather than passing. Only use Plater on a
+character carrying a legacy Plater install.
+
+## The checks
+
+- [ ] **1. The regression check, and it matters most.** With every optional addon
+  installed, run a full install. Every step reports success exactly as it does
+  today. Nothing about a working install may change.
+- [ ] **2.** `/kitn load` with everything installed: "All profiles loaded!" as
+  today.
+- [ ] **3.** Disable **BigWigs**, reload, `/kitn load`. A printed line names it and
+  the "could not be loaded" toast counts it. **No Lua error**, and every step after
+  it still runs.
+- [ ] **4.** Same for KitnEssentials, then BuffReminders, one at a time.
+- [ ] **5.** Disable NSRT, reload, `/kitn load`. NSRT must **NOT** be counted as a
+  refusal. It has nothing to do on load and that is success.
+- [ ] **6.** Install BigWigs' profile and **DECLINE** its prompt. A printed line
+  says the profile was not imported. This is the async path; it cannot toast, and
+  the "imported!" toast you already saw is expected and unchanged.
+- [ ] **7. Deleted companion profile, ledger intact.** Install normally, then
+  delete the KitnUI profile from inside the companion addon's own options, reload,
+  `/kitn load`. That step names the missing profile rather than claiming success.
+  **Run this against BigWigs AND KitnEssentials, both.** KitnEssentials is the one
+  that would otherwise rebuild an empty profile behind your back and report
+  success, so a free choice of addon here could hide the defect.
+- [ ] **8.** Delete the KitnUI EllesmereUI profile from EllesmereUI's own profile
+  UI, then `/kitn load`. The EllesmereUI step refuses rather than reporting loaded.
+- [ ] **9.** Delete the KitnUI Edit Mode layout in Edit Mode, then run the Edit Mode
+  load page. It refuses and names the layout it looked for, instead of toasting
+  "loaded!".
+
+## Result
+
+Kitn, record the outcome here.
+
+- Date:
+- Regression (checks 1-2):
+- Disabled-addon (checks 3-5):
+- BigWigs decline (check 6):
+- Deleted profiles (checks 7-9):
 - Notes:

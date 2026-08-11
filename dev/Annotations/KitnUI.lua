@@ -59,7 +59,9 @@
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field GetOutdatedAddons fun(): table[]
 ---@field IsAddonImported fun(addonKey: string): boolean
----@field SetupAddon fun(addonKey: string, import: boolean?, ...: any): boolean
+--- Success returns nil (or true from EllesmereUI, Edit Mode install and CDM
+--- install); a refusal prints and returns false. Callers test `== false`.
+---@field SetupAddon fun(addonKey: string, import: boolean?, ...: any): boolean|nil
 ---@field OpenInstaller fun(profileLoadMode: boolean?, updateKeys: table?, cdmMode: boolean?)
 ---@field GetInstallerData fun(self: KitnUINS, profileLoadMode: boolean?, updateKeys: table?, cdmMode: boolean?): table
 ---@field SnapshotProfiles fun()
