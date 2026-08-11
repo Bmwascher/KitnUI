@@ -161,6 +161,7 @@ end
 local defaults = {
     profiles = {},          -- [addonKey] = true when imported
     addonVersions = {},     -- [addonKey] = X-header version at time of import
+    extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
@@ -445,6 +446,7 @@ local function InitDB()
     ns.db = KitnUIDB
     ns.db.profiles = ns.db.profiles or {}
     ns.db.addonVersions = ns.db.addonVersions or {}
+    ns.db.extras = ns.db.extras or {}
     ns.db.perChar = ns.db.perChar or {}
     -- Vestigial after the 2026-08-07 migration: switch states live in
     -- EllesmereUI's profile now, and this table is only read by
@@ -459,6 +461,14 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
+
+    -- Chat font face only. The game never saves a chat frame's font file, so
+    -- without this the Expressway face the Chat Setup extra applied is gone after
+    -- the next reload. Everything else that extra writes -- position, size, tabs,
+    -- groups, channels -- WoW keeps by itself, so nothing else is replayed here.
+    if ns.db.extras and ns.db.extras.chat and ns.ApplyChatFont then
+        ns.ApplyChatFont()
+    end
 
     -- Drained before the EllesmereUI check below, so a message survives even a
     -- session where the installer itself is unavailable. Consumed only when it is

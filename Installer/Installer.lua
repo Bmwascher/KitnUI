@@ -411,6 +411,9 @@ local function ExtrasPage()
     ns.Wizard:SetOption(slot, "Chat Setup", function()
         if ns.RunChatSetup() then
             if ns.sessionExtras then ns.sessionExtras.chat = true end
+            -- Account-wide opt-in. WoW's chat layout is per character, so this is
+            -- what lets a later /kitn load rebuild it on an alt.
+            if ns.db and ns.db.extras then ns.db.extras.chat = true end
             SuccessToast("Chat", "configured!")
             PlayInstallSound()
         end

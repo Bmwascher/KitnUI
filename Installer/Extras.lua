@@ -107,16 +107,22 @@ local CHAT_FONT_SIZE = 15
 -- The docked tab set, left to right. ChatFrame3 (Voice) is absent ON PURPOSE:
 -- it is Blizzard's, it ships undocked and closed, and that is where it belongs.
 --
--- NUMBERED CHANNELS ARE DELIBERATELY NOT TOUCHED, only message GROUPS. Group
--- names (SAY, GUILD, LOOT) are global constants and safe to set anywhere.
--- Numbered channels (Trade, General, LookingForGroup) only exist while the
--- player is somewhere that offers them, so clearing them here would silence a
--- channel the player is still joined to with no window left showing it. The
--- CHANNEL group below routes them; which channel lands in which window stays
--- the player's own drag.
+-- `groups` are message groups (SAY, GUILD, LOOT) -- global constant names, set
+-- wholesale so a second run cannot drift.
+--
+-- `channels` are numbered chat channels, held as Blizzard's zone channel IDs
+-- rather than names, because the name is localized and the ID is not:
+-- C_ChatInfo.GetChannelShortcutForChannelID turns the ID into whatever the
+-- client calls it. 1 General, 2 Trade, 22 LocalDefense, 42 Services.
+--
+-- CHANNELS ARE ONLY EVER ADDED, NEVER CLEARED. Removing one would silence a
+-- channel the player is still joined to, with no window left showing it, and a
+-- channel the player added themselves is none of the installer's business. A
+-- community stream is likewise skipped: it is that player's own membership.
 local CHAT_WINDOWS = {
     {
         name = "General", dock = 1, reserved = "ChatFrame1",
+        channels = { 1, 22 },
         groups = {
             "SYSTEM", "SYSTEM_NOMENU", "SAY", "EMOTE", "YELL", "WHISPER",
             "PARTY", "PARTY_LEADER", "RAID", "RAID_LEADER", "RAID_WARNING",
@@ -144,6 +150,7 @@ local CHAT_WINDOWS = {
     },
     {
         name = "Trade/Services", dock = 4,
+        channels = { 2, 42 },
         groups = { "CHANNEL" },
     },
 }
@@ -196,6 +203,16 @@ local function ApplyChatWindow(entry)
         end
     end
 
+    if entry.channels and cf.AddChannel and cf.ContainsChannel
+        and C_ChatInfo and C_ChatInfo.GetChannelShortcutForChannelID then
+        for _, channelID in ipairs(entry.channels) do
+            local shortcut = C_ChatInfo.GetChannelShortcutForChannelID(channelID)
+            if shortcut and not cf:ContainsChannel(shortcut) then
+                cf:AddChannel(shortcut)
+            end
+        end
+    end
+
     -- FCF_DockFrame returns early on an already-docked frame, so this only ever
     -- acts on a window this run just opened.
     if entry.dock and not cf.isDocked and FCF_DockFrame then
@@ -208,6 +225,20 @@ local function ApplyChatWindow(entry)
     end
 end
 
+-- The font FACE is the one part of this the game does not keep. WoW saves a chat
+-- window's name, size, groups and channels, but never its font file, so the face
+-- is back to Blizzard's default after the next reload unless something puts it
+-- there again -- and EllesmereUIChat, which would normally do that, is disabled
+-- on a KitnUI install. Core.lua calls this at login once the user has opted in.
+-- Face only: it touches nothing the player can move.
+function ns.ApplyChatFont()
+    local cf = _G.ChatFrame1
+    local fo = cf and cf.GetFontObject and cf:GetFontObject()
+    if not (fo and fo.SetFont) then return false end
+    fo:SetFont(CHAT_FONT, CHAT_FONT_SIZE, "")
+    return true
+end
+
 function ns.RunChatSetup()
     local cf = _G.ChatFrame1
     if not cf then return false end
@@ -217,10 +248,9 @@ function ns.RunChatSetup()
     if cf.SetSize then cf:SetSize(420, 205) end
     if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(cf) end
 
-    -- Font FACE on the shared chat font object, so every window matches. Size
-    -- is then set per window below, which is what the game saves.
-    local fo = cf.GetFontObject and cf:GetFontObject()
-    if fo and fo.SetFont then fo:SetFont(CHAT_FONT, CHAT_FONT_SIZE, "") end
+    -- Shared font object, so every window matches. Per-window size is set below,
+    -- which is the half the game actually saves.
+    ns.ApplyChatFont()
 
     for _, entry in ipairs(CHAT_WINDOWS) do
         ApplyChatWindow(entry)

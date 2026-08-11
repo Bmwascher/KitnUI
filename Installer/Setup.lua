@@ -770,5 +770,14 @@ function ns.FinishInstallation()
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
 
+    -- Chat Setup, same reasoning as the module set above: the opt-in is account
+    -- wide but WoW's chat layout is per character, so an alt that only runs
+    -- /kitn load has none of it and needs its own pass. Skipped when the Extras
+    -- button already ran it this session -- the work is idempotent, just wasted.
+    if ns.db.extras and ns.db.extras.chat and ns.RunChatSetup
+        and not (ns.sessionExtras and ns.sessionExtras.chat) then
+        ns.RunChatSetup()
+    end
+
     ReloadUI()
 end

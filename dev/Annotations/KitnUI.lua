@@ -70,6 +70,7 @@
 ---@field RunCleanIcons fun(): boolean
 ---@field RunOptimize fun(): boolean
 ---@field RunChatSetup fun(): boolean
+---@field ApplyChatFont fun(): boolean
 ---@field IsAddOnAvailable fun(self: KitnUINS, addon: string): boolean
 ---@field IsCharLoaded fun(self: KitnUINS): boolean
 ---@field SetCharLoaded fun(self: KitnUINS)
@@ -80,6 +81,7 @@ local KitnUINS
 ---@class KitnUIDB
 ---@field profiles table<string, boolean|table>  # [addonKey] = true (CDM = per-spec table)
 ---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
+---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field installedVersion string?
 ---@field perChar table<string, table>
 ---@field devMode boolean
