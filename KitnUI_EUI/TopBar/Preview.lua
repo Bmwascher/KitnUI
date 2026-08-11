@@ -727,7 +727,11 @@ local function WireDrag(slot)
                 pendingSlot = nil
                 return
             end
+            -- The THIRD read in this file, and the one where a nil genuinely
+            -- throws: it goes straight into the subtraction below. Skipping the
+            -- tick leaves the watch armed, so the next frame simply tries again.
             local nx, ny = GetCursorPosition()
+            if not nx or not ny then return end
             local dx = nx - (s._pendX or nx)
             local dy = ny - (s._pendY or ny)
             if dx * dx + dy * dy >= DRAG_THRESHOLD * DRAG_THRESHOLD then
