@@ -72,6 +72,21 @@ local function RequestHouseList()
     end
 end
 
+-- Is this the same house we already had? Wrapped in pcall because the two GUID
+-- fields are WOWGUIDs, and comparing a Secret value throws rather than
+-- answering. A comparison that cannot be made is treated as CHANGED, which
+-- costs one extra re-wire and never a missed one.
+local function SameHouse(a, b)
+    if a == nil and b == nil then return true end
+    if a == nil or b == nil then return false end
+    local ok, same = pcall(function()
+        return a.neighborhoodGUID == b.neighborhoodGUID
+           and a.houseGUID == b.houseGUID
+           and a.plotID == b.plotID
+    end)
+    return ok and same
+end
+
 local housingWatcher = CreateFrame("Frame")
 housingWatcher:RegisterEvent("PLAYER_LOGIN")
 housingWatcher:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
@@ -80,12 +95,33 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
         RequestHouseList()
         return
     end
-    local house = type(houseInfoList) == "table" and houseInfoList[1]
-    if house and house.neighborhoodGUID and house.houseGUID and house.plotID then
-        cachedHouse = house
-    else
-        cachedHouse = nil
+    local house = nil
+    local first = type(houseInfoList) == "table" and houseInfoList[1] or nil
+    if first and first.neighborhoodGUID and first.houseGUID and first.plotID then
+        house = first
     end
+
+    -- THE FIX, and the whole reason left click did nothing. The house list is
+    -- ASYNC: this event is the answer to a request made earlier. Caching the
+    -- answer is not enough, because the only thing that writes the secure
+    -- attributes is HomeAttrs, and the only thing that calls HomeAttrs is
+    -- WireSecureAttributes, and the only thing that calls THAT is
+    -- ns.TopBar.Apply() (Bar.lua:722). Apply had already run, before the answer
+    -- arrived, and found nothing cached -- so it cleared `type1` and never came
+    -- back. The button then had no secure action at all.
+    --
+    -- That is also why it failed SILENTLY rather than printing the fallback:
+    -- HomeOnClick only explains itself while `cachedHouse` is nil, and by the
+    -- time the user clicks, it is set. Dead button, empty chat.
+    --
+    -- Apply() is safe to call in combat -- it defers its protected half and
+    -- retries on PLAYER_REGEN_ENABLED (Bar.lua:667) -- so no combat gate here.
+    -- The change test is what keeps this cheap: the button's OnEnter re-requests
+    -- the list on every hover, and without it every hover would drive a full
+    -- Apply.
+    if SameHouse(house, cachedHouse) then return end
+    cachedHouse = house
+    if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
 end)
 
 -- Left click with nothing cached: an insecure fallback that explains why,
