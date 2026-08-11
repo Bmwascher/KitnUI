@@ -71,8 +71,13 @@ local addonVersionHeaders = {
     Blizzard_EditMode = "X-EditMode-Version",
     KitnEssentials    = "X-KitnEssentials-Version",
     BuffReminders     = "X-BuffReminders-Version",
-    BlizzardCDM       = "X-BlizzardCDM-Version",
 }
+-- BLIZZARD CDM IS DELIBERATELY ABSENT, and its TOC header is gone with it. A
+-- single version string cannot describe per-class, per-spec data: it cannot say
+-- WHICH spec changed, so one edited layout prompts a three-spec player to
+-- reimport all three, and it is maintained by hand beside the data, so it lies
+-- in both directions when the two drift. CDM answers "is this stale?" by
+-- fingerprinting the string it ships instead -- see the block below.
 
 function ns.GetAddonDataVersion(addonKey)
     local header = addonVersionHeaders[addonKey]
@@ -80,10 +85,223 @@ function ns.GetAddonDataVersion(addonKey)
     return C_AddOns.GetAddOnMetadata(addonName, header)
 end
 
+---------------------------------------------------------------------------------
+-- Blizzard CDM: content fingerprints instead of a version header
+---------------------------------------------------------------------------------
+
+-- A short token derived from the layout string KitnUI ships for one spec. It is
+-- only ever compared against another token this function produced, so it never
+-- has to be cryptographic and never leaves SavedVariables.
+--
+-- Multiply-and-modulo rather than the FNV-1a the reference addon uses: FNV needs
+-- bit.bxor, and bitops are forbidden family-wide (../AGENTS.md). Every step here
+-- is plain arithmetic. The largest intermediate is (2^32-1)*33+255, about 1.42e11
+-- -- far below 2^53, so a double holds it exactly and the result cannot drift.
+--
+-- THE EMISSION SPLITS h RATHER THAN FORMATTING IT WHOLE. Printing a whole 32-bit
+-- value with %x or %d depends on how the host formatter converts a double
+-- outside the signed 32-bit range, and nothing available here settles what WoW's
+-- Lua does there. Two halves below 2^16 are inside the well-defined range on
+-- every runtime, and the split is lossless (hi * 65536 + lo == h), so this costs
+-- no hash bits. Length is a third field: two strings that collide on the hash
+-- almost certainly differ in length.
+local function Fingerprint(str)
+    if type(str) ~= "string" or str == "" then return nil end
+
+    local h = 5381
+    for i = 1, #str do
+        h = (h * 33 + str:byte(i)) % 4294967296
+    end
+    return format("%d-%d-%d", math.floor(h / 65536), h % 65536, #str)
+end
+
+-- The storage key. A STRING, so it can never be confused with the plain integer
+-- spec indices every earlier build wrote -- which is what makes the migration in
+-- GetCDMSpecState safe without any argument about numeric ranges.
+--
+-- Both halves are validated because ns.SetupAddon forwards its variadic argument
+-- straight through, so a caller can reach here with a nil or non-numeric spec.
+function ns.GetCDMKey(classId, specIndex)
+    if type(classId) ~= "number" or type(specIndex) ~= "number" then return nil end
+    if classId < 1 or specIndex < 1 then return nil end
+    if math.floor(classId) ~= classId or math.floor(specIndex) ~= specIndex then return nil end
+    return format("%d:%d", classId, specIndex)
+end
+
+-- Memoized because ns.IsAddonImported feeds every sidebar repaint, and without
+-- this the class's whole payload would be re-hashed on each one. The cache
+-- cannot go stale: ns.data.BlizzardCDM is a table literal built at load time and
+-- nothing writes to it, so a shipped string is constant for the session.
+local shippedFingerprints = {}
+
+function ns.GetCDMShippedFingerprint(classId, specIndex)
+    local key = ns.GetCDMKey(classId, specIndex)
+    if not key then return nil end
+    if shippedFingerprints[key] ~= nil then
+        local cached = shippedFingerprints[key]
+        if cached == false then return nil end
+        return cached
+    end
+
+    local classData = ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
+    local fp = Fingerprint(classData and classData[specIndex])
+    -- false, not nil: a nil would look like "not cached yet" and re-hash forever.
+    shippedFingerprints[key] = fp or false
+    return fp
+end
+
+-- Does the CDM table still hold keys from a build that stored plain spec
+-- indices? Those prove the account imported SOMETHING and say nothing about
+-- which class, which is exactly the "untracked" state below.
+local function HasLegacyCDMKeys()
+    local store = ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM
+    if type(store) ~= "table" then return false end
+    for k in pairs(store) do
+        if type(k) == "number" then return true end
+    end
+    return false
+end
+
+-- One of five states, and never a guess:
+--   nodata    nothing shipped, or a shipped string that will not fingerprint
+--   current   a stored fingerprint equal to what we ship now
+--   stale     a stored fingerprint different from what we ship now
+--   untracked no entry for this spec, but legacy keys exist, so what this
+--             character holds is genuinely unknown
+--   missing   no entry and no legacy keys
+function ns.GetCDMSpecState(classId, specIndex)
+    local shipped = ns.GetCDMShippedFingerprint(classId, specIndex)
+    if not shipped then return "nodata" end
+
+    local key = ns.GetCDMKey(classId, specIndex)
+    local store = ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM
+    local held = type(store) == "table" and key and store[key] or nil
+
+    if type(held) == "string" then
+        return held == shipped and "current" or "stale"
+    end
+    return HasLegacyCDMKeys() and "untracked" or "missing"
+end
+
+-- THE SINGLE OWNER of every specialization API call on the status surfaces.
+-- The CDM page used to resolve the class and the spec count itself, which meant
+-- two places guarding the same APIs two different ways. Returns the class id (or
+-- nil) and the rows; the import path keeps its own calls, which are not status.
+function ns.GetCDMSpecRows()
+    local rows = {}
+    local _, _, classId = UnitClass("player")
+    if type(classId) ~= "number" then return nil, rows end
+    if not (C_SpecializationInfo and C_SpecializationInfo.GetNumSpecializationsForClassID) then
+        return classId, rows
+    end
+
+    local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classId)
+    if type(numSpecs) ~= "number" then return classId, rows end
+
+    for i = 1, numSpecs do
+        local specName
+        if GetSpecializationInfoForClassID then
+            specName = select(2, GetSpecializationInfoForClassID(classId, i))
+        end
+        rows[#rows + 1] = {
+            specIndex = i,
+            specName = specName or ("Spec " .. i),
+            state = ns.GetCDMSpecState(classId, i),
+        }
+    end
+    return classId, rows
+end
+
+function ns.HasCDMForCurrentClass()
+    local _, rows = ns.GetCDMSpecRows()
+    for _, row in ipairs(rows) do
+        if row.state == "current" or row.state == "stale" then return true end
+    end
+    return false
+end
+
+-- Specs worth offering: a "nodata" spec is skipped, because a spec we cannot
+-- ship cannot be fixed by importing, and offering it would build a prompt
+-- nothing can clear.
+function ns.GetOutdatedCDMSpecs()
+    local out = {}
+    local _, rows = ns.GetCDMSpecRows()
+    for _, row in ipairs(rows) do
+        if row.state == "stale" or row.state == "untracked" or row.state == "missing" then
+            out[#out + 1] = row
+        end
+    end
+    return out
+end
+
+-- One summary, two callers (/kitn version and the CDM page), so the two cannot
+-- describe the same database differently. "update available" means STALE and
+-- nothing else -- a spec that was never imported has no update to take.
+function ns.SummarizeCDMRows(rows)
+    local counts = { current = 0, stale = 0, untracked = 0, missing = 0, nodata = 0 }
+    for _, row in ipairs(rows or {}) do
+        counts[row.state] = (counts[row.state] or 0) + 1
+    end
+    local parts = {}
+    if counts.current > 0 then parts[#parts + 1] = counts.current .. " up to date" end
+    if counts.stale > 0 then parts[#parts + 1] = counts.stale .. " update available" end
+    if counts.untracked > 0 then parts[#parts + 1] = counts.untracked .. " untracked" end
+    if counts.missing > 0 then parts[#parts + 1] = counts.missing .. " not imported" end
+    if #parts == 0 then return "no layouts available for this class" end
+    return table.concat(parts, ", ")
+end
+
+-- Should the wizard ask before importing? Pure over its arguments so the same
+-- implementation serves both call sites AND the test harness -- a copy of this
+-- decision living in a test could pass while the shipped one drifted.
+--
+-- `snapshot` is the FROZEN pre-session copy of profiles.BlizzardCDM. A nil
+-- specIndex asks "any spec of this class", which is what Import All needs.
+--
+-- Legacy keys warn even though they name no class. That over-warns across
+-- classes on purpose: the import deletes a matching layout before recreating it,
+-- a legacy user may have edited theirs, and over-warning costs a click while
+-- under-warning destroys work.
+function ns.CDMNeedsOverwriteConfirm(snapshot, classId, specIndex)
+    if type(snapshot) ~= "table" then return false end
+
+    for k in pairs(snapshot) do
+        if type(k) == "number" then return true end
+    end
+
+    if specIndex then
+        local key = ns.GetCDMKey(classId, specIndex)
+        return (key and snapshot[key]) and true or false
+    end
+
+    if type(classId) ~= "number" then return false end
+    local prefix = classId .. ":"
+    for k in pairs(snapshot) do
+        if type(k) == "string" and k:sub(1, #prefix) == prefix then return true end
+    end
+    return false
+end
+
 -- Which addons have updated data since last install, or new data never imported.
 function ns.GetOutdatedAddons()
     local outdated = {}
     if not ns.db then return outdated end
+
+    -- CDM rides the same list so every consumer downstream is unchanged -- the
+    -- login notification, the update popup, /kitn update's keys and the update
+    -- wizard's page selection all read this one function. Only the RULE differs:
+    -- fingerprints, not a header. isNew is true only when nothing of this class
+    -- is tracked and no legacy key survives, so a player coming back from an
+    -- older build is offered an update rather than announced as new.
+    local cdmSpecs = ns.GetOutdatedCDMSpecs()
+    if #cdmSpecs > 0 then
+        local everImported = ns.HasCDMForCurrentClass() or HasLegacyCDMKeys()
+        outdated[#outdated + 1] = {
+            key = "BlizzardCDM",
+            isNew = not everImported,
+            specs = cdmSpecs,
+        }
+    end
 
     for addonKey, header in pairs(addonVersionHeaders) do
         local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
@@ -395,23 +613,34 @@ KitnCommands["version"] = function()
         BlizzardCDM = "Blizzard CDM",
     }
     for _, key in ipairs(order) do
-        local current = ns.GetAddonDataVersion(key)
-        local installed = ns.db and ns.db.addonVersions and ns.db.addonVersions[key]
-        local isImported = ns.db and ns.db.profiles and ns.db.profiles[key]
-        local status, color
-        if isImported then
-            if installed and current and installed ~= current then
-                status = "Outdated (v" .. installed .. " -> v" .. current .. ")"
-                color = "|cffFF0000"
-            else
-                status = "Imported" .. (current and (" v" .. current) or "")
-                color = "|cff00FF00"
-            end
+        -- CDM has no version to print. Reading addonVersions for it here was the
+        -- fifth status surface the header removal had to cover: with no header,
+        -- `current` is nil forever and the Outdated branch below becomes
+        -- unreachable, so a stale layout would have read "Imported".
+        if key == "BlizzardCDM" then
+            local _, rows = ns.GetCDMSpecRows()
+            local summary = ns.SummarizeCDMRows(rows)
+            local color = ns.HasCDMForCurrentClass() and "|cff00FF00" or "|cffFF0000"
+            print("  " .. names[key] .. ": " .. color .. summary .. "|r |cff9d9d9d(this class)|r")
         else
-            status = "Not Imported" .. (current and (" v" .. current) or "")
-            color = "|cffFF0000"
+            local current = ns.GetAddonDataVersion(key)
+            local installed = ns.db and ns.db.addonVersions and ns.db.addonVersions[key]
+            local isImported = ns.db and ns.db.profiles and ns.db.profiles[key]
+            local status, color
+            if isImported then
+                if installed and current and installed ~= current then
+                    status = "Outdated (v" .. installed .. " -> v" .. current .. ")"
+                    color = "|cffFF0000"
+                else
+                    status = "Imported" .. (current and (" v" .. current) or "")
+                    color = "|cff00FF00"
+                end
+            else
+                status = "Not Imported" .. (current and (" v" .. current) or "")
+                color = "|cffFF0000"
+            end
+            print("  " .. (names[key] or key) .. ": " .. color .. status .. "|r")
         end
-        print("  " .. (names[key] or key) .. ": " .. color .. status .. "|r")
     end
 end
 KitnCommands["ver"] = KitnCommands["version"]
@@ -566,8 +795,14 @@ boot:SetScript("OnEvent", function()
             for _, info in ipairs(outdated) do
                 if info.isNew then
                     new[#new + 1] = ns.Green(info.key)
-                else
+                elseif info.oldVersion and info.newVersion then
                     updated[#updated + 1] = ns.Color(info.key) .. " (v" .. info.oldVersion .. " -> v" .. info.newVersion .. ")"
+                else
+                    -- No versions to name. CDM is the case that exists today: it
+                    -- left the header scheme, so its entry carries specs instead.
+                    -- Naming the key alone beats the nil concatenation this
+                    -- branch used to raise.
+                    updated[#updated + 1] = ns.Color(info.key)
                 end
             end
             if #updated > 0 then print(ns.title .. ": " .. ns.Red("Outdated: ") .. table.concat(updated, ", ")) end

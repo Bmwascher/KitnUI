@@ -84,12 +84,42 @@ function ns.SnapshotProfiles()
     wipe(preSessionProfiles)
     if ns.db and ns.db.profiles then
         for k, v in pairs(ns.db.profiles) do
-            preSessionProfiles[k] = v
+            -- BlizzardCDM's entry is a TABLE, and the import writes into that
+            -- same table. Copying the reference would let this session's own
+            -- imports appear in what is supposed to be a frozen picture of the
+            -- database before the wizard opened, so revisiting the CDM page
+            -- would ask to overwrite a layout this run had just created. Copied
+            -- by value for that reason; every other entry is a plain flag.
+            if type(v) == "table" then
+                local copy = {}
+                for ik, iv in pairs(v) do copy[ik] = iv end
+                preSessionProfiles[k] = copy
+            else
+                preSessionProfiles[k] = v
+            end
         end
     end
 end
 
-local function ConfirmImport(addonKey, displayName, callback)
+-- `alreadyImported` overrides the default table-level test. CDM passes one,
+-- because "this account imported some spec of some class" is not a reason to
+-- warn the character in front of you.
+local function ConfirmImport(addonKey, displayName, callback, alreadyImported)
+    if alreadyImported ~= nil then
+        if alreadyImported and _G.EllesmereUI and EllesmereUI.ShowConfirmPopup then
+            EllesmereUI:ShowConfirmPopup({
+                title = "Overwrite?",
+                message = ns.Color(displayName) .. " has already been imported. Overwrite with the fresh profile?",
+                confirmText = "Overwrite",
+                cancelText = "Cancel",
+                onConfirm = callback,
+            })
+        else
+            callback()
+        end
+        return
+    end
+
     if preSessionProfiles[addonKey] and _G.EllesmereUI and EllesmereUI.ShowConfirmPopup then
         EllesmereUI:ShowConfirmPopup({
             title = "Overwrite?",
@@ -135,7 +165,13 @@ end
 
 -- Real profile lookup: the sidebar shows a completed check only for addons that
 -- are actually imported, not merely stepped past.
+--
+-- CDM answers per class. The table being non-empty means some character on this
+-- account imported something; it says nothing about the one on screen, and
+-- letting it stand would put a completed sidebar check beside page rows reading
+-- "not imported".
 function ns.IsAddonImported(addonKey)
+    if addonKey == "BlizzardCDM" then return ns.HasCDMForCurrentClass() end
     return (ns.db and ns.db.profiles and ns.db.profiles[addonKey]) ~= nil
 end
 
@@ -151,24 +187,23 @@ local function ShowLoadStatusAndVersion(addonKey)
     WF().Desc3:SetText(GetVersionLine(addonKey))
 end
 
-local function GetCDMSpecStatus(specIndex)
-    local _, _, classId = UnitClass("player")
-    local classData = ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
-    local specData = classData and classData[specIndex]
-    if specData and strtrim(specData) ~= "" then
-        return ns.Green("available")
-    else
-        return ns.Red("no data")
-    end
-end
+-- One label per state from ns.GetCDMSpecState. Until fingerprints landed this
+-- could only say whether data SHIPPED, never whether the character held it.
+local cdmStateLabel = {
+    nodata    = function() return ns.Red("no data") end,
+    missing   = function() return ns.Amber("not imported") end,
+    untracked = function() return ns.Amber("untracked") end,
+    current   = function() return ns.Green("up to date") end,
+    stale     = function() return ns.Red("update available") end,
+}
 
-local function BuildCDMStatusText(classId, numSpecs)
+-- Rows come from ns.GetCDMSpecRows, the single owner of the specialization API
+-- on the status surfaces, so this no longer resolves the class or spec count.
+local function BuildCDMStatusText(rows)
     local parts = {}
-    for i = 1, numSpecs do
-        local _, specName = GetSpecializationInfoForClassID(classId, i)
-        if specName then
-            parts[#parts + 1] = specName .. ": " .. GetCDMSpecStatus(i)
-        end
+    for _, row in ipairs(rows or {}) do
+        local label = cdmStateLabel[row.state]
+        parts[#parts + 1] = row.specName .. ": " .. (label and label() or row.state)
     end
     return table.concat(parts, " | ")
 end
@@ -309,20 +344,25 @@ local function BlizzardCDMPage()
         return
     end
 
-    local _, _, classId = UnitClass("player")
-    local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classId)
-    local classData = ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
-    if not classData or not next(classData) then
+    -- The class id and the rows come from ONE guarded call. This page used to
+    -- resolve both itself, which meant two places guarding the same APIs two
+    -- different ways, and a nil class id failed here before any guard downstream
+    -- could help.
+    local classId, rows = ns.GetCDMSpecRows()
+    local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
+    if not classId or #rows == 0 or not classData or not next(classData) then
         f.Desc1:SetText("No CDM layouts available for your class yet.")
         f.Desc2:SetText("Add your layout strings to Data/Classes/BlizzardCDM.lua.")
         if cdmAllButton then cdmAllButton:Hide() end
         return
     end
+    local numSpecs = #rows
+    local preCDM = preSessionProfiles.BlizzardCDM
 
     f.Desc1:SetText(stepDesc("BlizzardCDM"))
     if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("PROFILE STATUS") end
-    f.Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
-    f.Desc3:SetText(GetVersionLine("BlizzardCDM"))
+    f.Desc2:SetText(BuildCDMStatusText(rows))
+    f.Desc3:SetText(ns.SummarizeCDMRows(rows) .. " |cff9d9d9d(this class)|r")
 
     -- Persistent "Import All Specs" button, above the option row.
     if not cdmAllButton then
@@ -346,7 +386,9 @@ local function BlizzardCDMPage()
                     end
                 end
             end
-            WF().Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
+            local _, freshRows = ns.GetCDMSpecRows()
+            WF().Desc2:SetText(BuildCDMStatusText(freshRows))
+            WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
             if failed > 0 then
                 ShowInstallToast(imported .. " imported, " .. failed .. " failed (layout limit?)", 1, 0.8, 0.2)
             else
@@ -354,16 +396,23 @@ local function BlizzardCDMPage()
             end
             PlayInstallSound()
             SetVariant(WF().Next, "primary")
-        end)
+        end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, nil))
     end
     cdmAllButton:Show()
 
-    -- Per-spec option buttons (Option1..4, with spec icons)
+    -- Per-spec option buttons (Option1..4, with spec icons). The name comes from
+    -- the row, not from a second API call; only the icon is looked up here, and
+    -- it is cosmetic, so a nil falls back to the plain label.
     for i = 1, math.min(numSpecs, 4) do
-        local _, specName, _, specIcon = GetSpecializationInfoForClassID(classId, i)
+        local row = rows[i]
+        local specName = row.specName
+        local specIcon
+        if GetSpecializationInfoForClassID then
+            specIcon = select(4, GetSpecializationInfoForClassID(classId, i))
+        end
         local specData = classData[i]
-        local label = specName or ("Spec " .. i)
-        if specName and specIcon then
+        local label = specName
+        if specIcon then
             label = "|T" .. specIcon .. ":14:14:0:0|t " .. specName
         end
 
@@ -371,16 +420,18 @@ local function BlizzardCDMPage()
             ns.Wizard:SetOption(i, label, function()
                 ConfirmImport("BlizzardCDM", "Blizzard CDM", function()
                     local success = ns.SetupAddon("BlizzardCDM", true, i)
-                    WF().Desc2:SetText(BuildCDMStatusText(classId, numSpecs))
+                    local _, freshRows = ns.GetCDMSpecRows()
+                    WF().Desc2:SetText(BuildCDMStatusText(freshRows))
+                    WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
                     if success then
-                        SuccessToast(specName or "CDM", "layout imported!")
+                        SuccessToast(specName, "layout imported!")
                         PlayInstallSound()
                         SetVariant(WF().Next, "primary")
                     else
                         WF().Desc2:SetText(ns.Red("Layout limit reached. Delete a layout and try again."))
                         ShowInstallToast("Layout limit reached!", 1, 0.2, 0.2)
                     end
-                end)
+                end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, i))
             end)
         else
             ns.Wizard:SetOption(i, label, function()
@@ -460,6 +511,9 @@ local recapNames = {
 local recapOrder = { "EllesmereUI", "Plater", "BuffReminders", "BigWigs", "NSRT", "KitnEssentials", "Blizzard_EditMode", "BlizzardCDM" }
 
 local function IsProfileImported(key)
+    -- Same per-class reasoning as ns.IsAddonImported: the finish recap describes
+    -- the character that just ran the wizard, not the account.
+    if key == "BlizzardCDM" then return ns.HasCDMForCurrentClass() end
     local v = ns.db and ns.db.profiles and ns.db.profiles[key]
     return v and (type(v) ~= "table" or next(v)) and true or false
 end

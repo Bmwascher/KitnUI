@@ -517,6 +517,18 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             return
         end
 
+        -- Both pieces of bookkeeping are resolved BEFORE the layout manager is
+        -- touched. Importing first and discovering afterwards that there is
+        -- nothing to stamp would leave a replaced layout with no record of what
+        -- it holds -- which is exactly the state this whole scheme exists to
+        -- avoid.
+        local cdmKey = ns.GetCDMKey(classId, specIndex)
+        local cdmFingerprint = ns.GetCDMShippedFingerprint(classId, specIndex)
+        if not cdmKey or not cdmFingerprint then
+            print(ns.title .. ": Could not identify this spec's CDM layout. Nothing was changed.")
+            return false
+        end
+
         if not CooldownViewerSettings or not CooldownViewerSettings.GetLayoutManager then
             print(ns.title .. ": Blizzard Cooldown Manager is not available. Enable it in Settings > Gameplay > Combat.")
             return
@@ -576,21 +588,22 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
                 end)
             end
 
-            ns.db.profiles = ns.db.profiles or {}
-            ns.db.profiles["BlizzardCDM"] = ns.db.profiles["BlizzardCDM"] or {}
-            ns.db.profiles["BlizzardCDM"][specIndex] = true
-            ns.db.installedVersion = ns.version
-
             -- CDM writes its own bookkeeping instead of calling CompleteSetup,
             -- because its profile entry is a per-spec table rather than a flag.
-            -- This line is the piece that was missing: without it
-            -- addonVersions.BlizzardCDM stays nil, GetOutdatedAddons can reach
-            -- neither of its branches (nil installed, truthy profile), and every
-            -- X-BlizzardCDM-Version bump is inert for the people who already
-            -- imported.
-            ns.db.addonVersions = ns.db.addonVersions or {}
-            local cdmVersion = ns.GetAddonDataVersion("BlizzardCDM")
-            if cdmVersion then ns.db.addonVersions["BlizzardCDM"] = cdmVersion end
+            --
+            -- The value is the FINGERPRINT of the string just imported, under a
+            -- class-and-spec key. A plain `true` under a bare spec index -- what
+            -- every earlier build wrote -- could not say which class it belonged
+            -- to, so a Warrior importing spec 1 made a Paladin read as imported,
+            -- and it could not say whether the data had moved on since. A string
+            -- is still truthy, so everything that only asks "is this set?" keeps
+            -- working. Old integer keys are LEFT ALONE: they are the only
+            -- evidence that this account ever imported CDM, which is what
+            -- GetCDMSpecState reads as "untracked".
+            ns.db.profiles = ns.db.profiles or {}
+            ns.db.profiles["BlizzardCDM"] = ns.db.profiles["BlizzardCDM"] or {}
+            ns.db.profiles["BlizzardCDM"][cdmKey] = cdmFingerprint
+            ns.db.installedVersion = ns.version
 
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}

@@ -70,6 +70,14 @@
 ---@field RunCleanIcons fun(): boolean
 ---@field RunOptimize fun(): boolean
 ---@field RunChatSetup fun(): boolean
+---@field GetCDMKey fun(classId: number?, specIndex: number?): string?
+---@field GetCDMShippedFingerprint fun(classId: number?, specIndex: number?): string?
+---@field GetCDMSpecState fun(classId: number?, specIndex: number?): "nodata"|"current"|"stale"|"untracked"|"missing"
+---@field GetCDMSpecRows fun(): number?, { specIndex: number, specName: string, state: string }[]
+---@field HasCDMForCurrentClass fun(): boolean
+---@field GetOutdatedCDMSpecs fun(): { specIndex: number, specName: string, state: string }[]
+---@field SummarizeCDMRows fun(rows: table?): string
+---@field CDMNeedsOverwriteConfirm fun(snapshot: table?, classId: number?, specIndex: number?): boolean
 ---@field IsAddOnAvailable fun(self: KitnUINS, addon: string): boolean
 ---@field IsCharLoaded fun(self: KitnUINS): boolean
 ---@field SetCharLoaded fun(self: KitnUINS)
@@ -78,7 +86,7 @@ local KitnUINS
 -- SavedVariables shape (KitnUIDB). Written by Core.lua/Setup.lua on import.
 
 ---@class KitnUIDB
----@field profiles table<string, boolean|table>  # [addonKey] = true (CDM = per-spec table)
+---@field profiles table<string, boolean|table>  # [addonKey] = true; BlizzardCDM is a table of ["<classId>:<specIndex>"] = <fingerprint string>, plus any surviving legacy [specIndex] = true keys from builds before 2026.08.11
 ---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field installedVersion string?
