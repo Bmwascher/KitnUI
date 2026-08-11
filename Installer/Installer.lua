@@ -620,7 +620,14 @@ local function EllesmereUILoadPage()
     f.Desc1:SetText("Activate the EllesmereUI profile on this character.")
     ShowLoadStatusAndVersion("EllesmereUI")
     ns.Wizard:SetOption(1, "Load Profile", function()
-        ns.SetupAddon("EllesmereUI", false)
+        -- The last load-mode caller to honour the refusal contract. The setup
+        -- function rechecks EllesmereUI's API at click time, not only when the
+        -- installer opened, so a host that went away in between refuses here --
+        -- and saying "profile loaded!" over that would be the one wrong answer.
+        if ns.SetupAddon("EllesmereUI", false) == false then
+            ShowInstallToast("EllesmereUI load failed", 1, 0.2, 0.2)
+            return
+        end
         WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
         SuccessToast("EllesmereUI", "profile loaded!")
         PlayInstallSound()
