@@ -365,12 +365,19 @@ end
 -- ClubMemberInfo marks only `isSelf` and `faction` NeverSecret
 -- (ClubDocumentation.lua:1798, :1827). Every OTHER field of that structure may
 -- therefore arrive as a Secret value. A Secret cannot be used as a table key
--- and cannot be concatenated -- both throw -- so nothing read off a roster
--- structure reaches a lookup or a format string without passing Plain() first.
--- FriendInfo (FriendListDocumentation.lua:602-616) and BNetGameAccountInfo
--- (BattleNetDocumentation.lua:247-274) declare no Secret fields at all, but
--- they go through the same gate: one rule kept everywhere is cheaper to keep
--- true than three rules kept in three places.
+-- and cannot be concatenated -- both throw -- so nothing reaches a LOOKUP, a
+-- CONCATENATION or a FORMAT without passing Plain() first.
+--
+-- State the rule's reach exactly, because an overstated one stops being
+-- checkable. Plain() guards the UNSAFE OPERATIONS above, not every read. Plain
+-- truth-tests (`if info.name then`) and equality tests against a literal
+-- (`clientProgram == "WoW"`) are left raw, and deliberately: on the BNet and
+-- FriendList paths the fields involved declare no Secret marking at all
+-- (FriendListDocumentation.lua:602-616, BattleNetDocumentation.lua:247-274),
+-- and on the guild path the one raw truth-test that could see a Secret is
+-- inside a pcall, behind RosterReadable(), and costs at worst that hover's
+-- list. What a Secret does under a bare truth-test is NOT decidable from the
+-- static reference, which is exactly why it is not load-bearing here.
 ---------------------------------------------------------------------------------
 
 local function Plain(v)
@@ -381,7 +388,7 @@ end
 
 -- The exact path: classID -> classFile -> RAID_CLASS_COLORS. Guild members and
 -- Battle.net friends both carry a numeric classID
--- (ClubDocumentation.lua:1808, BattleNetDocumentation.lua:257), and
+-- (ClubDocumentation.lua:1808, BattleNetDocumentation.lua:263), and
 -- C_CreatureInfo.GetClassInfo declares no SecretReturns
 -- (CreatureInfoDocumentation.lua:11-24), so no locale guessing is involved.
 local function ClassColorFromID(classID)
@@ -400,8 +407,16 @@ end
 -- (FriendListDocumentation.lua:608), and that string is LOCALISED. Reversing
 -- the client's own localised tables is the standard answer and is correct in
 -- every language the client ships, because both sides come from the same
--- client. It fails only where a locale gives two classes the same word, and
--- then it fails to a plain white name rather than a wrong colour.
+-- client. It can fail only where a locale gives two DIFFERENT classes the same
+-- word, and the map below is built so that such a word resolves to no colour
+-- at all rather than to whichever class was absorbed last. A plain white name
+-- is a fallback a reader can ignore; a confidently wrong class colour is one
+-- they would act on.
+--
+-- The two source tables are keyed by classFile and both contain every class,
+-- so the SAME classFile appearing in both is the ordinary case and must not
+-- count as a collision. Only a second, DIFFERENT classFile claiming a word
+-- already taken poisons it.
 --
 -- Built once on first use rather than at load: RAID_CLASS_COLORS and the
 -- LOCALIZED_CLASS_NAMES tables all exist by then, and a roster hover is the
@@ -412,11 +427,21 @@ local function ClassColorFromLocalizedName(className)
     if type(className) ~= "string" or className == "" then return nil end
     if not localizedClassColor then
         localizedClassColor = {}
+        local claimedBy = {}
         local function Absorb(tbl)
             if type(tbl) ~= "table" then return end
             for file, localized in pairs(tbl) do
                 local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[file]
-                if c and type(localized) == "string" then localizedClassColor[localized] = c end
+                if c and type(localized) == "string" then
+                    local owner = claimedBy[localized]
+                    if owner == nil then
+                        claimedBy[localized] = file
+                        localizedClassColor[localized] = c
+                    elseif owner ~= file then
+                        -- Ambiguous word: no colour, so the name renders white.
+                        localizedClassColor[localized] = nil
+                    end
+                end
             end
         end
         Absorb(LOCALIZED_CLASS_NAMES_MALE)
@@ -620,13 +645,18 @@ local function BuildGuildRoster(tt)
 
     local roster = NewRoster(tt)
     for _, info in ipairs(online) do
-        if info and info.name then
+        -- Plain() BEFORE the truth-test, not after: `name` is the one field on
+        -- this path that can genuinely be Secret, and this is the only place a
+        -- raw one would be tested. Doing it here means the whole loop body
+        -- works from a value already known to be an ordinary string or nil.
+        local name = info and Plain(info.name)
+        if type(name) == "string" and name ~= "" then
             local r, g, b = ClassColorFromID(info.classID)
             -- ClubMemberPresence: 4 Away, 5 Busy (ClubDocumentation.lua:1674-1675).
             local presence = Plain(info.presence)
             local tag = (presence == 4 and "  |cff808080<AFK>|r")
                 or (presence == 5 and "  |cff808080<DND>|r") or ""
-            roster.Row(RosterLabel(info.name, info.level, tag), Plain(info.zone), r, g, b)
+            roster.Row(RosterLabel(name, info.level, tag), Plain(info.zone), r, g, b)
         end
     end
     return roster.Finish()

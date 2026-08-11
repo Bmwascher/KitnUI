@@ -869,8 +869,12 @@ end
 -- at the worst-case fit; this one stays a crisp single pixel at any scale.
 --
 -- Hidden entirely when the clock is not drawn: with no centre occupant there
--- is no centre zone to divide, and FindDragTarget's own boundaries collapse
--- onto each other.
+-- is nothing between the two panels worth marking off. Note that the two
+-- boundaries do NOT collapse in that case -- with `clockW` zero they still sit
+-- `spacing` apart (:271-272), leaving a narrow dead band that FindDragTarget
+-- still refuses as centre. Drawing two lines a hair apart around an invisible
+-- clock would describe that band accurately and read as a defect, which is the
+-- real reason to hide them.
 local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
     if not previewWrap then return end
     if not dividerL then
@@ -889,12 +893,16 @@ local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
     -- backdrop instead of a line drawn on top of it, and two pixels wide so
     -- it survives being seen against the busy panel art behind the stage.
     -- Both are taste values with no other code depending on them.
+    -- Written out rather than looped over a table literal: Layout() runs on
+    -- every settings change and every drop, and this file keeps its allocation
+    -- discipline explicit elsewhere.
     local h = math.max(1, rowH * scale)
-    for _, tex in ipairs({ dividerL, dividerR }) do
-        tex:SetColorTexture(0, 0, 0, 0.55)
-        tex:SetSize(DIVIDER_W, h)
-        tex:ClearAllPoints()
-    end
+    dividerL:SetColorTexture(0, 0, 0, 0.55)
+    dividerL:SetSize(DIVIDER_W, h)
+    dividerL:ClearAllPoints()
+    dividerR:SetColorTexture(0, 0, 0, 0.55)
+    dividerR:SetSize(DIVIDER_W, h)
+    dividerR:ClearAllPoints()
     -- Centred ON the boundary, not started at it: at two pixels wide an
     -- unshifted line would sit entirely to the right of the line it claims to
     -- draw, and the claim that the divider IS the drop boundary is the whole
