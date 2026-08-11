@@ -106,6 +106,14 @@ read_globals = {
     "date", "GetTime", "GetGameTime", "GetFramerate", "GetNetStats",
     "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
 
+    -- Top bar rosters (Readouts.lua): class colour for the friends and guild
+    -- tooltips, and the Secret-value test that guards every field read off a
+    -- roster structure before it is used as a key or concatenated.
+    "issecretvalue",
+    "GetGuildInfo",
+    "C_CreatureInfo", "RAID_CLASS_COLORS",
+    "LOCALIZED_CLASS_NAMES_MALE", "LOCALIZED_CLASS_NAMES_FEMALE",
+
     -- Top bar: home (housing teleport + dashboard)
     "C_Housing", "HousingFramesUtil",
 

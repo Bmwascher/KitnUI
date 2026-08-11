@@ -358,29 +358,159 @@ local function FriendsCount()
     return wowOnline + bnetOnline
 end
 
+---------------------------------------------------------------------------------
+-- Class colour for the two rosters, and the guard that makes reading these
+-- fields safe.
+--
+-- ClubMemberInfo marks only `isSelf` and `faction` NeverSecret
+-- (ClubDocumentation.lua:1798, :1827). Every OTHER field of that structure may
+-- therefore arrive as a Secret value. A Secret cannot be used as a table key
+-- and cannot be concatenated -- both throw -- so nothing read off a roster
+-- structure reaches a lookup or a format string without passing Plain() first.
+-- FriendInfo (FriendListDocumentation.lua:602-616) and BNetGameAccountInfo
+-- (BattleNetDocumentation.lua:247-274) declare no Secret fields at all, but
+-- they go through the same gate: one rule kept everywhere is cheaper to keep
+-- true than three rules kept in three places.
+---------------------------------------------------------------------------------
+
+local function Plain(v)
+    if v == nil then return nil end
+    if issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
+-- The exact path: classID -> classFile -> RAID_CLASS_COLORS. Guild members and
+-- Battle.net friends both carry a numeric classID
+-- (ClubDocumentation.lua:1808, BattleNetDocumentation.lua:257), and
+-- C_CreatureInfo.GetClassInfo declares no SecretReturns
+-- (CreatureInfoDocumentation.lua:11-24), so no locale guessing is involved.
+local function ClassColorFromID(classID)
+    classID = Plain(classID)
+    if type(classID) ~= "number" then return nil end
+    local info = C_CreatureInfo and C_CreatureInfo.GetClassInfo and C_CreatureInfo.GetClassInfo(classID)
+    local file = info and Plain(info.classFile)
+    if type(file) ~= "string" then return nil end
+    local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[file]
+    if not c then return nil end
+    return c.r, c.g, c.b
+end
+
+-- The inexact path, and the only one available for a plain WoW friend:
+-- FriendInfo carries `className` and nothing else about class
+-- (FriendListDocumentation.lua:608), and that string is LOCALISED. Reversing
+-- the client's own localised tables is the standard answer and is correct in
+-- every language the client ships, because both sides come from the same
+-- client. It fails only where a locale gives two classes the same word, and
+-- then it fails to a plain white name rather than a wrong colour.
+--
+-- Built once on first use rather than at load: RAID_CLASS_COLORS and the
+-- LOCALIZED_CLASS_NAMES tables all exist by then, and a roster hover is the
+-- earliest anything here needs them.
+local localizedClassColor
+local function ClassColorFromLocalizedName(className)
+    className = Plain(className)
+    if type(className) ~= "string" or className == "" then return nil end
+    if not localizedClassColor then
+        localizedClassColor = {}
+        local function Absorb(tbl)
+            if type(tbl) ~= "table" then return end
+            for file, localized in pairs(tbl) do
+                local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[file]
+                if c and type(localized) == "string" then localizedClassColor[localized] = c end
+            end
+        end
+        Absorb(LOCALIZED_CLASS_NAMES_MALE)
+        Absorb(LOCALIZED_CLASS_NAMES_FEMALE)
+    end
+    local c = localizedClassColor[className]
+    if not c then return nil end
+    return c.r, c.g, c.b
+end
+
 local ROSTER_CAP = 40
+
+-- Both rosters render as two-column rows and both overflow the same way, so
+-- the row writer and the overflow line live here once. Counting CONTINUES past
+-- the cap rather than breaking, which is what lets the trailing line say how
+-- many were left out instead of the list simply stopping. NaowhUI's own bar
+-- does the same (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:
+-- 322-327, :346).
+local function NewRoster(tt)
+    local shown, hidden = 0, 0
+    return {
+        Row = function(left, right, r, g, b)
+            if shown < ROSTER_CAP then
+                tt:AddDoubleLine(left or "?", right or "", r or 1, g or 1, b or 1, 0.7, 0.7, 0.7)
+            else
+                hidden = hidden + 1
+            end
+            shown = shown + 1
+        end,
+        Finish = function()
+            if hidden > 0 then tt:AddLine(format("... and %d more", hidden), 0.5, 0.5, 0.5) end
+            return shown
+        end,
+    }
+end
+
+-- "80  Kitnpriest <AFK>". Level first so the names line up in a column, which
+-- is the shape NaowhUI's guild list uses and the reason it reads at a glance.
+local function RosterLabel(name, level, tag)
+    name = Plain(name)
+    if type(name) ~= "string" or name == "" then name = "?" end
+    -- A cross-realm name arrives as "Name-Realm"; the realm is already on the
+    -- right-hand column or irrelevant, and the full form pushes the columns apart.
+    name = name:match("[^%-]+") or name
+    level = Plain(level)
+    local prefix = ""
+    if type(level) == "number" and level > 0 then prefix = format("%d  ", level) end
+    return prefix .. name .. (tag or "")
+end
+
+-- One Battle.net game account, rendered. `acc` supplies the fallback label for
+-- a friend whose character name has not arrived yet.
+local function BNetRow(roster, acc, ga)
+    local name = Plain(ga.characterName)
+    if type(name) ~= "string" or name == "" then
+        name = Plain(acc.accountName) or Plain(acc.battleTag)
+    end
+    -- Only a WoW account has a class to colour. A friend sitting in another
+    -- Blizzard game keeps the plain white row and gets that game named on the
+    -- right, which is more useful than an area they do not have.
+    local r, g, b
+    local right
+    if Plain(ga.clientProgram) == "WoW" then
+        r, g, b = ClassColorFromID(ga.classID)
+        right = Plain(ga.areaName) or Plain(ga.realmDisplayName)
+    else
+        right = Plain(ga.clientProgram)
+    end
+    roster.Row(RosterLabel(name, ga.characterLevel), right, r, g, b)
+end
 
 local function BuildFriendsRoster(tt)
     local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
-    local rows = 0
+    local roster = NewRoster(tt)
 
     local numFriends = (C_FriendList and C_FriendList.GetNumFriends and C_FriendList.GetNumFriends()) or 0
     for i = 1, numFriends do
-        if rows >= ROSTER_CAP then break end
         local info = C_FriendList.GetFriendInfoByIndex and C_FriendList.GetFriendInfoByIndex(i)
         if info and info.connected and info.name then
-            rows = rows + 1
-            tt:AddLine(info.name, 1, 1, 1)
+            -- The localised path, because FriendInfo carries no classID.
+            local r, g, b = ClassColorFromLocalizedName(info.className)
+            local tag = (info.afk and "  |cff808080<AFK>|r")
+                or (info.dnd and "  |cff808080<DND>|r") or ""
+            roster.Row(RosterLabel(info.name, info.level, tag), Plain(info.area), r, g, b)
         end
     end
 
     -- Walks the same two shapes FriendsCount/BNetFriendRows walk, in the same
     -- order and under the same predicates, so the badge's number is the number
-    -- of lines below it -- up to ROSTER_CAP, which truncates the list only.
+    -- of rows counted here -- ROSTER_CAP truncates what is DRAWN, never what is
+    -- counted, and the overflow line accounts for the difference.
     local subAccounts = Get("tbFriendsSubAccounts", ns.EUI_DEFAULTS.tbFriendsSubAccounts) and true or false
     local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
     for i = 1, numBNet do
-        if rows >= ROSTER_CAP then break end
         local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
             and C_BattleNet.GetFriendAccountInfo(i)
         local gameInfo = accountInfo and accountInfo.gameAccountInfo
@@ -392,32 +522,32 @@ local function BuildFriendsRoster(tt)
             if n <= 0 then
                 -- Off, or no per-account list: the primary account is the one row.
                 if not inGameOnly or gameInfo.clientProgram == "WoW" then
-                    rows = rows + 1
-                    tt:AddLine(gameInfo.characterName or accountInfo.accountName
-                        or accountInfo.battleTag or "?", 1, 1, 1)
+                    BNetRow(roster, accountInfo, gameInfo)
                 end
             else
                 for j = 1, n do
-                    if rows >= ROSTER_CAP then break end
                     local sub = C_BattleNet.GetFriendGameAccountInfo
                         and C_BattleNet.GetFriendGameAccountInfo(i, j)
                     if sub and sub.isOnline and (not inGameOnly or sub.clientProgram == "WoW") then
-                        rows = rows + 1
-                        tt:AddLine(sub.characterName or accountInfo.accountName
-                            or accountInfo.battleTag or "?", 1, 1, 1)
+                        BNetRow(roster, accountInfo, sub)
                     end
                 end
             end
         end
     end
+
+    return roster.Finish()
 end
 
 -- Elements.lua's friends element hands its tooltip straight here.
 function ns.TopBar.FriendsTooltip(tt)
     if not tt then return end
     if not RosterReadable() then return end
-    -- A pcall failure here costs the tooltip, never the bar.
-    pcall(BuildFriendsRoster, tt)
+    -- A pcall failure here costs the tooltip, never the bar. An empty roster
+    -- says so rather than leaving a gap the reader has to interpret; a FAILED
+    -- one says nothing, because it does not know whether the list was empty.
+    local ok, shown = pcall(BuildFriendsRoster, tt)
+    if ok and shown == 0 then tt:AddLine("No friends online", 0.6, 0.6, 0.6) end
 end
 
 -- GetNumGuildMembers has no generated-doc entry (it predates the C_
@@ -481,14 +611,25 @@ local function BuildGuildRoster(tt)
     local online = CommunitiesUtil.GetOnlineMembers(infos)
     if type(online) ~= "table" then return end
 
-    local rows = 0
+    -- The guild's own name above the roster, the way NaowhUI heads its list.
+    -- GetGuildInfo is an old global with no generated-doc entry, so its return
+    -- goes through Plain() like every other roster read rather than being
+    -- trusted on the strength of its age.
+    local gname = GetGuildInfo and Plain(GetGuildInfo("player"))
+    if type(gname) == "string" and gname ~= "" then tt:AddLine(gname, 0.1, 1, 0.1) end
+
+    local roster = NewRoster(tt)
     for _, info in ipairs(online) do
-        if rows >= ROSTER_CAP then break end
         if info and info.name then
-            rows = rows + 1
-            tt:AddLine(info.name, 1, 1, 1)
+            local r, g, b = ClassColorFromID(info.classID)
+            -- ClubMemberPresence: 4 Away, 5 Busy (ClubDocumentation.lua:1674-1675).
+            local presence = Plain(info.presence)
+            local tag = (presence == 4 and "  |cff808080<AFK>|r")
+                or (presence == 5 and "  |cff808080<DND>|r") or ""
+            roster.Row(RosterLabel(info.name, info.level, tag), Plain(info.zone), r, g, b)
         end
     end
+    return roster.Finish()
 end
 
 -- Elements.lua's guild element hands its tooltip straight here. The throttled
@@ -499,7 +640,12 @@ function ns.TopBar.GuildTooltip(tt)
     if not tt then return end
     RequestGuildRoster()
     if not RosterReadable() then return end
-    pcall(BuildGuildRoster, tt)
+    -- Same split as the friends tooltip: an empty roster says so, a failed or
+    -- not-yet-ready one stays quiet. BuildGuildRoster also returns nothing on
+    -- its several early exits, which is why the test is `shown == 0` and not
+    -- `not shown`.
+    local ok, shown = pcall(BuildGuildRoster, tt)
+    if ok and shown == 0 then tt:AddLine("No guild members online", 0.6, 0.6, 0.6) end
 end
 
 -- Great Vault: C_WeeklyRewards.GetActivities() returns nothing useful before
