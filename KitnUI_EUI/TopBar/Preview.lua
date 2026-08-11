@@ -864,9 +864,10 @@ end
 -- of a rule the drop test does not follow.
 --
 -- Parented to previewWrap, which is UNSCALED, and given the boundary
--- positions converted into wrap space. A one-unit line on previewFrame would
--- be the same line in CONTENT space and would soften to two thirds of a pixel
--- at the worst-case fit; this one stays a crisp single pixel at any scale.
+-- positions converted into wrap space. A DIVIDER_W-wide line on previewFrame
+-- would be that many units in CONTENT space and would shrink by the fit scale,
+-- losing about a third of its width at the worst case; this one stays exactly
+-- DIVIDER_W physical pixels at any scale.
 --
 -- Hidden entirely when the clock is not drawn: with no centre occupant there
 -- is nothing between the two panels worth marking off. Note that the two

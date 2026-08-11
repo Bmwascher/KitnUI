@@ -314,35 +314,40 @@ end
 -- BattleNetDocumentation.lua:68-97); both mark only SecretArguments, which
 -- constrains what may be passed IN and says nothing about the returns.
 --
--- Returns the number of rows the roster below will list for one friend, so the
--- badge and the tooltip can never disagree about that friend.
-local function BNetFriendRows(i, inGameOnly, subAccounts)
+-- Returns `accountInfo` and the LIST of game accounts this friend contributes,
+-- in render order. The badge sums the list lengths and the roster renders the
+-- lists, so the two cannot drift: they are not two walks kept in step, they are
+-- one walk with two consumers.
+--
+-- tbFriendsSubAccounts expands a friend into their WoW accounts, and ONLY their
+-- WoW accounts -- that is what the switch says and what WindTools' own counter
+-- does (GameBar.lua:605-616 tallies `numWoWOnline` on `clientProgram == "WoW"`).
+-- Counting a friend's Heroes session as a second "sub account" would be a
+-- different promise than the one on the switch.
+--
+-- A friend with NO WoW account online is not erased by that filter: the switch
+-- has nothing to expand for them, so they fall through to the single row the
+-- off state would have given, which tbFriendsInGameOnly may then drop on its
+-- own terms. Without that fall-through, turning the switch on would silently
+-- hide every friend playing something else.
+local function BNetFriendAccounts(i, inGameOnly, subAccounts)
     local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
         and C_BattleNet.GetFriendAccountInfo(i)
     local gameInfo = accountInfo and accountInfo.gameAccountInfo
-    if not (gameInfo and gameInfo.isOnline) then return 0 end
+    if not (gameInfo and gameInfo.isOnline) then return nil, nil end
 
-    if not subAccounts then
-        if inGameOnly and gameInfo.clientProgram ~= "WoW" then return 0 end
-        return 1
-    end
-
-    local n = (C_BattleNet.GetFriendNumGameAccounts and C_BattleNet.GetFriendNumGameAccounts(i)) or 0
-    if n <= 0 then
-        -- No per-account list available: fall back to the primary, which is
-        -- the same row the off state would have counted.
-        if inGameOnly and gameInfo.clientProgram ~= "WoW" then return 0 end
-        return 1
-    end
-
-    local rows = 0
-    for j = 1, n do
-        local sub = C_BattleNet.GetFriendGameAccountInfo and C_BattleNet.GetFriendGameAccountInfo(i, j)
-        if sub and sub.isOnline and (not inGameOnly or sub.clientProgram == "WoW") then
-            rows = rows + 1
+    if subAccounts then
+        local n = (C_BattleNet.GetFriendNumGameAccounts and C_BattleNet.GetFriendNumGameAccounts(i)) or 0
+        local out = {}
+        for j = 1, n do
+            local sub = C_BattleNet.GetFriendGameAccountInfo and C_BattleNet.GetFriendGameAccountInfo(i, j)
+            if sub and sub.isOnline and sub.clientProgram == "WoW" then out[#out + 1] = sub end
         end
+        if #out > 0 then return accountInfo, out end
     end
-    return rows
+
+    if inGameOnly and gameInfo.clientProgram ~= "WoW" then return accountInfo, {} end
+    return accountInfo, { gameInfo }
 end
 
 local function FriendsCount()
@@ -353,7 +358,8 @@ local function FriendsCount()
     local bnetOnline = 0
     local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
     for i = 1, numBNet do
-        bnetOnline = bnetOnline + BNetFriendRows(i, inGameOnly, subAccounts)
+        local _, list = BNetFriendAccounts(i, inGameOnly, subAccounts)
+        if list then bnetOnline = bnetOnline + #list end
     end
     return wowOnline + bnetOnline
 end
@@ -500,15 +506,22 @@ local function BNetRow(roster, acc, ga)
         name = Plain(acc.accountName) or Plain(acc.battleTag)
     end
     -- Only a WoW account has a class to colour. A friend sitting in another
-    -- Blizzard game keeps the plain white row and gets that game named on the
-    -- right, which is more useful than an area they do not have.
+    -- Blizzard game keeps the plain white row and gets their rich presence on
+    -- the right instead of an area they do not have.
+    --
+    -- richPresence, NOT clientProgram. `clientProgram` is a program identifier
+    -- such as "Hero" or "CLNT" (Blizzard_SharedXML/AccountUtil.lua:1-4), fit
+    -- for keying an icon and not for showing a person. Blizzard's own friends
+    -- list renders rich presence in that slot
+    -- (Blizzard_FriendsFrame/Mainline/FriendsFrame.lua:1888-1894), which is
+    -- already localised and already says what they are doing.
     local r, g, b
     local right
     if Plain(ga.clientProgram) == "WoW" then
         r, g, b = ClassColorFromID(ga.classID)
         right = Plain(ga.areaName) or Plain(ga.realmDisplayName)
     else
-        right = Plain(ga.clientProgram)
+        right = Plain(ga.richPresence) or Plain(ga.clientProgram)
     end
     roster.Row(RosterLabel(name, ga.characterLevel), right, r, g, b)
 end
@@ -529,35 +542,17 @@ local function BuildFriendsRoster(tt)
         end
     end
 
-    -- Walks the same two shapes FriendsCount/BNetFriendRows walk, in the same
-    -- order and under the same predicates, so the badge's number is the number
-    -- of rows counted here -- ROSTER_CAP truncates what is DRAWN, never what is
-    -- counted, and the overflow line accounts for the difference.
+    -- The SAME call FriendsCount makes, over the same friend indices. The badge
+    -- sums these lists' lengths and this loop draws their contents, so the two
+    -- agree by construction rather than by two walks being kept in step.
+    -- ROSTER_CAP truncates what is DRAWN, never what is counted, and the
+    -- overflow line accounts for the difference.
     local subAccounts = Get("tbFriendsSubAccounts", ns.EUI_DEFAULTS.tbFriendsSubAccounts) and true or false
     local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
     for i = 1, numBNet do
-        local accountInfo = C_BattleNet and C_BattleNet.GetFriendAccountInfo
-            and C_BattleNet.GetFriendAccountInfo(i)
-        local gameInfo = accountInfo and accountInfo.gameAccountInfo
-        if accountInfo and gameInfo and gameInfo.isOnline then
-            local n = 0
-            if subAccounts and C_BattleNet.GetFriendNumGameAccounts then
-                n = C_BattleNet.GetFriendNumGameAccounts(i) or 0
-            end
-            if n <= 0 then
-                -- Off, or no per-account list: the primary account is the one row.
-                if not inGameOnly or gameInfo.clientProgram == "WoW" then
-                    BNetRow(roster, accountInfo, gameInfo)
-                end
-            else
-                for j = 1, n do
-                    local sub = C_BattleNet.GetFriendGameAccountInfo
-                        and C_BattleNet.GetFriendGameAccountInfo(i, j)
-                    if sub and sub.isOnline and (not inGameOnly or sub.clientProgram == "WoW") then
-                        BNetRow(roster, accountInfo, sub)
-                    end
-                end
-            end
+        local accountInfo, list = BNetFriendAccounts(i, inGameOnly, subAccounts)
+        if accountInfo and list then
+            for _, ga in ipairs(list) do BNetRow(roster, accountInfo, ga) end
         end
     end
 

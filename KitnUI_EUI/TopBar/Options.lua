@@ -110,7 +110,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- the two read alike for anyone who has used it there.
     local FRIENDS_SUBACCOUNTS = { type = "checkbox",
         text = "Count Sub Accounts",
-        tooltip = "Counts every WoW game account a Battle.net friend has online, rather than counting that friend once. Affects the number under the icon and the list in its tooltip together.",
+        tooltip = "Counts every WoW game account a Battle.net friend has online, rather than counting that friend once. Only WoW accounts are expanded: a friend playing something else still counts once. Affects the number under the icon and the list in its tooltip together.",
         getValue = function() return ns.TopBar.Get("tbFriendsSubAccounts") end,
         setValue = function(v)
             ns.TopBar.Set("tbFriendsSubAccounts", v and true or false); ns.TopBar.Apply()
