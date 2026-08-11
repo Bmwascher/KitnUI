@@ -36,8 +36,8 @@ local Get, Set = ns.TopBar.Get, ns.TopBar.Set
 
 -- Returns three arrays, always populated. A MISSING stored panel entry means
 -- the user has never arranged anything, so the registry default stands. An
--- EMPTY stored panel entry is a deliberate, legitimate layout (Task 4 lets a
--- drag empty a side) and must stand as empty, not fall back to the default.
+-- EMPTY stored panel entry is a deliberate layout -- a drag can empty a side --
+-- and must stand as empty, not fall back to the default.
 function ns.TopBar.Order()
     local s = S()
     local stored = s and s.tbOrder
@@ -90,7 +90,7 @@ local bar, leftPanel, centrePanel, rightPanel
 local fitPending = false
 local buttons = {}
 
--- Task 8 mouseover fade: the AnimationGroup/Animation pair, built once in
+-- Mouseover fade: the AnimationGroup/Animation pair, built once in
 -- EnsureCreated so PlayFade only ever has to Play() it.
 local fadeGroup, fadeAnim
 
@@ -100,9 +100,8 @@ local PAD = 8
 -- Button footprint around the icon texture, on top of tbIconSize.
 local BTN_PAD = 8
 
--- Icon rest tint and the hover tween. REST is flat white, matching NaowhUI's
--- own icon default. TWEEN_TIME is fixed by the design and deliberately not
--- exposed as a setting.
+-- Icon rest tint and the hover tween. TWEEN_TIME is fixed by the design and
+-- deliberately not exposed as a setting.
 local REST_R, REST_G, REST_B = 1, 1, 1
 local TWEEN_TIME = 0.2
 
@@ -155,10 +154,9 @@ local function TintTo(btn, tr, tg, tb)
     end)
 end
 
--- Mouseover fade (Task 8): an AnimationGroup, per the project's no-OnUpdate
--- rule's one stated exception. FROM is always the bar's live alpha, so a
--- fade interrupted mid-tween by the opposite hover restarts from where it
--- visually is rather than snapping.
+-- An AnimationGroup rather than an OnUpdate. FROM is always the bar's live
+-- alpha, so a fade interrupted mid-tween by the opposite hover restarts from
+-- where it visually is rather than snapping.
 local function PlayFade(toAlpha)
     if not (bar and fadeGroup and fadeAnim) then return end
     fadeGroup:Stop()
@@ -253,9 +251,8 @@ local function CreateElementButton(el)
 
     -- The tooltip contract, owned here so no element repeats it. An element's
     -- own tooltip function only adds lines. The one exception is the portals
-    -- launcher's own flyout buttons (Elements.lua:718-722), which own and
-    -- show a tooltip anchored ANCHOR_RIGHT for themselves -- those buttons
-    -- are not laid out by this file and never reach this OnEnter at all.
+    -- flyout's own buttons, which show their own tooltip -- they are not laid
+    -- out by this file and never reach this OnEnter.
     btn:SetScript("OnEnter", function(self)
         TintTo(self, AccentRGB())
         if not Get("tbTooltips", ns.EUI_DEFAULTS.tbTooltips) then return end
@@ -280,19 +277,16 @@ end
 
 local function EnsureCreated()
     if bar then return end
-    -- Strata MEDIUM, not exposed. Both references hardcode it and neither has
-    -- been asked for a control.
+    -- Strata MEDIUM, deliberately not exposed as a setting.
     bar = CreateFrame("Frame", "KitnUITopBar", UIParent)
     bar:SetFrameStrata("MEDIUM")
-    -- A saved pixel position can be stranded off-screen by a UI scale change,
-    -- past where Unlock Mode can reach it. NaowhUI shipped that bug and added
-    -- the clamp afterwards.
+    -- Without the clamp, a saved pixel position can be stranded off-screen by a
+    -- UI scale change, past where Unlock Mode can reach it.
     bar:SetClampedToScreen(true)
 
-    -- Mouseover fade (Task 8), built once here so PlayFade only ever has to
-    -- Play() it. Gated on tbFade inside the handlers, not here, matching how
-    -- the icon OnEnter/OnLeave elsewhere check tbTooltips rather than skip
-    -- wiring altogether.
+    -- The fade pair, built once here so PlayFade only ever has to Play() it.
+    -- Gated on tbFade inside the handlers, not here, matching how the icon
+    -- handlers check tbTooltips rather than skip wiring altogether.
     bar:EnableMouse(true)
     fadeGroup = bar:CreateAnimationGroup()
     fadeAnim  = fadeGroup:CreateAnimation("Alpha")
@@ -320,9 +314,9 @@ end
 -- Layout and width fit
 ---------------------------------------------------------------------------------
 
--- Symmetric auto width, taken from WindTools: the container is padded plus the
--- centre plus TWICE the wider side, so the clock stays optically screen-centred
--- even when the two sides hold different numbers of icons.
+-- Symmetric auto width: padding plus the centre plus TWICE the wider side, so
+-- the clock stays optically screen-centred even when the two sides hold
+-- different numbers of icons.
 local function FitBarWidth()
     if InCombatLockdown() then
         fitPending = true
@@ -331,10 +325,10 @@ local function FitBarWidth()
     fitPending = false
     local wide = math.max(leftPanel:GetWidth(), rightPanel:GetWidth())
     bar:SetWidth(PAD + centrePanel:GetWidth() + 2 * wide)
-    -- The bar had no height at all until this line. It gets one anchor point,
-    -- which derives none, so GetHeight() returned 0 and Unlock Mode's drag
-    -- region was zero pixels tall. Take the tallest panel: the centre one is
-    -- taller than the sides whenever the clock is larger than an icon.
+    -- The bar has one anchor point, which derives no height, so without this
+    -- GetHeight() is 0 and Unlock Mode's drag region is zero pixels tall. Take
+    -- the tallest panel: the centre one is taller than the sides whenever the
+    -- clock is larger than an icon.
     bar:SetHeight(math.max(leftPanel:GetHeight(),
                            centrePanel:GetHeight(),
                            rightPanel:GetHeight()))
@@ -366,10 +360,7 @@ local function ApplyPanelColors()
 end
 
 -- Nil-guarded: Readouts.lua produces this, and it owns both the clock
--- FontString (attached to the "clock" element's own button) and the FPS/MS
--- readout's font, sized from tbClockSize / tbSysSize. Calling it here, rather
--- than adding a new line to Apply(), is what lets Task 4 land without
--- touching the funnel.
+-- FontString and the FPS/MS readout's font, sized from tbClockSize/tbSysSize.
 local function ApplyFonts()
     if ns.TopBar.ApplyReadoutFonts then ns.TopBar.ApplyReadoutFonts() end
 end
@@ -390,9 +381,9 @@ local function ApplyIconColors()
     end
 end
 
--- Rest-state reconciliation for the mouseover fade (Task 8): runs on every
--- Apply so switching tbFade off, or changing it while the pointer is
--- elsewhere, snaps the bar back to visible instead of waiting for a hover.
+-- Rest-state reconciliation for the mouseover fade: runs on every Apply so
+-- switching tbFade off, or changing it while the pointer is elsewhere, snaps
+-- the bar back to visible instead of waiting for a hover.
 local function ApplyFade()
     if not bar then return end
     if fadeGroup then fadeGroup:Stop() end
@@ -427,8 +418,7 @@ local function ApplyPosition()
         bar:SetPoint(pos.point or "TOP", UIParent, pos.relPoint or "TOP", pos.x or 0, pos.y or 0)
     else
         -- The default position, used when tbPos has never been written and by
-        -- ResetPositions. Flush to the top edge, matching
-        -- References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:212-214.
+        -- ResetPositions. Flush to the top edge.
         bar:SetPoint("TOP", UIParent, "TOP", 0, 0)
     end
 end
@@ -448,9 +438,9 @@ local function WireSecureAttributes()
 end
 
 -- Positions the visible buttons of one panel left-to-right from its own LEFT
--- edge, skipping any id with no matching definition (Tasks 4-7 still owe
--- several), any id switched off via tbOff, and any element whose `requires`
--- says no (kitnessentials absent, not greyed out, when it is not loaded).
+-- edge, skipping any id with no matching definition, any id switched off via
+-- tbOff, and any element whose `requires` says no (kitnessentials is absent,
+-- not greyed out, when it is not loaded).
 local function LayoutSide(panel, order, size, spacing)
     local x, tallest = 0, size
     for _, id in ipairs(order) do
@@ -515,16 +505,14 @@ local function HideBar()
 end
 
 ---------------------------------------------------------------------------------
--- Visibility (Task 8)
+-- Visibility
 ---------------------------------------------------------------------------------
 
 -- Own frame and own pending flag, deliberately separate from deferFrame/
--- pendingApply below: registering (or re-Show()ing after an unregister)
--- performs a Show()/Hide() on `bar` immediately and on the caller's own
--- taint (SecureStateDriver.lua:26-28 -> :8-13 -> the "setstate" branch of
--- SecureStateDriverManager_OnAttributeChanged at :157-165 calls
--- resolveDriver() synchronously, which at :98-104 calls frame:Show()/
--- Hide()), so it must queue its own retry rather than share Apply()'s.
+-- pendingApply below: registering a state driver (or re-Show()ing after an
+-- unregister) performs a Show()/Hide() on `bar` synchronously and on the
+-- caller's own taint, so it must queue its own retry rather than share
+-- Apply()'s.
 local visibilityPending = false
 local visibilityEvents = CreateFrame("Frame")
 visibilityEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -553,19 +541,14 @@ local function SeriousContent()
     if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive
        and C_ChallengeMode.IsChallengeModeActive() then return true end
 
-    -- RATED, not "any arena". Two separate mistakes are being avoided here.
-    --
-    -- First, branching on the "arena" instance type would catch skirmishes.
-    --
-    -- Second, and less obvious: IsRatedArena() ALONE still catches them.
-    -- Blizzard's own match code reads `IsRatedArena() and not IsArenaSkirmish()`
-    -- at .wow-api-reference/Interface/AddOns/Blizzard_PVPMatch/PVPMatchUtil.lua:
-    -- 88-90, so the skirmish exclusion is not belt and braces, it is the
-    -- actual semantics.
+    -- RATED, not "any arena", and two mistakes are avoided here. Branching on
+    -- the "arena" instance type would catch skirmishes; less obviously, so does
+    -- IsRatedArena() ALONE. Blizzard's own match code reads
+    -- `IsRatedArena() and not IsArenaSkirmish()`, so the skirmish exclusion is
+    -- the actual semantics, not belt and braces.
     --
     -- IsArenaSkirmish is a GLOBAL, not a C_PvP member. Reaching for
-    -- C_PvP.IsArenaSkirmish yields nil, the exclusion silently never fires, and
-    -- the bug this guard exists to prevent comes straight back.
+    -- C_PvP.IsArenaSkirmish yields nil and the exclusion silently never fires.
     local P = _G.C_PvP
     if P then
         local skirmish = _G.IsArenaSkirmish and _G.IsArenaSkirmish()
@@ -579,8 +562,7 @@ local function SeriousContent()
     return false
 end
 
--- Built, not typed. WindTools exposes the raw conditional in a text box and it
--- is the ugliest control on its page.
+-- Built from the switches, never typed by the user.
 local function BuildConditional()
     local hide = {}
     if Get("tbHideCombat", false)    then hide[#hide + 1] = "combat"    end
@@ -591,22 +573,15 @@ local function BuildConditional()
     return "[" .. table.concat(hide, "][") .. "] hide; show"
 end
 
--- The funnel's one Task 8 hook (Apply() calls this already, gated behind
--- Apply()'s own combat check, so that call site never runs in combat).
--- Also called directly by the event frame below, which CAN fire mid-combat
--- (a keystone completing mid-fight is the normal case, not the edge case).
+-- Called from Apply(), behind Apply()'s own combat check, and directly by the
+-- event frame below, which CAN fire mid-combat -- a keystone completing during a
+-- fight is the normal case, not the edge case.
 --
 -- NONE of RegisterStateDriver, UnregisterStateDriver or bar:Show() are
 -- combat-safe from here, so all three sit behind the gate. UnregisterStateDriver
--- looked safe at first (it only reaches the "setstate" branch's values=="" path,
--- SecureStateDriver.lua:159-161, which never calls resolveDriver) but
--- UnregisterAttributeDriver sets "setframe" FIRST (:16-23), and that branch of
--- SecureStateDriverManager_OnAttributeChanged calls SecureStateDriverManager:Show()
--- unconditionally (:150-154) -- on OUR taint, since we are the one calling
--- SetAttribute. SecureStateDriverManager is itself a SecureFrameTemplate frame
--- (:178), and SecureFrameTemplate is protected="true" (Blizzard_FrameXML/
--- SecureTemplatesBase.xml:4), so that Show() is a protected call and fails in
--- combat exactly like bar:Show()/Hide() would.
+-- looks safe and is not: UnregisterAttributeDriver sets "setframe" first, and
+-- that branch calls Show() on Blizzard's own SecureStateDriverManager -- a
+-- protected frame -- on OUR taint, because we are the one calling SetAttribute.
 function ns.TopBar.ApplyVisibility()
     if not bar then return end
     -- A disabled bar keeps its frame alive for the rest of the session --
@@ -620,26 +595,21 @@ function ns.TopBar.ApplyVisibility()
     if not ns.TopBar.Enabled() then return end
     ApplyFade()
 
-    -- THE FPS/MS READOUT IS DELIBERATELY NOT DRIVEN. It follows the bar, but it
-    -- follows it from Readouts.lua's OnShow/OnHide hooks on this frame, and the
-    -- reason is worth stating because a second state driver looks like the
-    -- tidier answer and is not.
+    -- THE FPS/MS READOUT IS DELIBERATELY NOT DRIVEN. It follows the bar through
+    -- Readouts.lua's OnShow/OnHide hooks on this frame instead, because a second
+    -- state driver looks tidier and is not.
     --
-    -- A driver, once registered, is re-resolved by Blizzard's own 0.2s tick for
-    -- as long as it is registered, and a `show` result calls frame:Show()
-    -- unconditionally, with no change test
-    -- (Blizzard_RestrictedAddOnEnvironment/SecureStateDriver.lua:62, :92-102,
-    -- :117-124). Releasing a driver is protected. Put those together: the user
-    -- switches the readout OFF during combat, Apply()'s first half hides it, and
-    -- Apply then bails at the combat gate before this function can release the
-    -- driver -- so the next tick shows the readout straight back and it stays up
+    -- A registered driver is re-resolved by Blizzard's 0.2s tick, and a `show`
+    -- result calls frame:Show() unconditionally with no change test. Releasing a
+    -- driver is protected. So: the user switches the readout off during combat,
+    -- Apply()'s first half hides it, Apply bails at the combat gate before the
+    -- driver can be released, and the next tick shows the readout straight back
     -- for the rest of the fight. The off switch has to outrank every visibility
-    -- rule, and a driver cannot be taken away at the moment it needs to be.
+    -- rule, and a driver cannot be taken away when it needs to be.
     --
-    -- Following the bar's shown state instead has none of that: showing and
-    -- hiding an unprotected frame from Lua is safe in combat, so the decision
-    -- always lands when it is made. It is also not a second RULE that could
-    -- drift from this one -- it reads the outcome of this one.
+    -- Following the bar's shown state has none of that: showing and hiding an
+    -- unprotected frame is safe in combat, so the decision lands when it is made,
+    -- and it reads the outcome of this rule rather than being a second one.
     local cond = BuildConditional()
     if cond == "show" then
         -- No driver needed for a plain "show": Blizzard's own 0.2s tick
@@ -701,13 +671,12 @@ function ns.TopBar.Apply()
     --
     -- Running it here means it can be reached BEFORE the bar exists, on the
     -- enabled-in-combat path. UpdateTicker must therefore cancel unconditionally
-    -- when disabled but start only once the readout exists. See Task 4.
+    -- when disabled but start only once the readout exists.
     if ns.TopBar.UpdateTicker then ns.TopBar.UpdateTicker() end
 
     -- CREATION IS PROTECTED, so it cannot happen before the gate. Once the bar
     -- parents secure buttons, creating more of them in combat is unsafe, and so
-    -- is hiding the bar. NaowhUI returns early when its bar does not exist
-    -- rather than building one from the apply path; do the same.
+    -- is hiding the bar.
     if not bar then
         -- Enabled check first: a disabled bar that does not exist has nothing to
         -- defer, and deferring it would arm the queue for no reason.
@@ -742,8 +711,6 @@ function ns.TopBar.Apply()
     -- Half two: every line below is protected.
     ApplySize()
     ApplyPosition()
-    -- Namespaced and nil-guarded: Task 8 produces ns.TopBar.ApplyVisibility, and
-    -- this task ships before it. A bare local call would be nil until then.
     if ns.TopBar.ApplyVisibility then ns.TopBar.ApplyVisibility() end
     WireSecureAttributes()
     LayoutPanels()
@@ -777,10 +744,9 @@ function ns.TopBar.ResetPositions()
     ns.TopBar.Apply()
 end
 
--- Reset/uninstall teardown (Task 9). Order is load-bearing: EllesmereUI's own
--- FPS counter comes back FIRST, before anything else comes down, so a caller
--- that throws partway through never strands the counter hidden with no bar
--- left to give it back.
+-- Reset/uninstall teardown. Order is load-bearing: EllesmereUI's own FPS counter
+-- comes back FIRST, so a caller that throws partway through never strands the
+-- counter hidden with no bar left to give it back.
 function ns.TopBar.Teardown()
     -- 1. Nil-guarded: Readouts.lua may not have loaded.
     if ns.TopBar.SuppressEUIFps then ns.TopBar.SuppressEUIFps(false) end
@@ -828,13 +794,11 @@ local function RegisterUnlock()
             -- overwritten by the next one.
             noResize = true,
             isHidden = function() return not ns.TopBar.Enabled() end,
-            -- Deliberately does NOT create. EllesmereUI's ApplySavedPositions calls
-            -- this unconditionally on login and every zone change, before its own
-            -- combat gate and without consulting isHidden (EUI_UnlockMode.lua:4271-
-            -- 4276). Creating here would build the bar and its secure buttons for a
-            -- user who has the feature switched off, and would do it in combat.
-            -- Apply() owns creation. The `key` argument is unused: this element is
-            -- a singleton.
+            -- Deliberately does NOT create. EllesmereUI calls this
+            -- unconditionally on login and every zone change, before its own
+            -- combat gate and without consulting isHidden, so creating here
+            -- would build the bar and its secure buttons in combat for a user
+            -- who has the feature switched off. Apply() owns creation.
             getFrame = function() return bar end,
             getSize = function()
                 if not bar then return 1, 1 end
