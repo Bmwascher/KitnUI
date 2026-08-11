@@ -90,7 +90,20 @@ function ns.GetOutdatedAddons()
         local current = C_AddOns.GetAddOnMetadata(addonName, header)
         local hasProfile = ns.db.profiles and ns.db.profiles[addonKey]
 
-        if installed and current and installed ~= current then
+        -- An addon whose payload is empty can never be imported, so reporting it
+        -- outdated creates a prompt nothing can clear: the wizard skips a dormant
+        -- step when building its pages, the version is never re-stamped, and the
+        -- popup returns on every login. Checked on BOTH branches -- it used to
+        -- guard only the never-imported one, which left a dormant addon with an
+        -- older stored version stuck in exactly that loop.
+        local payload = ns.data[addonKey]
+        local emptyPayload = payload == nil
+            or (type(payload) == "string" and strtrim(payload) == "")
+            or (type(payload) == "table" and not next(payload))
+
+        if emptyPayload then -- luacheck: ignore 542
+            -- nothing to offer; fall through to the next addon
+        elseif installed and current and installed ~= current then
             outdated[#outdated + 1] = {
                 key = addonKey,
                 oldVersion = installed,
@@ -98,18 +111,11 @@ function ns.GetOutdatedAddons()
                 isNew = false,
             }
         elseif not hasProfile and current then
-            local hasData = ns.data[addonKey]
-            if hasData then
-                local empty = (type(hasData) == "string" and strtrim(hasData) == "")
-                    or (type(hasData) == "table" and not next(hasData))
-                if not empty then
-                    outdated[#outdated + 1] = {
-                        key = addonKey,
-                        newVersion = current,
-                        isNew = true,
-                    }
-                end
-            end
+            outdated[#outdated + 1] = {
+                key = addonKey,
+                newVersion = current,
+                isNew = true,
+            }
         end
     end
     return outdated

@@ -237,7 +237,15 @@ local function ImportBigWigsBosses()
     if type(bossString) ~= "string" or strtrim(bossString) == "" then return end
     if not (BigWigsAPI and BigWigsAPI.ImportBossOptions) then return end
 
-    pcall(BigWigsAPI.ImportBossOptions, ns.title, bossString)
+    -- The failure is REPORTED, not swallowed. CompleteSetup stamps the addon
+    -- version straight after this returns, so a silent failure would look like a
+    -- clean install for the rest of that version's life and leave nothing to
+    -- diagnose from.
+    local ok, err = pcall(BigWigsAPI.ImportBossOptions, ns.title, bossString)
+    if not ok then
+        print(ns.title .. ": BigWigs boss settings could not be imported. The main "
+            .. "BigWigs profile installed normally. " .. tostring(err))
+    end
 end
 
 setupFunctions["BigWigs"] = function(addonKey, import)
@@ -778,8 +786,9 @@ function ns.FinishInstallation()
     -- the character's chat windows before rebuilding them, and FinishInstallation
     -- also ends the install and update runs -- so without this gate every /kitn
     -- update would silently wipe the chat layout of anyone who once pressed the
-    -- button. Install and update runs reach the Extras page anyway, where
-    -- pressing Chat Setup is the user's own deliberate act.
+    -- button. Only a plain install reaches the Extras page (Installer.lua:695-
+    -- 696); update must never replay a destructive action the user did not ask
+    -- for on that run.
     if ns.installerIsLoadMode and ns.db.extras and ns.db.extras.chat
         and ns.RunChatSetup then
         ns.RunChatSetup()

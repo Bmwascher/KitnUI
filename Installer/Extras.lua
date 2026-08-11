@@ -115,8 +115,16 @@ end
 -- the fallback for someone who ran the Extras button without importing the
 -- layout, not the authority.
 
--- The docked tab set, left to right. ChatFrame3 (Voice) is absent ON PURPOSE:
--- it is Blizzard's, it ships undocked and closed, and that is where it belongs.
+-- The docked tab set, left to right, plus one repair entry.
+--
+-- ChatFrame3 (Voice) IS listed, with no dock and no name. FCF_ResetChatWindows
+-- clears the message groups of every frame except ChatFrame1
+-- (.wow-api-reference/Interface/AddOns/Blizzard_ChatFrameBase/Mainline/
+-- FloatingChatFrame.lua:1681-1696), which takes VOICE_TEXT off the Voice tab.
+-- Putting it back is all this entry does: no dock, because Voice is undocked by
+-- default, and no name, because Blizzard's own name for it is localized and the
+-- reset already restored it (FloatingChatFrame.lua:806-812 fills an empty name
+-- from the frame ID).
 --
 -- `groups` are message groups (SAY, GUILD, LOOT) -- global constant names, set
 -- wholesale so a second run cannot drift.
@@ -156,6 +164,10 @@ local CHAT_WINDOWS = {
         },
     },
     {
+        reserved = "ChatFrame3",
+        groups = { "VOICE_TEXT" },
+    },
+    {
         name = "Whisper", dock = 3,
         groups = { "WHISPER", "CHANNEL", "BN_WHISPER" },
     },
@@ -182,9 +194,9 @@ local function FindChatWindow(name)
 end
 
 -- Reserved windows are always the same frame. Everything else is found by name
--- or opened. FCF_OpenNewWindow's return is read defensively: its callers in
--- Blizzard_Communities treat it as the new frame, but the function body writes
--- no return, so fall back to the index it was about to fill.
+-- or opened. FCF_OpenNewWindow returns the new frame and its index
+-- (FloatingChatFrame.lua:568); the index captured before the call is kept only
+-- as a fallback for a build where that return goes away.
 local function EnsureChatWindow(entry)
     if entry.reserved then return _G[entry.reserved] end
 
@@ -205,7 +217,9 @@ local function ApplyChatWindow(entry)
     local cf = EnsureChatWindow(entry)
     if not cf then return end
 
-    if FCF_SetWindowName then FCF_SetWindowName(cf, entry.name) end
+    -- No name means leave the tab's own name alone. Only the Voice repair entry
+    -- does that, and only because its name is localized.
+    if entry.name and FCF_SetWindowName then FCF_SetWindowName(cf, entry.name) end
 
     if cf.RemoveAllMessageGroups and cf.AddMessageGroup then
         cf:RemoveAllMessageGroups()
@@ -224,8 +238,11 @@ local function ApplyChatWindow(entry)
         end
     end
 
-    -- FCF_DockFrame returns early on an already-docked frame, so this only ever
-    -- acts on a window this run just opened.
+    -- Normally dead, and kept anyway. FCF_OpenNewWindow already docks what it
+    -- opens, at the end of the strip (FloatingChatFrame.lua:565), which lands
+    -- these entries in list order because ChatFrame3 stays undocked. This is the
+    -- fallback for a window that arrived some other way; FCF_DockFrame returns
+    -- early on an already-docked frame, so the normal path costs nothing.
     if entry.dock and not cf.isDocked and FCF_DockFrame then
         FCF_DockFrame(cf, entry.dock, false)
     end
