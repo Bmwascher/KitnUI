@@ -282,7 +282,15 @@ local function SimpleInstallPage(addonKey, displayName)
         ShowStatusAndVersion(addonKey)
         ns.Wizard:SetOption(1, "Install", function()
             ConfirmImport(addonKey, displayName, function()
-                ns.SetupAddon(addonKey, true)
+                -- `== false`, never `not`: a setup function that succeeded
+                -- returns nothing, so a plain truth test would report every
+                -- successful step as a failure. Only an EXPLICIT false is a
+                -- refusal, which is what stops a failed import being announced
+                -- as a successful one.
+                if ns.SetupAddon(addonKey, true) == false then
+                    ShowInstallToast(displayName .. " import failed", 1, 0.2, 0.2)
+                    return
+                end
                 ShowStatusAndVersion(addonKey)
                 SuccessToast(displayName, "imported!")
                 PlayInstallSound()

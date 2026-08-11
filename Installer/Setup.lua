@@ -583,13 +583,29 @@ setupFunctions["Baganator"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No Baganator data found.")
-            return
+            return false
+        end
+
+        local src = ns.data[addonKey]
+
+        -- Decode BEFORE touching BAGANATOR_CONFIG, and bail on failure the same
+        -- way the NSRT decode above does. Both view modes ship as "category", so
+        -- a profile written without its category groups is a broken bag display
+        -- -- and writing one would replace a good existing profile, activate it,
+        -- and stamp the install as done.
+        local decoded
+        if type(src.categoriesJSON) == "string" and strtrim(src.categoriesJSON) ~= "" then
+            local err
+            decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
+            if not decoded then
+                print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
+                return false
+            end
         end
 
         BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
         BAGANATOR_CONFIG.Profiles = BAGANATOR_CONFIG.Profiles or {}
 
-        local src = ns.data[addonKey]
         local profile = {}
 
         -- Copy the non-JSON fields (view modes, seen_welcome) into the profile.
@@ -599,15 +615,9 @@ setupFunctions["Baganator"] = function(addonKey, import)
             end
         end
 
-        -- Decode the category groups and merge them into the profile.
-        if type(src.categoriesJSON) == "string" and strtrim(src.categoriesJSON) ~= "" then
-            local decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
-            if decoded then
-                for k, v in pairs(decoded) do
-                    profile[k] = v
-                end
-            else
-                print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
+        if decoded then
+            for k, v in pairs(decoded) do
+                profile[k] = v
             end
         end
 
