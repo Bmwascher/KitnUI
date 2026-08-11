@@ -497,13 +497,21 @@ local function NewRoster(tt)
                 return a.seq < b.seq
             end)
             local shown, hidden = 0, 0
+            local anyHeaded = false
             for _, grp in ipairs(order) do
                 local headed = false
                 for _, row in ipairs(grp.rows) do
                     if shown < ROSTER_CAP then
                         if grp.label and not headed then
+                            -- A blank line BETWEEN sections, never above the
+                            -- first one: a gap at the top of the list would
+                            -- read as a rendering fault rather than as spacing.
+                            -- Written only when a heading is actually about to
+                            -- be drawn, so a group that exists but is entirely
+                            -- past the cap cannot leave a gap behind nothing.
+                            if anyHeaded then tt:AddLine(" ") end
                             tt:AddLine(grp.label, 0.6, 0.6, 0.6)
-                            headed = true
+                            headed, anyHeaded = true, true
                         end
                         tt:AddDoubleLine(row[1], row[2], row[3], row[4], row[5], 0.7, 0.7, 0.7)
                         shown = shown + 1
