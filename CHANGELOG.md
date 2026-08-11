@@ -3,9 +3,12 @@
 ## v2.0.0
 
 ### EllesmereUI Rework
-- **NEW:** KitnUI now installs **EllesmereUI** profiles instead of ElvUI — EllesmereUI is the required dependency and the base UI it imports (**Dark Mode** / **Class Color**, with healer specs auto-swapping to a dedicated healer layout)
+- **NEW:** KitnUI now installs **EllesmereUI** profiles instead of ElvUI — EllesmereUI is the required dependency and the base UI it imports
+- **NEW:** One profile instead of a set — every spec, healer included, is baked into a single import, and the **Dark** / **Colored** looks are a preset you switch in KitnUI's own tab
 - **NEW:** Rebuilt the installer as a single-window, EllesmereUI-skinned wizard on custom KitnUI background art, replacing the old page-by-page flow
-- Trimmed the companion set to Plater, BuffReminders, BigWigs, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode, and per-spec Blizzard CDM (dropped Details, WarpDeplete, MRT, Ayije CDM, Baganator)
+- Trimmed the companion set to BuffReminders, BigWigs, Northern Sky Raid Tools, KitnEssentials, Baganator, Blizzard Edit Mode, and per-spec Blizzard CDM (dropped Details, WarpDeplete, MRT, Ayije CDM)
+- BigWigs now imports its per-boss settings alongside the main profile
+- Plater is dormant, not removed — no Plater profile is offered, but `/kitn load` still reactivates one installed by an earlier version
 
 ### Top Bar
 - **NEW:** KitnUI now draws its own top bar, with a clock, an FPS/latency readout, and a row of one-click launchers down each side (Group Finder, Encounter Journal, Achievements, Collections, Toy Box, Character, Spellbook, Talents, Professions, Volume, EllesmereUI settings, KitnEssentials, Game Menu, and more)
@@ -17,13 +20,22 @@
 - Optional mouseover fade, resting the bar at low visibility until your mouse moves over it
 - Draggable anywhere on screen from EllesmereUI's Unlock Mode
 
+### Settings Tab
+- **NEW:** A KitnUI tab inside EllesmereUI's config panel, with four pages: General, Gameplay, Nameplates and Top Bar
+- **NEW:** **Lulu Mode** — an alternate layout with a round minimap, Blizzard's own action bars, and its own Edit Mode layout; it asks first, then reloads, and hands everything back when you switch it off
+- **NEW:** **Beginner Mode** — tooltips, keybinds and key-press highlights on the Cooldown Manager, with Action Bars 1, 2, 3 and 5 always visible
+- **NEW:** KitnUI target arrows for nameplates, with an optional additive glow
+- **NEW:** Optional KitnUI pink accent for EllesmereUI, kept off the quest tracker, Mythic+ timer, damage meter and Friends tab
+- Combat tooltip hiding, either for every tooltip or for Cooldown Manager tooltips alone
+
 ### Installer
 - **NEW:** Clickable step sidebar with real per-profile import state (green check = actually imported) and a highlighted current step — click any step to jump straight to it and (re)install a single profile
-- **NEW:** Active-variant indicator marks which EllesmereUI color mode is currently live
+- **NEW:** Active-variant indicator marks which EllesmereUI look is currently live
 - **NEW:** Extras page — optional one-click chat setup, KitnEssentials settings optimization, and companion minimap-icon cleanup
 - **NEW:** Finish summary recaps which profiles were imported, which were skipped, and which extras were run
+- CDM layouts are now tracked per spec by content, not by a single version number — editing one spec's layout no longer prompts you to reimport the rest, and a layout imported by an older version is reported as untracked rather than up to date
 - Traffic-light status (Imported / Update available / Not Imported) backed by date-based profile versioning
-- Esc closes the installer; the `/kitn` command set is unchanged
+- Esc closes the installer; the `/kitn` command set gains `/kitn options`
 
 ---
 
