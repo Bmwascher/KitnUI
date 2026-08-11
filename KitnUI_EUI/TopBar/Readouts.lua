@@ -371,9 +371,40 @@ end
 -- Hooked LAZILY rather than at file load: the bridge is assigned during the
 -- minimap module's own init, and this file cannot assume that has happened yet.
 -- The flag makes every later pass a single table read.
+--
+-- THE BRIDGE ALONE IS NOT ENOUGH, and the reason generalises. hooksecurefunc
+-- wraps a GLOBAL, so it only ever sees calls made THROUGH that global; the
+-- host's own internal calls to the same function go straight past it. That is
+-- reachable today: in combat the host's apply refuses outright and merely
+-- queues (EllesmereUIMinimap.lua:4056-4058), so our hook fires with nothing
+-- built yet; when the fight ends the host's own frame calls ApplyAll()
+-- (:233-239), which calls its LOCAL ApplyMinimap upvalue (:5194-5195) rather
+-- than the published bridge. The readout the user enabled mid-fight is created
+-- there, our hook never fires again, and nothing else reconciles -- so it would
+-- sit beside ours for good. The regen retry below is what closes that.
 local minimapApplyHooked
+local minimapRegenFrame
+-- Forward-declared: the retry frame's handler calls it, and it is defined below.
+local RefreshMinimapSuppression
 
-local function RefreshMinimapSuppression()
+local function ArmMinimapRegenRetry()
+    if not minimapRegenFrame then
+        minimapRegenFrame = CreateFrame("Frame")
+        minimapRegenFrame:SetScript("OnEvent", function(self)
+            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            -- NEXT frame, not this one. The host flushes its deferred apply from
+            -- its OWN PLAYER_REGEN_ENABLED handler, and the order two addons'
+            -- handlers run in is not defined. Waiting a frame means we read the
+            -- result of that flush instead of racing it.
+            C_Timer.After(0, RefreshMinimapSuppression)
+        end)
+    end
+    -- Re-registering an event already registered is a no-op, so this coalesces
+    -- a burst of applies in one fight down to a single retry on its own.
+    minimapRegenFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+function RefreshMinimapSuppression()
     local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
     local ourClock = barFrame and barFrame:IsShown() and not ns.TopBar.IsOff("clock")
     local ourFps   = sysFrame and sysFrame:IsShown() and true or false
@@ -389,6 +420,10 @@ local function RefreshMinimapSuppression()
         -- apply finish and reads the result.
         hooksecurefunc("_EMM_ApplyMinimap", function()
             C_Timer.After(0, RefreshMinimapSuppression)
+            -- That next-frame pass reads nothing useful if the host refused the
+            -- apply and queued it instead, so arm the post-combat retry too.
+            -- Both are cheap and the pair covers either outcome.
+            if InCombatLockdown() then ArmMinimapRegenRetry() end
         end)
     end
 end
