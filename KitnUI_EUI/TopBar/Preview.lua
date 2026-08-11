@@ -19,6 +19,8 @@ local previewStage       -- UNSCALED. The backdrop the bar centres on, parented
                           -- hintText already is.
 local hintText            -- parented to the HEADER frame, never previewFrame or
                           -- previewWrap. Built once in BuildPreviewHeader.
+local dividerL, dividerR  -- UNSCALED. The two zone dividers, parented to
+                          -- previewWrap. See LayoutDividers.
 local availW              -- usable width, cached from the last BuildPreviewHeader
                           -- call so a settings-driven PreviewRefresh (which gets
                           -- no width argument) can still fit against it.
@@ -82,7 +84,10 @@ local CLOCK_PAD = 6
 -- width.
 local CLOCK_STRING_24H = "23:59"
 local CLOCK_STRING_12H = "12:59 PM"
-local FPS_STRING       = "999 fps  999 ms"
+-- Widest plausible readout, used to MEASURE the fps slot. Must keep the same
+-- case as the real string Readouts.lua:158 builds, or the measurement is of a
+-- string the bar never draws.
+local FPS_STRING       = "999 FPS  999 MS"
 
 -- Vertical gap between the icon row and the FPS text under the clock, and
 -- between the preview and the hint line below it. Not part of any width/scale
@@ -850,6 +855,47 @@ local function LayoutFps(centerX, topY, sysSize)
     return h
 end
 
+-- The two zone dividers: one between the left launcher panel and the clock,
+-- one between the clock and the right panel. They show the user where the
+-- three drag zones actually are, which is why they are placed on
+-- FindDragTarget's OWN boundaries (boundaryLC/boundaryCR, :267-268) rather
+-- than merely near them -- a divider drawn anywhere else would be a picture
+-- of a rule the drop test does not follow.
+--
+-- Parented to previewWrap, which is UNSCALED, and given the boundary
+-- positions converted into wrap space. A one-unit line on previewFrame would
+-- be the same line in CONTENT space and would soften to two thirds of a pixel
+-- at the worst-case fit; this one stays a crisp single pixel at any scale.
+--
+-- Hidden entirely when the clock is not drawn: with no centre occupant there
+-- is no centre zone to divide, and FindDragTarget's own boundaries collapse
+-- onto each other.
+local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
+    if not previewWrap then return end
+    if not dividerL then
+        dividerL = previewWrap:CreateTexture(nil, "ARTWORK")
+        dividerR = previewWrap:CreateTexture(nil, "ARTWORK")
+    end
+    if not (dividerL and dividerR) then return end
+
+    if not hasClock then
+        dividerL:Hide()
+        dividerR:Hide()
+        return
+    end
+
+    local h = math.max(1, rowH * scale)
+    for _, tex in ipairs({ dividerL, dividerR }) do
+        tex:SetColorTexture(1, 1, 1, 0.10)
+        tex:SetSize(1, h)
+        tex:ClearAllPoints()
+    end
+    dividerL:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryLC * scale, 0)
+    dividerR:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryCR * scale, 0)
+    dividerL:Show()
+    dividerR:Show()
+end
+
 -- The whole layout pass: slot rows, the fit scale, and the hint line. Returns
 -- the total header height in the PARENT's coordinate space (Step 5). Shared
 -- by BuildPreviewHeader (the cold mount) and PreviewRefresh (every later
@@ -927,6 +973,13 @@ local function Layout()
     previewWrap:SetSize(math.max(1, contentW * scale), unscaledH * scale)
     previewStage:SetSize(math.max(1, availW), unscaledH * scale + STAGE_PAD_Y * 2)
 
+    -- After previewWrap is sized, because the dividers anchor to it. The two
+    -- expressions are FindDragTarget's boundaryLC/boundaryCR verbatim
+    -- (:267-268), read off the same cached spans it reads.
+    LayoutDividers(leftW + spacing * 0.5,
+        lastClockStartX + clockW + spacing * 0.5,
+        iconRowH, scale, clockSlot and true or false)
+
     -- Step 5: the scaled preview's own contribution, the stage's own vertical
     -- padding, plus the hint line's own height and gap, both UNSCALED -- the
     -- hint is parented to the header frame (Step 4) and never scaled.
@@ -1003,7 +1056,10 @@ function ns.TopBar.BuildPreviewHeader(parent, width)
         hintText:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
         hintText:SetJustifyH("CENTER")
         hintText:SetTextColor(0.6, 0.6, 0.6, 1)
-        hintText:SetText("Drag an icon to move it. Drag it across the gap to send it to the other side.")
+        -- Short on purpose. The two zone dividers (LayoutDividers) now show
+        -- the sides and the centre, so the sentence no longer has to explain
+        -- them.
+        hintText:SetText("Drag an icon to arrange the bar however you like.")
     end
     hintText:SetParent(parent)
     hintText:ClearAllPoints()

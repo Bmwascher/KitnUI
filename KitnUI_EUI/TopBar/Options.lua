@@ -83,27 +83,43 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
             end }
     end
 
+    -- The friends qualifier is a CELL of the grid, sitting in the slot
+    -- immediately after the friends element's own checkbox, so the two read
+    -- as a pair. It is therefore conditional again: no friends element in the
+    -- grid, because its requires() failed, means no qualifier either -- which
+    -- is how it behaved before the grid existed.
+    --
+    -- The tooltip rides a hit frame anchored to the slot's generic label
+    -- (EllesmereUI_Widgets.lua:4089-4107), and the checkbox branch HIDES that
+    -- label (:4261) while drawing its own. The hit frame is a separate frame
+    -- and is not hidden with it, so the tooltip still works, but its hover
+    -- area sits over the box and the start of the text rather than the whole
+    -- label. Search indexing is unaffected (:4050-4052).
+    local FRIENDS_QUALIFIER = { type = "checkbox",
+        text = "Only Friends In World Of Warcraft",
+        tooltip = "Counts and lists only friends who are actually playing WoW, ignoring anyone online in another Blizzard game.",
+        getValue = function() return ns.TopBar.Get("tbFriendsInGameOnly") end,
+        setValue = function(v)
+            ns.TopBar.Set("tbFriendsInGameOnly", v and true or false); ns.TopBar.Apply()
+            if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+        end }
+
+    -- One flat list of grid cells, so the qualifier packs with the elements
+    -- instead of the loop having to know about it.
+    local cells = {}
+    for _, el in ipairs(rows) do
+        cells[#cells + 1] = ElementCheckboxCfg(el)
+        if el.id == "friends" then cells[#cells + 1] = FRIENDS_QUALIFIER end
+    end
+
     -- Three-across checkbox grid, TripleRow per precedent
     -- (EUI_PartyMode_Options.lua:343-419).
-    for i = 1, #rows, 3 do
+    for i = 1, #cells, 3 do
         _, h = W:TripleRow(parent, y,
-            ElementCheckboxCfg(rows[i]), ElementCheckboxCfg(rows[i + 1]), ElementCheckboxCfg(rows[i + 2]),
+            cells[i], cells[i + 1], cells[i + 2],
             CB_SPLITS);                                                            y = y - h
     end
     CloseGrid(y)
-
-    -- Moved out of the grid loop: it used to sit immediately after whichever
-    -- row held the friends element, but with three-across packing that
-    -- placement is arbitrary. As its own row directly after the grid's
-    -- closing hairline, it reads as a qualifier on the list above it.
-    _, h = W:Checkbox(parent, "Only Friends In World Of Warcraft", y,
-        function() return ns.TopBar.Get("tbFriendsInGameOnly") end,
-        function(v)
-            ns.TopBar.Set("tbFriendsInGameOnly", v and true or false); ns.TopBar.Apply()
-            if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
-        end,
-        "Counts and lists only friends who are actually playing WoW, ignoring anyone online in another Blizzard game."
-    );                                                                             y = y - h
 
     -- Cross-panel drag can empty one side completely with no other way back.
     -- This restores ARRANGEMENT only -- it must never touch tbOff, which

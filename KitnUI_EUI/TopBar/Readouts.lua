@@ -155,7 +155,9 @@ local function BuildSysText(fps, home)
     local accentHex = Hex(ar, ag, ab)
     local fpsStr = fps and format("|cff%s%d|r", Hex(FpsColor(fps)), fps) or "|cff808080--|r"
     local msStr  = home and format("|cff%s%d|r", Hex(MsColor(home)), home) or "|cff808080--|r"
-    return format("%s |cff%sfps|r  %s |cff%sms|r", fpsStr, accentHex, msStr, accentHex)
+    -- Upper case. Preview.lua's FPS_STRING measures the same case, so the two
+    -- must be changed together.
+    return format("%s |cff%sFPS|r  %s |cff%sMS|r", fpsStr, accentHex, msStr, accentHex)
 end
 
 local function UpdateSys()
