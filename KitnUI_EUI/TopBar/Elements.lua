@@ -170,7 +170,26 @@ local function HomeAttrs(btn)
         btn:SetAttribute("house-plot-id", nil)
     end
     if not btn._homeWired then
-        btn:SetScript("OnClick", HomeOnClick)
+        -- PostClick, NEVER OnClick. This is a SecureActionButtonTemplate, and
+        -- that template performs its action FROM its OnClick script:
+        -- `<OnClick function="SecureActionButton_OnClick"/>`
+        -- (.wow-api-reference/Interface/AddOns/Blizzard_FrameXML/
+        -- SecureTemplates.xml:8). Assigning our own OnClick REPLACED it, so
+        -- the teleport action never ran at all -- and because our handler only
+        -- explains itself while nothing is cached, a click after the house
+        -- data had arrived did nothing and said nothing.
+        --
+        -- Home is the only secure element in this file that wants an insecure
+        -- click behaviour of its own; every other one is a Macro() passthrough
+        -- that sets attributes and leaves the template's script alone. That is
+        -- exactly why home was the only launcher broken.
+        --
+        -- PostClick runs AFTER the secure action, alongside it rather than
+        -- instead of it, which is what Blizzard's own action buttons use for
+        -- insecure follow-up work (Blizzard_ActionBar/Mainline/
+        -- ActionButtonTemplate.xml:178). Right click still reaches it because
+        -- `type2` is never set, so the secure half is a no-op there.
+        btn:SetScript("PostClick", HomeOnClick)
         -- Opportunistic refresh on hover, matching WindTools' ButtonOnEnter
         -- (GameBar.lua:1269-1271). HookScript ADDS to Bar.lua's own OnEnter
         -- (tint + tooltip) rather than replacing it.
