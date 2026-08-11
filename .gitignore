@@ -23,3 +23,15 @@ AGENTS.md
 # planning / Superpowers artifacts. Tracked dev tooling (dev/Annotations/,
 # dev/README.md) stays in git.
 dev/docs/
+
+
+# Icon variant sets. ONLY the loose icon-*.tga sitting directly in
+# KitnUI_EUI/Media/TopBar/ ship, because that is the only place the addon looks:
+# Elements.lua builds every path as ICON_DIR .. "icon-" .. id .. ".tga" and never
+# reaches into a subfolder. Base/, Halo/ and Stencil/ are the three style trials
+# the shipped set was picked from, 19 files each. Kept on disk so the choice can
+# be revisited, out of git so the repo does not carry three unused copies of
+# every icon.
+KitnUI_EUI/Media/TopBar/Base/
+KitnUI_EUI/Media/TopBar/Halo/
+KitnUI_EUI/Media/TopBar/Stencil/
