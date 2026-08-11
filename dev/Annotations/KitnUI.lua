@@ -70,7 +70,6 @@
 ---@field RunCleanIcons fun(): boolean
 ---@field RunOptimize fun(): boolean
 ---@field RunChatSetup fun(): boolean
----@field ApplyChatFont fun(): boolean
 ---@field IsAddOnAvailable fun(self: KitnUINS, addon: string): boolean
 ---@field IsCharLoaded fun(self: KitnUINS): boolean
 ---@field SetCharLoaded fun(self: KitnUINS)

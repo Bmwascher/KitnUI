@@ -87,13 +87,19 @@ function ns.RunOptimize()
     return true
 end
 
--- Full chat reconfigure: main-frame position/size, font, timestamps, CVars, and
--- the docked tab set. Idempotent -- running twice yields the same state.
+-- Chat reconfigure: main-frame position/size, timestamps, CVars, and the docked
+-- tab set. Idempotent -- running twice yields the same state.
 --
--- KitnUI owns the chat frames outright on an installed profile. EllesmereUIChat
--- is in ALWAYS_DISABLED (Installer/Setup.lua), so EllesmereUI's own chat module
--- writes nothing and there is nobody to fight: the values below are the last
--- word.
+-- EllesmereUIChat is in ALWAYS_DISABLED (Installer/Setup.lua), so EllesmereUI's
+-- own chat module writes nothing and there is nobody to fight here.
+--
+-- FONT FACE AND FONT SIZE ARE DELIBERATELY ABSENT. KitnEssentials' Chat skin
+-- owns both -- Modules/Skinning/Chat.lua:2069-2075 applies its own FontFace and
+-- FontSize to every chat frame, and :719 secure-hooks FCF_SetChatWindowFontSize
+-- so a size written from outside is overwritten anyway. Setting either here
+-- would be a fight KitnUI loses, on a setting the player already has a panel
+-- for. Tabs, message groups and channels are NOT KitnEssentials' business, which
+-- is why they stay below.
 --
 -- Position and size deliberately repeat where the Edit Mode layout in
 -- Data/AddOns/EditMode.lua already puts chat, so the two agree rather than take
@@ -101,8 +107,6 @@ end
 -- PositionAndDimensions early-returns for DEFAULT_CHAT_FRAME -- so this call is
 -- the fallback for someone who ran the Extras button without importing the
 -- layout, not the authority.
-local CHAT_FONT = "Interface\\AddOns\\KitnUI\\Media\\Fonts\\Expressway.TTF"
-local CHAT_FONT_SIZE = 15
 
 -- The docked tab set, left to right. ChatFrame3 (Voice) is absent ON PURPOSE:
 -- it is Blizzard's, it ships undocked and closed, and that is where it belongs.
@@ -218,25 +222,6 @@ local function ApplyChatWindow(entry)
     if entry.dock and not cf.isDocked and FCF_DockFrame then
         FCF_DockFrame(cf, entry.dock, false)
     end
-
-    -- Persists the size into the window's saved settings, not just the frame.
-    if FCF_SetChatWindowFontSize then
-        FCF_SetChatWindowFontSize(nil, cf, CHAT_FONT_SIZE)
-    end
-end
-
--- The font FACE is the one part of this the game does not keep. WoW saves a chat
--- window's name, size, groups and channels, but never its font file, so the face
--- is back to Blizzard's default after the next reload unless something puts it
--- there again -- and EllesmereUIChat, which would normally do that, is disabled
--- on a KitnUI install. Core.lua calls this at login once the user has opted in.
--- Face only: it touches nothing the player can move.
-function ns.ApplyChatFont()
-    local cf = _G.ChatFrame1
-    local fo = cf and cf.GetFontObject and cf:GetFontObject()
-    if not (fo and fo.SetFont) then return false end
-    fo:SetFont(CHAT_FONT, CHAT_FONT_SIZE, "")
-    return true
 end
 
 function ns.RunChatSetup()
@@ -247,10 +232,6 @@ function ns.RunChatSetup()
     cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 5)
     if cf.SetSize then cf:SetSize(420, 205) end
     if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(cf) end
-
-    -- Shared font object, so every window matches. Per-window size is set below,
-    -- which is the half the game actually saves.
-    ns.ApplyChatFont()
 
     for _, entry in ipairs(CHAT_WINDOWS) do
         ApplyChatWindow(entry)

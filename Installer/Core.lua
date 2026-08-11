@@ -462,14 +462,6 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
 
-    -- Chat font face only. The game never saves a chat frame's font file, so
-    -- without this the Expressway face the Chat Setup extra applied is gone after
-    -- the next reload. Everything else that extra writes -- position, size, tabs,
-    -- groups, channels -- WoW keeps by itself, so nothing else is replayed here.
-    if ns.db.extras and ns.db.extras.chat and ns.ApplyChatFont then
-        ns.ApplyChatFont()
-    end
-
     -- Drained before the EllesmereUI check below, so a message survives even a
     -- session where the installer itself is unavailable. Consumed only when it is
     -- shown, so an interrupted login carries it to the next one. The delay matches
