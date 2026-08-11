@@ -67,6 +67,10 @@ read_globals = {
     -- Chat frame (used for programmatic slash commands + Extras chat setup)
     "DEFAULT_CHAT_FRAME", "ChatEdit_SendText",
     "FCF_SavePositionAndDimensions", "FCF_SetWindowName",
+    "FCF_IterateActiveChatWindows", "GetChatWindowInfo",
+    "FCF_OpenNewWindow", "FCF_CanOpenNewWindow",
+    "FCF_GetNextOpenChatWindowIndex", "FCF_DockFrame",
+    "FCF_SetChatWindowFontSize",
 
     -- Sound
     "PlaySound", "SOUNDKIT",

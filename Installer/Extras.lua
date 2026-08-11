@@ -87,31 +87,151 @@ function ns.RunOptimize()
     return true
 end
 
--- Full chat reconfigure: main-frame position/size, font, timestamps, and named
--- tabs (General + Combat Log). Idempotent -- running twice yields the same state.
+-- Full chat reconfigure: main-frame position/size, font, timestamps, CVars, and
+-- the docked tab set. Idempotent -- running twice yields the same state.
+--
+-- KitnUI owns the chat frames outright on an installed profile. EllesmereUIChat
+-- is in ALWAYS_DISABLED (Installer/Setup.lua), so EllesmereUI's own chat module
+-- writes nothing and there is nobody to fight: the values below are the last
+-- word.
+--
+-- Position and size deliberately repeat where the Edit Mode layout in
+-- Data/AddOns/EditMode.lua already puts chat, so the two agree rather than take
+-- turns. Edit Mode owns ChatFrame1's placement in 12.0 -- FCF_Restore
+-- PositionAndDimensions early-returns for DEFAULT_CHAT_FRAME -- so this call is
+-- the fallback for someone who ran the Extras button without importing the
+-- layout, not the authority.
+local CHAT_FONT = "Interface\\AddOns\\KitnUI\\Media\\Fonts\\Expressway.TTF"
+local CHAT_FONT_SIZE = 15
+
+-- The docked tab set, left to right. ChatFrame3 (Voice) is absent ON PURPOSE:
+-- it is Blizzard's, it ships undocked and closed, and that is where it belongs.
+--
+-- NUMBERED CHANNELS ARE DELIBERATELY NOT TOUCHED, only message GROUPS. Group
+-- names (SAY, GUILD, LOOT) are global constants and safe to set anywhere.
+-- Numbered channels (Trade, General, LookingForGroup) only exist while the
+-- player is somewhere that offers them, so clearing them here would silence a
+-- channel the player is still joined to with no window left showing it. The
+-- CHANNEL group below routes them; which channel lands in which window stays
+-- the player's own drag.
+local CHAT_WINDOWS = {
+    {
+        name = "General", dock = 1, reserved = "ChatFrame1",
+        groups = {
+            "SYSTEM", "SYSTEM_NOMENU", "SAY", "EMOTE", "YELL", "WHISPER",
+            "PARTY", "PARTY_LEADER", "RAID", "RAID_LEADER", "RAID_WARNING",
+            "GUILD", "OFFICER", "MONSTER_SAY", "MONSTER_YELL", "MONSTER_EMOTE",
+            "MONSTER_WHISPER", "MONSTER_BOSS_EMOTE", "MONSTER_BOSS_WHISPER",
+            "ERRORS", "AFK", "DND", "IGNORED", "BG_HORDE", "BG_ALLIANCE",
+            "BG_NEUTRAL", "COMBAT_FACTION_CHANGE", "SKILL", "LOOT", "MONEY",
+            "CHANNEL", "ACHIEVEMENT", "GUILD_ACHIEVEMENT", "TARGETICONS",
+            "BN_WHISPER", "BN_WHISPER_INFORM", "BN_CONVERSATION",
+            "BN_INLINE_TOAST_ALERT", "CURRENCY", "BN_WHISPER_PLAYER_OFFLINE",
+            "PET_BATTLE_INFO", "INSTANCE_CHAT", "INSTANCE_CHAT_LEADER",
+            "GUILD_ITEM_LOOTED", "COMBAT_HONOR_GAIN", "PING",
+        },
+    },
+    {
+        name = "Combat Log", dock = 2, reserved = "ChatFrame2",
+        groups = {
+            "OPENING", "TRADESKILLS", "PET_INFO", "COMBAT_XP_GAIN",
+            "COMBAT_HONOR_GAIN", "COMBAT_MISC_INFO",
+        },
+    },
+    {
+        name = "Whisper", dock = 3,
+        groups = { "WHISPER", "CHANNEL", "BN_WHISPER" },
+    },
+    {
+        name = "Trade/Services", dock = 4,
+        groups = { "CHANNEL" },
+    },
+}
+
+-- Locate an already-open window by its tab name, so a second run reuses the
+-- window the first run made instead of stacking a duplicate beside it.
+local function FindChatWindow(name)
+    if not (FCF_IterateActiveChatWindows and GetChatWindowInfo) then return nil end
+    local found
+    FCF_IterateActiveChatWindows(function(chatFrame, index)
+        local windowName = GetChatWindowInfo(index)
+        if windowName and strlower(windowName) == strlower(name) then
+            found = chatFrame
+            return true
+        end
+    end)
+    return found
+end
+
+-- Reserved windows are always the same frame. Everything else is found by name
+-- or opened. FCF_OpenNewWindow's return is read defensively: its callers in
+-- Blizzard_Communities treat it as the new frame, but the function body writes
+-- no return, so fall back to the index it was about to fill.
+local function EnsureChatWindow(entry)
+    if entry.reserved then return _G[entry.reserved] end
+
+    local existing = FindChatWindow(entry.name)
+    if existing then return existing end
+
+    if not (FCF_OpenNewWindow and FCF_CanOpenNewWindow) then return nil end
+    if not FCF_CanOpenNewWindow() then return nil end
+
+    local index = FCF_GetNextOpenChatWindowIndex and FCF_GetNextOpenChatWindowIndex()
+    local created = FCF_OpenNewWindow(entry.name, true)
+    if type(created) == "table" then return created end
+    if index then return _G["ChatFrame" .. index] end
+    return nil
+end
+
+local function ApplyChatWindow(entry)
+    local cf = EnsureChatWindow(entry)
+    if not cf then return end
+
+    if FCF_SetWindowName then FCF_SetWindowName(cf, entry.name) end
+
+    if cf.RemoveAllMessageGroups and cf.AddMessageGroup then
+        cf:RemoveAllMessageGroups()
+        for _, group in ipairs(entry.groups) do
+            cf:AddMessageGroup(group)
+        end
+    end
+
+    -- FCF_DockFrame returns early on an already-docked frame, so this only ever
+    -- acts on a window this run just opened.
+    if entry.dock and not cf.isDocked and FCF_DockFrame then
+        FCF_DockFrame(cf, entry.dock, false)
+    end
+
+    -- Persists the size into the window's saved settings, not just the frame.
+    if FCF_SetChatWindowFontSize then
+        FCF_SetChatWindowFontSize(nil, cf, CHAT_FONT_SIZE)
+    end
+end
+
 function ns.RunChatSetup()
     local cf = _G.ChatFrame1
     if not cf then return false end
 
-    -- Position + size the main chat frame (bottom-left, standard KitnUI spot).
     cf:ClearAllPoints()
-    cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 20, 22)
-    if cf.SetSize then cf:SetSize(400, 170) end
+    cf:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 5)
+    if cf.SetSize then cf:SetSize(420, 205) end
     if FCF_SavePositionAndDimensions then FCF_SavePositionAndDimensions(cf) end
 
-    -- Font + size via the chat frame's font object.
+    -- Font FACE on the shared chat font object, so every window matches. Size
+    -- is then set per window below, which is what the game saves.
     local fo = cf.GetFontObject and cf:GetFontObject()
-    if fo and fo.SetFont then
-        fo:SetFont("Interface\\AddOns\\KitnUI\\Media\\Fonts\\Expressway.TTF", 13, "")
+    if fo and fo.SetFont then fo:SetFont(CHAT_FONT, CHAT_FONT_SIZE, "") end
+
+    for _, entry in ipairs(CHAT_WINDOWS) do
+        ApplyChatWindow(entry)
     end
 
-    -- Chat timestamps (pcall-guarded in case the CVar name shifts across builds).
-    if SetCVar then pcall(SetCVar, "showTimestamps", "%H:%M ") end
-
-    -- Named tabs: General (main) + Combat Log (ChatFrame2).
-    if FCF_SetWindowName then
-        FCF_SetWindowName(cf, "General")
-        if _G.ChatFrame2 then FCF_SetWindowName(_G.ChatFrame2, "Combat Log") end
+    -- pcall-guarded in case a CVar name shifts across builds.
+    if SetCVar then
+        pcall(SetCVar, "showTimestamps", "%I:%M %p ")
+        pcall(SetCVar, "chatStyle", "classic")
+        pcall(SetCVar, "whisperMode", "inline")
+        pcall(SetCVar, "chatMouseScroll", "1")
     end
 
     return true
