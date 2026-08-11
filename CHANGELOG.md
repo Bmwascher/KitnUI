@@ -35,6 +35,7 @@
 - **NEW:** Finish summary recaps which profiles were imported, which were skipped, and which extras were run
 - CDM layouts are now tracked per spec by content, not by a single version number — editing one spec's layout no longer prompts you to reimport the rest, and a layout imported by an older version is reported as untracked rather than up to date
 - Traffic-light status (Imported / Update available / Not Imported) backed by date-based profile versioning
+- A step that cannot import or load now says so instead of reporting success — Load All reports how many profiles it could not load, and a Baganator profile whose category data is missing or unreadable is refused outright rather than written half-formed
 - Esc closes the installer; the `/kitn` command set gains `/kitn options`
 
 ---
