@@ -114,9 +114,10 @@ function ns.GetOutdatedAddons()
             -- Covers two cases with one branch: never imported, and imported by
             -- a build that did not record a version (the Blizzard CDM path did
             -- not stamp one before 2026.08.11). Both are reported as new because
-            -- there is no old version to name, and the popup at line 563
-            -- concatenates oldVersion without a nil guard. Reporting it once is
-            -- enough: the reimport records a version and this stops firing.
+            -- there is no old version to name, and the login notification's
+            -- non-new branch concatenates oldVersion with no nil guard.
+            -- Reporting it once is enough: the reimport records a version and
+            -- this stops firing.
             outdated[#outdated + 1] = {
                 key = addonKey,
                 newVersion = current,
