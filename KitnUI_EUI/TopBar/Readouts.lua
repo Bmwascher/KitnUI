@@ -14,20 +14,21 @@ ns.TopBar = ns.TopBar or {}
 local Get, Set = ns.TopBar.Get, ns.TopBar.Set
 
 ---------------------------------------------------------------------------------
--- Colour bands. Fixed by the spec, not user-configurable.
+-- Readout colours.
+--
+-- The FPS and latency NUMBERS are plain white, on the bar and in the tooltip.
+-- They used to carry a green / amber / red threshold band. Green sat next to
+-- the pink accent nearly all the time, so it read as decoration rather than as
+-- information, and the tooltip's addon-memory column matched it. Removed
+-- rather than re-tuned: a colour that is almost always the same colour is not
+-- telling you anything.
+--
+-- The grey "--" for a value that could not be read STAYS. That is not a
+-- quality rating, it is the absence of a reading, and it has to look different
+-- from a real number.
 ---------------------------------------------------------------------------------
 
-local function FpsColor(v)
-    if v >= 60 then return 0.3, 1, 0.3 end
-    if v >= 30 then return 1, 0.85, 0.3 end
-    return 1, 0.35, 0.3
-end
-
-local function MsColor(v)
-    if v <= 100 then return 0.3, 1, 0.3 end
-    if v <= 250 then return 1, 0.85, 0.3 end
-    return 1, 0.35, 0.3
-end
+local WHITE_HEX = "ffffff"
 
 -- The bar's own accent resolution, duplicated rather than exported: Bar.lua's
 -- AccentRGB is file-local, and this file's only consumable interfaces are
@@ -153,8 +154,8 @@ ApplyReadoutPosition()
 local function BuildSysText(fps, home)
     local ar, ag, ab = AccentRGB()
     local accentHex = Hex(ar, ag, ab)
-    local fpsStr = fps and format("|cff%s%d|r", Hex(FpsColor(fps)), fps) or "|cff808080--|r"
-    local msStr  = home and format("|cff%s%d|r", Hex(MsColor(home)), home) or "|cff808080--|r"
+    local fpsStr = fps and format("|cff%s%d|r", WHITE_HEX, fps) or "|cff808080--|r"
+    local msStr  = home and format("|cff%s%d|r", WHITE_HEX, home) or "|cff808080--|r"
     -- Upper case. Preview.lua's FPS_STRING measures the same case, so the two
     -- must be changed together.
     return format("%s |cff%sFPS|r  %s |cff%sMS|r", fpsStr, accentHex, msStr, accentHex)
@@ -190,13 +191,13 @@ local function ShowSysTooltip(owner)
     local fps = GetFramerate()
     local _, _, home, world = GetNetStats()
     if fps then
-        GameTooltip:AddDoubleLine("FPS", format("%d fps", fps), 0.7, 0.7, 0.7, FpsColor(fps))
+        GameTooltip:AddDoubleLine("FPS", format("%d fps", fps), 0.7, 0.7, 0.7, 1, 1, 1)
     end
     if home then
-        GameTooltip:AddDoubleLine("Home Latency", format("%d ms", home), 0.7, 0.7, 0.7, MsColor(home))
+        GameTooltip:AddDoubleLine("Home Latency", format("%d ms", home), 0.7, 0.7, 0.7, 1, 1, 1)
     end
     if world then
-        GameTooltip:AddDoubleLine("World Latency", format("%d ms", world), 0.7, 0.7, 0.7, MsColor(world))
+        GameTooltip:AddDoubleLine("World Latency", format("%d ms", world), 0.7, 0.7, 0.7, 1, 1, 1)
     end
 
     local now = GetTime()
@@ -227,7 +228,21 @@ local function ShowSysTooltip(owner)
         for i = 1, math.min(10, #_memTable) do
             local e = _memTable[i]
             local memStr = e.mem > 1024 and format("%.2f MB", e.mem / 1024) or format("%.0f KB", e.mem)
-            GameTooltip:AddDoubleLine(e.name, memStr, 1, 1, 1, ar, ag, ab)
+            -- Two things are going on in this one line, and only one of them is
+            -- the colour argument.
+            --
+            -- The NAME comes from another addon's own TOC title, so it can carry
+            -- an escape code this addon did not write, and nothing guarantees it
+            -- is closed. An unterminated |cff bleeds forward into the value next
+            -- to it and into every row drawn after it, which is why the whole
+            -- memory column could come out one colour regardless of what was
+            -- passed here. A trailing |r closes any open code and does nothing
+            -- when there is none.
+            --
+            -- The VALUE is then given white explicitly, both as colour arguments
+            -- and inline, so it cannot inherit from anything upstream.
+            GameTooltip:AddDoubleLine(e.name .. "|r",
+                format("|cff%s%s|r", WHITE_HEX, memStr), 1, 1, 1, 1, 1, 1)
         end
     end
     GameTooltip:Show()
