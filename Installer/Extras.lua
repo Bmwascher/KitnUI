@@ -239,10 +239,15 @@ local function ApplyChatWindow(entry)
     end
 
     -- Normally dead, and kept anyway. FCF_OpenNewWindow already docks what it
-    -- opens, at the end of the strip (FloatingChatFrame.lua:565), which lands
-    -- these entries in list order because ChatFrame3 stays undocked. This is the
-    -- fallback for a window that arrived some other way; FCF_DockFrame returns
-    -- early on an already-docked frame, so the normal path costs nothing.
+    -- opens, at the END of the strip (FloatingChatFrame.lua:565), so these
+    -- entries land in list order whatever is already docked. The numbers below
+    -- are therefore a relative fallback, not a promise of absolute position:
+    -- Blizzard redocks ChatFrame3 when Speak For Me is active
+    -- (FloatingChatFrame.lua:1676-1679, :1701-1703), which KitnUI's CVar writes
+    -- do not control, and the two new tabs then sit one place further along --
+    -- correctly, since the player really does have a Voice tab. FCF_DockFrame
+    -- returns early on an already-docked frame, so the normal path costs
+    -- nothing.
     if entry.dock and not cf.isDocked and FCF_DockFrame then
         FCF_DockFrame(cf, entry.dock, false)
     end

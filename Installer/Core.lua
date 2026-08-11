@@ -101,16 +101,22 @@ function ns.GetOutdatedAddons()
             or (type(payload) == "string" and strtrim(payload) == "")
             or (type(payload) == "table" and not next(payload))
 
-        if emptyPayload then -- luacheck: ignore 542
+        if emptyPayload or not current then -- luacheck: ignore 542
             -- nothing to offer; fall through to the next addon
-        elseif installed and current and installed ~= current then
+        elseif installed and installed ~= current then
             outdated[#outdated + 1] = {
                 key = addonKey,
                 oldVersion = installed,
                 newVersion = current,
                 isNew = false,
             }
-        elseif not hasProfile and current then
+        elseif not hasProfile or not installed then
+            -- Covers two cases with one branch: never imported, and imported by
+            -- a build that did not record a version (the Blizzard CDM path did
+            -- not stamp one before 2026.08.11). Both are reported as new because
+            -- there is no old version to name, and the popup at line 563
+            -- concatenates oldVersion without a nil guard. Reporting it once is
+            -- enough: the reimport records a version and this stops firing.
             outdated[#outdated + 1] = {
                 key = addonKey,
                 newVersion = current,

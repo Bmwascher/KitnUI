@@ -235,7 +235,16 @@ end
 local function ImportBigWigsBosses()
     local bossString = ns.data.BigWigs_Bosses
     if type(bossString) ~= "string" or strtrim(bossString) == "" then return end
-    if not (BigWigsAPI and BigWigsAPI.ImportBossOptions) then return end
+
+    -- Reported, for the same reason the pcall below is. A BigWigs old enough to
+    -- lack ImportBossOptions still registers the profile, so CompleteSetup
+    -- stamps the version and the boss half is never offered again on that
+    -- version. Silence here would be indistinguishable from success.
+    if not (BigWigsAPI and BigWigsAPI.ImportBossOptions) then
+        print(ns.title .. ": This BigWigs version cannot import boss settings. The "
+            .. "main BigWigs profile installed normally.")
+        return
+    end
 
     -- The failure is REPORTED, not swallowed. CompleteSetup stamps the addon
     -- version straight after this returns, so a silent failure would look like a
@@ -572,6 +581,17 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             ns.db.profiles["BlizzardCDM"][specIndex] = true
             ns.db.installedVersion = ns.version
 
+            -- CDM writes its own bookkeeping instead of calling CompleteSetup,
+            -- because its profile entry is a per-spec table rather than a flag.
+            -- This line is the piece that was missing: without it
+            -- addonVersions.BlizzardCDM stays nil, GetOutdatedAddons can reach
+            -- neither of its branches (nil installed, truthy profile), and every
+            -- X-BlizzardCDM-Version bump is inert for the people who already
+            -- imported.
+            ns.db.addonVersions = ns.db.addonVersions or {}
+            local cdmVersion = ns.GetAddonDataVersion("BlizzardCDM")
+            if cdmVersion then ns.db.addonVersions["BlizzardCDM"] = cdmVersion end
+
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
             ns.db.perChar[charKey].loaded = true
@@ -786,8 +806,9 @@ function ns.FinishInstallation()
     -- the character's chat windows before rebuilding them, and FinishInstallation
     -- also ends the install and update runs -- so without this gate every /kitn
     -- update would silently wipe the chat layout of anyone who once pressed the
-    -- button. Only a plain install reaches the Extras page (Installer.lua:695-
-    -- 696); update must never replay a destructive action the user did not ask
+    -- button. Only a plain install reaches the Extras page -- the gate that
+    -- appends ExtrasPage in GetInstallerData excludes both load and update mode
+    -- -- so update must never replay a destructive action the user did not ask
     -- for on that run.
     if ns.installerIsLoadMode and ns.db.extras and ns.db.extras.chat
         and ns.RunChatSetup then
