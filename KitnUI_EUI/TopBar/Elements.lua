@@ -106,16 +106,16 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
     -- answer is not enough, because the only thing that writes the secure
     -- attributes is HomeAttrs, and the only thing that calls HomeAttrs is
     -- WireSecureAttributes, and the only thing that calls THAT is
-    -- ns.TopBar.Apply() (Bar.lua:722). Apply had already run, before the answer
-    -- arrived, and found nothing cached -- so it cleared `type1` and never came
-    -- back. The button then had no secure action at all.
+    -- ns.TopBar.Apply(), in its protected half. Apply had already run, before
+    -- the answer arrived, and found nothing cached -- so it cleared `type1` and
+    -- never came back. The button then had no secure action at all.
     --
     -- That is also why it failed SILENTLY rather than printing the fallback:
     -- HomeOnClick only explains itself while `cachedHouse` is nil, and by the
     -- time the user clicks, it is set. Dead button, empty chat.
     --
     -- Apply() is safe to call in combat -- it defers its protected half and
-    -- retries on PLAYER_REGEN_ENABLED (Bar.lua:667) -- so no combat gate here.
+    -- retries on PLAYER_REGEN_ENABLED -- so no combat gate here.
     -- The change test is what keeps this cheap: the button's OnEnter re-requests
     -- the list on every hover, and without it every hover would drive a full
     -- Apply.

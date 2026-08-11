@@ -272,12 +272,22 @@ end
 --
 -- Reachable at all only because the minimap module publishes both frames as
 -- globals immediately before showing them
--- (References/EllesmereUI-v8.7.5/EllesmereUIMinimap/EllesmereUIMinimap.lua:4625,
--- :4937). Both are file-local otherwise. A frame that was never created --
--- Clock Style already None, or Show FPS/MS already off -- leaves its global nil,
--- which reads correctly here as "nothing to suppress".
+-- (References/EllesmereUI-v8.7.5/EllesmereUIMinimap/EllesmereUIMinimap.lua:4626,
+-- :4937). Both are file-local otherwise.
+--
+-- A GLOBAL THAT IS NIL IS NOT THE SAME AS A SETTING THAT IS OFF, and reading it
+-- that way was a real defect. Those two assignments happen only on the ENABLED
+-- branch, but nothing ever clears them: the disabled branch merely hides a frame
+-- the global still points at (EllesmereUIMinimap.lua:4674-4678, :4944-4946). So
+-- the global is nil only for a frame that was never enabled in this session, and
+-- a frame the host has since switched off still answers here. Taking that frame
+-- and then handing it back would put a clock on the minimap the user had turned
+-- off. Shown-state at take time is what settles it, below.
 ---------------------------------------------------------------------------------
 
+-- Not a boolean. Each held key records whether the frame was VISIBLE when we
+-- took it, so the restore can give back only what it actually took. Both values
+-- are truthy, so "are we holding this" is still a plain test.
 local minimapTaken = {}
 
 local function SuppressMinimapFrame(key, on)
@@ -289,35 +299,42 @@ local function SuppressMinimapFrame(key, on)
         -- undone by the next options change or minimap redraw. The hook makes
         -- the suppression stick without polling for it.
         hooksecurefunc(f, "Show", function(self)
-            if minimapTaken[key] then self:Hide() end
+            if not minimapTaken[key] then return end
+            -- The host asking for this frame IS the host's own setting saying it
+            -- wants it. Record that before hiding it again, so a frame switched
+            -- ON while we hold it is still given back when we let go.
+            minimapTaken[key] = "shown"
+            self:Hide()
         end)
     end
     if on then
         if not minimapTaken[key] then
-            minimapTaken[key] = true
+            minimapTaken[key] = f:IsShown() and "shown" or "hidden"
             f:Hide()
         end
     elseif minimapTaken[key] then
-        -- Give back only what we took. Known edge, bounded and self-healing: if
-        -- the user turns that minimap element off WHILE we are suppressing it,
-        -- EllesmereUI hides it itself, our hook never fires (it watches Show,
-        -- not Hide), and this restore shows it once. EllesmereUI's next minimap
-        -- refresh re-asserts its own setting and takes it away again.
+        -- Give back only what we took, which now means what was actually on
+        -- screen. A frame the host had already hidden goes back hidden.
+        local wasShown = (minimapTaken[key] == "shown")
         minimapTaken[key] = nil
-        f:Show()
+        if wasShown then f:Show() end
     end
 end
 
 -- Derived from what is ACTUALLY on screen rather than from the visibility
 -- rules, so it stays correct however those rules change. Two frames decide it
--- rather than one because the two readouts are separate frames -- the clock
--- rides the bar and the FPS readout is parented to UIParent -- even though
--- ApplyVisibility now drives both off the same conditional.
+-- because the two readouts are separate frames: the clock is part of the bar,
+-- and the FPS readout is parented to UIParent and follows the bar (below).
 --
--- EllesmereUI's standalone FPS counter is handed back here too, on the same
--- shown-state test. Keying it to the on/off switch instead would leave the
--- player with no counter at all inside a key, which is the whole point of
--- giving these back.
+-- HOW MANY FPS COUNTERS THE PLAYER ENDS UP WITH IS ELLESMEREUI'S ANSWER, NOT
+-- OURS. It ships TWO independent ones, a minimap readout
+-- (References/EllesmereUI-v8.7.5/EllesmereUIMinimap/EUI_Minimap_Options.lua:1411)
+-- and a standalone counter
+-- (References/EllesmereUI-v8.7.5/EllesmereUIQoL/EUI_QoL_Options.lua:945), each
+-- with its own switch. When ours is up we take both; when ours goes we give back
+-- exactly what we took and no more, so both host switches on returns two and
+-- both off returns none. Picking one for the player would mean overruling a
+-- configuration this addon does not own, which is the one thing it may not do.
 local function RefreshMinimapSuppression()
     local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
     local ourClock = barFrame and barFrame:IsShown() and not ns.TopBar.IsOff("clock")
@@ -325,6 +342,29 @@ local function RefreshMinimapSuppression()
     SuppressMinimapFrame("_EBS_ClockBg", ourClock and true or false)
     SuppressMinimapFrame("_EBS_FpsBg", ourFps)
     ns.TopBar.SuppressEUIFps(ourFps)
+end
+
+-- THE FPS/MS READOUT FOLLOWS THE BAR, and follows it from here rather than from
+-- a state driver of its own. Bar.lua's ApplyVisibility carries the full reason;
+-- the short version is that a driver cannot be released during combat, so a
+-- resident one would show the readout back after the user switched it off
+-- mid-fight. Everything below is a plain Show or Hide on an unprotected frame,
+-- so the decision always lands at the moment it is made, combat or not.
+local function SysShouldShow()
+    if not ns.TopBar.Enabled() then return false end
+    if ns.TopBar.IsOff("fps") then return false end
+    local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
+    if not barFrame then return false end
+    return barFrame:IsShown() and true or false
+end
+
+local function RefreshFollowers()
+    if sysFrame then
+        if SysShouldShow() then sysFrame:Show() else sysFrame:Hide() end
+    end
+    -- After the readout, never before: the suppression reads sysFrame:IsShown()
+    -- and must see the state this pass just set.
+    RefreshMinimapSuppression()
 end
 
 local minimapVisHooked
@@ -335,15 +375,19 @@ function ns.TopBar.RefreshEUIMinimap()
         local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
         if barFrame then
             minimapVisHooked = true
-            barFrame:HookScript("OnShow", RefreshMinimapSuppression)
-            barFrame:HookScript("OnHide", RefreshMinimapSuppression)
+            -- The bar's own Show/Hide is the signal, whoever caused it -- the
+            -- state driver inside a key, HideBar when the feature is switched
+            -- off, or Apply. That is what makes this a follower rather than a
+            -- second copy of the visibility rules.
+            barFrame:HookScript("OnShow", RefreshFollowers)
+            barFrame:HookScript("OnHide", RefreshFollowers)
             if sysFrame then
                 sysFrame:HookScript("OnShow", RefreshMinimapSuppression)
                 sysFrame:HookScript("OnHide", RefreshMinimapSuppression)
             end
         end
     end
-    RefreshMinimapSuppression()
+    RefreshFollowers()
 end
 
 -- Re-assert the hide after anything that might restore EllesmereUI's own
@@ -470,11 +514,12 @@ end
 -- truth-tests (`if info.name then`) and equality tests against a literal
 -- (`clientProgram == "WoW"`) are left raw, and deliberately: on the BNet and
 -- FriendList paths the fields involved declare no Secret marking at all
--- (FriendListDocumentation.lua:602-616, BattleNetDocumentation.lua:247-274),
--- and on the guild path the one raw truth-test that could see a Secret is
--- inside a pcall, behind RosterReadable(), and costs at worst that hover's
--- list. What a Secret does under a bare truth-test is NOT decidable from the
--- static reference, which is exactly why it is not load-bearing here.
+-- (FriendListDocumentation.lua:602-616, BattleNetDocumentation.lua:247-274).
+-- The guild path is stricter still and does not rely on this at all: `name` is
+-- the one field there that can genuinely be Secret, and it goes through Plain()
+-- BEFORE it is tested, so no raw truth-test on the guild path can ever see one.
+-- What a Secret does under a bare truth-test is NOT decidable from the static
+-- reference, which is exactly why nothing here is load-bearing on it.
 ---------------------------------------------------------------------------------
 
 local function Plain(v)
@@ -1108,21 +1153,15 @@ function ns.TopBar.UpdateTicker()
         ticker = C_Timer.NewTicker(1, Tick)
     end
 
-    -- This runs on every Apply(), including the profile- and spec-switch reapply
-    -- Bar.lua already wires up, and nothing below touches anything protected.
-    local showSys = ns.TopBar.Enabled() and not ns.TopBar.IsOff("fps")
-    -- HIDE ONLY. The readout now rides the bar's visibility driver
-    -- (Bar.lua ApplyVisibility), and that driver is the only thing allowed to
-    -- show it. This line runs in Apply's first half, which still executes in
-    -- combat, while ApplyVisibility sits in the second half behind the combat
-    -- gate -- so a Show() here would pop the readout back up mid-fight inside a
-    -- key or a raid, where the driver had already hidden it, and nothing would
-    -- take it away again until the next state change. Hiding is always safe:
-    -- the switch being off outranks every visibility rule.
-    if sysFrame and not showSys then sysFrame:Hide() end
-    -- Both suppressions run from here, off what is actually on screen. After
-    -- the Hide above, so the first pass reads the state this Apply just set
-    -- rather than the previous one.
+    -- The readout's visibility and both EllesmereUI suppressions all resolve
+    -- from this one call, off what is actually on screen. It runs on every
+    -- Apply(), including the profile- and spec-switch reapply Bar.lua already
+    -- wires up.
+    --
+    -- Deliberately in Apply's FIRST half, which still executes during combat,
+    -- and safe there because nothing it reaches is protected. That is what makes
+    -- switching the FPS element off mid-fight take effect at once instead of
+    -- waiting for the deferred Apply.
     ns.TopBar.RefreshEUIMinimap()
 end
 
