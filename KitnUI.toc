@@ -2,7 +2,7 @@
 ## Notes: EllesmereUI profile installer for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## Interface: 120005, 120007
+## Interface: 120005, 120007, 120100
 ## RequiredDeps: EllesmereUI
 ## OptionalDeps: Plater, BigWigs, NorthernSkyRaidTools, KitnEssentials, BuffReminders
 ## SavedVariables: KitnUIDB

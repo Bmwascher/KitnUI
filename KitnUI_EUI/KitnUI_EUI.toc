@@ -2,7 +2,7 @@
 ## Notes: KitnUI's configuration pages inside EllesmereUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## Interface: 120005, 120007
+## Interface: 120005, 120007, 120100
 ## Dependencies: KitnUI, EllesmereUI
 ## IconTexture: Interface\Icons\INV_Misc_Gift_05
 ## Group: KitnUI
