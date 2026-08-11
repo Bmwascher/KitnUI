@@ -370,7 +370,10 @@ end
 KitnCommands["version"] = function()
     print(string.format("|cffffffffKitnUI version %s|r", ns.version or "?"))
 
-    local order = { "EllesmereUI", "Plater", "BigWigs", "NSRT", "Blizzard_EditMode", "KitnEssentials", "BuffReminders", "BlizzardCDM" }
+    -- Plater is omitted while it is dormant (see the addon step list in
+    -- Installer.lua): printing a data version for a profile the installer no
+    -- longer offers would advertise something the user cannot get.
+    local order = { "EllesmereUI", "BigWigs", "NSRT", "Blizzard_EditMode", "KitnEssentials", "BuffReminders", "BlizzardCDM" }
     local names = {
         EllesmereUI = "EllesmereUI", Plater = "Plater", BigWigs = "BigWigs",
         NSRT = "Northern Sky Raid Tools", Blizzard_EditMode = "Edit Mode",

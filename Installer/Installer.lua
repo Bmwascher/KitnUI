@@ -179,7 +179,15 @@ end
 
 local addonSteps = {
     { key = "EllesmereUI",       display = "EllesmereUI Profile",     checkAddon = "EllesmereUI",          alwaysAvailable = true,  desc = "Your full UI: unit frames, action bars, nameplates, cast bars, and more. Dark and Colored are a preset inside KitnUI's EllesmereUI tab." },
-    { key = "Plater",            display = "Plater Nameplates",       checkAddon = "Plater",               alwaysAvailable = false, desc = "Curated Plater nameplates tuned to match the KitnUI look." },
+    -- PLATER IS DORMANT, NOT REMOVED. Data/AddOns/Plater.lua ships an empty
+    -- string, so offering the step here put a tickbox in the wizard whose only
+    -- possible outcome was "No Plater data found." in chat. Hidden by taking it
+    -- out of this list and nothing else: setupFunctions["Plater"], the data
+    -- file, its Data.xml entry, the X-Plater-Version header and the OptionalDeps
+    -- line all stay, so an existing install keeps having its Plater profile
+    -- re-selected on load and the SavedVariables shape is not lost. Put this
+    -- line back once the data file carries a real export.
+    -- { key = "Plater",         display = "Plater Nameplates",       checkAddon = "Plater",               alwaysAvailable = false, desc = "Curated Plater nameplates tuned to match the KitnUI look." },
     { key = "BuffReminders",     display = "BuffReminders",           checkAddon = "BuffReminders",        alwaysAvailable = false, desc = "Flags missing raid buffs, food, and flasks right on your HUD so you never pull under-prepped." },
     { key = "BigWigs",           display = "BigWigs",                 checkAddon = "BigWigs",              alwaysAvailable = false, desc = "Boss timers and warnings, positioned and styled for KitnUI." },
     { key = "NSRT",              display = "Northern Sky Raid Tools", checkAddon = "NorthernSkyRaidTools", alwaysAvailable = false, desc = "Northern Sky raid tooling: assignments, timers, and note sync." },
