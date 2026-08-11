@@ -40,7 +40,10 @@
 
 ---
 
-## v1.0.8
+## v1.0.8 (never released)
+
+Written but never tagged. Everything below shipped in v2.0.0 instead; the
+Baganator payload it describes is the one v2.0.0 restored.
 
 ### New Addon Support
 
