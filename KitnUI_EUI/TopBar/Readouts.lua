@@ -466,37 +466,132 @@ local ROSTER_CAP = 40
 -- many were left out instead of the list simply stopping. NaowhUI's own bar
 -- does the same (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_TopBar.lua:
 -- 322-327, :346).
+-- Rows are COLLECTED and only drawn by Finish, because grouping cannot be done
+-- while writing: a heading has to be printed before rows that are not known to
+-- exist until the whole walk is done. Guild rows pass no group and land in one
+-- unnamed group, which draws exactly as an ungrouped list.
+--
+-- The cap counts ROWS and never headings. A heading is not a friend, and
+-- letting it consume a slot would make the badge and the list disagree by the
+-- number of games your friends happen to be playing.
 local function NewRoster(tt)
-    local shown, hidden = 0, 0
+    local groups, order, rows = {}, {}, 0
     return {
-        Row = function(left, right, r, g, b)
-            if shown < ROSTER_CAP then
-                tt:AddDoubleLine(left or "?", right or "", r or 1, g or 1, b or 1, 0.7, 0.7, 0.7)
-            else
-                hidden = hidden + 1
+        Row = function(left, right, r, g, b, key, label, sortKey)
+            key = key or ""
+            local grp = groups[key]
+            if not grp then
+                grp = { label = label, sort = sortKey or 0, seq = #order, rows = {} }
+                groups[key] = grp
+                order[#order + 1] = grp
             end
-            shown = shown + 1
+            grp.rows[#grp.rows + 1] = { left or "?", right or "", r or 1, g or 1, b or 1 }
+            rows = rows + 1
         end,
         Finish = function()
+            -- Stable: `seq` is the order the groups were first seen, so two
+            -- groups with the same sort key keep the walk's own order rather
+            -- than an arbitrary one.
+            table.sort(order, function(a, b)
+                if a.sort ~= b.sort then return a.sort < b.sort end
+                return a.seq < b.seq
+            end)
+            local shown, hidden = 0, 0
+            for _, grp in ipairs(order) do
+                local headed = false
+                for _, row in ipairs(grp.rows) do
+                    if shown < ROSTER_CAP then
+                        if grp.label and not headed then
+                            tt:AddLine(grp.label, 0.6, 0.6, 0.6)
+                            headed = true
+                        end
+                        tt:AddDoubleLine(row[1], row[2], row[3], row[4], row[5], 0.7, 0.7, 0.7)
+                        shown = shown + 1
+                    else
+                        hidden = hidden + 1
+                    end
+                end
+            end
             if hidden > 0 then tt:AddLine(format("... and %d more", hidden), 0.5, 0.5, 0.5) end
-            return shown
+            return rows
         end,
     }
 end
 
--- "80  Kitnpriest <AFK>". Level first so the names line up in a column, which
--- is the shape NaowhUI's guild list uses and the reason it reads at a glance.
-local function RosterLabel(name, level, tag)
+-- Blizzard's own gold, `NORMAL_FONT_COLOR` (1, 0.82, 0), for the level number.
+--
+-- Deliberately a FIXED gold and not `GetQuestDifficultyColor`, which is what
+-- greys out a level the client considers trivial. That difficulty test is
+-- relative to THIS client's own max level, so it mislabels a friend who is at
+-- the cap of a DIFFERENT WoW version -- a Season of Discovery or Anniversary
+-- character at their own max shows as trivial grey. Kitn saw exactly that in
+-- the reference list. One colour is right in every version; a clever one is
+-- right only in ours.
+local LEVEL_HEX = "ffd100"
+
+-- "|cffffd10090|r  Kitnpriest <AFK>". Level first so the names line up in a
+-- column, and the two halves carry their OWN colour escapes because
+-- AddDoubleLine takes a single colour for the whole left string.
+local function RosterLabel(name, level, tag, r, g, b)
     name = Plain(name)
     if type(name) ~= "string" or name == "" then name = "?" end
     -- A cross-realm name arrives as "Name-Realm"; the realm is already on the
     -- right-hand column or irrelevant, and the full form pushes the columns apart.
     name = name:match("[^%-]+") or name
+    if r and g and b then name = format("|cff%s%s|r", Hex(r, g, b), name) end
+
     level = Plain(level)
     local prefix = ""
-    if type(level) == "number" and level > 0 then prefix = format("%d  ", level) end
+    if type(level) == "number" and level > 0 then
+        prefix = format("|cff%s%d|r  ", LEVEL_HEX, level)
+    end
     return prefix .. name .. (tag or "")
 end
+
+-- The away/busy suffix. Battle.net reports it on the ACCOUNT (isAFK/isDND) and
+-- again per game account (isGameAFK/isGameBusy); the character friend list
+-- reports it on the friend. Either source counts, because a friend flagged away
+-- in the app and a friend flagged away in game are the same fact to a reader.
+local function StatusTag(afk, dnd)
+    if afk then return "  |cff808080<AFK>|r" end
+    if dnd then return "  |cff808080<DND>|r" end
+    return ""
+end
+
+-- Group headings for the friends list, so the versions do not interleave.
+--
+-- WoW projects come from `wowProjectID`, whose constants Blizzard defines in
+-- its own Constants.lua (MAINLINE 1, CLASSIC 2, WOWLABS 3, BURNING_CRUSADE 5,
+-- WRATH 11, CATACLYSM 14, MISTS 19). **Season of Discovery and the Anniversary
+-- realms have no id of their own** -- they run on Classic Era and report
+-- `WOW_PROJECT_CLASSIC` like any other Classic Era realm, so they group
+-- together under one heading. Splitting them further would mean pattern
+-- matching a rich-presence string, which is the guesswork the reference list's
+-- own mislabelling comes from.
+local WOW_PROJECT_NAMES = {
+    [1]  = "WoW",
+    [2]  = "WoW Classic",
+    [3]  = "WoW Plunderstorm",
+    [5]  = "Burning Crusade Classic",
+    [11] = "Wrath Classic",
+    [14] = "Cataclysm Classic",
+    [19] = "Mists Classic",
+}
+
+-- Non-WoW clients, by the program code Battle.net reports. The codes are
+-- Blizzard's own and are not localised; the names here are the only part a
+-- reader sees. Matches the reference addon's table
+-- (References/ElvUI_WindTools-v4.19/Modules/Social/FriendList.lua:43-57) so a
+-- user of both sees one vocabulary. An unlisted code falls back to the code
+-- itself, which is ugly but honest and names the gap.
+local CLIENT_NAMES = {
+    APP  = "Battle.net App",  BSAp = "Battle.net App",
+    WTCG = "Hearthstone",     Hero = "Heroes of the Storm",
+    D3   = "Diablo III",      ANBS = "Diablo Immortal",
+    OSI  = "Diablo II",       S2   = "StarCraft II",
+    S1   = "StarCraft",       W3   = "WarCraft III",
+    Pro  = "Overwatch",       RTRO = "Blizzard Arcade Collection",
+}
 
 -- One Battle.net game account, rendered. `acc` supplies the fallback label for
 -- a friend whose character name has not arrived yet.
@@ -515,30 +610,65 @@ local function BNetRow(roster, acc, ga)
     -- list renders rich presence in that slot
     -- (Blizzard_FriendsFrame/Mainline/FriendsFrame.lua:1888-1894), which is
     -- already localised and already says what they are doing.
+    local isWoW = Plain(ga.clientProgram) == "WoW"
     local r, g, b
     local right
-    if Plain(ga.clientProgram) == "WoW" then
+    if isWoW then
         r, g, b = ClassColorFromID(ga.classID)
-        right = Plain(ga.areaName) or Plain(ga.realmDisplayName)
+        -- The Battle.net account, not the zone. A character name you do not
+        -- recognise is the problem this column solves; the zone answers a
+        -- question nobody asked of a friends list.
+        right = Plain(acc.accountName) or Plain(acc.battleTag)
     else
         right = Plain(ga.richPresence) or Plain(ga.clientProgram)
     end
-    roster.Row(RosterLabel(name, ga.characterLevel), right, r, g, b)
+
+    -- Away and busy are reported on the account AND on the game account, and
+    -- either one is the same fact to a reader.
+    local tag = StatusTag(Plain(acc.isAFK) or Plain(ga.isGameAFK),
+                          Plain(acc.isDND) or Plain(ga.isGameBusy))
+
+    -- The group this row belongs under. WoW rows group by version; everything
+    -- else groups by game. `order` sorts the headings: this client's own
+    -- version first, other WoW versions next by id, other games last.
+    local key, label, order
+    if isWoW then
+        local pid = Plain(ga.wowProjectID)
+        if type(pid) ~= "number" then pid = 0 end
+        key = "wow" .. pid
+        label = WOW_PROJECT_NAMES[pid] or "WoW"
+        order = (pid == (WOW_PROJECT_ID or 1)) and 0 or (100 + pid)
+    else
+        local code = Plain(ga.clientProgram)
+        if type(code) ~= "string" or code == "" then code = "?" end
+        key = "app" .. code
+        label = CLIENT_NAMES[code] or code
+        order = 1000
+    end
+
+    roster.Row(RosterLabel(name, ga.characterLevel, tag, r, g, b), right, 1, 1, 1,
+        key, label, order)
 end
 
 local function BuildFriendsRoster(tt)
     local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
     local roster = NewRoster(tt)
 
+    -- Character friends: this client's own version by definition, so they join
+    -- the same group as a Battle.net friend playing here. They carry no
+    -- Battle.net account to name, so their right column keeps the zone -- the
+    -- most useful thing that list actually knows about them.
     local numFriends = (C_FriendList and C_FriendList.GetNumFriends and C_FriendList.GetNumFriends()) or 0
+    local ownPid = WOW_PROJECT_ID or 1
+    local ownKey, ownLabel = "wow" .. ownPid, (WOW_PROJECT_NAMES[ownPid] or "WoW")
     for i = 1, numFriends do
         local info = C_FriendList.GetFriendInfoByIndex and C_FriendList.GetFriendInfoByIndex(i)
         if info and info.connected and info.name then
             -- The localised path, because FriendInfo carries no classID.
             local r, g, b = ClassColorFromLocalizedName(info.className)
-            local tag = (info.afk and "  |cff808080<AFK>|r")
-                or (info.dnd and "  |cff808080<DND>|r") or ""
-            roster.Row(RosterLabel(info.name, info.level, tag), Plain(info.area), r, g, b)
+            local tag = StatusTag(Plain(info.afk), Plain(info.dnd))
+            roster.Row(RosterLabel(info.name, info.level, tag, r, g, b),
+                Plain(info.area), 1, 1, 1, ownKey, ownLabel, 0)
         end
     end
 
@@ -631,12 +761,33 @@ local function BuildGuildRoster(tt)
     local online = CommunitiesUtil.GetOnlineMembers(infos)
     if type(online) ~= "table" then return end
 
-    -- The guild's own name above the roster, the way NaowhUI heads its list.
-    -- GetGuildInfo is an old global with no generated-doc entry, so its return
-    -- goes through Plain() like every other roster read rather than being
-    -- trusted on the strength of its age.
-    local gname = GetGuildInfo and Plain(GetGuildInfo("player"))
+    -- The guild header: name, then YOUR rank in it, then the message of the
+    -- day. GetGuildInfo is an old global with no generated-doc entry, so both
+    -- of its returns go through Plain() like every other roster read rather
+    -- than being trusted on the strength of its age. Its second return is the
+    -- rank name (.wow-api-reference/Interface/AddOns/Blizzard_UIPanels_Game/
+    -- Mainline/TabardFrame.lua:78).
+    local gname, grank
+    if GetGuildInfo then
+        local n, r = GetGuildInfo("player")
+        gname, grank = Plain(n), Plain(r)
+    end
     if type(gname) == "string" and gname ~= "" then tt:AddLine(gname, 0.1, 1, 0.1) end
+    if type(grank) == "string" and grank ~= "" then tt:AddLine(grank, 1, 0.82, 0) end
+
+    -- GetGuildRosterMOTD is deprecated to C_GuildInfo.GetMOTD
+    -- (Blizzard_DeprecatedGuildScript/Deprecated_GuildScript.lua:19), so call
+    -- the new name and fall back rather than the other way round. Wrapped
+    -- because a long message would otherwise force the whole tooltip to that
+    -- width, and a guild message of the day is routinely a paragraph.
+    local motd
+    if C_GuildInfo and C_GuildInfo.GetMOTD then motd = Plain(C_GuildInfo.GetMOTD())
+    elseif GetGuildRosterMOTD then motd = Plain(GetGuildRosterMOTD()) end
+    if type(motd) == "string" and motd ~= "" then
+        tt:AddLine(" ")
+        tt:AddLine(motd, 0.6, 0.8, 1, true)
+    end
+    tt:AddLine(" ")
 
     local roster = NewRoster(tt)
     for _, info in ipairs(online) do
@@ -651,7 +802,9 @@ local function BuildGuildRoster(tt)
             local presence = Plain(info.presence)
             local tag = (presence == 4 and "  |cff808080<AFK>|r")
                 or (presence == 5 and "  |cff808080<DND>|r") or ""
-            roster.Row(RosterLabel(name, info.level, tag), Plain(info.zone), r, g, b)
+            -- Colour goes INTO the label so the level keeps its gold while the
+            -- name takes the class colour; the row itself draws plain.
+            roster.Row(RosterLabel(name, info.level, tag, r, g, b), Plain(info.zone), 1, 1, 1)
         end
     end
     return roster.Finish()

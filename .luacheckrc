@@ -110,7 +110,7 @@ read_globals = {
     -- tooltips, and the Secret-value test that guards every field read off a
     -- roster structure before it is used as a key or concatenated.
     "issecretvalue",
-    "GetGuildInfo",
+    "GetGuildInfo", "GetGuildRosterMOTD", "WOW_PROJECT_ID",
     "C_CreatureInfo", "RAID_CLASS_COLORS",
     "LOCALIZED_CLASS_NAMES_MALE", "LOCALIZED_CLASS_NAMES_FEMALE",
 
