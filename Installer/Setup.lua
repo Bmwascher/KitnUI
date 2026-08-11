@@ -190,7 +190,55 @@ end
 
 ---------------------------------------------------------------------------------
 -- BigWigs
+--
+-- TWO STRINGS, TWO APIS, AND THE ORDER IS LOAD-BEARING.
+--
+-- BigWigs exports a profile in two halves, because its own export API hands
+-- back two: RequestProfile's callback receives (profileString, bossString)
+-- (BigWigs/API.lua:226). `BW2:` is the profile -- sounds, bars, colours,
+-- layout. `BWB1:` is the per-boss settings -- flags, renames, sounds, private
+-- auras and colours for every instance that was exported.
+--
+-- Neither call will take the other's string, so this is not a style choice.
+-- RegisterProfile rejects anything that parses as a boss export
+-- (API.lua:205, `if not valid or bossExport then error(...)`) and
+-- ImportBossOptions rejects anything that does not (API.lua:219-220).
+--
+-- Boss settings are written into whatever BigWigs profile is ACTIVE, so the
+-- boss import has to run after the profile import has finished and swapped.
+-- That is why it lives inside the RegisterProfile callback, which BigWigs
+-- fires only once the user has accepted and the import has completed
+-- (API.lua:197). Firing the two side by side would drop the boss settings into
+-- whichever profile the player happened to be on. Both reference installers do
+-- it this same way: References/NaowhUI-20260721.01/NaowhUI/Game/Shared/Modules/
+-- Setup/AddOns/BigWigs.lua:9-16, and References/atrocityUI/Imports/
+-- BigWigsInstances.lua:14-15.
+--
+-- NOT copied from atrocityUI: its 30-line private-aura workaround. That
+-- targeted a BigWigs bug where the export wrote sounds.privateaura and the
+-- import read settings.privateAuras, so private aura sounds rode the string
+-- and never landed. It is FIXED in BigWigs v419.2 -- BigWigs_Options/
+-- Sharing.lua:1047 now calls ImportPrivateAuras(settings.sounds, moduleName),
+-- and :951 reads the "privateaura" key the export actually writes. atrocityUI
+-- cites line 1046, one line above the fix. Re-check only if a future BigWigs
+-- regresses it.
 ---------------------------------------------------------------------------------
+
+-- The boss half is OPTIONAL. A profile with no boss settings is a legitimate
+-- thing to ship, so a missing or empty string is skipped without comment
+-- rather than reported as a packaging fault.
+--
+-- pcall'd because ImportBossOptions signals bad input by raising, not by
+-- returning false (API.lua:215-220). Unguarded, one malformed shipped string
+-- would abort the enclosing callback and take CompleteSetup down with it --
+-- the install would look like it failed when the profile had already landed.
+local function ImportBigWigsBosses()
+    local bossString = ns.data.BigWigs_Bosses
+    if type(bossString) ~= "string" or strtrim(bossString) == "" then return end
+    if not (BigWigsAPI and BigWigsAPI.ImportBossOptions) then return end
+
+    pcall(BigWigsAPI.ImportBossOptions, ns.title, bossString)
+end
 
 setupFunctions["BigWigs"] = function(addonKey, import)
     if import then
@@ -201,6 +249,12 @@ setupFunctions["BigWigs"] = function(addonKey, import)
 
         BigWigsAPI.RegisterProfile(ns.title, ns.data[addonKey], ns.profileName, function(success)
             if success then
+                -- The boss prompt is a SECOND prompt the player answers, and
+                -- declining it must not un-install BigWigs: the profile is the
+                -- thing being installed and it has already landed. Marking the
+                -- addon complete regardless is also what keeps the installer
+                -- from offering BigWigs again on every later run.
+                ImportBigWigsBosses()
                 CompleteSetup(addonKey)
             end
         end)
