@@ -390,7 +390,7 @@ local function BlizzardCDMPage()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
             if failed > 0 then
-                ShowInstallToast(imported .. " imported, " .. failed .. " failed (layout limit?)", 1, 0.8, 0.2)
+                ShowInstallToast(imported .. " imported, " .. failed .. " failed (see chat)", 1, 0.8, 0.2)
             else
                 SuccessToast("All specs", "layouts imported!")
             end
@@ -428,8 +428,13 @@ local function BlizzardCDMPage()
                         PlayInstallSound()
                         SetVariant(WF().Next, "primary")
                     else
-                        WF().Desc2:SetText(ns.Red("Layout limit reached. Delete a layout and try again."))
-                        ShowInstallToast("Layout limit reached!", 1, 0.2, 0.2)
+                        -- The cause is NOT named here. setupFunctions
+                        -- ["BlizzardCDM"] fails on five different paths and
+                        -- prints the real reason to chat on every one of them;
+                        -- this branch used to assert the layout limit for all
+                        -- five, so four of them read as a wrong diagnosis.
+                        WF().Desc2:SetText(ns.Red("Import failed. See chat for the reason."))
+                        ShowInstallToast("Import failed!", 1, 0.2, 0.2)
                     end
                 end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, i))
             end)

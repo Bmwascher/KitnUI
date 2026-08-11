@@ -175,7 +175,10 @@ function ns.GetCDMSpecState(classId, specIndex)
 
     local key = ns.GetCDMKey(classId, specIndex)
     local store = ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM
-    local held = type(store) == "table" and key and store[key] or nil
+    -- An `if`, not `and`/`or`: the value on the right can be nil, which is the
+    -- one shape the project rule forbids collapsing.
+    local held
+    if type(store) == "table" and key then held = store[key] end
 
     if type(held) == "string" then
         return held == shipped and "current" or "stale"
