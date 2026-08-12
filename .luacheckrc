@@ -172,6 +172,7 @@ read_globals = {
     "WarpDeplete",
     "MRT", "MRT_DB",
     "Ayije_CDM",
+    "NSAPI", "NorthernSkyRaidTools",
 
     -- Cross-addon globals (read from other Kitn addons)
     "KitnHelpLines",

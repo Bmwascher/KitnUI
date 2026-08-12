@@ -253,60 +253,155 @@ end
 
 ---------------------------------------------------------------------------------
 -- Northern Sky Raid Tools
--- Decodes NSRT's export string (AceSerializer-3.0 + LibDeflate) and writes each
--- module's data directly into the account-wide NSRT global. NSRT has no profile
--- system, so there is nothing to activate on load.
+-- NSRT export strings are LibSerialize + LibDeflate now and land in NSRT's own
+-- profile system (NSRT.Profiles / ProfileKeys / CurrentProfile), so the import
+-- goes through NSRT's public NSAPI:ImportProfileString - decode, activation and
+-- future format changes stay NSRT's problem. The pre-profile direct-write
+-- importer this replaces (AceSerializer, per-module {enabled, data} shape) is
+-- in git history; it cannot decode current exports at all.
 ---------------------------------------------------------------------------------
 
-local function DecodeNSRTString(exportString)
-    local LibDeflate = LibStub and LibStub("LibDeflate", true)
-    local Serialize = LibStub and LibStub("AceSerializer-3.0", true)
-    if not LibDeflate or not Serialize then
-        return nil, "LibDeflate or AceSerializer-3.0 not available (is NSRT loaded?)"
-    end
-
-    local decoded = LibDeflate:DecodeForPrint(exportString)
-    local decompressed = decoded and LibDeflate:DecompressDeflate(decoded)
-    if not decompressed then
-        return nil, "failed to decompress NSRT string"
-    end
-
-    local success, data = Serialize:Deserialize(decompressed)
-    if not success or type(data) ~= "table" then
-        return nil, "failed to deserialize NSRT data"
-    end
-    return data
-end
-
 setupFunctions["NSRT"] = function(addonKey, import)
+    if not IsAddOnLoaded("NorthernSkyRaidTools") then
+        print(ns.title .. ": NorthernSkyRaidTools is not loaded.")
+        return false
+    end
+
+    -- NSRT's internal namespace is a global too (NorthernSkyRaidTools.lua
+    -- assigns it next to NSAPI); the decode preflight and profile helpers
+    -- live there. An NSRT old enough to lack any of them gets a plain
+    -- refusal - importing into a pre-profile NSRT is not supported. The two
+    -- tables are required because the helpers iterate and write through both.
+    local NSI = NorthernSkyRaidTools
+    if not (NSAPI and NSAPI.ImportProfileString
+        and NSI and NSI.DecodeExportData and NSI.LoadProfile
+        and NSI.SaveProfile and NSI.GetProfileKey
+        and type(NSRT) == "table" and type(NSRT.Profiles) == "table"
+        and type(NSRT.ProfileKeys) == "table") then
+        print(ns.title .. ": Your Northern Sky Raid Tools version is too old for this profile. Please update it.")
+        return false
+    end
+
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No NSRT data found.")
-            return
-        end
-        if not IsAddOnLoaded("NorthernSkyRaidTools") then
-            print(ns.title .. ": NorthernSkyRaidTools is not loaded.")
-            return
+            return false
         end
 
-        local decoded, err = DecodeNSRTString(ns.data[addonKey])
-        if not decoded then
-            print(ns.title .. ": NSRT decode failed - " .. (err or "unknown error"))
-            return
+        -- Preflight the decode before touching any saved state: the import
+        -- API rejects only a non-table decode, so a decoded table with no
+        -- data field would still create and activate an EMPTY profile.
+        local decoded = NSI:DecodeExportData(ns.data[addonKey])
+        if type(decoded) ~= "table" or type(decoded.data) ~= "table" then
+            print(ns.title .. ": NSRT import failed - the export string could not be decoded.")
+            return false
         end
 
-        NSRT = NSRT or {}
-        for k, v in pairs(decoded) do
-            if type(v) == "table" and v.enabled and v.data ~= nil then
-                NSRT[k] = v.data
+        -- Import WITHOUT deleting anything first. On a name collision NSRT
+        -- imports under a renamed profile ("KitnUI 2") and the swap below
+        -- moves it over the old name only after the import fully succeeded,
+        -- so the existing profile and every character's binding stay intact
+        -- on every failure path. The snapshots let a failed import be swept
+        -- away; the active profile's stored copy is freshened and deep-copied
+        -- because the import's own save empties and refills it, and a raise
+        -- mid-copy would leave it partial.
+        local priorNames = {}
+        for profileName in pairs(NSRT.Profiles) do priorNames[profileName] = true end
+        local priorCurrent = NSRT.CurrentProfile
+        local myKey = NSI:GetProfileKey()
+        local priorMyBinding = myKey and NSRT.ProfileKeys[myKey] or nil
+        local priorCurrentCopy
+        if priorCurrent and NSRT.Profiles[priorCurrent] then
+            -- SaveProfile empties and refills the stored table, so freshen it
+            -- only under protection with a pre-save copy to fall back on: a
+            -- raise mid-save would leave the active profile partial, and it
+            -- was this function that invoked the save.
+            local preSaveCopy = CopyTable(NSRT.Profiles[priorCurrent])
+            if not pcall(NSI.SaveProfile, NSI) then
+                NSRT.Profiles[priorCurrent] = preSaveCopy
+                print(ns.title .. ": NSRT import failed - the current profile could not be saved.")
+                return false
             end
+            priorCurrentCopy = CopyTable(NSRT.Profiles[priorCurrent])
+        end
+
+        -- pcall because ImportProfileString mutates several structures with
+        -- no internal protection - a raised error must reach the sweep.
+        local ok, imported = pcall(NSAPI.ImportProfileString, NSAPI, ns.data[addonKey], ns.profileName)
+        if not ok or not imported then
+            -- The preflight makes this near-impossible (the import decodes
+            -- the same string); sweep whatever the aborted import created
+            -- and put everything else back where it was. Only bindings that
+            -- point at a name swept HERE are cleared - a binding that was
+            -- already dangling before the import survives, unless it happened
+            -- to point at the very name the import chose.
+            local sweptNames = {}
+            for profileName in pairs(NSRT.Profiles) do
+                if not priorNames[profileName] then
+                    NSRT.Profiles[profileName] = nil
+                    sweptNames[profileName] = true
+                end
+            end
+            for charKey, profileName in pairs(NSRT.ProfileKeys) do
+                if sweptNames[profileName] then NSRT.ProfileKeys[charKey] = nil end
+            end
+            -- Restore the prior active profile's stored copy, put the prior
+            -- name back, and ALWAYS repair the live root when possible: the
+            -- import's LoadProfile writes into the live root before it
+            -- changes CurrentProfile, so a partial import can sit in the
+            -- root while CurrentProfile still looks untouched. skipsave
+            -- skips only LoadProfile's ENTRY save; its exit save still runs
+            -- and can itself raise mid-copy, so the known-good stored copy
+            -- goes back in afterwards no matter how the repair went.
+            if priorCurrent and priorCurrentCopy then
+                NSRT.Profiles[priorCurrent] = priorCurrentCopy
+            end
+            NSRT.CurrentProfile = priorCurrent
+            if priorCurrent and priorCurrentCopy then
+                pcall(NSI.LoadProfile, NSI, priorCurrent, true)
+                NSRT.Profiles[priorCurrent] = priorCurrentCopy
+            end
+            -- LAST, because the repair's LoadProfile rebinds this character
+            -- to priorCurrent; restore the true prior binding, nil included.
+            if myKey then
+                NSRT.ProfileKeys[myKey] = priorMyBinding
+            end
+            print(ns.title .. ": NSRT import failed - the profile was not created.")
+            return false
+        end
+
+        -- Collision case: the import landed under a renamed profile and is
+        -- already built and active. Move it over the old KitnUI name - pure
+        -- renames, the only direct SavedVariables writes in this function.
+        if imported ~= ns.profileName then
+            NSRT.Profiles[ns.profileName] = NSRT.Profiles[imported]
+            NSRT.Profiles[imported] = nil
+            for charKey, profileName in pairs(NSRT.ProfileKeys) do
+                if profileName == imported then NSRT.ProfileKeys[charKey] = ns.profileName end
+            end
+            if NSRT.CurrentProfile == imported then NSRT.CurrentProfile = ns.profileName end
+            if NSRT.MainProfile == imported then NSRT.MainProfile = ns.profileName end
         end
 
         CompleteSetup(addonKey)
-        return
+        return true
     end
 
-    -- Load is a no-op: NSRT is account-wide with no per-character profile.
+    -- Load: bind this character to the account-wide KitnUI profile. pcall
+    -- for the same reason as the import path - LoadProfile's saves can
+    -- raise mid-copy. (A raise in its entry save can still leave this
+    -- character's active stored profile partial; accepted risk, the same
+    -- unprotected path NSRT's own UI takes, and only reachable when NSRT
+    -- itself is already broken.)
+    if not NSRT.Profiles[ns.profileName] then
+        print(ns.title .. ": No NSRT profile found. Run the installer first.")
+        return false
+    end
+    if not pcall(NSI.LoadProfile, NSI, ns.profileName) then
+        print(ns.title .. ": NSRT profile load failed.")
+        return false
+    end
+    return true
 end
 
 ---------------------------------------------------------------------------------
