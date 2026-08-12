@@ -49,13 +49,37 @@ function ns.EUIReady()
     return _G.EllesmereUI and EllesmereUI.ImportProfile and true or false
 end
 
+-- Why EUIReady() is false, for the boot prompt and OpenInstaller's refusal:
+-- "missing" (not installed), "disabled" (installed but switched off for this
+-- character), "loaderror" (enabled yet failed to load -- an interface,
+-- dependency or Lua error), "tooold" (loaded without the import API). nil
+-- when EllesmereUI is ready. The addon loads without EllesmereUI now that
+-- the dependency is optional, so every consumer of the answer exists to
+-- point the user at the right fix. Enabled-but-unloaded is deliberately NOT
+-- called disabled: an Enable and Reload button against a load error would
+-- walk the user through a reload that fixes nothing.
+function ns.EUIMissingReason()
+    if ns.EUIReady() then return nil end
+    if not C_AddOns.DoesAddOnExist("EllesmereUI") then return "missing" end
+    if IsAddOnLoaded("EllesmereUI") then return "tooold" end
+    local state = C_AddOns.GetAddOnEnableState
+        and C_AddOns.GetAddOnEnableState("EllesmereUI", UnitGUID("player"))
+    -- Enum.AddOnEnableState.None is 0. A state we cannot read fails CLOSED,
+    -- to loaderror: that popup has no button, so being wrong there costs one
+    -- inaccurate sentence, while calling it disabled would offer an Enable
+    -- and Reload button that reloads without fixing anything -- and the same
+    -- popup would greet the user again on the far side, forever.
+    if state == 0 then return "disabled" end
+    return "loaderror"
+end
+
 -- Tell EllesmereUI that KitnUI owns the first-run experience, so EUI's own
 -- first-install picker stays silent while our wizard runs. This is runtime
 -- state on the EllesmereUI table, not a SavedVariable, so it has to be set
--- every session. File scope is early enough on both counts: RequiredDeps
--- guarantees EllesmereUI is loaded before this file runs, and EUI does not
--- check the flag until PLAYER_LOGIN plus half a second. Guarded, so an older
--- EllesmereUI simply keeps its own picker.
+-- every session. File scope is early enough on both counts: EllesmereUI is
+-- in OptionalDeps, so when it is present it loads before this file runs, and
+-- EUI does not check the flag until PLAYER_LOGIN plus half a second. Guarded,
+-- so a missing or older EllesmereUI simply keeps its own picker.
 if _G.EllesmereUI and EllesmereUI.RegisterExternalInstaller then
     EllesmereUI.RegisterExternalInstaller("KitnUI")
 end
@@ -722,7 +746,67 @@ boot:SetScript("OnEvent", function()
     end
 
     if not ns.EUIReady() then
-        print(ns.title .. ": EllesmereUI not detected - installer unavailable.")
+        -- Spam rule: a user who has completed an install gets one chat line,
+        -- never a popup -- their profiles already exist and nagging them to
+        -- install would be wrong. Only a user the first-run auto-open below
+        -- would have caught gets the popup treatment.
+        local completed = (ns.db.profiles and next(ns.db.profiles) ~= nil)
+            or ns.db.installedVersion
+        local reason = ns.EUIMissingReason()
+        if completed then
+            local words = {
+                missing   = "not installed",
+                disabled  = "disabled for this character",
+                loaderror = "failing to load",
+                tooold    = "too old for this KitnUI",
+            }
+            print(ns.title .. ": EllesmereUI is " .. (words[reason] or "unavailable")
+                .. ", so the installer and profile loading are unavailable until it is back.")
+        else
+            local text, button1, button2, accept
+            if reason == "disabled" then
+                text = ns.title .. ": Welcome! KitnUI installs profiles for EllesmereUI, which is installed but disabled. Enable it and reload to start the installer?"
+                button1 = "Enable and Reload"
+                button2 = "Later"
+                accept = function()
+                    if C_AddOns.EnableAddOn then
+                        -- This character only: no argument means the whole
+                        -- account (see AddonCharacter in Setup.lua).
+                        C_AddOns.EnableAddOn("EllesmereUI", UnitGUID("player"))
+                        ReloadUI()
+                    end
+                end
+            elseif reason == "loaderror" then
+                -- Blizzard's own reason token, humanized by its ADDON_*
+                -- globalstring when one exists (ADDON_INTERFACE_VERSION is
+                -- "Out of date", and so on).
+                local why
+                if C_AddOns.GetAddOnInfo then
+                    why = select(5, C_AddOns.GetAddOnInfo("EllesmereUI"))
+                end
+                if type(why) == "string" and why ~= "" then
+                    why = " (" .. (_G["ADDON_" .. why] or why) .. ")"
+                else
+                    why = ""
+                end
+                text = ns.title .. ": Welcome! KitnUI needs EllesmereUI, which is enabled but could not load" .. why .. ". Update EllesmereUI, then log back in to start the installer."
+                button1 = "Okay"
+            elseif reason == "tooold" then
+                text = ns.title .. ": Welcome! KitnUI needs a newer EllesmereUI than this one. Update EllesmereUI, then log back in to start the installer."
+                button1 = "Okay"
+            else
+                text = ns.title .. ": Welcome! KitnUI installs profiles for EllesmereUI, which is not installed. Install EllesmereUI from CurseForge or Wago, then log back in to start the installer."
+                button1 = "Okay"
+            end
+            StaticPopupDialogs["KITNUI_NEEDS_EUI"] = {
+                text = text,
+                button1 = button1,
+                button2 = button2,
+                OnAccept = accept,
+                timeout = 0, whileDead = true, hideOnEscape = true,
+            }
+            StaticPopup_Show("KITNUI_NEEDS_EUI")
+        end
         return
     end
 

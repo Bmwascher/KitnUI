@@ -3,8 +3,7 @@
 ## Author: Bitebtw
 ## Version: @project-version@
 ## Interface: 120005, 120007, 120100
-## RequiredDeps: EllesmereUI
-## OptionalDeps: Plater, BigWigs, NorthernSkyRaidTools, KitnEssentials, BuffReminders, Baganator
+## OptionalDeps: EllesmereUI, Plater, BigWigs, NorthernSkyRaidTools, KitnEssentials, BuffReminders, Baganator
 ## SavedVariables: KitnUIDB
 ## IconTexture: Interface\Icons\INV_Misc_Gift_05
 ## Category-enUS: |cffFF008CKitn|rUI

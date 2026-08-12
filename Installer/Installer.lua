@@ -809,7 +809,16 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
         return
     end
     if not ns.EUIReady() then
-        print(ns.title .. ": EllesmereUI is not ready.")
+        local reason = ns.EUIMissingReason and ns.EUIMissingReason()
+        if reason == "missing" then
+            print(ns.title .. ": EllesmereUI is not installed. KitnUI imports its profiles into EllesmereUI, so install it first.")
+        elseif reason == "disabled" then
+            print(ns.title .. ": EllesmereUI is installed but disabled. Enable it and reload, then try again.")
+        elseif reason == "loaderror" then
+            print(ns.title .. ": EllesmereUI is enabled but could not load. Update it, then try again.")
+        else
+            print(ns.title .. ": This EllesmereUI is too old for the installer. Update EllesmereUI and try again.")
+        end
         return
     end
     ns.SnapshotProfiles()
