@@ -28,7 +28,7 @@ an agent.**
 |---|---|---|---|---|
 | 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
-| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes | Sol PASS, Fable PASS | **PENDING** |
+| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | not started | plan out to Sol | — |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -243,4 +243,90 @@ Kitn, record the outcome here.
 - Disabled-addon (checks 3-5):
 - BigWigs decline (check 6):
 - Deleted profiles (checks 7-9):
+- Notes:
+
+---
+
+# Item 3 — Each forcing switch says whether it is really holding your setting
+
+**Plan:** `dev/docs/superpowers/plans/2026-08-11-ownership-tooltip.md` (local only).
+**Status: DRAFT. The plan is still in review, and no code is built. These checks
+may change before they are run — do not start them yet.**
+
+## What is changing and why it needs testing
+
+Item 1 created a state that nothing on screen distinguishes: a switch reads ON
+while KitnUI holds none of your setting. It usually happens when a host profile is
+copied, because the switch travels with the profile and the note does not.
+
+Four switches get a line on hover saying which state they are really in: holding,
+or on-but-not-holding. Everything else keeps the tooltip it has now.
+
+## Read this before starting
+
+**Leaving the page and coming back proves NOTHING here.** EllesmereUI re-shows a
+cached page instead of rebuilding it, so the tooltip you see after navigating away
+and back can be the old one. Several checks below say "without leaving the page"
+for exactly this reason, and swapping in a leave-and-return would let a broken
+build pass.
+
+**The line is refreshed when ownership actually changes**, which for Beginner Mode
+is when combat ends, not when you click the switch.
+
+**Three checks can only fail loudly, so do not skip them.** Check 4 proves the
+unowned state is visible at all. Check 5 proves the page really is rebuilt. Check 8
+proves the rejected design did not sneak back in as a thrown Lua error.
+
+## The checks
+
+- [ ] **1. Off is quiet.** Fresh profile, all four switches OFF. Hover each: the
+  description reads as it does today, with no ownership line.
+- [ ] **2. On says holding.** Turn each on and hover each. Each says KitnUI is
+  holding the setting and names the right one. **Beginner Mode must say it once, not
+  once per action bar.**
+- [ ] **3. Off takes it back.** Turn each off. The ownership line disappears again.
+- [ ] **4. THE DECISIVE CHECK.** Switches on. **Save Current as Profile**, switch to
+  the copy, open KitnUI's tab and hover each of the four. Each must say it is ON but
+  NOT holding, and tell you to toggle it. Before this item there was no way to tell
+  this state from a healthy one.
+- [ ] **5. Claiming in the copy, without leaving the page.** Still in the copy,
+  toggle **Pink Accent or Target Arrows** off and on, then hover it again **without
+  leaving the page.** It must ALREADY read holding. **Do not use Lulu Mode here** —
+  accepting its prompt reloads everything, so there is no "without leaving the page"
+  left to test.
+- [ ] **6. The deferred claim.** In combat, turn Beginner Mode on. When combat ends,
+  hover it: the line reads holding. Now do it again, but this time move to a
+  DIFFERENT KitnUI page before combat ends and return to Gameplay afterwards. The
+  line must still read holding.
+- [ ] **7. Nothing else changed.** Hover Additive Glow, the **Dark Class Resource
+  Bar**, and any Top Bar switch. No ownership line on any of them, and the
+  description is word for word what it is today. The Dark Class Resource Bar matters
+  most here: it does change a host setting, and it still must not claim ownership.
+- [ ] **8. THE THROW CHECK.** Make EllesmereUI's panel as narrow as it goes, so the
+  Target Arrows label is cut short with an ellipsis, and hover all four switches. A
+  tooltip must appear each time and **BugSack must stay empty.** An error here means
+  the build regressed to the rejected dynamic-tooltip design.
+- [ ] **9. Combat.** Hover a forcing switch in combat in an open-world zone: it
+  works. Do the same in a Mythic+ dungeon: EllesmereUI suppresses every widget
+  tooltip there, so nothing appears. **That is expected and is not a defect.**
+- [ ] **10. Search still finds them.** In EllesmereUI's settings search, type
+  "accent", "lulu", "beginner" and "arrows" and confirm each row is found. Then
+  search a distinctive word from one of the four descriptions and confirm the row
+  still matches, which proves the descriptions are still indexed.
+- [ ] **11. The rebuild broke nothing.** Toggle each forcing switch a few times and
+  watch the settings page. It must not flicker into a broken layout, lose its scroll
+  position badly, or make other pages disappear. This work tears the page down and
+  builds it again, so a layout fault shows up here.
+
+## Result
+
+Kitn, record the outcome here.
+
+- Date:
+- Off / on / off (checks 1-3):
+- Copied profile and claiming (checks 4-5):
+- Deferred claim (check 6):
+- Untouched switches (check 7):
+- Narrow panel, BugSack (check 8):
+- Combat, search, rebuild (checks 9-11):
 - Notes:
