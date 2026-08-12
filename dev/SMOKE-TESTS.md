@@ -28,7 +28,7 @@ an agent.**
 |---|---|---|---|---|
 | 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
-| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | not started | plan out to Sol | — |
+| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `SHA_PENDING` | Sol PASS, Fable PASS | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -250,8 +250,7 @@ Kitn, record the outcome here.
 # Item 3 — Each forcing switch says whether it is really holding your setting
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-11-ownership-tooltip.md` (local only).
-**Status: DRAFT. The plan is still in review, and no code is built. These checks
-may change before they are run — do not start them yet.**
+**Commit:** `c20fa1a`. **Status: awaiting Kitn.**
 
 ## What is changing and why it needs testing
 
