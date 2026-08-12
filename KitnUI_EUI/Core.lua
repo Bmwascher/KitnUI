@@ -823,7 +823,15 @@ boot:SetScript("OnEvent", function(self)
     -- is registered first, at KitnUI load time.
     MigrateSettingsForward()
 
-    if not (_G.EllesmereUI and EllesmereUI.RegisterModule and EllesmereUI.Widgets) then return end
+    -- RegisterModule only, NOT Widgets: EllesmereUI 8.8 moved the widget
+    -- factory into its LoadOnDemand EllesmereUIOptions addon, so
+    -- EllesmereUI.Widgets is nil at login and appears only when the panel
+    -- first opens (EnsureOptionsLoaded). The page builders read it at build
+    -- time, which normally follows that load; if the options addon fails to
+    -- load, the panel still builds and buildPage's pcall costs that page,
+    -- not the panel. Requiring Widgets here would skip this whole block on
+    -- every 8.8+ install.
+    if not (_G.EllesmereUI and EllesmereUI.RegisterModule) then return end
 
     InjectSidebar()
 
@@ -907,8 +915,8 @@ KitnCommands["config"] = KitnCommands["options"]
 local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar" }
 
 -- Its own frame, deliberately. The main boot handler above returns early when
--- EllesmereUI is too old for RegisterModule or Widgets, and none of these
--- exports needs EllesmereUI. Publishing behind that guard would leave /kitn
+-- EllesmereUI is too old for RegisterModule, and none of these exports needs
+-- EllesmereUI. Publishing behind that guard would leave /kitn
 -- reset with no teardown on exactly the configuration where forced values from a
 -- previous session are still held down.
 --

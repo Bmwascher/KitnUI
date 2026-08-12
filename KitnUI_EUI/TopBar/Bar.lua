@@ -823,7 +823,7 @@ end
 
 -- Its own frame: registering with Unlock Mode has nothing to do with
 -- EllesmereUI's config panel capability, so it must not share Core.lua's
--- RegisterModule/Widgets gate. Registered even while the bar is off; the
+-- RegisterModule gate. Registered even while the bar is off; the
 -- hooks above cope with a bar that does not exist yet.
 local unlockBoot = CreateFrame("Frame")
 unlockBoot:RegisterEvent("PLAYER_LOGIN")
