@@ -155,20 +155,22 @@ local function EnsureArrows(plate)
     local parent = plate.health
     if not parent then return false end
 
-    -- On 12.1 the aura containers carry UntrustedLayoutScriptExecution and only
+    -- The aura containers carry UntrustedLayoutScriptExecution and only
     -- aspect-bearing objects may anchor to them. An aspect cannot be gained
     -- later, so a region has to be BORN inside the template holder. We only ever
     -- anchor to the health bar, so this is insurance rather than a present need,
-    -- but it is insurance that cannot be retrofitted.
-    if _G.EllesmereUI and EllesmereUI.IS_121 then
-        local ok, holder = pcall(CreateFrame, "Frame", nil, plate.health,
-            "DisableUntrustedLayoutScriptsTemplate")
-        if ok and holder then
-            holder:SetAllPoints(plate.health)
-            holder:SetFrameLevel(plate.health:GetFrameLevel())
-            plate._kitnArrowHost = holder
-            parent = holder
-        end
+    -- but it is insurance that cannot be retrofitted once a plate is built.
+    -- Unconditional: this used to check EllesmereUI.IS_121, which 8.8 removed
+    -- entirely, leaving the insurance permanently off. EllesmereUI now creates
+    -- its own holder the same way -- a client without the template keeps the
+    -- plain parent through the failed pcall.
+    local ok, holder = pcall(CreateFrame, "Frame", nil, plate.health,
+        "DisableUntrustedLayoutScriptsTemplate")
+    if ok and holder then
+        holder:SetAllPoints(plate.health)
+        holder:SetFrameLevel(plate.health:GetFrameLevel())
+        plate._kitnArrowHost = holder
+        parent = holder
     end
 
     -- NO anchor and NO size at creation: an unanchored hidden texture has no rect
