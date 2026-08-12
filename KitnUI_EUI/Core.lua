@@ -376,6 +376,92 @@ function ns.EUIRestore(tbl, saved, key)
     saved.prev = nil
 end
 
+-- Is this section holding anything right now, in the ACTIVE profile?
+--
+-- It walks instead of reading fixed keys, because two sections have no fixed key
+-- to read. `accent` nests its per-module scope records a level deeper under
+-- keys[slot] (General.lua's scope apply), and `beginner` builds a key per action
+-- bar at runtime (Gameplay.lua's BarSnapKey). A cleared note leaves its record
+-- shell behind with prev set to nil (EUIRestore above), so the test is
+-- `prev ~= nil` and never the record's existence -- and never a type check
+-- either, since a recorded value may legitimately be false, nil-as-EUI_ABSENT,
+-- or a table.
+local function HoldsAny(tbl, depth)
+    if type(tbl) ~= "table" or depth > 4 then return false end
+    if tbl.prev ~= nil then return true end
+    for _, v in pairs(tbl) do
+        if type(v) == "table" and HoldsAny(v, depth + 1) then return true end
+    end
+    return false
+end
+
+function ns.EUIHolds(section)
+    local root = ns.db and ns.db.euiSnap
+    local sect = root and root[section]
+    local profile = sect and sect[ActiveProfileName()]
+    if not profile then return false end
+    return HoldsAny(profile, 0)
+end
+
+-- The hover description for a forcing switch, with a sentence saying whether
+-- KitnUI is really holding the setting down right now.
+--
+-- It RETURNS A STRING, and that is deliberate rather than lazy. EllesmereUI does
+-- resolve a function tooltip on each show (EllesmereUI_Widgets.lua:1738), but
+-- both widget shapes used here CONCATENATE the tooltip when a row label is
+-- ellipsized -- :2350 for W:Toggle, :2420 for a DualRow half -- and concatenating
+-- a function raises an error. A string also stays in the settings search index,
+-- which drops anything that is not one (EllesmereUI_GlobalSearch.lua:107).
+--
+-- The cost of a string is that it is fixed when the page is BUILT, and the host
+-- re-shows a cached page rather than rebuilding it. So every caller must force a
+-- rebuild once an ownership change has COMPLETED, or this sentence goes stale.
+function ns.EUIOwnershipTip(base, section, enabled, thing)
+    local on = enabled
+    if type(enabled) == "function" then on = enabled() end
+    if not on then return base end
+
+    if ns.EUIHolds(section) then
+        return base .. "\n\nKitnUI is holding " .. thing
+            .. " for you. Turn this off and your own setting comes back."
+    end
+    return base .. "\n\nThis is on, but KitnUI is not holding " .. thing
+        .. " - that usually happens when a profile is copied. Turn it off and on"
+        .. " again to take it."
+end
+
+-- Force the page to be rebuilt so an ownership sentence above is recomputed.
+--
+-- Inline on purpose, NOT wrapped in C_Timer.After, which goes against the usual
+-- next-frame habit. The host does exactly this from inside its own setValue
+-- (EUI__General_Options.lua:1800-1801), reparenting does not destroy the frame,
+-- and a timer would be worse: RefreshPage acts on whatever page is active when it
+-- fires, so navigating during that frame rebuilds an unrelated page.
+--
+-- `page` is optional. Pass it when the call can happen long after the click --
+-- Beginner Mode's claim lands when combat ends -- so the rebuild is skipped when
+-- the user has moved on. Invalidation still runs, and returning to the page then
+-- takes the cold-build path. RefreshPage handles the panel-closed case itself.
+function ns.EUIRebuildForOwnership(page)
+    if not _G.EllesmereUI then return end
+
+    if EllesmereUI.InvalidateModulePageCache then
+        pcall(EllesmereUI.InvalidateModulePageCache, EllesmereUI, ns.EUI_MODULE_KEY)
+    end
+
+    if page then
+        if not (EllesmereUI.GetActiveModule and EllesmereUI.GetActivePage) then return end
+        local okM, mod = pcall(EllesmereUI.GetActiveModule, EllesmereUI)
+        local okP, pg = pcall(EllesmereUI.GetActivePage, EllesmereUI)
+        if not (okM and okP) then return end
+        if mod ~= ns.EUI_MODULE_KEY or pg ~= page then return end
+    end
+
+    if EllesmereUI.RefreshPage then
+        pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Profile lifecycle
 ---------------------------------------------------------------------------------

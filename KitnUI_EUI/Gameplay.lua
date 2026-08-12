@@ -432,7 +432,14 @@ local function SetBeginnerMode(on)
     if not s then return end
     s.beginner = on and true or false
 
-    if not RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled(), true) end) then
+    -- The rebuild rides INSIDE the closure, so it runs once the claim has really
+    -- landed -- immediately out of combat, or when the fight ends. Guarded by the
+    -- page name because a deferred claim can land long after the user moved on,
+    -- and an unguarded rebuild would then tear down whatever page they are on.
+    if not RunOutOfCombat(function()
+        ApplyBeginner(ns.BeginnerEnabled(), true)
+        ns.EUIRebuildForOwnership("Gameplay")
+    end) then
         print(ns.title .. ": Beginner Mode is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it - toggle it again afterwards.")
     end
 end
@@ -523,8 +530,15 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
 
     _, h = W:Toggle(parent, "Beginner Mode", y,
         function() return ns.BeginnerEnabled() end,
+        -- No rebuild here: in combat the claim is deferred, so rebuilding at the
+        -- click would publish a sentence about ownership that does not exist yet.
+        -- The call lives in the out-of-combat closure instead.
         function(v) SetBeginnerMode(v) end,
-        "Shows tooltips, keybinds and key-press highlights on the Cooldown Manager, and keeps Action Bars 1, 2, 3 and 5 always visible.");
+        ns.EUIOwnershipTip(
+            "Shows tooltips, keybinds and key-press highlights on the Cooldown Manager, and keeps Action Bars 1, 2, 3 and 5 always visible.",
+            "beginner",
+            function() return ns.BeginnerEnabled() end,
+            "your Cooldown Manager and action bar settings"));
                                                                                    y = y - h
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h

@@ -429,12 +429,21 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
     -- own and read as a list rather than a settings group.
     row, h = W:DualRow(parent, y,
         { type = "toggle", text = "KitnUI Target Arrows",
-          tooltip = "Draws KitnUI's own chevrons around your target's nameplate. EllesmereUI's own target arrows are switched off while this is on, and given back when you switch it off. Theirs have 16 styles and dodge auras automatically; these do not.",
+          -- The old description promised outright that EllesmereUI's arrows are
+          -- given back on switch-off. That is false in the unowned state, so the
+          -- promise is gone and the generated sentence below says it truthfully
+          -- or not at all.
+          tooltip = ns.EUIOwnershipTip(
+              "Draws KitnUI's own chevrons around your target's nameplate. EllesmereUI's have 16 styles and dodge auras automatically; these do not.",
+              "nameplates",
+              function() return ns.NameplateArrowsEnabled() end,
+              "EllesmereUI's own target arrows"),
           getValue = function() return ns.NameplateArrowsEnabled() end,
           setValue = function(v)
               local s = ns.EUISettings()
               if s then s.npArrows = v and true or false end
               ApplyArrows(true, true)
+              ns.EUIRebuildForOwnership()
           end },
         { type = "toggle", text = "Additive Glow",
           tooltip = "Makes the arrows glow rather than sit flat. Turn it off if they wash out against a bright background.",

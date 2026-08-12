@@ -516,7 +516,16 @@ ns.EUIPages["General"] = function(parent, yOffset)
             return ns.LuluEnabled()
         end,
         function(v) if ns.SetLuluMode then ns.SetLuluMode(v) end end,
-        "Round minimap, Blizzard's own action bars, and a dedicated Edit Mode layout. Asks first, then reloads.");
+        -- No rebuild call here, deliberately. This setter only raises a
+        -- confirmation popup; the real change happens in that popup's OnAccept,
+        -- which reloads the whole UI (Lulu.lua). A rebuild here would fire before
+        -- the user has confirmed, and one in OnAccept would run a line before the
+        -- reload throws it away.
+        ns.EUIOwnershipTip(
+            "Round minimap, Blizzard's own action bars, and a dedicated Edit Mode layout. Asks first, then reloads.",
+            "lulu",
+            function() return ns.LuluEnabled and ns.LuluEnabled() end,
+            "your minimap shape"));
                                                                                    y = y - h
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
@@ -527,8 +536,14 @@ ns.EUIPages["General"] = function(parent, yOffset)
         function(v)
             SetAccentEnabled(v)
             ApplyAccent(true)
+            -- The claim is complete, so the ownership sentence can be recomputed.
+            ns.EUIRebuildForOwnership()
         end,
-        "Sets EllesmereUI's accent to KitnUI pink for this profile, and stops that accent tinting quest tracker headers, the Mythic+ timer, the damage meter and the Friends tab.");
+        ns.EUIOwnershipTip(
+            "Sets EllesmereUI's accent to KitnUI pink for this profile, and stops that accent tinting quest tracker headers, the Mythic+ timer, the damage meter and the Friends tab.",
+            "accent",
+            AccentEnabled,
+            "EllesmereUI's accent colour"));
                                                                                    y = y - h
 
     return math.abs(y)
