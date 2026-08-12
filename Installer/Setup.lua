@@ -816,8 +816,7 @@ end
 
 -- Every EllesmereUI module folder, read from EllesmereUI's own map so a module
 -- added in a later release is covered without editing a list here. hostAddon is
--- the folder that actually ships a module whose own entry is a shim. Basics is
--- not in the map and is added by name.
+-- the folder that actually ships a module whose own entry is a shim.
 --
 -- Returns nil rather than a partial list when the map is unreadable: a guess at
 -- the suite's composition would enable or disable the wrong folders, and the
@@ -836,9 +835,6 @@ local function euiAllModules()
     end
     if #folders == 0 then return nil end
 
-    if not seen.EllesmereUIBasics then
-        folders[#folders + 1] = "EllesmereUIBasics"
-    end
     return folders
 end
 
