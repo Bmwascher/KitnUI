@@ -702,6 +702,36 @@ SlashCmdList["KITN"] = function(msg)
 end
 
 ---------------------------------------------------------------------------------
+-- KitnUI_Lite conflict: reclaim the /kitn commands
+---------------------------------------------------------------------------------
+
+-- KitnUI_Lite is the standalone installer this addon replaces. It assigns the
+-- same KitnCommands keys and the same SlashCmdList["KITN"] dispatcher at ITS
+-- file scope, and it loads after this addon, so left alone it owns every
+-- shared command: /kitn install opens Lite's installer and /kitn reset wipes
+-- Lite's saved variables. The snapshot below is put back the moment Lite
+-- finishes loading -- ADDON_LOADED fires after an addon's file scope runs --
+-- so this addon wins whatever the load order, at login or later. Lite's own
+-- extra entries (diag, slash) and other addons' entries (KitnEssentials'
+-- shortcuts, KitnUI_EUI's options) are left alone: only the keys named here
+-- are taken back, and a new /kitn command added above must be added here too.
+local OWNED_KEYS = { "install", "load", "cdm", "dev", "reset", "update", "version", "ver", "v" }
+local ownedCommands = {}
+for _, key in ipairs(OWNED_KEYS) do ownedCommands[key] = KitnCommands[key] end
+local ownedDispatcher = SlashCmdList["KITN"]
+
+local reclaim = CreateFrame("Frame")
+reclaim:RegisterEvent("ADDON_LOADED")
+reclaim:SetScript("OnEvent", function(_, _, loadedName)
+    if loadedName ~= "KitnUI_Lite" then return end
+    for key, fn in pairs(ownedCommands) do
+        KitnCommands[key] = fn
+    end
+    SLASH_KITN1, SLASH_KITN2, SLASH_KITN3 = "/kitn", "/kitnui", "/kui"
+    SlashCmdList["KITN"] = ownedDispatcher
+end)
+
+---------------------------------------------------------------------------------
 -- SavedVariables init + boot (PLAYER_LOGIN)
 ---------------------------------------------------------------------------------
 
@@ -743,6 +773,29 @@ boot:SetScript("OnEvent", function()
             for _, line in ipairs(queued) do print(line) end
             print("")
         end)
+    end
+
+    -- KitnUI_Lite conflict, second half: the reclaim frame above has already
+    -- taken the /kitn commands back by now, so this is the human half -- say
+    -- why two installers are fighting and offer to end it. Before the
+    -- EllesmereUI check on purpose: a Lite user without EllesmereUI needs
+    -- this prompt too.
+    if IsAddOnLoaded("KitnUI_Lite") then
+        StaticPopupDialogs["KITNUI_LITE_CONFLICT"] = {
+            text = ns.title .. ": KitnUI and KitnUI Lite are both enabled. The full KitnUI replaces Lite, and running both causes duplicate login prompts and conflicting /kitn commands.\n\nDisable KitnUI Lite now? After that, remove it in your addon manager.",
+            button1 = "Disable and Reload",
+            button2 = "Later",
+            OnAccept = function()
+                if C_AddOns.DisableAddOn then
+                    -- No character argument on purpose: disabled for the whole
+                    -- account, because the conflict exists on every character.
+                    C_AddOns.DisableAddOn("KitnUI_Lite")
+                    ReloadUI()
+                end
+            end,
+            timeout = 0, whileDead = true, hideOnEscape = true,
+        }
+        StaticPopup_Show("KITNUI_LITE_CONFLICT")
     end
 
     if not ns.EUIReady() then
