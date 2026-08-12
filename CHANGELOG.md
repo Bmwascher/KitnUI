@@ -2,12 +2,15 @@
 
 ## v2.0.1
 
+A compatibility release: EllesmereUI 8.8 and the newest Northern Sky Raid Tools
+both changed underneath v2.0.0, and this fixes what those breaks took with them.
+
 ### Fixes
 - Restored the KitnUI tab in EllesmereUI's settings panel on EllesmereUI v8.8+, which moved its options window into a load-on-demand addon. The same break also silently disabled KitnUI's entry in EllesmereUI's profile export list and the re-apply of KitnUI's settings switches after a profile or spec change; both are restored.
 - Restored the nameplate arrows' untrusted-layout insurance (its version check died with EllesmereUI 8.8) and retired leftover EllesmereUIBasics handling in the installer
+- Fixed the Northern Sky Raid Tools import failing with a decode error: newer NSRT versions export in a new format and keep their own profiles, so the installer now imports through NSRT's own profile import, and `/kitn load` puts alts on the KitnUI profile instead of doing nothing
 - KitnUI now loads without EllesmereUI and says what to install, enable or update, instead of silently never loading - new users get a login prompt, users with an existing install get a chat line
 - Having KitnUI Lite enabled alongside KitnUI no longer hijacks the /kitn commands, and a login prompt offers to disable Lite for you
-- NSRT import failing with a decode error: newer Northern Sky Raid Tools exports use a new format and profile system, so the installer now imports through NSRT's own profile import and `/kitn load` binds alts to the KitnUI profile
 
 ## v2.0.0
 
