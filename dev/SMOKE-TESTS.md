@@ -362,9 +362,13 @@ proves the rejected design did not sneak back in as a thrown Lua error.
     say both.** Lulu switches EllesmereUI's action bars off, but the action bar
     notes are still live and still owe you a restore, so KitnUI is still holding
     them. A sentence that drops to Cooldown Manager here is the defect.
-  - Turn Lulu back off. Turn Beginner Mode OFF, then ON, while EllesmereUI's
-    **Cooldown Manager** module is disabled and reloaded. Hover: "your action bar
-    settings" only, because that claim never recorded a Cooldown Manager note.
+  - Turn Lulu back off and reload. Now turn Beginner Mode **OFF while the Cooldown
+    Manager module is still enabled**, which is what clears its notes. THEN disable
+    EllesmereUI's **Cooldown Manager** module, reload, and turn Beginner Mode ON.
+    Hover: "your action bar settings" only. **The order matters.** Turning it off
+    with that module already disabled cannot clear its notes, so they stay live,
+    and the sentence correctly says both. That would look like a failure and would
+    not be one.
   - Re-enable the Cooldown Manager module, turn Beginner off and on again with
     Lulu ON. Hover: "your Cooldown Manager settings" only.
 - [ ] **7. Nothing else changed.** Hover Additive Glow, the **Dark Class Resource
