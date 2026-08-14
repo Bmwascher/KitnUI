@@ -21,6 +21,18 @@ local ACTION_BARS = "EllesmereUIActionBars"
 -- "Bar<n>", so bar 5 is "Bar5" and there is no "Bar1".
 local AB_KEYS = { "MainBar", "Bar2", "Bar3", "Bar5" }
 
+-- Every snapshot key the ACTION BAR half of Beginner Mode can write, as a set.
+-- Both halves live in the one `beginner` section, so this is what tells them
+-- apart when the page asks which half is really held. It is exhaustive by
+-- construction: ApplyActionBars writes these two keys per bar and nothing else,
+-- and the Cooldown Manager half builds its keys from live bars at runtime, which
+-- is why the CDM half is the complement rather than a second list.
+local BAR_SNAP_KEYS = {}
+for _, key in ipairs(AB_KEYS) do
+    BAR_SNAP_KEYS[key .. "\31hideKeybind"] = true
+    BAR_SNAP_KEYS[key .. "\31barVisibility"] = true
+end
+
 -- Written to every non-buff bar. showTooltip is deliberately NOT in here; it
 -- goes to every bar including buff bars, because an aura has no keybind but a
 -- beginner most wants to know what a buff icon IS.
@@ -535,21 +547,26 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "BEGINNER MODE", y);                            y = y - h
 
-    -- Named half by half, because EITHER half can be held without the other and
-    -- a fixed sentence naming both would claim something KitnUI is not holding,
-    -- which is the exact failure this tooltip exists to stop. Each half is
-    -- skipped when its own EllesmereUI module is away: ApplyCdm returns when
-    -- CdmBars finds nothing, and ApplyActionBars returns on the ON path when its
-    -- profile is missing, which is what Lulu Mode causes.
+    -- Named half by half, because EITHER half can be held without the other:
+    -- ApplyCdm skips its half when CdmBars finds nothing, and ApplyActionBars
+    -- skips its half on the ON path when its profile is missing, which is what
+    -- Lulu Mode causes. Naming both when only one is held would claim something
+    -- KitnUI is not holding, which is the exact failure this tooltip exists to
+    -- stop.
     --
-    -- Neither available falls back to naming both, because that state reaches the
-    -- NOT-holding sentence, which should say what the switch would hold.
-    local cdmHalf = CdmBars() ~= nil
-    local barHalf = ns.EUIProfile(ACTION_BARS) ~= nil
+    -- Read from the NOTES, not from which modules are loaded. Disabling a module
+    -- hides its profile while the notes for it stay live and still owe a restore,
+    -- so an availability test would announce that KitnUI had let go of something
+    -- it is still holding -- the same lie in the other direction.
+    --
+    -- Nothing held is the one case the notes cannot answer, because there is
+    -- nothing to read. That state reaches the NOT-holding sentence, which should
+    -- name what the switch WOULD hold, so it falls back to both.
+    local barHeld, cdmHeld = ns.EUIHoldsSplit("beginner", BAR_SNAP_KEYS)
     local beginnerHolds = "your Cooldown Manager and action bar settings"
-    if cdmHalf and not barHalf then
+    if cdmHeld and not barHeld then
         beginnerHolds = "your Cooldown Manager settings"
-    elseif barHalf and not cdmHalf then
+    elseif barHeld and not cdmHeld then
         beginnerHolds = "your action bar settings"
     end
 

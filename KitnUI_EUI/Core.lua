@@ -403,6 +403,35 @@ function ns.EUIHolds(section)
     return HoldsAny(profile, 0)
 end
 
+-- The same question, asked of two halves of one section at once. Returns two
+-- booleans: is anything held under a key IN the given set, and is anything held
+-- under a key outside it.
+--
+-- It exists because Beginner Mode forces two different things through ONE
+-- section, and a switch that holds only one of them must not name both. The
+-- halves cannot be told apart by availability: disabling a module hides its
+-- profile while the notes for it stay live and still owe the user a restore, so
+-- reading availability would tell the user KitnUI had let go of something it is
+-- still holding. Only the notes can answer that, which is what this reads.
+--
+-- FLAT sections only. It does not recurse, because the one section that nests
+-- (accent) has no halves to tell apart.
+function ns.EUIHoldsSplit(section, keySet)
+    local root = ns.db and ns.db.euiSnap
+    local sect = root and root[section]
+    local profile = sect and sect[ActiveProfileName()]
+    if type(profile) ~= "table" then return false, false end
+
+    local inSet, outSet = false, false
+    for key, rec in pairs(profile) do
+        if type(rec) == "table" and rec.prev ~= nil then
+            if keySet[key] then inSet = true else outSet = true end
+            if inSet and outSet then break end
+        end
+    end
+    return inSet, outSet
+end
+
 -- The hover description for a forcing switch, with a sentence saying whether
 -- KitnUI is really holding the setting down right now.
 --

@@ -162,6 +162,14 @@ failure.
   Mode with Lulu OFF, turn Lulu ON and reload. Now turn Beginner Mode OFF while
   Lulu is still ON: the probe must show its action bar notes cleared. Then turn
   Lulu OFF and reload: both action bar sentinels must be back.
+- [ ] **14. MANDATORY STANDALONE. ACCEPTING the Lulu prompt, which is the only
+  re-apply route allowed to claim.** Every other check declines it, so nothing else
+  covers this. Set a minimap shape sentinel (square) with Lulu OFF and no Lulu note.
+  Import a profile that carries Lulu ON, by check 11's route. When the reconcile
+  prompt appears, **ACCEPT it.** After the reload: the minimap is round, and the
+  probe shows a Lulu note holding your square sentinel. Then turn Lulu OFF and
+  reload: the minimap is square again. Accepting the prompt is a user action, and
+  it is the only thing outside a switch click that may record an original.
 
 ## Result
 
@@ -171,6 +179,7 @@ Kitn, record the outcome here.
 - Pass A:
 - Pass B:
 - Check 13:
+- Check 14 (accepting the Lulu prompt):
 - Notes:
 
 ---
@@ -266,6 +275,10 @@ these have no manual check and are not counted as untested work:
 - The Edit Mode load refusals for a missing `SetActiveLayout` or a missing preset
   count enum.
 - The CDM import refusal for a missing layout-manager method.
+- The CDM import's DEGRADED path when `C_SpecializationInfo.GetSpecialization` is
+  missing. This one does not refuse: the layout is already created, named and
+  saved by that line, so the import still succeeds and only the automatic
+  activation is skipped. You would pick the layout yourself in Edit Mode.
 
 Their value is that a future API change refuses and prints instead of throwing and
 stranding the rest of the run. Check 9 and check 5b cover the same shape on the
@@ -321,8 +334,12 @@ proves the rejected design did not sneak back in as a thrown Lua error.
 
 ## The checks
 
-- [ ] **1. Off is quiet.** Fresh profile, all four switches OFF. Hover each: the
-  description reads as it does today, with no ownership line.
+- [ ] **1. Off is quiet.** Fresh profile, all four switches OFF. Hover each: no
+  ownership line on any of them. Pink Accent, Lulu Mode and Beginner Mode keep the
+  descriptions they had before this item. **Target Arrows does NOT** — its old
+  description promised that EllesmereUI's arrows come back when you switch off,
+  which is untrue in the unowned state, so that promise was deliberately deleted.
+  Its new base description ends at "these do not."
 - [ ] **2. On says holding.** Turn each on and hover each. Each says KitnUI is
   holding the setting and names the right one. **Beginner Mode must say it once, not
   once per action bar.**
@@ -337,13 +354,19 @@ proves the rejected design did not sneak back in as a thrown Lua error.
   accepting its prompt reloads everything, so there is no "without leaving the page"
   left to test.
 - [ ] **6. Beginner Mode names only what it holds, BOTH ways.** Beginner Mode holds
-  two halves and either can be away, so test both directions.
+  two halves and can hold either alone. The sentence is built from the NOTES, not
+  from which modules are loaded, so test the difference.
   - With both modules on, turn Beginner Mode on and hover: "your Cooldown Manager
     and action bar settings".
-  - Turn Lulu Mode on, accept the reload, hover again: "your Cooldown Manager
-    settings" only. Lulu switches EllesmereUI's action bars off.
-  - Lulu back off, then disable EllesmereUI's **Cooldown Manager** module and
-    reload. Hover again: "your action bar settings" only.
+  - **Now turn Lulu Mode on and accept the reload, then hover again. It must STILL
+    say both.** Lulu switches EllesmereUI's action bars off, but the action bar
+    notes are still live and still owe you a restore, so KitnUI is still holding
+    them. A sentence that drops to Cooldown Manager here is the defect.
+  - Turn Lulu back off. Turn Beginner Mode OFF, then ON, while EllesmereUI's
+    **Cooldown Manager** module is disabled and reloaded. Hover: "your action bar
+    settings" only, because that claim never recorded a Cooldown Manager note.
+  - Re-enable the Cooldown Manager module, turn Beginner off and on again with
+    Lulu ON. Hover: "your Cooldown Manager settings" only.
 - [ ] **7. Nothing else changed.** Hover Additive Glow, the **Dark Class Resource
   Bar**, and any Top Bar switch. No ownership line on any of them, and the
   description is word for word what it is today. The Dark Class Resource Bar matters

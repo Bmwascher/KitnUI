@@ -40,6 +40,8 @@
 ---@field EUIPeekSnapGlobal fun(key: string): table|nil
 ---@field EUIOverride fun(tbl: table, saved: table, key: string, value: any, claiming: boolean|nil)
 ---@field EUIRestore fun(tbl: table, saved: table, key: string)
+---@field EUIHolds fun(section: string): boolean
+---@field EUIHoldsSplit fun(section: string, keySet: table<string, boolean>): boolean, boolean
 ---@field EUIRegisterReapply fun(fn: function)
 ---@field EUIQueueReapply fun()
 ---@field EUIResetAll fun(): boolean|nil
