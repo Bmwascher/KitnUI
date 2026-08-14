@@ -26,9 +26,13 @@ an agent.**
 
 | Item | Branch | Built | Reviewed | In-game |
 |---|---|---|---|---|
-| 1. Unowned switch | `feature/unowned-switch` | yes, `dfc9833` | Sol PASS, Fable PASS | **PENDING** |
-| 2. Every loader says when it refused | `feature/unowned-switch` | yes | Sol PASS, Fable PASS | **PENDING** |
-| 3. Ownership tooltip on forcing switches | — | not started | — | — |
+| 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
+| 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
+| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes | Sol PASS, Fable PASS | **PENDING** |
+
+**Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
+rebased ones; anything you wrote down before that date is gone. The rebase also
+retired one check — see the NSRT note in Item 2.
 
 ## Shared tools
 
@@ -51,7 +55,7 @@ only. The account-wide popup colour lives in `euiSnapGlobal` and is NOT covered 
 # Item 1 — A switch that is on without owning the setting
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-11-unowned-switch.md` (local only).
-**Commit:** `dfc9833`. **Status: awaiting Kitn.**
+**Commit:** `e90048b` (rebased onto v2.0.1). **Status: awaiting Kitn.**
 
 ## What changed and why it needs testing
 
@@ -179,10 +183,14 @@ error instead of refusing. The Load All loop has no `pcall`, so one of those err
 also skipped every step after it.
 
 Now: success returns nothing, a refusal prints why and returns `false`, and the
-wizard counts it. Two carve-outs stay as they were, and both would look like bugs
-if you did not know: **NSRT's load does nothing and that is success** (it is
-account-wide with no profile), and **BigWigs' install still toasts before you
-answer its prompt**, because that call is asynchronous and always has been.
+wizard counts it. One carve-out stays and would look like a bug if you did not
+know: **BigWigs' install still toasts before you answer its prompt**, because that
+call is asynchronous and always has been.
+
+**Changed since this section was written.** It used to say NSRT's load did nothing
+and that this was success. v2.0.1 rebuilt the NSRT import on NSAPI's profile
+support, so NSRT now has a real profile to load and a missing one is a genuine
+refusal. Check 5 below is rewritten to match.
 
 ## Read this before starting
 
@@ -205,8 +213,12 @@ character carrying a legacy Plater install.
   the "could not be loaded" toast counts it. **No Lua error**, and every step after
   it still runs.
 - [ ] **4.** Same for KitnEssentials, then BuffReminders, one at a time.
-- [ ] **5.** Disable NSRT, reload, `/kitn load`. NSRT must **NOT** be counted as a
-  refusal. It has nothing to do on load and that is success.
+- [ ] **5.** Disable NSRT, reload, `/kitn load`. It names NSRT as not loaded and
+  counts the refusal, same as the others. **This is the opposite of what this check
+  said before v2.0.1** — NSRT used to have nothing to do on load. Now it does.
+- [ ] **5b.** With NSRT installed, delete the KitnUI profile from inside NSRT, then
+  `/kitn load`. It says no NSRT profile was found and tells you to run the installer,
+  rather than reporting success.
 - [ ] **6.** Install BigWigs' profile and **DECLINE** its prompt. A printed line
   says the profile was not imported. This is the async path; it cannot toast, and
   the "imported!" toast you already saw is expected and unchanged.

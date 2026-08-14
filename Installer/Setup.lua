@@ -25,13 +25,16 @@ local setupFunctions = {}
 -- nil, so a plain truth test would report every success as a failure. This is
 -- what stops the wizard toasting "loaded!" over a step that did nothing.
 --
--- FOUR producers return `true` on success instead, and that is deliberate:
--- EllesmereUI in both modes, Edit Mode install, and CDM install. Their callers at
--- Installer.lua:263, :312, :379 and :419 test truthiness and depend on it. Do not
--- harmonise them.
+-- Some producers return `true` on success instead, and that is deliberate:
+-- EllesmereUI in both modes, NSRT in both modes, Edit Mode install, and CDM
+-- install. Four callers TEST truthiness and depend on it -- Installer.lua:263,
+-- :312, :379 and :419 -- so do not harmonise those. A `true` is also harmless
+-- under an `== false` test, which is how NSRT's callers read it.
 --
--- One case is neither: NSRT's load path returns nothing because it has nothing to
--- do -- it is account-wide with no profile to activate -- and that is success.
+-- NSRT's load path used to return nothing on the grounds that it was account-wide
+-- with nothing to activate, so doing nothing was success. v2.0.1 rebuilt the
+-- import on NSAPI's profile support, so it now has a real profile to load and a
+-- missing one is a genuine refusal. That carve-out is retired, not forgotten.
 function ns.SetupAddon(addonKey, import, ...)
     local fn = setupFunctions[addonKey]
     if not fn then
