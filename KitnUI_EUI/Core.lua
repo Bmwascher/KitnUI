@@ -436,11 +436,16 @@ end
 -- KitnUI is really holding the setting down right now.
 --
 -- It RETURNS A STRING, and that is deliberate rather than lazy. EllesmereUI does
--- resolve a function tooltip on each show (EllesmereUI_Widgets.lua:1738), but
--- both widget shapes used here CONCATENATE the tooltip when a row label is
--- ellipsized -- :2350 for W:Toggle, :2420 for a DualRow half -- and concatenating
--- a function raises an error. A string also stays in the settings search index,
--- which drops anything that is not one (EllesmereUI_GlobalSearch.lua:107).
+-- resolve a function tooltip on each show (EllesmereUI/EllesmereUI_UICore.lua:145),
+-- but both widget shapes used here CONCATENATE the tooltip when a row label is
+-- ellipsized -- EllesmereUIOptions/EllesmereUI_Widgets.lua:1647 for W:Toggle and
+-- :1710 for a DualRow half -- and concatenating a function raises an error. A
+-- string also stays in the settings search index, which drops anything that is
+-- not one (EllesmereUI/EllesmereUI_GlobalSearch.lua:400).
+--
+-- Those four citations are 8.8.2, re-verified 2026-08-14. They were 8.7.5 line
+-- numbers until then, which pointed at nothing after the host moved its whole
+-- settings panel into the EllesmereUIOptions load-on-demand addon.
 --
 -- The cost of a string is that it is fixed when the page is BUILT, and the host
 -- re-shows a cached page rather than rebuilding it. So every caller must force a

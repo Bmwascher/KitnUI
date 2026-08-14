@@ -940,8 +940,15 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             end
         end
 
-        local specName = select(2, GetSpecializationInfoForClassID(classId, specIndex)) or ("Spec" .. specIndex)
-        local layoutName = "KUI - " .. specName
+        -- Guarded the same way Installer.lua:407 guards the same global. It is
+        -- only used for the layout's display name, so a missing one degrades to
+        -- the numbered fallback rather than refusing; the throw it would
+        -- otherwise raise sits in the pcall-less Import All loop.
+        local specName
+        if GetSpecializationInfoForClassID then
+            specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
+        end
+        local layoutName = "KUI - " .. (specName or ("Spec" .. specIndex))
         local removedExisting = false
         local _, layouts = lm:EnumerateLayouts()
         if layouts then
