@@ -925,6 +925,21 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             return false
         end
 
+        -- Every layout-manager method this path calls, checked BEFORE the first
+        -- mutation. RemoveLayout below deletes the user's existing layout, so a
+        -- throw after that point costs them the layout and reports nothing, and
+        -- the Import All loop has no pcall either, so every later spec would be
+        -- skipped too. AreLayoutsFullyMaxed and SetActiveLayoutByID stay checked
+        -- at their own call sites, because both are genuinely optional there.
+        for _, method in ipairs({ "EnumerateLayouts", "RemoveLayout",
+                                  "CreateLayoutsFromSerializedData", "SaveLayouts" }) do
+            if type(lm[method]) ~= "function" then
+                print(ns.title .. ": Your Cooldown Manager is missing " .. method
+                    .. ", so this layout cannot be imported. Nothing was changed.")
+                return false
+            end
+        end
+
         local specName = select(2, GetSpecializationInfoForClassID(classId, specIndex)) or ("Spec" .. specIndex)
         local layoutName = "KUI - " .. specName
         local removedExisting = false
@@ -958,7 +973,11 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             postLayouts[importedID].layoutName = layoutName
             lm:SaveLayouts()
 
-            local currentSpec = C_SpecializationInfo.GetSpecialization()
+            -- Degrades rather than refuses. The layout is already created and
+            -- named by this point, so a missing namespace costs only the
+            -- activation, and the user can pick the layout themselves.
+            local currentSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
+                and C_SpecializationInfo.GetSpecialization()
             if currentSpec == specIndex then
                 if lm.SetActiveLayoutByID then
                     lm:SetActiveLayoutByID(importedID)

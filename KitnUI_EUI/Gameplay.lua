@@ -535,14 +535,22 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "BEGINNER MODE", y);                            y = y - h
 
-    -- Named half by half, because only one half may be held. Lulu Mode switches
-    -- EllesmereUI's action bars off, and the ON path then skips that half instead
-    -- of forcing values into a module the user cannot see (ApplyActionBars). A
-    -- fixed sentence naming both would claim something KitnUI is not holding,
-    -- which is the exact failure this tooltip exists to stop.
+    -- Named half by half, because EITHER half can be held without the other and
+    -- a fixed sentence naming both would claim something KitnUI is not holding,
+    -- which is the exact failure this tooltip exists to stop. Each half is
+    -- skipped when its own EllesmereUI module is away: ApplyCdm returns when
+    -- CdmBars finds nothing, and ApplyActionBars returns on the ON path when its
+    -- profile is missing, which is what Lulu Mode causes.
+    --
+    -- Neither available falls back to naming both, because that state reaches the
+    -- NOT-holding sentence, which should say what the switch would hold.
+    local cdmHalf = CdmBars() ~= nil
+    local barHalf = ns.EUIProfile(ACTION_BARS) ~= nil
     local beginnerHolds = "your Cooldown Manager and action bar settings"
-    if not ns.EUIProfile(ACTION_BARS) then
+    if cdmHalf and not barHalf then
         beginnerHolds = "your Cooldown Manager settings"
+    elseif barHalf and not cdmHalf then
+        beginnerHolds = "your action bar settings"
     end
 
     _, h = W:Toggle(parent, "Beginner Mode", y,

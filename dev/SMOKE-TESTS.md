@@ -134,10 +134,15 @@ failure.
   specs are assigned to the SAME EllesmereUI profile first**, or the spec change
   switches profiles and this silently tests a different profile. Change spec, then
   turn each switch off: the sentinels recorded before the change must return.
-- [ ] **10. Combat, pass A only.** Flip Beginner Mode during combat with nothing
-  else happening. When combat ends, all THREE of its paths apply, and turning it
-  off restores all three sentinels. It is the only switch using the deferred
-  closure.
+- [ ] **10. All three paths, pass A only.** Flip Beginner Mode on, out of combat,
+  which is the only way it can be flipped at all. All THREE of its paths apply, and
+  turning it off restores all three sentinels. It is the only switch whose apply
+  rides a closure, so this is what proves that closure runs.
+
+  **This check used to ask for a combat toggle. That was impossible.** EllesmereUI
+  refuses to open its panel in combat and closes it when combat starts, so no
+  switch on that page can be clicked while locked down. The deferred branch stays
+  in the code as a defence against a host rule change and is documented as such.
 - [ ] **11. Partial import.** Fresh distinct sentinels on every path. Import a
   profile carrying the switches ON while excluding the module blobs they force, and
   exclude Global Settings so `euiAccent` is not carried. **Every sentinel survives
@@ -146,15 +151,12 @@ failure.
   reconcile prompt** — accepting is a legitimate claim and would read as a failure.
   Then finish the cycle: off changes nothing; on claims and the probe shows the new
   notes; a final off restores every sentinel and returns to `NOTES 0`.
-- [ ] **12. The eviction race, pass A only.** Profile A: Beginner Mode OFF, no
-  note, its own sentinels. Profile B: Beginner Mode ON, no note, its own distinct
-  sentinels — prepare B by check 11's import route, not by clicking the switch,
-  because the toggle cannot produce ON-with-no-note. Turn Beginner Mode ON in A
-  during combat, then switch to B with the EllesmereUI profile keybind before
-  combat ends. The message must list the four cancelling operations; B's sentinels
-  are NOT forced and the probe shows no note under B's name. Back in A: the switch
-  reads ON, nothing applied, no note under A's name. Then off, on (probe shows A's
-  notes holding A's sentinels), off again (every sentinel returns, `NOTES 0`).
+- **12. The eviction race. REMOVED, not skipped, and not a pass.** It asked you to
+  turn Beginner Mode on during combat and switch profile before combat ended. That
+  cannot be done: the panel is closed in combat, so the switch cannot be clicked
+  and the race has no way in. The queued-claim branch and its cancelling message
+  stay in the code as a defence against a host rule change, and neither is
+  reachable from the interface today. Nothing here needs testing.
 - [ ] **13. MANDATORY STANDALONE, after both passes.** The unloaded-module restore
   path, which neither pass reaches. Set the action bar sentinels, claim Beginner
   Mode with Lulu OFF, turn Lulu ON and reload. Now turn Beginner Mode OFF while
@@ -187,9 +189,14 @@ error instead of refusing. The Load All loop has no `pcall`, so one of those err
 also skipped every step after it.
 
 Now: success returns nothing, a refusal prints why and returns `false`, and the
-wizard counts it. One carve-out stays and would look like a bug if you did not
-know: **BigWigs' install still toasts before you answer its prompt**, because that
-call is asynchronous and always has been.
+wizard counts it. Four producers return `true` on success instead, deliberately:
+EllesmereUI in both modes, NSRT in both modes, Edit Mode install and CDM install.
+Four callers test that truthiness and depend on it, so a `true` there is not a
+defect. The full contract is at the top of `Installer/Setup.lua`.
+
+One carve-out stays and would look like a bug if you did not know: **BigWigs'
+install still toasts before you answer its prompt**, because that call is
+asynchronous and always has been.
 
 **Changed since this section was written.** It used to say NSRT's load did nothing
 and that this was success. v2.0.1 rebuilt the NSRT import on NSAPI's profile
@@ -241,6 +248,28 @@ character carrying a legacy Plater install.
   step to recreate the layout, then use the Edit Mode load page. The KitnUI layout
   must become the ACTIVE layout, not a neighbouring one. The load path now reads the
   preset count into a variable before using it, so an off-by-one would show here.
+- [ ] **10. The CDM import still works, every spec.** Run the CDM step for each of
+  your specs, including one that already has a KitnUI layout, so the remove-then-
+  recreate path runs. Each spec's layout imports, is named `KUI - <spec>`, and the
+  current spec's becomes active. The import now checks its layout-manager methods
+  before it deletes anything, so a regression shows as a refusal here.
+
+## What cannot be tested by hand, and why that is recorded rather than skipped
+
+Some refusals this item adds can only fire when a game or addon API is missing.
+There is no way to remove a method from a loaded addon from inside the game, so
+these have no manual check and are not counted as untested work:
+
+- Every INSTALL refusal for a missing API: EllesmereUI, Plater, BigWigs,
+  KitnEssentials, BuffReminders. The installer skips an addon it cannot detect at
+  all, so a disabled addon never reaches these lines.
+- The Edit Mode load refusals for a missing `SetActiveLayout` or a missing preset
+  count enum.
+- The CDM import refusal for a missing layout-manager method.
+
+Their value is that a future API change refuses and prints instead of throwing and
+stranding the rest of the run. Check 9 and check 5b cover the same shape on the
+paths that CAN be reached, by deleting a profile or layout rather than an API.
 
 ## Result
 
@@ -251,6 +280,7 @@ Kitn, record the outcome here.
 - Disabled-addon (checks 3-5):
 - BigWigs decline (check 6):
 - Deleted profiles (checks 7-9):
+- Edit Mode activation and CDM import (checks 9b-10):
 - Notes:
 
 ---
@@ -306,11 +336,14 @@ proves the rejected design did not sneak back in as a thrown Lua error.
   leaving the page.** It must ALREADY read holding. **Do not use Lulu Mode here** —
   accepting its prompt reloads everything, so there is no "without leaving the page"
   left to test.
-- [ ] **6. Beginner Mode names only what it holds.** With Lulu Mode OFF, turn
-  Beginner Mode on and hover it: it says KitnUI is holding "your Cooldown Manager
-  and action bar settings". Now turn Lulu Mode on, accept the reload, and hover
-  Beginner Mode again: it must say "your Cooldown Manager settings" only. Lulu
-  switches EllesmereUI's action bars off, so KitnUI really is holding one half.
+- [ ] **6. Beginner Mode names only what it holds, BOTH ways.** Beginner Mode holds
+  two halves and either can be away, so test both directions.
+  - With both modules on, turn Beginner Mode on and hover: "your Cooldown Manager
+    and action bar settings".
+  - Turn Lulu Mode on, accept the reload, hover again: "your Cooldown Manager
+    settings" only. Lulu switches EllesmereUI's action bars off.
+  - Lulu back off, then disable EllesmereUI's **Cooldown Manager** module and
+    reload. Hover again: "your action bar settings" only.
 - [ ] **7. Nothing else changed.** Hover Additive Glow, the **Dark Class Resource
   Bar**, and any Top Bar switch. No ownership line on any of them, and the
   description is word for word what it is today. The Dark Class Resource Bar matters
@@ -319,9 +352,9 @@ proves the rejected design did not sneak back in as a thrown Lua error.
   Target Arrows label is cut short with an ellipsis, and hover all four switches. A
   tooltip must appear each time and **BugSack must stay empty.** An error here means
   the build regressed to the rejected dynamic-tooltip design.
-- [ ] **9. Combat.** Hover a forcing switch in combat in an open-world zone: it
-  works. Do the same in a Mythic+ dungeon: EllesmereUI suppresses every widget
-  tooltip there, so nothing appears. **That is expected and is not a defect.**
+- **9. Combat. REMOVED, not skipped.** It asked you to hover a forcing switch in
+  combat. The panel is closed in combat, so there is nothing to hover. Nothing here
+  needs testing.
 - [ ] **10. Search still finds them.** In EllesmereUI's settings search, type
   "accent", "lulu", "beginner" and "arrows" and confirm each row is found. Then
   search a distinctive word from one of the four descriptions and confirm the row
@@ -330,6 +363,10 @@ proves the rejected design did not sneak back in as a thrown Lua error.
   watch the settings page. It must not flicker into a broken layout, lose its scroll
   position badly, or make other pages disappear. This work tears the page down and
   builds it again, so a layout fault shows up here.
+- [ ] **12. The Lulu prompt no longer counts parts.** Get the Lulu reconcile prompt
+  to appear (Item 1 check 7 or 11 both raise it). Its apply wording must read "Lulu
+  Mode is on, but it is not applied", with **no count of parts**. A count would be a
+  promise about the screen that two states can defeat.
 
 ## Result
 
@@ -341,5 +378,5 @@ Kitn, record the outcome here.
 - Beginner Mode names only what it holds (check 6):
 - Untouched switches (check 7):
 - Narrow panel, BugSack (check 8):
-- Combat, search, rebuild (checks 9-11):
+- Search, rebuild, Lulu wording (checks 10-12):
 - Notes:
