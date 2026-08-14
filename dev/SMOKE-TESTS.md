@@ -28,7 +28,7 @@ an agent.**
 |---|---|---|---|---|
 | 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
-| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `SHA_PENDING` | Sol PASS, Fable PASS | **PENDING** |
+| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
