@@ -564,10 +564,25 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
         return false
     end
 
+    -- The setter and the preset count as well as the getter above. The old line
+    -- reached through three things it had never checked, and a throw here would
+    -- also skip every later step of Load All, which has no pcall.
+    if not C_EditMode.SetActiveLayout then
+        print(ns.title .. ": Edit Mode cannot switch layouts right now.")
+        return false
+    end
+
+    local presetCount = Enum and Enum.EditModePresetLayoutsMeta
+        and Enum.EditModePresetLayoutsMeta.NumValues
+    if type(presetCount) ~= "number" then
+        print(ns.title .. ": Could not read Edit Mode's preset layout count.")
+        return false
+    end
+
     local _, wantedLayout = editModeTarget()
     for i, v in ipairs(layouts.layouts) do
         if v.layoutName == wantedLayout then
-            C_EditMode.SetActiveLayout(Enum.EditModePresetLayoutsMeta.NumValues + i)
+            C_EditMode.SetActiveLayout(presetCount + i)
             -- Success. Returns nothing, per the contract at the top of this file.
             return
         end

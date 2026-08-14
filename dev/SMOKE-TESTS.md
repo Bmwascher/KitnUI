@@ -34,6 +34,10 @@ an agent.**
 rebased ones; anything you wrote down before that date is gone. The rebase also
 retired one check — see the NSRT note in Item 2.
 
+**The SHAs name where each item landed, not the branch tip.** A later commit on
+`feature/ownership-tooltip` carries the fixes the cross-model review found. Always
+test the tip: `git log main..HEAD` lists everything above `v2.0.1`.
+
 ## Shared tools
 
 ### The snapshot probe
@@ -233,6 +237,10 @@ character carrying a legacy Plater install.
 - [ ] **9.** Delete the KitnUI Edit Mode layout in Edit Mode, then run the Edit Mode
   load page. It refuses and names the layout it looked for, instead of toasting
   "loaded!".
+- [ ] **9b. The Edit Mode layout still activates.** Re-run the installer's Edit Mode
+  step to recreate the layout, then use the Edit Mode load page. The KitnUI layout
+  must become the ACTIVE layout, not a neighbouring one. The load path now reads the
+  preset count into a variable before using it, so an off-by-one would show here.
 
 ## Result
 
@@ -250,7 +258,7 @@ Kitn, record the outcome here.
 # Item 3 — Each forcing switch says whether it is really holding your setting
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-11-ownership-tooltip.md` (local only).
-**Commit:** `c20fa1a`. **Status: awaiting Kitn.**
+**Commit:** `792a53b` (rebased onto v2.0.1). **Status: awaiting Kitn.**
 
 ## What is changing and why it needs testing
 
@@ -269,8 +277,13 @@ and back can be the old one. Several checks below say "without leaving the page"
 for exactly this reason, and swapping in a leave-and-return would let a broken
 build pass.
 
-**The line is refreshed when ownership actually changes**, which for Beginner Mode
-is when combat ends, not when you click the switch.
+**The line is refreshed when ownership actually changes.** For Beginner Mode that
+is inside the apply, not at the click.
+
+**You cannot test any of this in combat.** EllesmereUI refuses to open its panel in
+combat and closes it when combat starts, so no switch here can be clicked while
+locked down. An earlier version of this document asked for an in-combat toggle;
+that check was impossible and has been replaced.
 
 **Three checks can only fail loudly, so do not skip them.** Check 4 proves the
 unowned state is visible at all. Check 5 proves the page really is rebuilt. Check 8
@@ -293,10 +306,11 @@ proves the rejected design did not sneak back in as a thrown Lua error.
   leaving the page.** It must ALREADY read holding. **Do not use Lulu Mode here** —
   accepting its prompt reloads everything, so there is no "without leaving the page"
   left to test.
-- [ ] **6. The deferred claim.** In combat, turn Beginner Mode on. When combat ends,
-  hover it: the line reads holding. Now do it again, but this time move to a
-  DIFFERENT KitnUI page before combat ends and return to Gameplay afterwards. The
-  line must still read holding.
+- [ ] **6. Beginner Mode names only what it holds.** With Lulu Mode OFF, turn
+  Beginner Mode on and hover it: it says KitnUI is holding "your Cooldown Manager
+  and action bar settings". Now turn Lulu Mode on, accept the reload, and hover
+  Beginner Mode again: it must say "your Cooldown Manager settings" only. Lulu
+  switches EllesmereUI's action bars off, so KitnUI really is holding one half.
 - [ ] **7. Nothing else changed.** Hover Additive Glow, the **Dark Class Resource
   Bar**, and any Top Bar switch. No ownership line on any of them, and the
   description is word for word what it is today. The Dark Class Resource Bar matters
@@ -324,7 +338,7 @@ Kitn, record the outcome here.
 - Date:
 - Off / on / off (checks 1-3):
 - Copied profile and claiming (checks 4-5):
-- Deferred claim (check 6):
+- Beginner Mode names only what it holds (check 6):
 - Untouched switches (check 7):
 - Narrow panel, BugSack (check 8):
 - Combat, search, rebuild (checks 9-11):

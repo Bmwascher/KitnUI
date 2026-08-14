@@ -433,9 +433,16 @@ local function SetBeginnerMode(on)
     s.beginner = on and true or false
 
     -- The rebuild rides INSIDE the closure, so it runs once the claim has really
-    -- landed -- immediately out of combat, or when the fight ends. Guarded by the
-    -- page name because a deferred claim can land long after the user moved on,
-    -- and an unguarded rebuild would then tear down whatever page they are on.
+    -- landed. Guarded by the page name because a deferred claim can land long
+    -- after the user moved on, and an unguarded rebuild would then tear down
+    -- whatever page they are on.
+    --
+    -- The deferred branch is DEFENSIVE, not a path this switch reaches today:
+    -- EllesmereUI refuses to open its panel in combat and closes it on entering
+    -- combat (EllesmereUI.lua:11347 and :11514 in 8.8.2), so nobody can click
+    -- this switch while locked down. Kept because that is the host's rule and
+    -- the host's rules change between releases, and because the same helper is
+    -- shared with the re-apply below, which genuinely does run in combat.
     if not RunOutOfCombat(function()
         ApplyBeginner(ns.BeginnerEnabled(), true)
         ns.EUIRebuildForOwnership("Gameplay")
@@ -453,8 +460,8 @@ end
 -- The CLAIM is captured, not re-read, and it is lost with the closure it rides
 -- in. A profile, import, deletion or spec change during the same fight replaces
 -- the toggle's claiming closure with this one, which then finds no note and
--- writes nothing. That is why the toggle's message no longer promises: the state
--- is recoverable with one more toggle, but it is not what the user asked for.
+-- writes nothing. That supersede is only reachable if the host ever lets its
+-- panel stay open in combat; see SetBeginnerMode above for why it cannot today.
 ns.EUIRegisterReapply(function()
     RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled(), false) end)
 end)
@@ -528,17 +535,27 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "BEGINNER MODE", y);                            y = y - h
 
+    -- Named half by half, because only one half may be held. Lulu Mode switches
+    -- EllesmereUI's action bars off, and the ON path then skips that half instead
+    -- of forcing values into a module the user cannot see (ApplyActionBars). A
+    -- fixed sentence naming both would claim something KitnUI is not holding,
+    -- which is the exact failure this tooltip exists to stop.
+    local beginnerHolds = "your Cooldown Manager and action bar settings"
+    if not ns.EUIProfile(ACTION_BARS) then
+        beginnerHolds = "your Cooldown Manager settings"
+    end
+
     _, h = W:Toggle(parent, "Beginner Mode", y,
         function() return ns.BeginnerEnabled() end,
-        -- No rebuild here: in combat the claim is deferred, so rebuilding at the
-        -- click would publish a sentence about ownership that does not exist yet.
-        -- The call lives in the out-of-combat closure instead.
+        -- No rebuild here. It lives inside SetBeginnerMode's closure so it can
+        -- never run ahead of the claim, which matters if the host's defensive
+        -- deferred branch is ever reached.
         function(v) SetBeginnerMode(v) end,
         ns.EUIOwnershipTip(
             "Shows tooltips, keybinds and key-press highlights on the Cooldown Manager, and keeps Action Bars 1, 2, 3 and 5 always visible.",
             "beginner",
             function() return ns.BeginnerEnabled() end,
-            "your Cooldown Manager and action bar settings"));
+            beginnerHolds));
                                                                                    y = y - h
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
