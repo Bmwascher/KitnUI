@@ -610,8 +610,14 @@ local PORTAL_BTN_SIZE, PORTAL_SPACING, PORTAL_PADDING, PORTAL_COLS = 32, 2, 4, 4
 local portalFlyout, portalFlyoutBtns
 
 -- Desaturates unknown teleports and keeps cooldown swipes current. `known` comes
--- from C_SpellBook.IsSpellKnown, which carries no secret marker, rather than the
--- deprecated IsPlayerSpell global that only exists behind a CVar.
+-- from C_SpellBook.IsSpellKnownOrInSpellBook, which carries no secret marker,
+-- rather than the deprecated IsPlayerSpell global that only exists behind a CVar.
+--
+-- Not the narrower IsSpellKnown, which this used until 2026-08-18. Dungeon
+-- teleports are account-wide and sit in the General tab of the spellbook rather
+-- than being "known" the way a class spell is, so IsSpellKnown answers false for
+-- a teleport the player has earned and every icon dims. BigWigs asks the wider
+-- question for the same list, and for the same reason (its Loader.lua:157).
 --
 -- C_Spell.GetSpellCooldown IS a secret-value risk: it is marked
 -- SecretWhenCooldownsRestricted, and the SpellCooldownInfo it returns marks only
@@ -624,8 +630,8 @@ local function RefreshPortalButtons()
     if not portalFlyoutBtns then return end
     for _, btn in ipairs(portalFlyoutBtns) do
         local spellID = btn.spellID
-        local known = C_SpellBook and C_SpellBook.IsSpellKnown
-            and C_SpellBook.IsSpellKnown(spellID, Enum.SpellBookSpellBank.Player)
+        local known = C_SpellBook and C_SpellBook.IsSpellKnownOrInSpellBook
+            and C_SpellBook.IsSpellKnownOrInSpellBook(spellID, Enum.SpellBookSpellBank.Player)
         if btn._lastKnown ~= known then
             btn._lastKnown = known
             btn.icon:SetDesaturated(not known)
