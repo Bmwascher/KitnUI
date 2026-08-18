@@ -679,10 +679,28 @@ local function CreatePortalFlyout()
 
             local cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
             cooldown:SetAllPoints()
-            cooldown:SetHideCountdownNumbers(true)
             cooldown:SetDrawSwipe(true)
             cooldown:SetDrawBling(false)
             cooldown:SetDrawEdge(false)
+
+            -- The countdown text is the ENGINE's, and that is the whole point. A
+            -- hand-drawn timer would have to subtract GetTime() from the
+            -- startTime and duration this file is careful never to touch (see
+            -- RefreshPortalButtons above): both are secret whenever cooldowns are
+            -- restricted, and arithmetic on a secret throws. The widget formats
+            -- the same two numbers internally, where that restriction does not
+            -- apply, and ticks itself without an OnUpdate.
+            --
+            -- Abbreviation OFF is what produces "8h" and "45m" instead of
+            -- "7:59:12". A threshold below one minute performs no abbreviation at
+            -- all, so every remaining time keeps its unit suffix
+            -- (FrameAPICooldownDocumentation.lua:349). Guarded because it is the
+            -- newer of the two calls; without it the text still shows, just
+            -- abbreviated.
+            cooldown:SetHideCountdownNumbers(false)
+            if cooldown.SetCountdownAbbrevThreshold then
+                cooldown:SetCountdownAbbrevThreshold(0)
+            end
             btn.cooldown = cooldown
 
             -- AnyUp AND AnyDown instead of Bar.lua's useOnKeyDown=false fix for
