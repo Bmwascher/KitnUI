@@ -566,17 +566,28 @@ local hearthstoneElement = {
 -- was rejected (Kitn, 2026-08-18) because it would also overwrite a newer host
 -- list, silently, on the day one finally ships.
 --
--- Shape matches the host's entry for entry so the two stay diffable, though only
--- spellID is read here. Replace the whole table each season.
+-- SOURCE, and it is not guesswork: BigWigs v419.2, `Tools/Keystones.lua:367` for
+-- the spell ids and `Loader.lua:346` for which maps are this season, both read
+-- from the live install on 2026-08-18. BigWigs gates these eight behind build
+-- 120100 (`Loader.lua:183`) and the live client is 12.1.0.69382, so they are
+-- current rather than pending. Altar of Fangs was cross-checked against Wowhead
+-- on its own. The host's eight are the season BEFORE these, which is the whole
+-- reason this table exists.
+--
+-- Only spellID is read. mapID and short ride along for whoever next has to check
+-- this against BigWigs; note mapID is the CHALLENGE MODE map, while the host's
+-- entries carry an LFG dungeonID, so the two lists do not diff field for field.
+--
+-- Replace the whole table each season.
 local KITN_SEASON_PORTALS = {
-    { spellID = 1254400, short = "WRS", dungeonID = 2739, names = { "windrunner spire" } },
-    { spellID = 1254572, short = "MT",  dungeonID = 3085, names = { "magisters' terrace" } },
-    { spellID = 1254563, short = "NPX", dungeonID = 3056, names = { "nexus-point xenas" } },
-    { spellID = 1254559, short = "MC",  dungeonID = 3097, names = { "maisara caverns" } },
-    { spellID = 159898,  short = "SR",  dungeonID = 779,  names = { "skyreach" } },
-    { spellID = 1254555, short = "PoS", dungeonID = 3113, names = { "pit of saron" } },
-    { spellID = 1254551, short = "SoT", dungeonID = 3118, names = { "seat of the triumvirate" } },
-    { spellID = 393273,  short = "AA",  dungeonID = 2366, names = { "algeth'ar academy" } },
+    { spellID = 1286809, short = "MR",  mapID = 2813, names = { "murder row" } },
+    { spellID = 1286807, short = "DoN", mapID = 2825, names = { "den of nalorakk" } },
+    { spellID = 1286801, short = "TBV", mapID = 2859, names = { "the blinding vale" } },
+    { spellID = 1286804, short = "VA",  mapID = 2923, names = { "voidscar arena" } },
+    { spellID = 1286812, short = "AoF", mapID = 2993, names = { "altar of fangs" } },
+    { spellID = 393256,  short = "RLP", mapID = 2521, names = { "ruby life pools" } },
+    { spellID = 1286828, short = "ToS", mapID = 1877, names = { "temple of sethraliss" } },
+    { spellID = 1286831, short = "KR",  mapID = 1762, names = { "king's rest" } },
 }
 
 -- Read fresh on every requires() and CreateFlyout() call rather than snapshotted
