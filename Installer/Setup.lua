@@ -893,6 +893,49 @@ end
 -- Blizzard Cooldown Manager (per-spec)
 ---------------------------------------------------------------------------------
 
+-- Blizzard's Cooldown Manager redraws itself the instant a layout changes, and
+-- that redraw cannot run inside an addon's call stack. It indexes a table the
+-- client forbids to tainted code
+-- (Blizzard_CooldownViewer/CooldownViewer.lua:946) and compares protected spell
+-- data (:344), and whichever it reaches first throws. The throw landed
+-- mid-RemoveLayout, which by then had cleared the user's active layout and had
+-- not yet removed anything, so the import died having done only damage.
+--
+-- LockNotifications is Blizzard's own answer to a batch of edits; its own code
+-- brackets batches the same way (CooldownViewerSettingsDataProvider.lua:186 and
+-- CooldownViewerSettingsDataStoreSerialization.lua:353). Held, every layout edit
+-- runs to completion and the manager merely records that one redraw is owed.
+--
+-- That owed redraw is then DROPPED rather than fired, because firing it would
+-- throw exactly as before: releasing the lock is still our call stack. Nothing
+-- is lost. The wizard reloads the UI at Finish and the viewer rebuilds from the
+-- saved layouts, so a stale viewer until then costs nothing.
+--
+-- needsNotificationAfterUnlock is Blizzard's own flag
+-- (CooldownViewerSettingsLayoutManager.lua:825). Clearing it is what makes the
+-- release quiet, and it is preferred to the alternatives because of HOW it
+-- fails: if a later build renames the flag the redraw fires and errors as it
+-- does today, but the edits have already completed by then, so the import still
+-- succeeds.
+local function SilenceCDM(lm)
+    if type(lm.LockNotifications) ~= "function"
+        or type(lm.UnlockNotifications) ~= "function" then
+        return false
+    end
+    lm:LockNotifications()
+    return true
+end
+
+-- Every SilenceCDM needs exactly one of these, and NO `return` may sit between
+-- the pair: a lock that is never released leaves the viewer frozen until the
+-- next reload. That is why the brackets below wrap single runs of edits instead
+-- of the import as a whole, which has four exits inside it.
+local function RestoreCDM(lm, silenced)
+    if not silenced then return end
+    lm.needsNotificationAfterUnlock = false
+    lm:UnlockNotifications()
+end
+
 setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
     if import then
         local _, _, classId = UnitClass("player")
@@ -954,7 +997,9 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         if layouts then
             for layoutID, layout in pairs(layouts) do
                 if layout and layout.layoutName == layoutName then
+                    local quietRemove = SilenceCDM(lm)
                     lm:RemoveLayout(layoutID)
+                    RestoreCDM(lm, quietRemove)
                     removedExisting = true
                     break
                 end
@@ -967,7 +1012,10 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             return false
         end
 
+        local quietCreate = SilenceCDM(lm)
         local layoutIDs = lm:CreateLayoutsFromSerializedData(specString)
+        RestoreCDM(lm, quietCreate)
+
         if layoutIDs and layoutIDs[1] then
             local importedID = layoutIDs[1]
 
@@ -978,7 +1026,10 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             end
 
             postLayouts[importedID].layoutName = layoutName
+
+            local quietSave = SilenceCDM(lm)
             lm:SaveLayouts()
+            RestoreCDM(lm, quietSave)
 
             -- Degrades rather than refuses. The layout is already created and
             -- named by this point, so a missing namespace costs only the
@@ -986,15 +1037,19 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             local currentSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
                 and C_SpecializationInfo.GetSpecialization()
             if currentSpec == specIndex then
+                local quietActivate = SilenceCDM(lm)
                 if lm.SetActiveLayoutByID then
                     lm:SetActiveLayoutByID(importedID)
                 end
                 lm:SaveLayouts()
+                RestoreCDM(lm, quietActivate)
 
                 C_Timer.After(0, function()
                     if not InCombatLockdown() and lm.SetActiveLayoutByID then
+                        local quietRetry = SilenceCDM(lm)
                         lm:SetActiveLayoutByID(importedID)
                         lm:SaveLayouts()
+                        RestoreCDM(lm, quietRetry)
                     end
                 end)
             end

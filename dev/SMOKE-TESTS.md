@@ -262,6 +262,18 @@ character carrying a legacy Plater install.
   recreate path runs. Each spec's layout imports, is named `KUI - <spec>`, and the
   current spec's becomes active. The import now checks its layout-manager methods
   before it deletes anything, so a regression shows as a refusal here.
+- [ ] **10b. Re-importing over the ACTIVE layout raises nothing.** This is the
+  2026-08-18 crash, and it needs the same conditions you hit it in: the Cooldown
+  Manager on screen, holding live spell data, with `KUI - <spec>` already the
+  active layout. Run the CDM step for that spec again. BugSack must stay empty.
+  Before the fix this threw from inside Blizzard's own redraw
+  (`CooldownViewer.lua:946` and `:344`), and it threw HALFWAY, which wiped the
+  active layout and imported nothing.
+  - The Cooldown Manager not redrawing until you click Finish is EXPECTED, not a
+    defect. Dropping that redraw is the fix. Finish reloads the UI and rebuilds
+    the viewer from the saved layouts.
+  - What must be true after Finish: the layout exists once, not twice, is named
+    `KUI - <spec>`, and is active.
 
 ## What cannot be tested by hand, and why that is recorded rather than skipped
 
@@ -279,6 +291,15 @@ these have no manual check and are not counted as untested work:
   missing. This one does not refuse: the layout is already created, named and
   saved by that line, so the import still succeeds and only the automatic
   activation is skipped. You would pick the layout yourself in Edit Mode.
+- The CDM import's other DEGRADED path, when `GetSpecializationInfoForClassID` is
+  missing. The layout is named `KUI - Spec<n>` instead of `KUI - <spec name>` and
+  everything else runs unchanged.
+- The CDM import running WITHOUT Blizzard's `LockNotifications`, which is what
+  check 10b exercises the working half of. If a future build drops those two
+  methods the import stops suppressing the redraw and behaves as it did before
+  2026-08-18, which is to say it throws from inside Blizzard's code. That is
+  deliberate: the alternative was to refuse the import outright over a method
+  that only makes it quieter.
 
 Their value is that a future API change refuses and prints instead of throwing and
 stranding the rest of the run. Check 9 and check 5b cover the same shape on the
@@ -293,7 +314,7 @@ Kitn, record the outcome here.
 - Disabled-addon (checks 3-5):
 - BigWigs decline (check 6):
 - Deleted profiles (checks 7-9):
-- Edit Mode activation and CDM import (checks 9b-10):
+- Edit Mode activation and CDM import (checks 9b-10b):
 - Notes:
 
 ---
