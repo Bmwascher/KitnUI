@@ -551,11 +551,43 @@ local hearthstoneElement = {
 -- Mythic+ Portals: a secure flyout of this season's dungeon teleports, anchored
 -- to the portals launcher button.
 --
--- EllesmereUI.SEASON_PORTALS belongs to the host and moves once per season. Read
--- fresh on every requires() and CreateFlyout() call rather than snapshotted at
--- file scope, so a season boundary where the host's list is briefly missing
--- degrades to "no portals button" instead of a frozen empty grid.
+-- KitnUI's own season list, and the Top Bar's first choice for it.
+--
+-- EllesmereUI owns SEASON_PORTALS, and it has stopped moving: the list in the
+-- 8.7.5 and 8.8.2 references and in the live 8.9.2 install is identical, so
+-- waiting for the host to roll the season over is waiting for something that is
+-- not arriving on time. KitnUI cannot fix it at the source either, because
+-- editing EllesmereUI's own files is forbidden.
+--
+-- The reach is deliberately SMALL. This feeds the Top Bar flyout and nothing
+-- else, so EllesmereUI's minimap flyout, chat flyout and /keys resolver still
+-- read the host's and can disagree with this one until the host catches up.
+-- Assigning over EllesmereUI.SEASON_PORTALS would make the whole UI agree, and
+-- was rejected (Kitn, 2026-08-18) because it would also overwrite a newer host
+-- list, silently, on the day one finally ships.
+--
+-- Shape matches the host's entry for entry so the two stay diffable, though only
+-- spellID is read here. Replace the whole table each season.
+local KITN_SEASON_PORTALS = {
+    { spellID = 1254400, short = "WRS", dungeonID = 2739, names = { "windrunner spire" } },
+    { spellID = 1254572, short = "MT",  dungeonID = 3085, names = { "magisters' terrace" } },
+    { spellID = 1254563, short = "NPX", dungeonID = 3056, names = { "nexus-point xenas" } },
+    { spellID = 1254559, short = "MC",  dungeonID = 3097, names = { "maisara caverns" } },
+    { spellID = 159898,  short = "SR",  dungeonID = 779,  names = { "skyreach" } },
+    { spellID = 1254555, short = "PoS", dungeonID = 3113, names = { "pit of saron" } },
+    { spellID = 1254551, short = "SoT", dungeonID = 3118, names = { "seat of the triumvirate" } },
+    { spellID = 393273,  short = "AA",  dungeonID = 2366, names = { "algeth'ar academy" } },
+}
+
+-- Read fresh on every requires() and CreateFlyout() call rather than snapshotted
+-- at file scope, so a season boundary where neither list is usable degrades to
+-- "no portals button" instead of a frozen empty grid.
+--
+-- The host stays as the FALLBACK for the one case the table above cannot cover:
+-- a KitnUI that has fallen behind a season the host did roll over. Emptying the
+-- table therefore means "use theirs", not "no portals".
 local function SeasonPortals()
+    if #KITN_SEASON_PORTALS > 0 then return KITN_SEASON_PORTALS end
     local EUI = _G.EllesmereUI
     local list = EUI and EUI.SEASON_PORTALS
     if type(list) ~= "table" or #list == 0 then return nil end
