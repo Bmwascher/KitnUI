@@ -249,7 +249,51 @@ local function WelcomePage()
     f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
 end
 
-local function EllesmereUIPage()
+-- The two EllesmereUI appearance presets, offered on this page once the profile
+-- is in. KitnUI_EUI/General.lua owns them: the KEYS are what ns.ApplyLook and
+-- ns.CurrentLook speak, and the labels are copies of its LOOKS table. Both
+-- functions arrive through the EXPORTS bridge in KitnUI_EUI/Core.lua and are nil
+-- when that addon is missing, so every use below is guarded.
+local EUI_LOOKS = {
+    { key = "dark",  label = "Dark" },
+    { key = "color", label = "Colored" },
+}
+
+-- Forward-declared: the look buttons rebuild the page they sit on, which is the
+-- only thing that moves the highlight onto the look just applied.
+local EllesmereUIPage
+
+-- Option1 is the import; the looks take Option2 and Option3. Three buttons at
+-- the default 165 width with two 10px gaps is 515 in a 520-wide content column,
+-- so they fit the row without FitOptions.
+local function ShowLookOptions()
+    if not (ns.ApplyLook and ns.IsAddonImported("EllesmereUI")) then
+        -- No profile yet: say where the looks live rather than offering them.
+        ns.Wizard:SetOptionHint("Dark and Colored are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
+        return
+    end
+    -- nil is Custom: the user has hand-edited a colour, so neither look is live
+    -- and neither button is marked.
+    local current = ns.CurrentLook and ns.CurrentLook() or nil
+    for i, look in ipairs(EUI_LOOKS) do
+        local slot = i + 1
+        ns.Wizard:SetOption(slot, look.label, function()
+            -- ns.ApplyLook is the RAW apply. The combat refusal lives in the
+            -- config page's own wrapper, not in it, so without this guard a
+            -- mid-fight click stores a look the screen never finishes painting.
+            if InCombatLockdown() then
+                ShowInstallToast("Appearance cannot be changed in combat", 1, 0.8, 0.2)
+                return
+            end
+            ns.ApplyLook(look.key)
+            EllesmereUIPage()
+        end)
+        SetVariant(WF()["Option" .. slot], current == look.key and "selected" or "selectable")
+    end
+    ns.Wizard:SetOptionHint("Pick a look now, or change it any time in KitnUI's EllesmereUI tab.")
+end
+
+function EllesmereUIPage()
     local f = WF()
     -- Hand-written, unlike the generic pages that title themselves from the
     -- step's `display` field, so keep the two in step by hand.
@@ -268,10 +312,14 @@ local function EllesmereUIPage()
             SuccessToast("EllesmereUI", "profile imported!")
             PlayInstallSound()
             SetVariant(WF().Next, "primary")
+            -- The import applies Dark (Setup.lua), so the buttons appear already
+            -- marked. Called here rather than only at page entry so a first
+            -- install does not have to leave and come back to see them.
+            ShowLookOptions()
         end)
     end)
     SetVariant(WF().Option1, "primary")
-    ns.Wizard:SetOptionHint("Dark and Colored are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
+    ShowLookOptions()
 end
 
 local function SimpleInstallPage(addonKey, displayName)

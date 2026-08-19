@@ -265,6 +265,13 @@ end
 -- not the page's.
 ns.ApplyLook = ApplyLook
 
+-- The installer's EllesmereUI page offers the same two looks and has to know
+-- which one is live to mark it. It reads through this rather than testing the
+-- profile itself: a second copy of MatchesLook would drift from this one the
+-- first time a look gains a key. Both names must also be listed in Core.lua's
+-- EXPORTS or they never cross into KitnUI, silently.
+ns.CurrentLook = CurrentLook
+
 -- Refused in combat because a look is not one write: it flips dark mode across
 -- two modules, rewrites the unit and raid frame colour flags, and asks three
 -- refreshers to repaint. Anything that defers under lockdown leaves the stored

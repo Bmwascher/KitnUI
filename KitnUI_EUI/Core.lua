@@ -1042,7 +1042,7 @@ KitnCommands["config"] = KitnCommands["options"]
 -- The read-through metatable above is one-way: KitnUI_EUI reads KitnUI's
 -- namespace, but anything this addon defines stays local until it is copied back
 -- here.
-local EXPORTS = { "EUIResetAll", "ApplyLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar" }
+local EXPORTS = { "EUIResetAll", "ApplyLook", "CurrentLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar" }
 
 -- Its own frame, deliberately. The main boot handler above returns early when
 -- EllesmereUI is too old for RegisterModule, and none of these exports needs
