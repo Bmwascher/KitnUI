@@ -29,7 +29,7 @@ an agent.**
 | 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
-| 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..d69d818` | none yet | **PENDING** |
+| 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -439,7 +439,12 @@ Three separate changes that all show up in the installer wizard. Design:
 `dev/docs/superpowers/specs/2026-08-18-installer-polish-design.md`.
 
 Commits: `a9ea04b` (sidebar), `9d7352a` (looks), `643ca4e` (nickname),
-`d69d818` (version string).
+`d69d818` (version string), `d388c51` (version helper), `ad33cf1` and `20601ae`
+(review fixes).
+
+Cross-model review closed 2026-08-19, verdict PASS on `d13af7d..20601ae`,
+verification status FULL. Round artifacts:
+`dev/docs/superpowers/rounds/2026-08-19-installer-polish/`.
 
 ## What changed and why it needs testing
 
