@@ -360,10 +360,11 @@ local function ShowNicknameInput()
     local current = ns.GetNSRTNickname and ns.GetNSRTNickname()
     if not current then return end
     ns.Wizard:ShowInput({
-        label      = "YOUR NICKNAME",
-        text       = current,
-        maxLetters = 12,
-        onCommit   = function(value)
+        label       = "YOUR NICKNAME",
+        text        = current,
+        placeholder = "Type a nickname",
+        maxLetters  = 12,
+        onCommit    = function(value)
             ns.SetNSRTNickname(value)
             -- Read back what NSRT actually kept. A trimmed, truncated or refused
             -- value then shows in the box instead of being assumed saved.
@@ -733,6 +734,28 @@ local function EllesmereUILoadPage()
     end)
 end
 
+-- The load-mode twin of NSRTPage. It exists for the field alone: the nickname is
+-- account-wide in NSRT but binds to the character that sets it, so an alt is
+-- exactly when someone wants to set one, and /kitn load is the only wizard an alt
+-- runs. There is nothing to keep in step: both pages read and write the one live
+-- value in NSRT, so they cannot disagree.
+local function NSRTLoadPage()
+    local f = WF()
+    f.SubTitle:SetText("Northern Sky Raid Tools")
+    f.Desc1:SetText("Activate the " .. ns.Color("Northern Sky Raid Tools") .. " profile on this character.")
+    ShowLoadStatusAndVersion("NSRT")
+    ns.Wizard:SetOption(1, "Load", function()
+        if ns.SetupAddon("NSRT") == false then
+            ShowInstallToast("Northern Sky Raid Tools load failed", 1, 0.2, 0.2)
+            return
+        end
+        WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
+        SuccessToast("Northern Sky Raid Tools", "loaded!")
+        PlayInstallSound()
+    end)
+    ShowNicknameInput()
+end
+
 local function SimpleLoadPage(addonKey, displayName)
     return function()
         local f = WF()
@@ -849,6 +872,8 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
             if isImported and step.key ~= "BlizzardCDM" then
                 if step.key == "EllesmereUI" then
                     tinsert(pages, EllesmereUILoadPage)
+                elseif step.key == "NSRT" then
+                    tinsert(pages, NSRTLoadPage)
                 elseif step.key == "Blizzard_EditMode" then
                     tinsert(pages, EditModeLoadPage)
                 else

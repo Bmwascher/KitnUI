@@ -487,8 +487,16 @@ to show up here.
   checkout, with no `v` and no stale number. The same rule now covers the
   "KitnUI has been updated" popup, which you will only see on a real update.
 - [ ] **3. The box shows your real nickname.** Go to the Northern Sky Raid Tools
-  step. The box under the status block shows your current NSRT nickname, or is
-  empty if you have none.
+  step. The box under the status block shows your current NSRT nickname, or the
+  grey words `Type a nickname` if you have none.
+- [ ] **3b. It is easy to spot.** The caption above the box is pink, the box has a
+  pink edge down its left side, and its border brightens when you click into it.
+  It should read as the one thing on the page asking you to type.
+- [ ] **3c. The same box is on the other two wizards.** Run `/kitn load` on any
+  character with an NSRT profile: the Northern Sky Raid Tools step has the same
+  box, showing the same value. Run `/kitn update` when NSRT has an update
+  pending: same again. Change the nickname in one and it reads the same in the
+  others - there is only one value, so they cannot drift.
 - [ ] **4. Typing a name saves it.** Type a name and press Enter. Open NSRT's own
   options and confirm the same name is there.
 - [ ] **5. Clearing works.** Empty the box and press Enter. NSRT's options show it
@@ -527,7 +535,7 @@ Kitn, record the outcome here.
 
 - Date:
 - Sidebar and version (checks 1-2c):
-- Nickname (checks 3-9):
+- Nickname (checks 3-9, including 3b and 3c):
 - Looks (checks 10-15):
 - BugSack (check 16):
 - Notes:

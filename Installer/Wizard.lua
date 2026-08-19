@@ -322,23 +322,43 @@ function W:ShowInput(opts)
     opts = opts or {}
 
     if not f.inputBox then
-        -- Same muted treatment as detailHeader, so the caption reads as part of
-        -- the status block rather than as a second heading.
-        f.inputCaption = EllesmereUI.MakeFont(f, 11, "", 1, 1, 1, 0.5)
+        -- Pink caption, not the muted grey the status header uses. This is the
+        -- one thing on any page asking the user to TYPE, and a field styled like
+        -- a status line reads as another status line.
+        f.inputCaption = EllesmereUI.MakeFont(f, 11, "", KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.9)
         f.inputCaption:SetJustifyH("LEFT")
 
         local eb = CreateFrame("EditBox", nil, f)
-        eb:SetSize(180, 26)
+        eb:SetSize(200, 28)
         eb:SetAutoFocus(false)
         eb:SetFont(ns.FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-        eb:SetTextInsets(8, 8, 0, 0)
+        eb:SetTextInsets(12, 8, 0, 0)  -- clears the pink edge bar below
         eb:SetTextColor(1, 1, 1, 0.95)
         local bg = eb:CreateTexture(nil, "BACKGROUND")
         bg:SetColorTexture(0, 0, 0, 0.40)  -- the "selectable" button fill, so the kit matches
         bg:SetAllPoints()
+        -- The same 3px pink edge the sidebar uses to mark the row you are on.
+        -- It is what makes the field read as "this one, now" at a glance.
+        local edge = eb:CreateTexture(nil, "ARTWORK")
+        edge:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 1)
+        edge:SetWidth(3)
+        edge:SetPoint("TOPLEFT")
+        edge:SetPoint("BOTTOMLEFT")
+        -- Kept so focus can brighten it. MakeBorder returns an object with a
+        -- SetColor METHOD, not a texture -- SetColorTexture on it is a nil call.
         if EllesmereUI.MakeBorder then
-            EllesmereUI.MakeBorder(eb, 1, 1, 1, 0.14, EllesmereUI.PanelPP)
+            eb._border = EllesmereUI.MakeBorder(eb, KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.5, EllesmereUI.PanelPP)
         end
+
+        -- Shown only while the box is empty and unfocused. An empty box with a
+        -- caption above it reads as "nothing here"; an invitation inside it reads
+        -- as something to do.
+        eb.placeholder = EllesmereUI.MakeFont(eb, 13, "", 1, 1, 1, 0.35)
+        eb.placeholder:SetPoint("LEFT", 12, 0)
+        eb.placeholder:SetJustifyH("LEFT")
+
+        eb:SetScript("OnTextChanged", function(box) W:RefreshInputChrome(box) end)
+        eb:SetScript("OnEditFocusGained", function(box) W:RefreshInputChrome(box) end)
 
         -- Enter commits by dropping focus, so there is exactly ONE commit path.
         eb:SetScript("OnEnterPressed", function(box) box:ClearFocus() end)
@@ -354,16 +374,18 @@ function W:ShowInput(opts)
                 box._cancelled = nil
                 box:SetText(box._committed or "")
                 box:SetCursorPosition(0)
-                return
+            else
+                -- An unchanged value is NOT committed. Focus is lost by clicking
+                -- anywhere, including Next, so without this test merely visiting
+                -- the page and clicking away would write - and for the nickname
+                -- that turns "never set" into "deliberately cleared", which NSRT
+                -- then broadcasts to the group.
+                local value = box:GetText()
+                if value ~= box._committed and box._onCommit then
+                    box._onCommit(value)
+                end
             end
-            -- An unchanged value is NOT committed. Focus is lost by clicking
-            -- anywhere, including Next, so without this test merely visiting the
-            -- page and clicking away would write - and for the nickname that
-            -- turns "never set" into "deliberately cleared", which NSRT then
-            -- broadcasts to the group.
-            local value = box:GetText()
-            if value == box._committed then return end
-            if box._onCommit then box._onCommit(value) end
+            W:RefreshInputChrome(box)
         end)
         f.inputBox = eb
     end
@@ -372,6 +394,8 @@ function W:ShowInput(opts)
     eb._onCommit = opts.onCommit
     eb._cancelled = nil
     eb:SetMaxLetters(opts.maxLetters or 12)
+    eb._placeholder = opts.placeholder or ""
+    eb.placeholder:SetText(eb._placeholder)
     W:SetInputText(opts.text)
 
     -- Anchored off Desc3 rather than a fixed y, the same way ShowStatusHeader
@@ -385,6 +409,21 @@ function W:ShowInput(opts)
     eb:Show()
 end
 
+-- Placeholder visibility and border emphasis, both driven by the same two facts:
+-- is there text, and does the box have focus. One function so the two can never
+-- disagree.
+function W:RefreshInputChrome(eb)
+    eb = eb or (W.frame and W.frame.inputBox)
+    if not eb then return end
+    local empty = (eb:GetText() or "") == ""
+    local focused = eb:HasFocus()
+    eb.placeholder:SetShown(empty and not focused and eb._placeholder ~= "")
+    if eb._border and eb._border.SetColor then
+        local a = focused and 1 or 0.5
+        eb._border:SetColor(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], a)
+    end
+end
+
 -- Put a value back in the box. Pages call this after a commit with whatever the
 -- target addon actually KEPT, so a truncated or refused value is visible rather
 -- than assumed.
@@ -394,6 +433,7 @@ function W:SetInputText(text)
     eb._committed = text or ""
     eb:SetText(eb._committed)
     eb:SetCursorPosition(0)
+    W:RefreshInputChrome(eb)
 end
 
 function W:HideInput()
