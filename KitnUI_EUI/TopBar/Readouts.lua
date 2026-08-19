@@ -1072,6 +1072,36 @@ local function UpdateGuildBadge()
     if ok then guildText:SetText(tostring(count)) end
 end
 
+-- The friends walk is EXPENSIVE IN GARBAGE, not in time: every
+-- GetFriendAccountInfo call returns a freshly allocated struct that
+-- FriendsCount reads one field of and drops. Measured in-game on 2026-08-19:
+-- one walk allocated 649 KB across 175 Battle.net friends, and
+-- BN_FRIEND_INFO_CHANGED fired 69 times in one minute -- any friend changing
+-- zone, game or status anywhere fires it -- so walking on every event churned
+-- ~44 MB of garbage a minute and the addon's reported memory sawtoothed to
+-- 90 MB between GC cycles.
+--
+-- So no trigger calls UpdateFriendsBadge directly any more: everything funnels
+-- through this request, which coalesces however many triggers land inside one
+-- window into a single trailing walk. Trailing rather than leading on purpose:
+-- these events arrive in bursts, and a leading edge would pay one walk per
+-- burst plus the deferred one. A badge at most 10 seconds stale is invisible;
+-- the churn was not.
+--
+-- GuildCount stays direct: GetNumGuildMembers returns two numbers, no structs,
+-- so there is nothing to throttle.
+local BADGE_WALK_WINDOW = 10
+local friendsBadgePending
+
+local function RequestFriendsBadgeUpdate()
+    if friendsBadgePending then return end
+    friendsBadgePending = true
+    C_Timer.After(BADGE_WALK_WINDOW, function()
+        friendsBadgePending = nil
+        UpdateFriendsBadge()
+    end)
+end
+
 -- Refresh triggers: the events that actually change these counts, plus a
 -- belt-and-braces re-render every tenth Tick() below. No WEEKLY_REWARDS_UPDATE
 -- here: the vault tooltip reads GetActivities() at the moment it opens, so it
@@ -1082,7 +1112,7 @@ badgeWatcher:RegisterEvent("BN_FRIEND_INFO_CHANGED")
 badgeWatcher:RegisterEvent("GUILD_ROSTER_UPDATE")
 badgeWatcher:SetScript("OnEvent", function(_, event)
     if event == "FRIENDLIST_UPDATE" or event == "BN_FRIEND_INFO_CHANGED" then
-        UpdateFriendsBadge()
+        RequestFriendsBadgeUpdate()
     elseif event == "GUILD_ROSTER_UPDATE" then
         UpdateGuildBadge()
     end
@@ -1119,10 +1149,18 @@ function ns.TopBar.ApplyReadoutFonts()
     if friendsBtn and not friendsText then
         friendsText = friendsBtn:CreateFontString(nil, "OVERLAY")
         friendsText:SetPoint("BOTTOM", friendsBtn, "BOTTOM", 0, -2)
+        -- Direct, ONCE, when the FontString is first created: a brand-new badge
+        -- showing nothing for a whole throttle window reads as broken. Every
+        -- later Apply() goes through the request instead -- dragging any Top
+        -- Bar slider re-runs Apply() per notch, and each direct call here was
+        -- a full friends walk (see RequestFriendsBadgeUpdate above). The cost:
+        -- flipping tbFriendsInGameOnly/tbFriendsSubAccounts now takes up to
+        -- BADGE_WALK_WINDOW to move the count.
+        UpdateFriendsBadge()
     end
     if friendsText then
         friendsText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
-        UpdateFriendsBadge()
+        RequestFriendsBadgeUpdate()
     end
 
     local guildBtn = _G.KitnUITopBar_guild
@@ -1161,12 +1199,14 @@ local function Tick()
     if not (barFrame and barFrame:IsShown()) then return end
     UpdateClock()
 
-    -- Belt-and-braces re-render, not a request: every tenth tick. The events
-    -- above already cover the real refresh triggers.
+    -- Belt-and-braces re-render every tenth tick. The events above already
+    -- cover the real refresh triggers. The friends half goes through the
+    -- throttled request like every other trigger, so it coalesces with the
+    -- event-driven walks instead of adding its own.
     tickCount = tickCount + 1
     if tickCount >= 10 then
         tickCount = 0
-        UpdateFriendsBadge()
+        RequestFriendsBadgeUpdate()
         UpdateGuildBadge()
     end
 end
