@@ -29,7 +29,7 @@ an agent.**
 | 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
-| 4. Installer polish (sidebar, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `643ca4e` | none yet | **PENDING** |
+| 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..d69d818` | none yet | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -433,12 +433,13 @@ Kitn, record the outcome here.
 
 ---
 
-# Item 4 — Installer polish: sidebar inset, NSRT nickname, EllesmereUI looks
+# Item 4 — Installer polish: sidebar, version, NSRT nickname, EllesmereUI looks
 
 Three separate changes that all show up in the installer wizard. Design:
 `dev/docs/superpowers/specs/2026-08-18-installer-polish-design.md`.
 
-Commits: `a9ea04b` (sidebar), `9d7352a` (looks), `643ca4e` (nickname).
+Commits: `a9ea04b` (sidebar), `9d7352a` (looks), `643ca4e` (nickname),
+`d69d818` (version string).
 
 ## What changed and why it needs testing
 
