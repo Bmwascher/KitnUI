@@ -29,6 +29,7 @@ an agent.**
 | 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
+| 4. Installer polish (sidebar, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `643ca4e` | none yet | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -427,4 +428,96 @@ Kitn, record the outcome here.
 - Untouched switches (check 7):
 - Narrow panel, BugSack (check 8):
 - Search, rebuild, Lulu wording (checks 10-12):
+- Notes:
+
+
+---
+
+# Item 4 — Installer polish: sidebar inset, NSRT nickname, EllesmereUI looks
+
+Three separate changes that all show up in the installer wizard. Design:
+`dev/docs/superpowers/specs/2026-08-18-installer-polish-design.md`.
+
+Commits: `a9ea04b` (sidebar), `9d7352a` (looks), `643ca4e` (nickname).
+
+## What changed and why it needs testing
+
+**The sidebar step names moved 8 pixels left.** The rail, the green tick and the
+label all shifted, and the tick shrank from 14 to 12 pixels to make the room.
+Nothing but geometry changed, so the only way this can be wrong is on screen: a
+name overlapping the tick, or a long name crossing the baked divider.
+
+**The Northern Sky Raid Tools step gained a text box.** It is the wizard's first
+EditBox, so it is the first thing here that can take keyboard focus. Two things
+about focus matter more than the feature itself: Escape must not close the
+wizard, and merely visiting the page must not write anything. Writing an empty
+nickname is not harmless - NSRT treats it as "delete my nickname" and tells your
+raid.
+
+**The EllesmereUI step gained Dark and Colored buttons.** They call the same
+function the config tab's own buttons call. They appear only once the profile is
+imported, and the highlighted one is read live, so a look changed elsewhere has
+to show up here.
+
+## Read this before starting
+
+- The nickname box only appears if NorthernSkyRaidTools is loaded. On a
+  character without it, checks 3 to 8 do not apply.
+- The look buttons only appear if the EllesmereUI profile is imported. Check 9
+  is deliberately the "before" state.
+- The installer applies Dark at import time, so check 10 expects Dark marked.
+
+## The checks
+
+- [ ] **1. Names sit further left.** Run `/kitn install`. The step names in the
+  left rail start visibly closer to the panel edge than before. Nothing is cut
+  off and no name crosses the divider line at the right of the sidebar.
+- [ ] **2. The tick and the bar still work.** Step past an addon you actually
+  import. Its row shows the green tick, and the tick does not touch or sit under
+  the first letter of the name. The current row still shows the pink bar and the
+  pink wash.
+- [ ] **3. The box shows your real nickname.** Go to the Northern Sky Raid Tools
+  step. The box under the status block shows your current NSRT nickname, or is
+  empty if you have none.
+- [ ] **4. Typing a name saves it.** Type a name and press Enter. Open NSRT's own
+  options and confirm the same name is there.
+- [ ] **5. Clearing works.** Empty the box and press Enter. NSRT's options show it
+  cleared.
+- [ ] **6. Long names are cut.** Type more than 12 characters and press Enter. The
+  box comes back showing 12 characters or fewer, which is what NSRT kept.
+- [ ] **7. Escape does not close the wizard.** Start typing in the box and press
+  Escape. Focus leaves the box, the box goes back to its old value, and **the
+  wizard stays open**.
+- [ ] **8. Just visiting writes nothing.** With NO nickname set, walk onto the
+  NSRT step, click the box, click away without typing, then leave the page. NSRT
+  must still have no nickname. Nothing about a nickname may be sent to your
+  group.
+- [ ] **9. Importing keeps the nickname.** Set a nickname, then import the NSRT
+  profile on that same step. The nickname is still there afterwards.
+- [ ] **10. No looks before the profile.** On the EllesmereUI step, before
+  importing, there are no Dark or Colored buttons - only the hint saying the
+  looks live in the KitnUI tab.
+- [ ] **11. Looks appear after the import.** Import the profile. Dark and Colored
+  appear straight away, with **Dark** marked.
+- [ ] **12. Colored works.** Click Colored. The UI recolours and Colored takes the
+  mark.
+- [ ] **13. The config tab agrees.** Open KitnUI's EllesmereUI tab. Its appearance
+  header names the same look the installer has marked.
+- [ ] **14. Custom is honest.** In the config tab, hand-change one colour so the
+  header reads CUSTOM. Return to the installer step. **Neither** button is
+  marked.
+- [ ] **15. Combat is refused.** Pull a target dummy. Click Dark: refused with a
+  message and nothing changes. Type in the nickname box and press Enter: refused
+  in chat, and the box goes back to the stored value.
+- [ ] **16. BugSack is empty.** After all of the above.
+
+## Result
+
+Kitn, record the outcome here.
+
+- Date:
+- Sidebar (checks 1-2):
+- Nickname (checks 3-9):
+- Looks (checks 10-15):
+- BugSack (check 16):
 - Notes:
