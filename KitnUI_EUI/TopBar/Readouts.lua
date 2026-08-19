@@ -1074,22 +1074,18 @@ end
 
 -- The friends walk is EXPENSIVE IN GARBAGE, not in time: every
 -- GetFriendAccountInfo call returns a freshly allocated struct that
--- FriendsCount reads a field or two of and drops. Measured in-game on
--- 2026-08-19: one walk allocated 649 KB across 175 Battle.net friends, and
--- BN_FRIEND_INFO_CHANGED fired 69 times in one minute -- any friend changing
--- zone, game or status anywhere fires it -- so walking on every event churned
--- ~44 MB of garbage a minute and the addon's reported memory sawtoothed to
--- 90 MB between GC cycles.
+-- FriendsCount reads a field or two of and drops. Measured in-game: one walk
+-- allocated 649 KB across 175 Battle.net friends, and BN_FRIEND_INFO_CHANGED
+-- fired 69 times a minute -- any friend changing zone, game or status
+-- anywhere fires it -- so walking per event churned ~44 MB of garbage a
+-- minute.
 --
--- Every RECURRING trigger therefore funnels through this request, which
--- coalesces however many land inside one window into a single trailing walk.
--- (The one direct call left is the badge's first fill, in ApplyReadoutFonts
--- below, which cannot wait a window.) Trailing rather than leading on
--- purpose: these events arrive in bursts, and a leading edge would pay one
--- walk per burst plus the deferred one. Staleness worst case: one window
--- after an event, TWO on the tick-only path (up to ten seconds until the
--- tenth tick issues the request, then the window). Either is invisible on a
--- badge; the churn was not.
+-- Every recurring trigger therefore funnels through this request, which
+-- coalesces a burst into one trailing walk per window. (The one direct call
+-- left is the badge's first fill in ApplyReadoutFonts, which cannot wait.)
+-- Trailing, not leading: a leading edge would pay one walk per burst plus
+-- the deferred one. Worst-case staleness is one window after an event, two
+-- on the tick-only path -- invisible on a badge; the churn was not.
 --
 -- GuildCount stays direct: GetNumGuildMembers returns two numbers, no structs,
 -- so there is nothing to throttle.
@@ -1157,15 +1153,13 @@ function ns.TopBar.ApplyReadoutFonts()
     end
     if friendsText then
         friendsText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
-        -- The first fill is direct and immediate: a badge that sits blank for
-        -- a whole throttle window after it appears reads as broken. It runs
-        -- from HERE rather than from the creation branch above because "font
-        -- before text" (sysText's comment, top of this file) binds this
-        -- FontString too -- SetText before the SetFont throws. Every LATER
-        -- Apply() goes through the request instead: dragging any Top Bar
-        -- slider re-runs Apply() per notch, and each notch used to pay a full
-        -- friends walk. The cost is that flipping tbFriendsInGameOnly or
-        -- tbFriendsSubAccounts takes up to a window to move the count.
+        -- The first fill is direct: a badge blank for a whole window after it
+        -- appears reads as broken. It runs here rather than in the creation
+        -- branch because SetText before SetFont throws (sysText's "font
+        -- before text" comment above). Every later Apply() takes the request
+        -- path -- sliders re-run Apply() per notch, and each notch used to
+        -- pay a full walk. Cost: flipping either tbFriends* filter takes up
+        -- to a window to move the count.
         if friendsFirstBuild then
             UpdateFriendsBadge()
         else
@@ -1209,11 +1203,10 @@ local function Tick()
     if not (barFrame and barFrame:IsShown()) then return end
     UpdateClock()
 
-    -- Belt-and-braces re-render every tenth tick; the events above cover the
-    -- real refresh triggers. The friends half goes through the throttled
-    -- request so it coalesces with the event-driven walks rather than adding
-    -- walks of its own; guild stays direct because it allocates nothing (see
-    -- RequestFriendsBadgeUpdate).
+    -- Belt-and-braces re-render every tenth tick; the events above are the
+    -- real triggers. Friends goes through the throttled request so it
+    -- coalesces with the event walks; guild is direct because it allocates
+    -- nothing.
     tickCount = tickCount + 1
     if tickCount >= 10 then
         tickCount = 0
