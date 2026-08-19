@@ -1074,21 +1074,22 @@ end
 
 -- The friends walk is EXPENSIVE IN GARBAGE, not in time: every
 -- GetFriendAccountInfo call returns a freshly allocated struct that
--- FriendsCount reads one field of and drops. Measured in-game on 2026-08-19:
--- one walk allocated 649 KB across 175 Battle.net friends, and
+-- FriendsCount reads a field or two of and drops. Measured in-game on
+-- 2026-08-19: one walk allocated 649 KB across 175 Battle.net friends, and
 -- BN_FRIEND_INFO_CHANGED fired 69 times in one minute -- any friend changing
 -- zone, game or status anywhere fires it -- so walking on every event churned
 -- ~44 MB of garbage a minute and the addon's reported memory sawtoothed to
 -- 90 MB between GC cycles.
 --
--- So no trigger calls UpdateFriendsBadge directly any more: everything funnels
--- through this request, which coalesces however many triggers land inside one
--- window into a single trailing walk. Trailing rather than leading on purpose:
--- these events arrive in bursts, and a leading edge would pay one walk per
--- burst plus the deferred one. Staleness worst case: one window after an
--- event, TWO on the tick-only path below (up to ten seconds until the tenth
--- tick issues the request, then the window). Either is invisible on a badge;
--- the churn was not.
+-- Every RECURRING trigger therefore funnels through this request, which
+-- coalesces however many land inside one window into a single trailing walk.
+-- (The one direct call left is the badge's first fill, in ApplyReadoutFonts
+-- below, which cannot wait a window.) Trailing rather than leading on
+-- purpose: these events arrive in bursts, and a leading edge would pay one
+-- walk per burst plus the deferred one. Staleness worst case: one window
+-- after an event, TWO on the tick-only path (up to ten seconds until the
+-- tenth tick issues the request, then the window). Either is invisible on a
+-- badge; the churn was not.
 --
 -- GuildCount stays direct: GetNumGuildMembers returns two numbers, no structs,
 -- so there is nothing to throttle.
@@ -1148,7 +1149,7 @@ function ns.TopBar.ApplyReadoutFonts()
     end
 
     local friendsBtn = _G.KitnUITopBar_friends
-    local friendsFirstBuild = false
+    local friendsFirstBuild
     if friendsBtn and not friendsText then
         friendsText = friendsBtn:CreateFontString(nil, "OVERLAY")
         friendsText:SetPoint("BOTTOM", friendsBtn, "BOTTOM", 0, -2)
@@ -1156,17 +1157,15 @@ function ns.TopBar.ApplyReadoutFonts()
     end
     if friendsText then
         friendsText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
-        -- Direct, ONCE, on the Apply() that first created the FontString --
-        -- and only from HERE, after the SetFont above: SetText on a FontString
-        -- with no font set throws (sysText's "Font before text" comment at the
-        -- top of this file is the same invariant). A brand-new badge showing
-        -- nothing for a whole throttle window reads as broken, so the first
-        -- fill cannot wait. Every later Apply() goes through the request
-        -- instead -- dragging any Top Bar slider re-runs Apply() per notch,
-        -- and each direct call here was a full friends walk (see
-        -- RequestFriendsBadgeUpdate above). The cost: flipping
-        -- tbFriendsInGameOnly/tbFriendsSubAccounts now takes up to
-        -- BADGE_WALK_WINDOW to move the count.
+        -- The first fill is direct and immediate: a badge that sits blank for
+        -- a whole throttle window after it appears reads as broken. It runs
+        -- from HERE rather than from the creation branch above because "font
+        -- before text" (sysText's comment, top of this file) binds this
+        -- FontString too -- SetText before the SetFont throws. Every LATER
+        -- Apply() goes through the request instead: dragging any Top Bar
+        -- slider re-runs Apply() per notch, and each notch used to pay a full
+        -- friends walk. The cost is that flipping tbFriendsInGameOnly or
+        -- tbFriendsSubAccounts takes up to a window to move the count.
         if friendsFirstBuild then
             UpdateFriendsBadge()
         else
@@ -1210,10 +1209,11 @@ local function Tick()
     if not (barFrame and barFrame:IsShown()) then return end
     UpdateClock()
 
-    -- Belt-and-braces re-render every tenth tick. The events above already
-    -- cover the real refresh triggers. The friends half goes through the
-    -- throttled request like every other trigger, so it coalesces with the
-    -- event-driven walks instead of adding its own.
+    -- Belt-and-braces re-render every tenth tick; the events above cover the
+    -- real refresh triggers. The friends half goes through the throttled
+    -- request so it coalesces with the event-driven walks rather than adding
+    -- walks of its own; guild stays direct because it allocates nothing (see
+    -- RequestFriendsBadgeUpdate).
     tickCount = tickCount + 1
     if tickCount >= 10 then
         tickCount = 0
