@@ -435,8 +435,14 @@ end
 function W:SetInputText(text)
     local eb = W.frame and W.frame.inputBox
     if not eb then return end
-    eb._committed = text or ""
-    eb:SetText(eb._committed)
+    eb:SetText(text or "")
+    -- Baseline from the BOX, never from the argument. SetMaxLetters can clip
+    -- what SetText kept, and then "unchanged" would mean a value the user cannot
+    -- see: a visit with no typing at all would satisfy the commit test and write
+    -- the clipped form, which for the nickname is a write NSRT broadcasts to the
+    -- raid and the guild. Reading it back makes the baseline and the screen the
+    -- same fact, whatever the letter budget did.
+    eb._committed = eb:GetText() or ""
     eb:SetCursorPosition(0)
     W:RefreshInputChrome(eb)
 end

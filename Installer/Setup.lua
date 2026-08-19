@@ -165,7 +165,22 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
     -- skips it: EllesmereUI profiles are account-wide, so an alt running
     -- /kitn load lands on the same profile and must not overwrite a look the
     -- user changed on their main.
-    if import and ns.ApplyLook then ns.ApplyLook("dark") end
+    --
+    -- Combat-guarded, like every other caller of the RAW apply. ns.ApplyLook
+    -- carries no refusal of its own; the refusal lives in the config page's
+    -- PickLook wrapper, which this path does not go through. A look is not one
+    -- write - it flips dark mode across two modules and asks three refreshers to
+    -- repaint - so a mid-fight apply stores values the screen never finishes
+    -- painting. The wizard refuses to OPEN in combat, but combat can start while
+    -- it is already open. Skipped rather than deferred: the user picks a look on
+    -- the EllesmereUI step or in the config tab, and both say so.
+    if import and ns.ApplyLook then
+        if InCombatLockdown() then
+            print(ns.title .. ": Appearance was not applied because you are in combat. Pick Dark or Colored on the EllesmereUI step when you are out.")
+        else
+            ns.ApplyLook("dark")
+        end
+    end
 
     -- Same import gate, same reason: without it, /kitn load on an alt would flip
     -- the bar back on for a user who had deliberately switched it off. The alt

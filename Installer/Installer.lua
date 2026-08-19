@@ -359,11 +359,17 @@ end
 local function ShowNicknameInput()
     local current = ns.GetNSRTNickname and ns.GetNSRTNickname()
     if not current then return end
+    -- 48, not NSRT's own 12. NSRT counts CHARACTERS (its Utf8Sub cut) while the
+    -- EditBox budget counts something this addon cannot establish from the API
+    -- reference, and a UTF-8 character runs to four bytes: a 12 at the box would
+    -- clip a Cyrillic or Korean name that NSRT stores perfectly well. 48 holds
+    -- any 12-character name under either reading, and NSRT still makes the
+    -- authoritative cut on write, which the read-back after commit displays.
     ns.Wizard:ShowInput({
         label       = "YOUR NICKNAME",
         text        = current,
         placeholder = "Type a nickname",
-        maxLetters  = 12,
+        maxLetters  = 48,
         onCommit    = function(value)
             ns.SetNSRTNickname(value)
             -- Read back what NSRT actually kept. A trimmed, truncated or refused

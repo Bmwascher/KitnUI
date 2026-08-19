@@ -503,6 +503,12 @@ to show up here.
   cleared.
 - [ ] **6. Long names are cut.** Type more than 12 characters and press Enter. The
   box comes back showing 12 characters or fewer, which is what NSRT kept.
+- [ ] **6b. A non-Latin name is not silently cut.** If you can, set a nickname in
+  NSRT's own options using 12 characters of a non-Latin alphabet (Cyrillic,
+  Korean, Chinese). Open the KitnUI installer's NSRT step. The box must show the
+  WHOLE name, not a chopped one. Then click into the box and click away WITHOUT
+  typing: NSRT's nickname must be completely unchanged and nothing may be sent
+  to your group. This is the check for the defect the review found.
 - [ ] **7. Escape does not close the wizard.** Start typing in the box and press
   Escape. Focus leaves the box, the box goes back to its old value, and **the
   wizard stays open**.
@@ -527,6 +533,10 @@ to show up here.
 - [ ] **15. Combat is refused.** Pull a target dummy. Click Dark: refused with a
   message and nothing changes. Type in the nickname box and press Enter: refused
   in chat, and the box goes back to the stored value.
+- [ ] **15b. Importing in combat does not force a look.** With the installer
+  already open, get into combat, then import the EllesmereUI profile. The
+  profile imports, and chat says the appearance was not applied because you are
+  in combat. Nothing about the UI colours changes mid-fight.
 - [ ] **16. BugSack is empty.** After all of the above.
 
 ## Result
@@ -535,7 +545,7 @@ Kitn, record the outcome here.
 
 - Date:
 - Sidebar and version (checks 1-2c):
-- Nickname (checks 3-9, including 3b and 3c):
-- Looks (checks 10-15):
+- Nickname (checks 3-9, including 3b, 3c and 6b):
+- Looks (checks 10-15b):
 - BugSack (check 16):
 - Notes:
