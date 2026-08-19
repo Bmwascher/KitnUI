@@ -195,7 +195,7 @@ function W:Build()
     -- Version, in the baked sidebar footer. ns.DisplayVersion (Core.lua) owns the
     -- rule, because the label here supplies the word "Version" and three other
     -- sites print the same value: a second copy of the rule would drift.
-    local ver = ns.DisplayVersion and ns.DisplayVersion() or (ns.version or "?")
+    local ver = ns.DisplayVersion()
     f.versionText = EllesmereUI.MakeFont(f, 13, "", 0.498, 0.839, 0.878, 0.95)  -- soft cyan
     f.versionText:SetPoint("BOTTOM", f, "BOTTOMLEFT", SIDEBAR_W / 2, 14)
     f.versionText:SetJustifyH("CENTER")
@@ -375,11 +375,16 @@ function W:ShowInput(opts)
                 box:SetText(box._committed or "")
                 box:SetCursorPosition(0)
             else
-                -- An unchanged value is NOT committed. Focus is lost by clicking
-                -- anywhere, including Next, so without this test merely visiting
-                -- the page and clicking away would write - and for the nickname
-                -- that turns "never set" into "deliberately cleared", which NSRT
-                -- then broadcasts to the group.
+                -- An unchanged value is NOT committed. Leaving the page clears
+                -- focus through HideInput below, so without this test merely
+                -- visiting the page and stepping off it would write - and for
+                -- the nickname that turns "never set" into "deliberately
+                -- cleared", which NSRT then broadcasts to the group.
+                --
+                -- The page teardown is named deliberately, and a bare mouse
+                -- click is not: nothing in this addon establishes that clicking
+                -- elsewhere drops an EditBox's focus, and Blizzard's own boxes
+                -- call ClearFocus explicitly rather than relying on it.
                 local value = box:GetText()
                 if value ~= box._committed and box._onCommit then
                     box._onCommit(value)

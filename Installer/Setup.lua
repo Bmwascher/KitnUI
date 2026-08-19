@@ -521,7 +521,13 @@ end
 function ns.GetNSRTNickname()
     if not IsAddOnLoaded("NorthernSkyRaidTools") then return nil end
     if type(NSRT) ~= "table" or type(NSRT.Settings) ~= "table" then return nil end
-    return NSRT.Settings.MyNickName or ""
+    -- Type-checked like every other read in this file. MyNickName is a plain
+    -- saved variable that any addon can write, and a non-string reaches the
+    -- wizard's SetText and raises there rather than here. A value that is not a
+    -- string reads as no nickname, which is a state the user can act on.
+    local nickname = NSRT.Settings.MyNickName
+    if type(nickname) ~= "string" then return "" end
+    return nickname
 end
 
 -- Follows the refusal contract at the top of this file: nothing on success,
