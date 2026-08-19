@@ -27,9 +27,12 @@ local setupFunctions = {}
 --
 -- Some producers return `true` on success instead, and that is deliberate:
 -- EllesmereUI in both modes, NSRT in both modes, Edit Mode install, and CDM
--- install. Four callers TEST truthiness and depend on it -- Installer.lua:263,
--- :312, :379 and :419 -- so do not harmonise those. A `true` is also harmless
--- under an `== false` test, which is how NSRT's callers read it.
+-- install. Four callers in Installer.lua TEST truthiness and depend on it --
+-- EllesmereUIPage, EditModePage, and BlizzardCDMPage's two import paths (the
+-- "Import All Specs" button and the per-spec buttons) -- so do not harmonise
+-- those. Named rather than numbered on purpose: the line numbers this comment
+-- used to carry went stale the first time a page was added above them. A `true`
+-- is also harmless under an `== false` test, which is how NSRT's callers read it.
 --
 -- NSRT's load path used to return nothing on the grounds that it was account-wide
 -- with nothing to activate, so doing nothing was success. v2.0.1 rebuilt the
@@ -495,6 +498,74 @@ setupFunctions["NSRT"] = function(addonKey, import)
         return false
     end
     return true
+end
+
+---------------------------------------------------------------------------------
+-- NSRT nickname
+--
+-- The nickname is NOT profile content and is not in our export string: NSRT
+-- keeps it at NSRT.Settings.MyNickName, carries it across its own profile
+-- writes (Profiles.lua) and strips it from exports, and current NSRT drops the
+-- payload's NickNames key on import anyway. So the field and the profile import
+-- cannot overwrite each other in either order, which is why the installer can
+-- offer both on one page.
+--
+-- All NSRT API knowledge stays in this file; Installer.lua only calls these two.
+---------------------------------------------------------------------------------
+
+-- Current nickname as a STRING, or nil when NSRT cannot be read at all. The
+-- empty-string fallback is what makes nil unambiguous: NSRT leaves MyNickName
+-- unset until the user touches it, so returning the raw field would report a
+-- perfectly healthy NSRT as unreadable and hide the field from everyone who has
+-- never set a nickname - which is exactly who it is for.
+function ns.GetNSRTNickname()
+    if not IsAddOnLoaded("NorthernSkyRaidTools") then return nil end
+    if type(NSRT) ~= "table" or type(NSRT.Settings) ~= "table" then return nil end
+    return NSRT.Settings.MyNickName or ""
+end
+
+-- Follows the refusal contract at the top of this file: nothing on success,
+-- print + explicit false on refusal.
+--
+-- An EMPTY value is a write, not a no-op: NSRT treats an empty string as
+-- deleting the nickname, so skipping the write would make a cleared box silently
+-- keep the old name.
+function ns.SetNSRTNickname(value)
+    if not IsAddOnLoaded("NorthernSkyRaidTools") then
+        print(ns.title .. ": NorthernSkyRaidTools is not loaded.")
+        return false
+    end
+
+    -- NickNames is required as well as Settings: NickNameUpdated indexes it
+    -- directly, so a missing table would raise inside NSRT rather than here.
+    local NSI = NorthernSkyRaidTools
+    if not (NSI and NSI.NickNameUpdated and NSI.Utf8Sub
+        and type(NSRT) == "table" and type(NSRT.Settings) == "table"
+        and type(NSRT.NickNames) == "table") then
+        print(ns.title .. ": Your Northern Sky Raid Tools version is too old for nickname setup. Please update it.")
+        return false
+    end
+
+    -- Refused in combat for the same reason NSRT marks its own nickname option
+    -- nocombat: the write is followed by a raid and guild broadcast.
+    if InCombatLockdown() then
+        print(ns.title .. ": Nickname cannot be changed in combat.")
+        return false
+    end
+
+    -- Trim first so a stray space does not become part of the name, then cut to
+    -- NSRT's own 12-character limit with NSRT's own utf8-aware helper.
+    local ok, trimmed = pcall(NSI.Utf8Sub, NSI, strtrim(value or ""), 1, 12)
+    if not ok then
+        print(ns.title .. ": Nickname could not be read.")
+        return false
+    end
+
+    -- Write before broadcast, matching the order NSRT's own options page uses.
+    NSRT.Settings.MyNickName = trimmed
+    if not pcall(NSI.NickNameUpdated, NSI, trimmed) then
+        print(ns.title .. ": Nickname was saved but could not be shared with your group.")
+    end
 end
 
 ---------------------------------------------------------------------------------

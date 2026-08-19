@@ -307,6 +307,105 @@ function W:SetOptionHint(text)
     h:Show()
 end
 
+---------------------------------------------------------------------------------
+-- Single-line text input, for a page that collects one value (the NSRT
+-- nickname). Built once and reused, like the CDM page's persistent button: a
+-- per-page frame would leak one EditBox per visit. SetPage hides it through
+-- ResetExtras, so it can never bleed onto the next page.
+--
+-- opts: label, text, maxLetters, onCommit(value)
+---------------------------------------------------------------------------------
+
+function W:ShowInput(opts)
+    if not W.frame then return end
+    local f = W.frame
+    opts = opts or {}
+
+    if not f.inputBox then
+        -- Same muted treatment as detailHeader, so the caption reads as part of
+        -- the status block rather than as a second heading.
+        f.inputCaption = EllesmereUI.MakeFont(f, 11, "", 1, 1, 1, 0.5)
+        f.inputCaption:SetJustifyH("LEFT")
+
+        local eb = CreateFrame("EditBox", nil, f)
+        eb:SetSize(180, 26)
+        eb:SetAutoFocus(false)
+        eb:SetFont(ns.FONT or "Fonts\\FRIZQT__.TTF", 13, "")
+        eb:SetTextInsets(8, 8, 0, 0)
+        eb:SetTextColor(1, 1, 1, 0.95)
+        local bg = eb:CreateTexture(nil, "BACKGROUND")
+        bg:SetColorTexture(0, 0, 0, 0.40)  -- the "selectable" button fill, so the kit matches
+        bg:SetAllPoints()
+        if EllesmereUI.MakeBorder then
+            EllesmereUI.MakeBorder(eb, 1, 1, 1, 0.14, EllesmereUI.PanelPP)
+        end
+
+        -- Enter commits by dropping focus, so there is exactly ONE commit path.
+        eb:SetScript("OnEnterPressed", function(box) box:ClearFocus() end)
+        -- Escape must not reach the frame: KitnUIWizard is in UISpecialFrames, so
+        -- without this the whole wizard closes on a half-typed value. It also
+        -- cancels, which is what an Escape means everywhere else.
+        eb:SetScript("OnEscapePressed", function(box)
+            box._cancelled = true
+            box:ClearFocus()
+        end)
+        eb:SetScript("OnEditFocusLost", function(box)
+            if box._cancelled then
+                box._cancelled = nil
+                box:SetText(box._committed or "")
+                box:SetCursorPosition(0)
+                return
+            end
+            -- An unchanged value is NOT committed. Focus is lost by clicking
+            -- anywhere, including Next, so without this test merely visiting the
+            -- page and clicking away would write - and for the nickname that
+            -- turns "never set" into "deliberately cleared", which NSRT then
+            -- broadcasts to the group.
+            local value = box:GetText()
+            if value == box._committed then return end
+            if box._onCommit then box._onCommit(value) end
+        end)
+        f.inputBox = eb
+    end
+
+    local eb = f.inputBox
+    eb._onCommit = opts.onCommit
+    eb._cancelled = nil
+    eb:SetMaxLetters(opts.maxLetters or 12)
+    W:SetInputText(opts.text)
+
+    -- Anchored off Desc3 rather than a fixed y, the same way ShowStatusHeader
+    -- hangs off Desc1: the status block above it is a different height per page.
+    f.inputCaption:ClearAllPoints()
+    f.inputCaption:SetPoint("TOPLEFT", f.Desc3, "BOTTOMLEFT", 0, -18)
+    f.inputCaption:SetText(opts.label or "")
+    f.inputCaption:Show()
+    eb:ClearAllPoints()
+    eb:SetPoint("TOPLEFT", f.inputCaption, "BOTTOMLEFT", 0, -4)
+    eb:Show()
+end
+
+-- Put a value back in the box. Pages call this after a commit with whatever the
+-- target addon actually KEPT, so a truncated or refused value is visible rather
+-- than assumed.
+function W:SetInputText(text)
+    local eb = W.frame and W.frame.inputBox
+    if not eb then return end
+    eb._committed = text or ""
+    eb:SetText(eb._committed)
+    eb:SetCursorPosition(0)
+end
+
+function W:HideInput()
+    local f = W.frame
+    if not (f and f.inputBox) then return end
+    -- ClearFocus first, so leaving the page commits what was typed instead of
+    -- discarding it. It is a no-op when the box was not focused.
+    f.inputBox:ClearFocus()
+    f.inputBox:Hide()
+    f.inputCaption:Hide()
+end
+
 -- Show the "profile status" separator (thin rule + caption) above the status/
 -- version block and re-anchor Desc2 below it. Addon pages call this; every page
 -- starts with it hidden (SetPage resets via HideStatusHeader). Safe to call twice.

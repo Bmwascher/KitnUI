@@ -349,6 +349,56 @@ local function SimpleInstallPage(addonKey, displayName)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Northern Sky Raid Tools page (the generic install page plus the nickname field)
+---------------------------------------------------------------------------------
+
+-- Hidden when NSRT cannot be read at all: a box that can never save anything is
+-- worse than no box. An NSRT that is simply missing a nickname reads as "", not
+-- nil, so the people the field is actually for still get it.
+local function ShowNicknameInput()
+    local current = ns.GetNSRTNickname and ns.GetNSRTNickname()
+    if not current then return end
+    ns.Wizard:ShowInput({
+        label      = "YOUR NICKNAME",
+        text       = current,
+        maxLetters = 12,
+        onCommit   = function(value)
+            ns.SetNSRTNickname(value)
+            -- Read back what NSRT actually kept. A trimmed, truncated or refused
+            -- value then shows in the box instead of being assumed saved.
+            ns.Wizard:SetInputText(ns.GetNSRTNickname() or "")
+        end,
+    })
+end
+
+-- NSRT gets a hand-written page rather than SimpleInstallPage only so it can
+-- carry the nickname field. The install half below is SimpleInstallPage's,
+-- unchanged, `== false` refusal test included.
+--
+-- The field and the import do not interact: the nickname is not profile content
+-- and NSRT carries it across its own profile writes. See Setup.lua.
+local function NSRTPage()
+    local f = WF()
+    f.SubTitle:SetText("Northern Sky Raid Tools")
+    f.Desc1:SetText(stepDesc("NSRT"))
+    ShowStatusAndVersion("NSRT")
+    ns.Wizard:SetOption(1, "Install", function()
+        ConfirmImport("NSRT", "Northern Sky Raid Tools", function()
+            if ns.SetupAddon("NSRT", true) == false then
+                ShowInstallToast("Northern Sky Raid Tools import failed", 1, 0.2, 0.2)
+                return
+            end
+            ShowStatusAndVersion("NSRT")
+            SuccessToast("Northern Sky Raid Tools", "imported!")
+            PlayInstallSound()
+            HandoffToNext(WF().Option1, CHECK .. " Re-import")
+        end)
+    end)
+    SetVariant(WF().Option1, "primary")
+    ShowNicknameInput()
+end
+
 local function EditModePage()
     local f = WF()
     f.SubTitle:SetText("Blizzard Edit Mode")
@@ -814,6 +864,8 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
             if available then
                 if step.key == "EllesmereUI" then
                     tinsert(pages, EllesmereUIPage)
+                elseif step.key == "NSRT" then
+                    tinsert(pages, NSRTPage)
                 elseif step.key == "Blizzard_EditMode" then
                     tinsert(pages, EditModePage)
                 elseif step.key == "BlizzardCDM" then
@@ -882,7 +934,10 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     ns.Wizard:Queue(ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode))
 end
 
--- Hide the persistent CDM "Import All" button whenever the page changes.
+-- Hide the persistent per-page extras whenever the page changes: the CDM
+-- "Import All" button and the NSRT nickname field. Both are built once and
+-- reused, so nothing hides them on the way out but this.
 ns.Wizard.ResetExtras = function()
     if cdmAllButton then cdmAllButton:Hide() end
+    if ns.Wizard.HideInput then ns.Wizard:HideInput() end
 end
