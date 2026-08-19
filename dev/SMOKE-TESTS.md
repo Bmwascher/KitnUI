@@ -476,6 +476,11 @@ to show up here.
   import. Its row shows the green tick, and the tick does not touch or sit under
   the first letter of the name. The current row still shows the pink bar and the
   pink wash.
+- [ ] **2b. The footer version reads plainly.** Bottom left of the sidebar reads
+  **`Version dev`** in your symlinked checkout. It must NOT read a number: a
+  number there is a stale hand-written guess, which is the bug. A packaged build
+  reads `Version 2.0.1`, with no `v` in front - only testable from a real
+  CurseForge or Wago install.
 - [ ] **3. The box shows your real nickname.** Go to the Northern Sky Raid Tools
   step. The box under the status block shows your current NSRT nickname, or is
   empty if you have none.
@@ -516,7 +521,7 @@ to show up here.
 Kitn, record the outcome here.
 
 - Date:
-- Sidebar (checks 1-2):
+- Sidebar and footer (checks 1-2b):
 - Nickname (checks 3-9):
 - Looks (checks 10-15):
 - BugSack (check 16):
