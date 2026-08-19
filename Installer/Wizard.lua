@@ -45,7 +45,7 @@ local SIDEBAR_W = 176                   -- baked sidebar width (art divider @ x~
 local CONTENT_X = SIDEBAR_W + 24        -- left edge of the content column
 local STEP_DONE = { 0.43, 0.75, 0.61 }  -- green check for completed steps
 local OPTION_W  = 165                   -- default action-button width (CDM shrinks to fit)
-local STEP_MAXW = 144                   -- max step-label width before the baked divider
+local STEP_MAXW = 148                   -- max step-label width before the baked divider
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
 -- border-hover(13-16), text(17-20), text-hover(21-24). Values match EUI's own buttons.
@@ -188,8 +188,8 @@ function W:Build()
 
     -- Step rail overlaid on the baked sidebar column (below the baked logo block).
     f.stepRail = CreateFrame("Frame", nil, f)
-    f.stepRail:SetPoint("TOPLEFT", 10, -76)
-    f.stepRail:SetSize(SIDEBAR_W - 14, 400)
+    f.stepRail:SetPoint("TOPLEFT", 6, -76)
+    f.stepRail:SetSize(SIDEBAR_W - 10, 400)
     f.stepLabels = {}
 
     -- Version, in the baked sidebar footer. GetAddOnMetadata returns the literal
@@ -442,10 +442,10 @@ local function updateRail()
             -- green check marks completed steps (shares the gutter with the bar)
             row.chk = row:CreateTexture(nil, "ARTWORK")
             row.chk:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
-            row.chk:SetSize(14, 14)
-            row.chk:SetPoint("LEFT", 5, 0)
+            row.chk:SetSize(12, 12)
+            row.chk:SetPoint("LEFT", 3, 0)
             row.label = EllesmereUI.MakeFont(row, 13, "", 1, 1, 1)
-            row.label:SetPoint("LEFT", 22, 0)
+            row.label:SetPoint("LEFT", 18, 0)
             row.label:SetJustifyH("LEFT")
             row:SetScript("OnEnter", function(self) if not self._isCurrent then self.hover:Show() end end)
             row:SetScript("OnLeave", function(self) self.hover:Hide() end)
