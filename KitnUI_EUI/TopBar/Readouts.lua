@@ -1085,7 +1085,9 @@ end
 -- through this request, which coalesces however many triggers land inside one
 -- window into a single trailing walk. Trailing rather than leading on purpose:
 -- these events arrive in bursts, and a leading edge would pay one walk per
--- burst plus the deferred one. A badge at most 10 seconds stale is invisible;
+-- burst plus the deferred one. Staleness worst case: one window after an
+-- event, TWO on the tick-only path below (up to ten seconds until the tenth
+-- tick issues the request, then the window). Either is invisible on a badge;
 -- the churn was not.
 --
 -- GuildCount stays direct: GetNumGuildMembers returns two numbers, no structs,
@@ -1146,21 +1148,30 @@ function ns.TopBar.ApplyReadoutFonts()
     end
 
     local friendsBtn = _G.KitnUITopBar_friends
+    local friendsFirstBuild = false
     if friendsBtn and not friendsText then
         friendsText = friendsBtn:CreateFontString(nil, "OVERLAY")
         friendsText:SetPoint("BOTTOM", friendsBtn, "BOTTOM", 0, -2)
-        -- Direct, ONCE, when the FontString is first created: a brand-new badge
-        -- showing nothing for a whole throttle window reads as broken. Every
-        -- later Apply() goes through the request instead -- dragging any Top
-        -- Bar slider re-runs Apply() per notch, and each direct call here was
-        -- a full friends walk (see RequestFriendsBadgeUpdate above). The cost:
-        -- flipping tbFriendsInGameOnly/tbFriendsSubAccounts now takes up to
-        -- BADGE_WALK_WINDOW to move the count.
-        UpdateFriendsBadge()
+        friendsFirstBuild = true
     end
     if friendsText then
         friendsText:SetFont(STANDARD_TEXT_FONT, BADGE_SIZE, "OUTLINE")
-        RequestFriendsBadgeUpdate()
+        -- Direct, ONCE, on the Apply() that first created the FontString --
+        -- and only from HERE, after the SetFont above: SetText on a FontString
+        -- with no font set throws (sysText's "Font before text" comment at the
+        -- top of this file is the same invariant). A brand-new badge showing
+        -- nothing for a whole throttle window reads as broken, so the first
+        -- fill cannot wait. Every later Apply() goes through the request
+        -- instead -- dragging any Top Bar slider re-runs Apply() per notch,
+        -- and each direct call here was a full friends walk (see
+        -- RequestFriendsBadgeUpdate above). The cost: flipping
+        -- tbFriendsInGameOnly/tbFriendsSubAccounts now takes up to
+        -- BADGE_WALK_WINDOW to move the count.
+        if friendsFirstBuild then
+            UpdateFriendsBadge()
+        else
+            RequestFriendsBadgeUpdate()
+        end
     end
 
     local guildBtn = _G.KitnUITopBar_guild
