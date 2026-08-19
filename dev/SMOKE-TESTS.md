@@ -482,6 +482,10 @@ to show up here.
   number there is a stale hand-written guess, which is the bug. A packaged build
   reads `Version 2.0.1`, with no `v` in front - only testable from a real
   CurseForge or Wago install.
+- [ ] **2c. Chat says it the same way.** Run `/kitn version` and `/kitn` with no
+  argument. Both name the version the same as the footer does - `dev` in your
+  checkout, with no `v` and no stale number. The same rule now covers the
+  "KitnUI has been updated" popup, which you will only see on a real update.
 - [ ] **3. The box shows your real nickname.** Go to the Northern Sky Raid Tools
   step. The box under the status block shows your current NSRT nickname, or is
   empty if you have none.
@@ -522,7 +526,7 @@ to show up here.
 Kitn, record the outcome here.
 
 - Date:
-- Sidebar and footer (checks 1-2b):
+- Sidebar and version (checks 1-2c):
 - Nickname (checks 3-9):
 - Looks (checks 10-15):
 - BugSack (check 16):

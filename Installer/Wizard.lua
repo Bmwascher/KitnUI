@@ -192,24 +192,10 @@ function W:Build()
     f.stepRail:SetSize(SIDEBAR_W - 10, 400)
     f.stepLabels = {}
 
-    -- Version, in the baked sidebar footer. Two corrections to what
-    -- GetAddOnMetadata hands back, because the label below supplies the word
-    -- "Version" itself.
-    --
-    -- Packaged: the packager substitutes the git TAG, which carries a leading
-    -- "v", so the line would otherwise read "Version v2.0.1".
-    --
-    -- Unpackaged checkout: the .toc still holds the literal @project-version@
-    -- token. The stand-in used to be a hand-written number, which went stale the
-    -- first release nobody remembered to edit it (it read 2.0 through all of
-    -- 2.0.1). "dev" cannot go stale, and it also says plainly that this is not a
-    -- shipped build.
-    local ver = ns.version
-    if not ver or ver:find("project") then
-        ver = "dev"
-    else
-        ver = ver:gsub("^[vV]", "")
-    end
+    -- Version, in the baked sidebar footer. ns.DisplayVersion (Core.lua) owns the
+    -- rule, because the label here supplies the word "Version" and three other
+    -- sites print the same value: a second copy of the rule would drift.
+    local ver = ns.DisplayVersion and ns.DisplayVersion() or (ns.version or "?")
     f.versionText = EllesmereUI.MakeFont(f, 13, "", 0.498, 0.839, 0.878, 0.95)  -- soft cyan
     f.versionText:SetPoint("BOTTOM", f, "BOTTOMLEFT", SIDEBAR_W / 2, 14)
     f.versionText:SetJustifyH("CENTER")

@@ -44,6 +44,24 @@ ns.version = C_AddOns.GetAddOnMetadata(addonName, "Version")
 ns.data = ns.data or {}
 ns.db = nil
 
+-- The version as it should be SHOWN. ns.version is the raw .toc value and is not
+-- printable as-is: the packager substitutes the git tag, which carries a leading
+-- "v" that reads as a second "version" next to the word, and an unpackaged
+-- checkout leaves the @project-version@ token in place. "dev" stands in for the
+-- token rather than a hand-written number, which goes stale the first release
+-- nobody remembers to edit it.
+--
+-- Display sites only. Anything COMPARING versions -- the update prompt's
+-- stored-against-current test below -- must keep using ns.version raw, because
+-- that is the form the stored value was written in.
+--
+-- `value` lets a caller pass a stored version through the same treatment.
+function ns.DisplayVersion(value)
+    local ver = value or ns.version
+    if type(ver) ~= "string" or ver:find("project") then return "dev" end
+    return (ver:gsub("^[vV]", ""))
+end
+
 -- EllesmereUI readiness guard (checked before touching the EUI API / wizard).
 function ns.EUIReady()
     return _G.EllesmereUI and EllesmereUI.ImportProfile and true or false
@@ -601,7 +619,7 @@ KitnCommands["update"] = function()
 end
 
 KitnCommands["version"] = function()
-    print(string.format("|cffffffffKitnUI version %s|r", ns.version or "?"))
+    print(string.format("|cffffffffKitnUI version %s|r", ns.DisplayVersion()))
 
     -- Plater is omitted while it is dormant: printing a data version for a
     -- profile the installer no longer offers advertises something the user
@@ -677,7 +695,7 @@ SlashCmdList["KITN"] = function(msg)
     if cmd then
         cmd()
     elseif msg == "" then
-        print(ns.title .. " " .. (ns.version or "?"))
+        print(ns.title .. " " .. ns.DisplayVersion())
         print("  /kitn install  - Open the installer to import profiles")
         print("   |cffff8800Warning: This will overwrite personal customizations|r")
         print("  /kitn update   - Reimport only profiles that have been updated")
@@ -875,7 +893,11 @@ boot:SetScript("OnEvent", function()
         and (ns.db.installedVersion ~= ns.version or ns.db.devMode)
         and ns.db.dismissedVersion ~= ns.version then
         local outdated = ns.GetOutdatedAddons()
-        local updateText = ns.title .. " has been updated (" .. ns.db.installedVersion .. " -> " .. ns.version .. ")."
+        -- Both sides go through DisplayVersion: the test above compares the RAW
+        -- stored value, but the sentence the user reads must not carry the
+        -- packager's "v" on either side of the arrow.
+        local updateText = ns.title .. " has been updated ("
+            .. ns.DisplayVersion(ns.db.installedVersion) .. " -> " .. ns.DisplayVersion() .. ")."
         if #outdated > 0 then
             local updated, new = {}, {}
             for _, info in ipairs(outdated) do
