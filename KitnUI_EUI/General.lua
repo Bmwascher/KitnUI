@@ -313,10 +313,21 @@ end
 ---------------------------------------------------------------------------------
 
 -- Each entry: the module folder, the sub-table holding the key (nil means the
--- key sits flat on the module profile), the key itself, and the module's own
--- refresh global.
+-- key sits flat on the module profile), the key itself, the module's own refresh
+-- global, and the value to force. `value` is omitted on the entries that scope
+-- the accent OUT, because false is what scoping means and the loop defaults to
+-- it; the quest tracker header is the one place the switch scopes the accent IN,
+-- so it names its value.
+--
+-- The header needs BOTH keys: EllesmereUIQuestTracker_Skin.lua:117 reads
+-- headerShowClassColor first and returns the class colour without ever looking
+-- at headerUseAccent, so forcing the accent on alone is silently ignored on any
+-- profile that had class-coloured headers. That citation is 8.9.4, verified
+-- 2026-08-19 -- stamped because Core.lua's unstamped 8.7.5 line numbers rotted
+-- silently once the host moved its settings panel.
 local ACCENT_KEYS = {
-    { folder = "EllesmereUIQuestTracker", sub = "questTracker", key = "headerUseAccent",  refresh = "_EQT_RefreshAll"  },
+    { folder = "EllesmereUIQuestTracker", sub = "questTracker", key = "headerUseAccent",  refresh = "_EQT_RefreshAll", value = true },
+    { folder = "EllesmereUIQuestTracker", sub = "questTracker", key = "headerShowClassColor", refresh = "_EQT_RefreshAll" },
     { folder = "EllesmereUIQuestTracker", sub = "questTracker", key = "lineUseAccent",    refresh = "_EQT_RefreshAll"  },
     { folder = "EllesmereUIMythicTimer",  sub = nil,            key = "titleUseAccent",   refresh = "_EMT_Apply"       },
     { folder = "EllesmereUIMythicTimer",  sub = nil,            key = "enemyBarUseAccent",refresh = "_EMT_Apply"       },
@@ -421,7 +432,11 @@ local function ApplyAccentScope(claiming)
             local slot = entry.folder .. "." .. entry.key
             saved.keys[slot] = saved.keys[slot] or {}
             if on then
-                ns.EUIOverride(target, saved.keys[slot], entry.key, false, claiming)
+                -- Written this way and not `entry.value or false`, because a
+                -- recorded value of false is a real forced value, not an absence.
+                local forced = entry.value
+                if forced == nil then forced = false end
+                ns.EUIOverride(target, saved.keys[slot], entry.key, forced, claiming)
             else
                 ns.EUIRestore(target, saved.keys[slot], entry.key)
             end
@@ -547,7 +562,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
             ns.EUIRebuildForOwnership()
         end,
         ns.EUIOwnershipTip(
-            "Sets EllesmereUI's accent to KitnUI pink for this profile, and stops that accent tinting quest tracker headers, the Mythic+ timer, the damage meter and the Friends tab.",
+            "Sets EllesmereUI's accent to KitnUI pink for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab.",
             "accent",
             AccentEnabled,
             "EllesmereUI's accent colour"));
