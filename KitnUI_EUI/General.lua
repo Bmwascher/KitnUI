@@ -322,7 +322,9 @@ end
 -- The header needs BOTH keys: EllesmereUIQuestTracker_Skin.lua:117 reads
 -- headerShowClassColor first and returns the class colour without ever looking
 -- at headerUseAccent, so forcing the accent on alone is silently ignored on any
--- profile that had class-coloured headers.
+-- profile that had class-coloured headers. That citation is 8.9.4, verified
+-- 2026-08-19 -- stamped because Core.lua's unstamped 8.7.5 line numbers rotted
+-- silently once the host moved its settings panel.
 local ACCENT_KEYS = {
     { folder = "EllesmereUIQuestTracker", sub = "questTracker", key = "headerUseAccent",  refresh = "_EQT_RefreshAll", value = true },
     { folder = "EllesmereUIQuestTracker", sub = "questTracker", key = "headerShowClassColor", refresh = "_EQT_RefreshAll" },
