@@ -95,7 +95,7 @@ read_globals = {
 
     -- Top bar launchers (gamemenu, clock: insecure toggles, refuse in combat)
     "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",
-    "ShowUIPanel", "HideUIPanel", "ToggleCalendar",
+    "ShowUIPanel", "HideUIPanel", "ToggleCalendar", "ToggleTimeManager",
 
     -- Top bar frame (Bar.lua): tooltip owner, Unlock Mode drag, the visibility
     -- state driver Task 8 wires up
@@ -131,7 +131,7 @@ read_globals = {
     "C_WeeklyRewards", "WeeklyRewards_ShowUI",
 
     -- Top bar: hearthstone ownership scan and macro building
-    "C_Item", "PlayerHasToy", "C_ToyBox", "Item",
+    "C_Item", "PlayerHasToy", "C_ToyBox", "Item", "GetBindLocation",
 
     -- Top bar: portals flyout (spell knowledge and cooldowns)
     "C_Spell", "C_SpellBook",

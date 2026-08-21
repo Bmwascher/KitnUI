@@ -30,6 +30,7 @@ an agent.**
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
+| 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes | not yet | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -553,4 +554,83 @@ Kitn, record the outcome here.
 - Nickname (checks 3-9, including 3b, 3c and 6b):
 - Looks (checks 10-15b):
 - BugSack (check 16):
+- Notes:
+
+---
+
+# Item 5 — Mouse-button pictures in the Top Bar tooltips
+
+Branch `feature/topbar-click-tooltips`. Touches `KitnUI_EUI/TopBar/Elements.lua`
+and two names in `.luacheckrc`. Nothing else moves.
+
+## What changed and why it needs testing
+
+- The **hearthstone** tooltip is now one row per mouse button: the button's own
+  picture, the stone's icon, the stone's name, and that stone's own cooldown in
+  the right-hand column. It used to be one shared cooldown line at the top and
+  three plain sentences under it.
+- The cooldown is now asked **per stone**, not once for the button. That is the
+  point: the Dalaran Hearthstone and the Key to the Arcantina run on cooldowns
+  separate from the main pool, so three rows can honestly disagree.
+- A last line names where a plain hearthstone sends you (`GetBindLocation`).
+- The **clock** gained a **right click**: the stopwatch and alarm window
+  (`ToggleTimeManager`). Left click (calendar) and middle click (reload) are
+  unchanged. Its tooltip gained a title and the same three pictures.
+- The three pictures are cut out of Blizzard's own `UI-TUTORIAL-FRAME` sheet by
+  pixel coordinates. **Nothing offline can prove the three crops are the right
+  way round** - that is check 2 and it is the reason this section exists.
+
+## Read this before starting
+
+- The stone names and icons resolve asynchronously after login. A tooltip opened
+  in the first seconds of a session can legitimately show a name with no icon.
+- The tooltip redraws every 0.5s while hovered. That is existing behaviour, not
+  new.
+- Tooltips must be switched ON in the Top Bar options, or none of this appears.
+
+## The checks
+
+- [ ] **1. Three rows, four parts each.** Hover the hearthstone button. There are
+  exactly three rows. Each has a mouse picture, a stone icon, a stone name, and
+  either a green **Ready** or a red countdown at the right.
+- [ ] **2. The pictures match the buttons.** Row one's picture must be a mouse
+  with the **left** button highlighted, row two the **scroll wheel**, row three
+  the **right** button. If any two are swapped, say which - the fix is swapping
+  two coordinate strings.
+- [ ] **3. The countdown is real.** Use the left-click stone. Its row switches to
+  a red countdown that ticks down while you keep hovering, and reaches Ready
+  again on its own.
+- [ ] **4. The rows can disagree.** Set one button to the Dalaran Hearthstone or
+  the Key to the Arcantina and another to any ordinary stone. Use the ordinary
+  one. The other row must still read **Ready** - a single shared cooldown line
+  was the old bug this replaces.
+- [ ] **5. Random says so.** Set a button to Random. Its row reads
+  `Random: <stone name>` with that stone's icon. Click the button, hover again:
+  the name and the icon have changed to the next roll.
+- [ ] **6. The destination is right.** The last line reads `Hearth set to` and
+  your actual inn. Hearth somewhere else, `/reload`, hover again: it has changed.
+- [ ] **7. A stone you do not own is not offered.** Nothing in the three rows may
+  show a bare number instead of a name once you have been logged in a few
+  seconds.
+- [ ] **8. The clock's right click opens the stopwatch.** Right click the clock.
+  The Time Manager window opens, with the stopwatch and the alarm in it. Right
+  click again: it closes.
+- [ ] **9. The other two clock clicks are untouched.** Left click still opens the
+  calendar. Middle click still reloads.
+- [ ] **10. The clock tooltip reads as three choices.** Hover the clock: a
+  **Clock** title, then three rows with the same three pictures, reading
+  Calendar, Stopwatch and Alarm, Reload UI.
+- [ ] **11. Combat is refused.** Pull a target dummy. Right click the clock: the
+  red "not in combat" message, and no window opens.
+- [ ] **12. BugSack is empty.** After all of the above, including hovering both
+  buttons while in combat.
+
+## Result
+
+Kitn, record the outcome here.
+
+- Date:
+- Hearthstone tooltip (checks 1-7):
+- Clock (checks 8-11):
+- BugSack (check 12):
 - Notes:

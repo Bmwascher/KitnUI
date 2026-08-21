@@ -17,6 +17,24 @@ local function Icon(id)
     return ICON_DIR .. "icon-" .. id .. ".tga"
 end
 
+-- Mouse-button pictures for tooltip lines, cut out of Blizzard's own tutorial
+-- sheet by pixel coordinates, so there is no art of our own to ship and nothing
+-- to keep in step with the Media folder. The three crops are ElvUI_WindTools'
+-- (v4.19, Modules/Misc/GameBar.lua:81-83), and the right-button crop is
+-- corroborated independently by DetailsFramework's own "right click to close"
+-- label (NSRT 12.1.3, Libs/LibDFramework-1.0/panel.lua:420).
+--
+-- Read the trailing numbers as: draw 13x11 pixels, from a 512x512 sheet, taking
+-- the box x=12..66 and the y range that differs per button.
+local CLICK_L = "|TInterface\\TUTORIALFRAME\\UI-TUTORIAL-FRAME:13:11:0:-1:512:512:12:66:230:307|t"
+local CLICK_R = "|TInterface\\TUTORIALFRAME\\UI-TUTORIAL-FRAME:13:11:0:-1:512:512:12:66:333:410|t"
+local CLICK_M = "|TInterface\\TUTORIALFRAME\\UI-TUTORIAL-FRAME:13:11:0:-1:512:512:12:66:127:204|t"
+
+-- An item icon inline in a tooltip line. The crop trims the stock icon border
+-- the same way the bar's own launcher textures are trimmed, so a row of these
+-- reads as icons rather than as bordered tiles.
+local ITEM_ICON = "|T%s:16:16:0:0:64:64:5:59:5:59|t"
+
 -- A launcher's whole job is to click something Blizzard already owns. Secure,
 -- because several of the targets are protected, and a macro is the only way to
 -- reach them from a click the player made.
@@ -355,14 +373,6 @@ local function StoneLabel(id)
     return hearthValues[tostring(id)] or tostring(id)
 end
 
--- The stone the left click currently resolves to. The tooltip reads THIS id's
--- own cooldown rather than an assumed shared one, because the Dalaran
--- Hearthstone and the Key to the Arcantina -- both valid choices here -- run on
--- cooldowns separate from the main pool. Querying the resolved id is correct
--- whichever pool it belongs to; it just means the tooltip reflects the LEFT
--- slot's cooldown only.
-local _hearthId
-
 local function FmtCD(sec)
     sec = math.floor(sec + 0.5)
     if sec >= 3600 then
@@ -375,10 +385,15 @@ end
 -- Cooldown WIDGET's GetCooldownTimes/GetCooldownDuration, which are marked
 -- Enum.SecretAspect.Cooldown. This reads the item API, never a Cooldown frame,
 -- so the arithmetic below is safe.
-local function HearthCooldownRemaining()
-    if not _hearthId then return nil end
+--
+-- Asked per stone rather than once for the button, because an assumed shared
+-- cooldown would be wrong: the Dalaran Hearthstone and the Key to the Arcantina
+-- -- both valid choices here -- run on cooldowns separate from the main pool, so
+-- three rows can legitimately show three different states.
+local function HearthCooldownRemaining(id)
+    if not id then return nil end
     if not (C_Item and C_Item.GetItemCooldown) then return nil end
-    local start, duration = C_Item.GetItemCooldown(_hearthId)
+    local start, duration = C_Item.GetItemCooldown(id)
     if type(start) == "number" and type(duration) == "number" and duration > 0 then
         local remaining = start + duration - GetTime()
         if remaining > 0 then return remaining end
@@ -386,21 +401,48 @@ local function HearthCooldownRemaining()
     return nil
 end
 
+-- One tooltip row per mouse button: the button's own picture, the stone's icon,
+-- its name, and its cooldown in the right-hand column.
+--
+-- The icon comes from hearthIcons, which ScanOwned fills asynchronously, so it
+-- can still be missing on the first hover after login. The row drops the picture
+-- and keeps the text in that case rather than drawing a blank square.
+local HEARTH_ROWS = {
+    { click = CLICK_L, setting = "tbHearthLeft",   slot = "left"  },
+    { click = CLICK_M, setting = "tbHearthMiddle", slot = "mid"   },
+    { click = CLICK_R, setting = "tbHearthRight",  slot = "right" },
+}
+
 local function HearthTooltip(tt)
     tt:AddLine("Hearthstone", 1, 1, 1)
-    local remaining = HearthCooldownRemaining()
-    if remaining then
-        tt:AddDoubleLine("Cooldown", FmtCD(remaining), 0.7, 0.7, 0.7, 1, 0.3, 0.3)
-    else
-        tt:AddDoubleLine("Cooldown", "Ready", 0.7, 0.7, 0.7, 0.3, 1, 0.3)
+    for _, row in ipairs(HEARTH_ROWS) do
+        local setting = ns.TopBar.Get(row.setting, ns.EUI_DEFAULTS[row.setting])
+        local id = ResolveID(setting, row.slot)
+        local icon = id and hearthIcons[tostring(id)]
+        local label = StoneLabel(id)
+        if setting == "RANDOM" then label = "Random: " .. label end
+
+        local left = row.click .. " "
+        if icon then left = left .. format(ITEM_ICON, icon) .. " " end
+        left = left .. label
+
+        local remaining = HearthCooldownRemaining(id)
+        if remaining then
+            tt:AddDoubleLine(left, FmtCD(remaining), 1, 1, 1, 1, 0.3, 0.3)
+        else
+            tt:AddDoubleLine(left, "Ready", 1, 1, 1, 0.3, 1, 0.3)
+        end
     end
-    tt:AddLine(" ")
-    tt:AddLine("Left-click: " .. StoneLabel(ResolveID(
-        ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft), "left")), 1, 1, 1)
-    tt:AddLine("Middle-click: " .. StoneLabel(ResolveID(
-        ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle), "mid")), 1, 1, 1)
-    tt:AddLine("Right-click: " .. StoneLabel(ResolveID(
-        ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight), "right")), 1, 1, 1)
+
+    -- Where a plain hearthstone sends you. Deliberately its own line rather than
+    -- appended to each row: only the shared-pool stones honour it, and the
+    -- Dalaran Hearthstone and the Key to the Arcantina in HEARTH_IDS do not, so a
+    -- per-row suffix would state a destination that is wrong for those rows.
+    -- GetBindLocation carries no secret marking (PlayerScriptDocumentation.lua:246).
+    local bind = GetBindLocation and GetBindLocation()
+    if type(bind) == "string" and bind ~= "" then
+        tt:AddDoubleLine("Hearth set to", bind, 0.7, 0.7, 0.7, 1, 1, 1)
+    end
 end
 
 -- Forward-declared: the defer watcher below closes over it before it is
@@ -440,7 +482,6 @@ HearthAttrs = function(btn)
     local leftID  = ResolveID(ns.TopBar.Get("tbHearthLeft",   ns.EUI_DEFAULTS.tbHearthLeft),   "left")
     local rightID = ResolveID(ns.TopBar.Get("tbHearthRight",  ns.EUI_DEFAULTS.tbHearthRight),  "right")
     local midID   = ResolveID(ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle), "mid")
-    _hearthId = leftID
 
     btn:SetAttribute("type1", "macro")
     btn:SetAttribute("macrotext1", MacroText(leftID))
@@ -1021,26 +1062,37 @@ ns.TopBar.Elements = {
     -- element declining a toggle. Bar.lua creates its button as
     -- "KitnUITopBar_clock" like any other element; Readouts.lua reaches that
     -- stable global name to attach the time FontString and size it from
-    -- tbClockSize. Left click opens the calendar, middle click reloads; both are
-    -- insecure and refuse in combat like gamemenu above.
+    -- tbClockSize. Left click opens the calendar, right click the stopwatch and
+    -- alarm, middle click reloads; all three are insecure and refuse in combat
+    -- like gamemenu above.
+    --
+    -- ToggleTimeManager is a global Blizzard defines in a bootstrap file
+    -- (Blizzard_TimeManager_Bootstrap.lua:7) precisely so the panel can be opened
+    -- from outside its own addon: it loads the addon on demand, then toggles.
+    -- Nil-guarded like every other host call here.
     {
         id = "clock", label = "Clock", panel = "centre",
         kind = "readout", secure = false,
         onClick = function(_self, button)
-            if button ~= "LeftButton" and button ~= "MiddleButton" then return end
+            if button ~= "LeftButton" and button ~= "MiddleButton"
+               and button ~= "RightButton" then return end
             if InCombatLockdown() then
                 UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
                 return
             end
             if button == "LeftButton" then
                 ToggleCalendar()
+            elseif button == "RightButton" then
+                if ToggleTimeManager then ToggleTimeManager() end
             else
                 ReloadUI()
             end
         end,
         tooltip = function(tt)
-            tt:AddLine("Left-click: Calendar", 1, 1, 1)
-            tt:AddLine("Middle-click: Reload UI", 1, 1, 1)
+            tt:AddLine("Clock", 1, 1, 1)
+            tt:AddLine(CLICK_L .. " Calendar", 1, 1, 1)
+            tt:AddLine(CLICK_R .. " Stopwatch and Alarm", 1, 1, 1)
+            tt:AddLine(CLICK_M .. " Reload UI", 1, 1, 1)
         end,
     },
 
