@@ -31,7 +31,7 @@ an agent.**
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
 | 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
-| 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PENDING** |
+| 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -819,5 +819,13 @@ moves.
 
 ## Result
 
-- Date:
-- Reported by Kitn:
+- Date: 2026-08-21
+- Reported by Kitn: **all checks passed.**
+- The eighteen keys applying and coming back (checks 1, 2, 2b, 3): pass
+- The upgrade prompt (checks 4, 4b, 4c): pass
+- Profile switch, tooltip, double-off (checks 5, 6, 7): pass
+- BugSack (check 8): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
