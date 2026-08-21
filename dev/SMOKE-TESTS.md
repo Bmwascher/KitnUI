@@ -666,10 +666,11 @@ and two names in `.luacheckrc`. Nothing else moves.
   tooltip goes straight from the title to the reset lines.
 - [ ] **19. The reset clocks are right.** Daily reset and Weekly reset both show
   a time, and both count down rather than up if you hover again later.
-- [ ] **20. The time line names the right clock.** Exactly ONE time line shows.
-  With the Top Bar's server-time setting on it reads **Realm time**; with it off
-  it reads **Local time**, and the number matches the clock face either way.
-  Flip the 12/24 hour setting: the line follows it.
+- [ ] **20. The time line shows the OTHER clock.** Exactly ONE time line shows,
+  and it is never the one on the bar. With the Top Bar's server-time setting on,
+  the face shows realm time and the line reads **Local time**; with it off, the
+  reverse. If the two ever read the same number, that is the bug. Flip the 12/24
+  hour setting: the line follows it.
 - [ ] **20b. The labels lead.** On the Daily reset, Weekly reset and time lines
   the left-hand label is white and the time on the right is grey. That is the
   reverse of what it was.

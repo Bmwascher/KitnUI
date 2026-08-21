@@ -1244,13 +1244,14 @@ function ns.TopBar.ClockTooltip(tt)
         tt:AddDoubleLine("Weekly reset", weekly, 1, 1, 1, 0.7, 0.7, 0.7)
     end
 
-    -- One line, naming whichever clock the face is set to: the face is a bare
-    -- number, and this says which one it is rather than repeating the other.
+    -- The OTHER clock, always: the face is already showing one of the two, and
+    -- repeating it would spend a line saying what the player can read on the bar.
+    -- So a face set to realm time gets local time here, and the reverse.
     if Get("tbServerTime", ns.EUI_DEFAULTS.tbServerTime) then
-        tt:AddDoubleLine("Realm time", FormatHM(GetGameTime()), 1, 1, 1, 0.7, 0.7, 0.7)
-    else
         tt:AddDoubleLine("Local time", FormatHM(tonumber(date("%H")), tonumber(date("%M"))),
             1, 1, 1, 0.7, 0.7, 0.7)
+    else
+        tt:AddDoubleLine("Realm time", FormatHM(GetGameTime()), 1, 1, 1, 0.7, 0.7, 0.7)
     end
 end
 
