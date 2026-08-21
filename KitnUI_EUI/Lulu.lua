@@ -42,31 +42,112 @@ ns.LuluLayoutName = function()
     return ns.profileName .. " Lulu"
 end
 
--- The minimap is the only part that applies without a reload, so it is the only
--- part that snapshots. The other two are reversed by re-enabling the addon and
--- re-activating the standard layout.
-local function ApplyMinimapShape(on, claiming)
-    local saved
-    if on and claiming then
-        saved = ns.EUISnap("lulu", "minimapShape")
-    else
-        saved = ns.EUIPeekSnap("lulu", "minimapShape")
-    end
-    if not saved then return end
+-- Every EllesmereUI minimap key Lulu Mode holds down, and the value it holds it
+-- at. A round minimap moves nothing on its own: the clock, the zone text, the
+-- FPS/MS readout, the mail icon, the difficulty text and the button row are all
+-- anchored for a square and sit wrong the moment the corners go. Each one is a
+-- separate key in the same table, so each is a separate note and each comes back
+-- on its own.
+--
+-- `snap` is the name of the note, and it is NOT always the key. `shape` shipped
+-- alone under the name "minimapShape", and every user who has Lulu Mode on right
+-- now has their original shape recorded under that name. Renaming the note would
+-- orphan theirs: the off path would find no record, restore nothing, and leave
+-- them a circle with no way back through the switch. So `shape` keeps the name it
+-- has always had and everything added since is named after its own key.
+--
+-- ONE CONTROL PER KEY is the standing rule in ns.EUIOverride, and this table is
+-- the whole of Lulu's claim. Nothing else in KitnUI HOLDS DOWN any of these
+-- eighteen. The profile install writes them once through EllesmereUI's own
+-- importer and takes no note, which is a write and not a claim.
+--
+-- The values were tuned in game against a round minimap. The positions are the
+-- host's own names, from MAP_POS_VALUES, ROW_POS_VALUES and the mail dropdown in
+-- EllesmereUIOptions/EUI_Minimap_Options.lua; the mail corners are UPPERCASE
+-- there and the map positions are not, which is the host's casing, not a slip.
+-- dev/tests/lulu-minimap-keys.lua checks every one of them against those lists.
+local MINIMAP_KEYS = {
+    { key = "shape",            snap = "minimapShape", value = "circle" },
 
+    { key = "clockPosition",    value = "bottom" },
+    { key = "clockOffsetX",     value = 0 },
+    { key = "clockOffsetY",     value = 18 },
+
+    { key = "locationPosition", value = "top" },
+    { key = "locationOffsetX",  value = 0 },
+    { key = "locationOffsetY",  value = -10 },
+
+    { key = "fpsPosition",      value = "bottom" },
+    { key = "fpsOffsetX",       value = 0 },
+    { key = "fpsOffsetY",       value = 8 },
+
+    { key = "mailPosition",     value = "TOPRIGHT" },
+    { key = "mailOffsetX",      value = -30 },
+    { key = "mailOffsetY",      value = -35 },
+
+    { key = "diffTextPosition", value = "topLeft" },
+    { key = "diffTextOffsetX",  value = 30 },
+    { key = "diffTextOffsetY",  value = -38 },
+
+    { key = "btnRowPosition",   value = "brLeft" },
+    { key = "btnRowDistance",   value = 35 },
+}
+
+-- Reachable only so dev/tests/lulu-minimap-keys.lua can load this file as a chunk
+-- and check the table it actually ships. It is NOT in KitnUI_EUI/Core.lua's
+-- EXPORTS list, so it stays invisible to KitnUI itself.
+ns.LuluMinimapKeys = MINIMAP_KEYS
+
+-- The minimap is the only part of Lulu Mode that applies without a reload, so it
+-- is the only part that snapshots. The other two are reversed by re-enabling the
+-- addon and re-activating the standard layout.
+--
+-- Named for the shape it started as. Every caller passes the same two arguments
+-- it always did and gets the same behaviour for the shape, plus seventeen more
+-- keys carried the same way.
+local function ApplyMinimapShape(on, claiming)
     local profile = ns.EUIProfile("EllesmereUIMinimap")
     local minimap = profile and profile.minimap
     if type(minimap) ~= "table" then return end
 
-    if on then
-        ns.EUIOverride(minimap, saved, "shape", "circle", claiming)
-    else
-        ns.EUIRestore(minimap, saved, "shape")
+    -- Whether anything was actually reached. The old single-key version returned
+    -- before the rebuild when there was no note to act on, and skipping a rebuild
+    -- nobody needs is worth keeping: the off path runs on every profile switch,
+    -- and ApplyAll is not free.
+    local touched = false
+
+    for i = 1, #MINIMAP_KEYS do
+        local entry = MINIMAP_KEYS[i]
+        local name = entry.snap or entry.key
+
+        -- Unchanged from the single-key version, per key. EUISnap builds a record
+        -- on the way down and so is used only where this is allowed to claim;
+        -- EUIPeekSnap asks without building, so merely visiting a profile does
+        -- not seed eighteen empty records in it.
+        local saved
+        if on and claiming then
+            saved = ns.EUISnap("lulu", name)
+        else
+            saved = ns.EUIPeekSnap("lulu", name)
+        end
+
+        if saved then
+            if on then
+                ns.EUIOverride(minimap, saved, entry.key, entry.value, claiming)
+            else
+                ns.EUIRestore(minimap, saved, entry.key)
+            end
+            touched = true
+        end
     end
+
+    if not touched then return end
 
     -- RefreshAllAddons does not apply the minimap, and a shape change needs the
     -- full rebuild rather than a plain apply because visibility only
-    -- re-evaluates there.
+    -- re-evaluates there. The other seventeen keys would be satisfied by the
+    -- plain apply the host's own options page calls, and the full rebuild is a
+    -- superset of it, so one call still covers all eighteen.
     if _G._EMM_FullRebuildMinimap then _G._EMM_FullRebuildMinimap() end
 end
 
