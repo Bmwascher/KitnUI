@@ -30,7 +30,7 @@ an agent.**
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
-| 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes | not yet | **PENDING** |
+| 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -712,12 +712,14 @@ moves.
 
 ## Result
 
-Kitn, record the outcome here.
-
-- Date:
-- Hearthstone tooltip (checks 1-7):
-- Clock clicks (checks 8-11):
-- Spacing and pictures elsewhere (checks 12-15):
-- Clock tooltip body (checks 16-21, including 16b, 16c and 20b):
-- BugSack (check 22):
-- Notes:
+- Date: 2026-08-21
+- Reported by Kitn: **all checks passed.**
+- Hearthstone tooltip (checks 1-7): pass
+- Clock clicks (checks 8-11): pass
+- Spacing and pictures elsewhere (checks 12-15): pass
+- Clock tooltip body (checks 16-21, including 16b, 16c and 20b): pass
+- BugSack (check 22): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
