@@ -619,7 +619,7 @@ moves.
   stone, then hover immediately. No row may flash `0:01`. A stone that is
   genuinely ready says **Ready** the whole time; a stone you actually used shows
   a countdown. If any stone you own reports a real cooldown of two seconds or
-  less, this check fails and the threshold needs raising - say which stone.
+  less, this check fails and the filter needs revisiting - say which stone.
 - [ ] **4. The rows can disagree.** Set one button to the Dalaran Hearthstone or
   the Key to the Arcantina and another to any ordinary stone. Use the ordinary
   one. The other row must still read **Ready** - a single shared cooldown line
