@@ -646,9 +646,18 @@ and two names in `.luacheckrc`. Nothing else moves.
   hover friends and guild. Each must be its name alone with no empty row: in
   there the name lists are withheld, and the gap must be withheld with them.
 - [ ] **16. The clock lists your lockouts.** On a character saved to something,
-  hover the clock. Under a gold **Saved to** heading there is one row per
-  lockout: the instance name, its size and difficulty in grey, the boss count
-  where the instance has one, and the time left on the right.
+  hover the clock. Under a **Saved Raid(s)** heading in your accent colour there
+  is one row per lockout: the instance picture, its name, its size and difficulty
+  in grey, the boss count where the instance has one, and the time left on the
+  right.
+- [ ] **16b. The pictures are the right instances.** Each row's picture is that
+  instance's own art from the Encounter Journal, cropped square. A row with no
+  picture is not a fault by itself - the join is by name - but tell me which
+  instance, because a missing one means its name does not match the journal's.
+- [ ] **16c. The journal is not disturbed.** Open the Encounter Journal, pick an
+  expansion that is NOT the current one, leave it open, and hover the clock. The
+  journal must still be on the expansion you chose. Close it and hover again:
+  the pictures appear from then on.
 - [ ] **17. It matches Blizzard.** Open the game's own raid info panel (the Raid
   tab of the social window). The same lockouts, the same boss counts, the same
   times give or take a minute of rounding.
@@ -657,10 +666,13 @@ and two names in `.luacheckrc`. Nothing else moves.
   tooltip goes straight from the title to the reset lines.
 - [ ] **19. The reset clocks are right.** Daily reset and Weekly reset both show
   a time, and both count down rather than up if you hover again later.
-- [ ] **20. Both clocks are named.** Realm time and Local time both appear. Flip
-  the Top Bar's server-time setting: the face changes, and BOTH tooltip lines
-  stay, still correctly labelled. Flip the 12/24 hour setting: both lines follow
-  it.
+- [ ] **20. The time line names the right clock.** Exactly ONE time line shows.
+  With the Top Bar's server-time setting on it reads **Realm time**; with it off
+  it reads **Local time**, and the number matches the clock face either way.
+  Flip the 12/24 hour setting: the line follows it.
+- [ ] **20b. The labels lead.** On the Daily reset, Weekly reset and time lines
+  the left-hand label is white and the time on the right is grey. That is the
+  reverse of what it was.
 - [ ] **21. Hovering is cheap.** Hover the clock, move away, hover again, twenty
   times in a row. No stutter, no chat spam, and nothing in BugSack. This is the
   check for the throttle: a fresh lockout you just earned may take up to 30
@@ -676,6 +688,6 @@ Kitn, record the outcome here.
 - Hearthstone tooltip (checks 1-7):
 - Clock clicks (checks 8-11):
 - Spacing and pictures elsewhere (checks 12-15):
-- Clock tooltip body (checks 16-21):
+- Clock tooltip body (checks 16-21, including 16b, 16c and 20b):
 - BugSack (check 22):
 - Notes:

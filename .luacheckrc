@@ -115,6 +115,10 @@ read_globals = {
     "GetNumSavedInstances", "GetSavedInstanceInfo", "RequestRaidInfo",
     "SecondsToTime", "C_DateAndTime",
 
+    -- Top bar: instance art for the lockout rows, read off the Encounter Journal
+    "EJ_GetNumTiers", "EJ_GetCurrentTier", "EJ_SelectTier",
+    "EJ_GetInstanceByIndex", "EncounterJournal",
+
     -- Top bar rosters (Readouts.lua): class colour for the friends and guild
     -- tooltips, and the Secret-value test that guards every field read off a
     -- roster structure before it is used as a key or concatenated.

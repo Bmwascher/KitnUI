@@ -1106,6 +1106,58 @@ end
 -- rule ROSTER_CAP follows above.
 local LOCKOUT_CAP = 12
 
+-- The instance art the Encounter Journal already ships, so no icon list has to
+-- be hand-maintained here and next tier's raids arrive with their own pictures.
+--
+-- The numbers are the journal's own: it draws this texture at 174x96 out of a
+-- 256x128 file (EncounterInstanceButtonTemplate). That is a wide banner, so a
+-- straight squeeze into a square would distort it; this takes the middle 96x96
+-- of the used area instead, which is where the art is.
+local INSTANCE_ICON = "|T%s:16:16:0:0:256:128:39:135:0:96|t"
+
+-- Built once per session, on the first hover that needs it, and only from the
+-- journal's own tier walk -- there is no map from a lockout to an Encounter
+-- Journal instance id, so the join is by NAME. An instance whose name does not
+-- match simply gets no picture; the row still says everything it said before.
+--
+-- EJ_SelectTier is the reason for the EncounterJournal guard: walking the tiers
+-- moves the journal's own selection, and restoring it afterwards would not
+-- redraw a journal the player is looking at. Skipped rather than worked around,
+-- because the next hover can do it just as well.
+local instanceIcons
+
+local function InstanceIcons()
+    if instanceIcons then return instanceIcons end
+    if not (EJ_GetNumTiers and EJ_GetCurrentTier and EJ_SelectTier and EJ_GetInstanceByIndex) then
+        instanceIcons = {}
+        return instanceIcons
+    end
+    if EncounterJournal and EncounterJournal.IsShown and EncounterJournal:IsShown() then
+        return nil
+    end
+
+    local icons = {}
+    local restore = EJ_GetCurrentTier()
+    for tier = 1, (EJ_GetNumTiers() or 0) do
+        EJ_SelectTier(tier)
+        for _, isRaid in ipairs({ true, false }) do
+            local index = 1
+            while true do
+                local _, name, _, _, buttonImage = EJ_GetInstanceByIndex(index, isRaid)
+                if not name then break end
+                -- First tier wins on a duplicate name: the earliest listing is
+                -- the original instance rather than a later revisit of it.
+                if buttonImage and not icons[name] then icons[name] = buttonImage end
+                index = index + 1
+            end
+        end
+    end
+    if restore then EJ_SelectTier(restore) end
+
+    instanceIcons = icons
+    return instanceIcons
+end
+
 -- SecondsToTime's fourth argument is the maximum number of units, so 2 gives
 -- "2 Days 7 Hr" rather than Blizzard's own three-unit "2 Days 7 Hr 4 Min". The
 -- rows are read at a glance and the minutes on a multi-day lockout are noise.
@@ -1116,7 +1168,7 @@ local function ResetText(seconds)
 end
 
 -- Collected before anything is drawn, not written as the walk goes: the
--- "Saved to" heading has to be printed ABOVE rows whose existence is only known
+-- "Saved Raid(s)" heading has to be printed ABOVE rows whose existence is only known
 -- once the walk is finished, and a heading over an empty list is exactly the
 -- kind of line the friends roster is careful never to leave behind.
 --
@@ -1127,6 +1179,7 @@ local function AddLockouts(tt)
     local total = GetNumSavedInstances()
     if type(total) ~= "number" or total <= 0 then return 0 end
 
+    local icons = InstanceIcons()
     local rows, held = {}, 0
     for i = 1, total do
         local name, _, reset, _, locked, extended, _, isRaid, maxPlayers, difficultyName,
@@ -1149,8 +1202,10 @@ local function AddLockouts(tt)
                    and type(encounterProgress) == "number" then
                     detail = format("%s %d/%d", detail, encounterProgress, numEncounters)
                 end
+                local icon = icons and icons[name]
                 rows[#rows + 1] = {
-                    format("%s |cff9d9d9d(%s)|r", name, detail),
+                    format("%s%s |cff9d9d9d(%s)|r",
+                        icon and (format(INSTANCE_ICON, icon) .. " ") or "", name, detail),
                     ResetText(reset) or "",
                 }
             end
@@ -1158,7 +1213,9 @@ local function AddLockouts(tt)
     end
     if held == 0 then return 0 end
 
-    tt:AddLine("Saved to", 1, 0.82, 0)
+    -- The bar's own accent, so the heading follows a custom accent colour or the
+    -- host's rather than being pinned to Blizzard gold.
+    tt:AddLine("Saved Raid(s)", AccentRGB())
     for _, row in ipairs(rows) do
         tt:AddDoubleLine(row[1], row[2], 1, 1, 1, 0.7, 0.7, 0.7)
     end
@@ -1178,19 +1235,23 @@ function ns.TopBar.ClockTooltip(tt)
         and ResetText(C_DateAndTime.GetSecondsUntilDailyReset())
     local weekly = C_DateAndTime and C_DateAndTime.GetSecondsUntilWeeklyReset
         and ResetText(C_DateAndTime.GetSecondsUntilWeeklyReset())
+    -- White label, grey value: the labels are the fixed part a reader scans down,
+    -- so they carry the emphasis and the times sit back.
     if daily then
-        tt:AddDoubleLine("Daily reset", daily, 0.7, 0.7, 0.7, 1, 1, 1)
+        tt:AddDoubleLine("Daily reset", daily, 1, 1, 1, 0.7, 0.7, 0.7)
     end
     if weekly then
-        tt:AddDoubleLine("Weekly reset", weekly, 0.7, 0.7, 0.7, 1, 1, 1)
+        tt:AddDoubleLine("Weekly reset", weekly, 1, 1, 1, 0.7, 0.7, 0.7)
     end
 
-    -- Both times, always, rather than whichever one the face is not showing:
-    -- tbServerTime can be flipped at any moment and a tooltip that silently
-    -- swapped which clock it was naming would be worse than one extra line.
-    tt:AddDoubleLine("Realm time", FormatHM(GetGameTime()), 0.7, 0.7, 0.7, 1, 1, 1)
-    tt:AddDoubleLine("Local time", FormatHM(tonumber(date("%H")), tonumber(date("%M"))),
-        0.7, 0.7, 0.7, 1, 1, 1)
+    -- One line, naming whichever clock the face is set to: the face is a bare
+    -- number, and this says which one it is rather than repeating the other.
+    if Get("tbServerTime", ns.EUI_DEFAULTS.tbServerTime) then
+        tt:AddDoubleLine("Realm time", FormatHM(GetGameTime()), 1, 1, 1, 0.7, 0.7, 0.7)
+    else
+        tt:AddDoubleLine("Local time", FormatHM(tonumber(date("%H")), tonumber(date("%M"))),
+            1, 1, 1, 0.7, 0.7, 0.7)
+    end
 end
 
 -- Badge FontStrings. Fixed size, like CLOCK_PAD above: not exposed as a setting.
