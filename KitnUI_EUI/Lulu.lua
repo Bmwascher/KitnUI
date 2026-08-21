@@ -626,6 +626,7 @@ end)
 -- before Lulu touched it, so someone who had them off already is never offered
 -- them back. The Edit Mode record is asked on its own, because that same user
 -- still has Lulu's layout active with the switch reading off.
+
 -- Is Lulu holding SOME of the minimap down but not all of it? That is the state
 -- an upgrade leaves behind: the shape note was taken when the user clicked the
 -- switch, and the seventeen keys added later have no note because only a click
@@ -842,8 +843,20 @@ function ns.LuluReconcile()
             -- reached "minimap" rather than "apply" -- so running them would be
             -- work with nothing to do, and the reload would cost the user a
             -- loading screen for a change that has already landed on screen.
+            --
+            -- The latch is released here, unlike the two paths below, and this is
+            -- the only accept that has to do it for itself: they reload, which
+            -- takes the latch with them. ApplyMinimapShape can legitimately do
+            -- nothing -- the mismatch is read from KitnUIDB while the write needs
+            -- EllesmereUI's minimap module to be loaded, and a user running Lulu
+            -- with that module switched off satisfies the first and not the
+            -- second. Holding the latch there would spend the user's only notice
+            -- on a prompt that changed nothing and mute every retry until they
+            -- next log in. Releasing it is harmless on success: the next reconcile
+            -- finds no mismatch and clears it anyway.
             if kind == "minimap" then
                 ApplyMinimapShape(true, true)
+                promptedForMismatch = nil
                 return
             end
 
