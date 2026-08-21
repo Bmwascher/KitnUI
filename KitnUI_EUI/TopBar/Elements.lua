@@ -286,10 +286,27 @@ local HEARTH_IDS = {
     140192, 253629, 264367, 190237,
 }
 
+-- Excluded from the RANDOM pool, never from the dropdowns: both of these go to a
+-- FIXED destination rather than to the player's own hearth, so a roll that lands
+-- on one sends them somewhere they did not ask for. Picking one deliberately is
+-- still a perfectly good choice, which is why they stay in the list and in
+-- HEARTH_IDS.
+--
+-- Exactly these two and no more. The host's own annotated list separates them
+-- from the pool for the same reason (EllesmereUI 8.8.2,
+-- EllesmereUIDataBars_Blocks.lua:2346 "TRAVEL_EXTRAS"), and confirms that the
+-- other two odd ids in HEARTH_IDS, the Broker Translocation Matrix and the
+-- Mushroom, DO return to the bind point and belong in the pool.
+local FIXED_DESTINATION = {
+    [140192] = true, -- Dalaran Hearthstone
+    [253629] = true, -- Personal Key to the Arcantina
+}
+
 -- The ownership scan is the expensive part of this element and is paid once
 -- (ScanOwned, run at PLAYER_LOGIN), then shared by all three dropdowns and
 -- all three mouse buttons through these tables.
 local owned = {}                           -- numeric item ids the player owns, scan order
+local randomPool = {}                      -- `owned` minus FIXED_DESTINATION; what RANDOM rolls out of
 local hearthValues = { RANDOM = "Random" } -- [stringKey] = display name; mutated in place as
                                             -- C_Item resolves names, which Options.lua's dropdown
                                             -- refresh reads live off this same table reference
@@ -308,16 +325,26 @@ end
 -- roll independently rather than sharing a single "last stone" memory.
 local randomCache = {}
 
--- Avoids repeating the immediately previous roll when more than one stone is
--- owned. Bounded at 10 attempts against a pathological repeat.
+-- Rolls out of `randomPool`, not `owned`: the pool is the owned stones minus the
+-- fixed-destination ones above. Avoids repeating the immediately previous roll
+-- when more than one is in the pool, bounded at 10 attempts against a
+-- pathological repeat.
+--
+-- The fallbacks walk outward one step at a time. A player who owns nothing but
+-- the two fixed-destination stones has an empty POOL but a non-empty `owned`, and
+-- rolling one of those is better than firing a plain Hearthstone they do not
+-- have.
 local function PickRandom(slot)
-    if #owned == 0 then return 6948 end
-    if #owned == 1 then return owned[1] end
+    if #randomPool == 0 then
+        if #owned > 0 then return owned[1] end
+        return 6948
+    end
+    if #randomPool == 1 then return randomPool[1] end
     local last = randomCache[slot]
-    local id = owned[math.random(#owned)]
+    local id = randomPool[math.random(#randomPool)]
     for _ = 1, 10 do
         if id ~= last then break end
-        id = owned[math.random(#owned)]
+        id = randomPool[math.random(#randomPool)]
     end
     return id
 end
@@ -436,11 +463,19 @@ end
 -- cooldown would be wrong: the Dalaran Hearthstone and the Key to the Arcantina
 -- -- both valid choices here -- run on cooldowns separate from the main pool, so
 -- three rows can legitimately show three different states.
+--
+-- GCD_MAX is why the rows do not all blink "0:01" the moment anything is used:
+-- using any item puts every other item on the 1.5s global cooldown, and
+-- GetItemCooldown reports that exactly like a real one. A hearthstone's own
+-- cooldown is a quarter of an hour at the shortest, so anything at or under two
+-- seconds is the global cooldown and the stone is in fact ready.
+local GCD_MAX = 2
+
 local function HearthCooldownRemaining(id)
     if not id then return nil end
     if not (C_Item and C_Item.GetItemCooldown) then return nil end
     local start, duration = C_Item.GetItemCooldown(id)
-    if type(start) == "number" and type(duration) == "number" and duration > 0 then
+    if type(start) == "number" and type(duration) == "number" and duration > GCD_MAX then
         local remaining = start + duration - GetTime()
         if remaining > 0 then return remaining end
     end
@@ -623,6 +658,7 @@ local function ScanOwned()
         local count = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(id)
         if isToy or (count and count > 0) then
             owned[#owned + 1] = id
+            if not FIXED_DESTINATION[id] then randomPool[#randomPool + 1] = id end
             local key = tostring(id)
             hearthValues[key] = key
             hearthOrder[#hearthOrder + 1] = key

@@ -612,6 +612,10 @@ and two names in `.luacheckrc`. Nothing else moves.
 - [ ] **3. The countdown is real.** Use the left-click stone. Its row switches to
   a red countdown that ticks down while you keep hovering, and reaches Ready
   again on its own.
+- [ ] **3b. The global cooldown is not a cooldown.** Use any item at all, or any
+  stone, then hover immediately. No row may flash `0:01`. A stone that is
+  genuinely ready says **Ready** the whole time; only a real 15-minute-or-longer
+  hearth cooldown shows a countdown.
 - [ ] **4. The rows can disagree.** Set one button to the Dalaran Hearthstone or
   the Key to the Arcantina and another to any ordinary stone. Use the ordinary
   one. The other row must still read **Ready** - a single shared cooldown line
@@ -627,6 +631,11 @@ and two names in `.luacheckrc`. Nothing else moves.
 - [ ] **5c. One click does not disturb the other buttons.** Set two buttons to
   Random. Note both rows, click one. The OTHER row must still name the same
   stone it did before.
+- [ ] **5d. Random never lands somewhere fixed.** Click a Random button twenty
+  times, hovering between clicks. It must never name the **Dalaran Hearthstone**
+  or the **Personal Key to the Arcantina**: those two go to a fixed place rather
+  than to your hearth. Both must still be pickable by hand in all three
+  dropdowns.
 - [ ] **6. The destination is right.** The last line reads `Hearth set to` and
   your actual inn. Hearth somewhere else, `/reload`, hover again: it has changed.
 - [ ] **7. A stone you do not own is not offered.** Nothing in the three rows may
