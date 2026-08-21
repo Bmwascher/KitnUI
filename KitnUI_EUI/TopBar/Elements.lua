@@ -289,9 +289,7 @@ local HEARTH_IDS = {
 -- still a perfectly good choice, which is why they stay in the list and in
 -- HEARTH_IDS.
 --
--- Exactly these two and no more. The test is the DESTINATION, not the cooldown:
--- several stones in HEARTH_IDS run on their own cooldown and still return the
--- player to their own hearth, and those belong in the pool.
+-- Exactly these two and no more. The test is the DESTINATION, not the cooldown.
 local FIXED_DESTINATION = {
     [140192] = true, -- Dalaran Hearthstone
     [253629] = true, -- Personal Key to the Arcantina
