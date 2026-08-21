@@ -619,6 +619,14 @@ and two names in `.luacheckrc`. Nothing else moves.
 - [ ] **5. Random says so.** Set a button to Random. Its row reads
   `Random: <stone name>` with that stone's icon. Click the button, hover again:
   the name and the icon have changed to the next roll.
+- [ ] **5b. The row names what WILL be used, not what was.** Hover, read the
+  Random row, then click that button. The stone that actually goes off must be
+  the one the row was naming. Hover again: a different stone is named, and
+  clicking again uses THAT one. This is the check for the defect Kitn found on
+  2026-08-21, where the row named the stone just used.
+- [ ] **5c. One click does not disturb the other buttons.** Set two buttons to
+  Random. Note both rows, click one. The OTHER row must still name the same
+  stone it did before.
 - [ ] **6. The destination is right.** The last line reads `Hearth set to` and
   your actual inn. Hearth somewhere else, `/reload`, hover again: it has changed.
 - [ ] **7. A stone you do not own is not offered.** Nothing in the three rows may

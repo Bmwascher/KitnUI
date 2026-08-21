@@ -342,7 +342,7 @@ end
 -- "RANDOM" (and now an unowned fixed id) resolves to whatever this slot last
 -- rolled, WITHOUT rolling again here -- rolling on every call would mean an
 -- unrelated Apply() (an opacity slider, say) silently swapped the stone
--- nobody clicked. Only RerollAll(), called from an actual click, advances it.
+-- nobody clicked. Only RerollSlot(), called after an actual click, advances it.
 local function ResolveID(setting, slot)
     local id = tonumber(setting)
     if id and IsOwned(id) then return id end
@@ -350,20 +350,29 @@ local function ResolveID(setting, slot)
     return randomCache[slot]
 end
 
--- Rerolls every slot currently set to RANDOM. Called from PreClick, so each
--- click uses a freshly rolled stone and the immediately preceding roll is
--- never repeated -- "rerolls after use" in effect, since the only way to use
--- one roll is to trigger the next PreClick, which replaces it before firing.
-local function RerollAll()
-    if ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft) == "RANDOM" then
-        randomCache.left = PickRandom("left")
-    end
-    if ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle) == "RANDOM" then
-        randomCache.mid = PickRandom("mid")
-    end
-    if ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight) == "RANDOM" then
-        randomCache.right = PickRandom("right")
-    end
+local SLOT_BY_BUTTON  = { LeftButton = "left", RightButton = "right", MiddleButton = "mid" }
+local SETTING_BY_SLOT = { left = "tbHearthLeft", right = "tbHearthRight", mid = "tbHearthMiddle" }
+
+-- Rerolls ONE slot, and only if that slot is actually set to RANDOM: an unowned
+-- fixed id also resolves through randomCache (see ResolveID above) and must keep
+-- the stone it settled on rather than wandering on every click.
+--
+-- Called AFTER the click, never before. Rolling first was the original design
+-- and it was wrong in the one way that matters: the roll it wrote was the stone
+-- that then fired, so from the moment the click ended the tooltip was naming the
+-- stone just USED, and the next click would replace it with something else
+-- before firing. Rolling afterwards means what the tooltip shows is what the
+-- next click will actually use.
+--
+-- Rerolling only the clicked slot, not all three, follows from the same rule: a
+-- left click must not silently change what the right button is about to do, and
+-- the tooltip is showing all three at once.
+local function RerollSlot(slot)
+    if not slot then return end
+    local key = SETTING_BY_SLOT[slot]
+    if not key then return end
+    if ns.TopBar.Get(key, ns.EUI_DEFAULTS[key]) ~= "RANDOM" then return end
+    randomCache[slot] = PickRandom(slot)
 end
 
 -- Toys must be used by NAME, not item:ID: item:ID only resolves for something
@@ -489,24 +498,28 @@ end
 local HearthAttrs
 
 -- "The Random reroll... rewrites the macro after use: defer it out of combat
--- rather than dropping it" -- a PreClick that finds InCombatLockdown() true
--- cannot write the reroll now, but must not forget it either, or the button
--- would keep firing a stale roll until some later click happens to land
--- outside combat. This is Bar.lua's own Defer()/pendingApply shape, scoped
--- down to this one button.
-local hearthDeferPending, hearthDeferBtn = false, nil
+-- rather than dropping it" -- a click that finds InCombatLockdown() true cannot
+-- write the reroll now, but must not forget it either, or the button would keep
+-- firing the same roll until some later click happens to land outside combat.
+-- This is Bar.lua's own Defer()/pendingApply shape, scoped down to this one
+-- button.
+--
+-- The slot is remembered with the button: the deferred work is the reroll for
+-- the mouse button that was actually clicked, not for all three.
+local hearthDeferPending, hearthDeferBtn, hearthDeferSlot = false, nil, nil
 local hearthDeferFrame = CreateFrame("Frame")
 hearthDeferFrame:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     hearthDeferPending = false
     if hearthDeferBtn then
-        RerollAll()
+        RerollSlot(hearthDeferSlot)
         HearthAttrs(hearthDeferBtn)
     end
 end)
 
-local function DeferHearthRefresh(btn)
+local function DeferHearthRefresh(btn, slot)
     hearthDeferBtn = btn
+    hearthDeferSlot = slot
     if hearthDeferPending then return end
     hearthDeferPending = true
     hearthDeferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -529,14 +542,29 @@ HearthAttrs = function(btn)
     btn:SetAttribute("macrotext3", MacroText(midID))
 
     if not btn._hearthWired then
-        -- Toy names may not be cached at login, so every click re-resolves all
-        -- three macros fresh rather than trusting whatever Apply() last wrote.
+        -- Two halves of one click, and the split is the whole point.
+        --
+        -- BEFORE: rewrite the three macros from the CURRENT rolls, without
+        -- rolling. Toy names may not have been cached when Apply() last wrote
+        -- them, and a macro still reading "/use item:<id>" for a toy that is not
+        -- in the bags does nothing at all. This repairs that in place, and
+        -- because it does not roll, the stone that fires is the one the tooltip
+        -- was naming a moment earlier.
         btn:SetScript("PreClick", function(self)
+            if InCombatLockdown() then return end
+            HearthAttrs(self)
+        end)
+
+        -- AFTER: roll the clicked slot on for next time and write that. The
+        -- tooltip's next pass shows the new stone, which is the one the next
+        -- click will use.
+        btn:SetScript("PostClick", function(self, button)
+            local slot = SLOT_BY_BUTTON[button]
             if InCombatLockdown() then
-                DeferHearthRefresh(self)
+                DeferHearthRefresh(self, slot)
                 return
             end
-            RerollAll()
+            RerollSlot(slot)
             HearthAttrs(self)
         end)
 
