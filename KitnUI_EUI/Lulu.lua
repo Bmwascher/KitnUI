@@ -42,31 +42,112 @@ ns.LuluLayoutName = function()
     return ns.profileName .. " Lulu"
 end
 
--- The minimap is the only part that applies without a reload, so it is the only
--- part that snapshots. The other two are reversed by re-enabling the addon and
--- re-activating the standard layout.
-local function ApplyMinimapShape(on, claiming)
-    local saved
-    if on and claiming then
-        saved = ns.EUISnap("lulu", "minimapShape")
-    else
-        saved = ns.EUIPeekSnap("lulu", "minimapShape")
-    end
-    if not saved then return end
+-- Every EllesmereUI minimap key Lulu Mode holds down, and the value it holds it
+-- at. A round minimap moves nothing on its own: the clock, the zone text, the
+-- FPS/MS readout, the mail icon, the difficulty text and the button row are all
+-- anchored for a square and sit wrong the moment the corners go. Each one is a
+-- separate key in the same table, so each is a separate note and each comes back
+-- on its own.
+--
+-- `snap` is the name of the note, and it is NOT always the key. `shape` shipped
+-- alone under the name "minimapShape", and every user who has Lulu Mode on right
+-- now has their original shape recorded under that name. Renaming the note would
+-- orphan theirs: the off path would find no record, restore nothing, and leave
+-- them a circle with no way back through the switch. So `shape` keeps the name it
+-- has always had and everything added since is named after its own key.
+--
+-- ONE CONTROL PER KEY is the standing rule in ns.EUIOverride, and this table is
+-- the whole of Lulu's claim. Nothing else in KitnUI HOLDS DOWN any of these
+-- eighteen. The profile install writes them once through EllesmereUI's own
+-- importer and takes no note, which is a write and not a claim.
+--
+-- The values were tuned in game against a round minimap. The positions are the
+-- host's own names, from MAP_POS_VALUES, ROW_POS_VALUES and the mail dropdown in
+-- EllesmereUIOptions/EUI_Minimap_Options.lua; the mail corners are UPPERCASE
+-- there and the map positions are not, which is the host's casing, not a slip.
+-- dev/tests/lulu-minimap-keys.lua checks every one of them against those lists.
+local MINIMAP_KEYS = {
+    { key = "shape",            snap = "minimapShape", value = "circle" },
 
+    { key = "clockPosition",    value = "bottom" },
+    { key = "clockOffsetX",     value = 0 },
+    { key = "clockOffsetY",     value = 18 },
+
+    { key = "locationPosition", value = "top" },
+    { key = "locationOffsetX",  value = 0 },
+    { key = "locationOffsetY",  value = -10 },
+
+    { key = "fpsPosition",      value = "bottom" },
+    { key = "fpsOffsetX",       value = 0 },
+    { key = "fpsOffsetY",       value = 8 },
+
+    { key = "mailPosition",     value = "TOPRIGHT" },
+    { key = "mailOffsetX",      value = -30 },
+    { key = "mailOffsetY",      value = -35 },
+
+    { key = "diffTextPosition", value = "topLeft" },
+    { key = "diffTextOffsetX",  value = 30 },
+    { key = "diffTextOffsetY",  value = -38 },
+
+    { key = "btnRowPosition",   value = "brLeft" },
+    { key = "btnRowDistance",   value = 35 },
+}
+
+-- Reachable only so dev/tests/lulu-minimap-keys.lua can load this file as a chunk
+-- and check the table it actually ships. It is NOT in KitnUI_EUI/Core.lua's
+-- EXPORTS list, so it stays invisible to KitnUI itself.
+ns.LuluMinimapKeys = MINIMAP_KEYS
+
+-- The minimap is the only part of Lulu Mode that applies without a reload, so it
+-- is the only part that snapshots. The other two are reversed by re-enabling the
+-- addon and re-activating the standard layout.
+--
+-- Named for the shape it started as. Every caller passes the same two arguments
+-- it always did and gets the same behaviour for the shape, plus seventeen more
+-- keys carried the same way.
+local function ApplyMinimapShape(on, claiming)
     local profile = ns.EUIProfile("EllesmereUIMinimap")
     local minimap = profile and profile.minimap
     if type(minimap) ~= "table" then return end
 
-    if on then
-        ns.EUIOverride(minimap, saved, "shape", "circle", claiming)
-    else
-        ns.EUIRestore(minimap, saved, "shape")
+    -- Whether anything was actually reached. The old single-key version returned
+    -- before the rebuild when there was no note to act on, and skipping a rebuild
+    -- nobody needs is worth keeping: the off path runs on every profile switch,
+    -- and ApplyAll is not free.
+    local touched = false
+
+    for i = 1, #MINIMAP_KEYS do
+        local entry = MINIMAP_KEYS[i]
+        local name = entry.snap or entry.key
+
+        -- Unchanged from the single-key version, per key. EUISnap builds a record
+        -- on the way down and so is used only where this is allowed to claim;
+        -- EUIPeekSnap asks without building, so merely visiting a profile does
+        -- not seed eighteen empty records in it.
+        local saved
+        if on and claiming then
+            saved = ns.EUISnap("lulu", name)
+        else
+            saved = ns.EUIPeekSnap("lulu", name)
+        end
+
+        if saved then
+            if on then
+                ns.EUIOverride(minimap, saved, entry.key, entry.value, claiming)
+            else
+                ns.EUIRestore(minimap, saved, entry.key)
+            end
+            touched = true
+        end
     end
+
+    if not touched then return end
 
     -- RefreshAllAddons does not apply the minimap, and a shape change needs the
     -- full rebuild rather than a plain apply because visibility only
-    -- re-evaluates there.
+    -- re-evaluates there. The other seventeen keys would be satisfied by the
+    -- plain apply the host's own options page calls, and the full rebuild is a
+    -- superset of it, so one call still covers all eighteen.
     if _G._EMM_FullRebuildMinimap then _G._EMM_FullRebuildMinimap() end
 end
 
@@ -511,6 +592,13 @@ end
 
 -- Only the minimap re-asserts on a profile switch. The module state and the Edit
 -- Mode layout are not profile-scoped and would need a reload to change anyway.
+--
+-- IT NEVER CLAIMS, and that is deliberate rather than incidental. A user who has
+-- had Lulu Mode on since before the other seventeen keys existed has a note for
+-- the shape and none for the rest, so this pass writes the shape and nothing
+-- else. Claiming here would fix that in one line and break the rule in
+-- Core.lua's EUIOverride that only a user action may record what a setting was
+-- before. ns.LuluReconcile asks instead; see the "minimap" mismatch below.
 ns.EUIRegisterReapply(function()
     ApplyMinimapShape(ns.LuluEnabled(), false)
 end)
@@ -538,6 +626,30 @@ end)
 -- before Lulu touched it, so someone who had them off already is never offered
 -- them back. The Edit Mode record is asked on its own, because that same user
 -- still has Lulu's layout active with the switch reading off.
+
+-- Is Lulu holding SOME of the minimap down but not all of it? That is the state
+-- an upgrade leaves behind: the shape note was taken when the user clicked the
+-- switch, and the seventeen keys added later have no note because only a click
+-- may take one.
+--
+-- Tested key by key rather than by counting notes. A count would have to be kept
+-- in step with MINIMAP_KEYS by hand, and a stale count reads as correct while
+-- being wrong. Held is `prev ~= nil`, never the record's existence, because
+-- ns.EUIRestore leaves the shell behind with prev cleared.
+local function MinimapNotesIncomplete()
+    local anyHeld, anyMissing = false, false
+    for i = 1, #MINIMAP_KEYS do
+        local entry = MINIMAP_KEYS[i]
+        local saved = ns.EUIPeekSnap("lulu", entry.snap or entry.key)
+        if saved and saved.prev ~= nil then
+            anyHeld = true
+        else
+            anyMissing = true
+        end
+    end
+    return anyHeld and anyMissing
+end
+
 local ACTION_BARS_LOADED_UNKNOWN = "unknown"
 
 local function ActionBarsLoaded()
@@ -600,7 +712,12 @@ local function CurrentMismatch()
     local loaded = ActionBarsLoaded()
 
     if on then
+        -- Order matters. "apply" means none of Lulu is really on, which is the
+        -- bigger statement and the one whose accept does the minimap too, so a
+        -- profile in both states is offered the whole job rather than a third of
+        -- it.
         if loaded == true then return "apply" end
+        if MinimapNotesIncomplete() then return "minimap" end
         return nil
     end
 
@@ -634,9 +751,10 @@ function ns.LuluReconcile()
     -- afterwards, so the next reconcile trigger prompts instead.
     if InCombatLockdown() then return end
 
-    -- Both texts describe the STATE, not how it got there. An imported profile is
-    -- the common cause of "apply" and a profile switch of "undo", but each is
-    -- reachable other ways and a message that named a cause would be wrong there.
+    -- Every text describes the STATE, not how it got there. An imported profile is
+    -- the common cause of "apply", a profile switch of "undo", and an upgrade of
+    -- "minimap", but each is reachable other ways and a message that named a cause
+    -- would be wrong there.
     --
     -- Built here rather than at file scope. At file scope ns.title is read before
     -- KitnUI has necessarily filled it, and a nil there is a load error in a file
@@ -644,7 +762,14 @@ function ns.LuluReconcile()
     -- the toggle shows, for the same reason: a full layout list costs the user a
     -- second reload to discover afterwards and nothing to cancel on now.
     local text, apply
-    if kind == "apply" then
+    if kind == "minimap" then
+        apply = true
+        -- The only one of the three that needs no reload. Every minimap key lands
+        -- through the host rebuild ApplyMinimapShape already calls, so saying
+        -- "needs a reload" here would be asking for something this accept does
+        -- not do.
+        text = ns.title .. ": Lulu Mode is on, but its minimap positions are not applied.\n\nThis version also moves the clock, zone text, FPS/MS readout, mail icon, difficulty text and button row to suit a round minimap. Apply them now?\n\nWhat you have now is written down first and comes back when you turn Lulu Mode off. No reload needed."
+    elseif kind == "apply" then
         apply = true
         -- Count-free on purpose. A count here is a promise about the screen, and
         -- two states defeat it: the import can carry the minimap blob so that half
@@ -673,8 +798,12 @@ function ns.LuluReconcile()
         text = ns.title .. ": Lulu Mode is off for this profile, but part of it is still on.\n\n" .. parts .. " Do that now?"
     end
 
-    local warning = EditModeWarning(apply)
-    if warning then text = text .. warning end
+    -- Not for the minimap kind: its accept touches no Edit Mode layout, so a
+    -- forecast about one would describe work that is not going to happen.
+    if kind ~= "minimap" then
+        local warning = EditModeWarning(apply)
+        if warning then text = text .. warning end
+    end
 
     StaticPopupDialogs["KITNUI_LULU_IMPORTED"] = {
         text = text,
@@ -704,12 +833,33 @@ function ns.LuluReconcile()
                 return
             end
 
-            -- The minimap belongs here too, and it CLAIMS. Accepting this prompt
-            -- is a user action, which is the only thing allowed to record an
-            -- original. Without it the minimap half would never apply on an
-            -- imported profile: the re-apply refuses to claim, and CurrentMismatch
-            -- reads only the action bar module and the layout record, so once
-            -- those two are settled the prompt never asks again.
+            -- Every branch below CLAIMS. Accepting this prompt is a user action,
+            -- which is the only thing allowed to record an original, and it is
+            -- the only route by which the minimap keys are ever recorded outside
+            -- the switch itself. The re-apply refuses to claim by design.
+            --
+            -- The minimap kind stops here. Its other two halves are already in
+            -- the state they should be -- that is exactly why CurrentMismatch
+            -- reached "minimap" rather than "apply" -- so running them would be
+            -- work with nothing to do, and the reload would cost the user a
+            -- loading screen for a change that has already landed on screen.
+            --
+            -- The latch is released here, unlike the two paths below, and this is
+            -- the only accept that has to do it for itself: they reload, which
+            -- takes the latch with them. ApplyMinimapShape can legitimately do
+            -- nothing -- the mismatch is read from KitnUIDB while the write needs
+            -- EllesmereUI's minimap module to be loaded, and a user running Lulu
+            -- with that module switched off satisfies the first and not the
+            -- second. Holding the latch there would spend the user's only notice
+            -- on a prompt that changed nothing and mute every retry until they
+            -- next log in. Releasing it is harmless on success: the next reconcile
+            -- finds no mismatch and clears it anyway.
+            if kind == "minimap" then
+                ApplyMinimapShape(true, true)
+                promptedForMismatch = nil
+                return
+            end
+
             ApplyMinimapShape(apply, true)
             ApplyEditModeLayout(apply)
             ApplyActionBarModule(apply)

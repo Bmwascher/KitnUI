@@ -31,6 +31,7 @@ an agent.**
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
 | 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
+| 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -719,6 +720,111 @@ moves.
 - Spacing and pictures elsewhere (checks 12-15): pass
 - Clock tooltip body (checks 16-21, including 16b, 16c and 20b): pass
 - BugSack (check 22): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
+
+---
+
+# Item 6 — Lulu Mode holds the whole circle layout
+
+Branch `feature/lulu-circle-layout`. Touches `KitnUI_EUI/Lulu.lua`, one string in
+`KitnUI_EUI/General.lua`, and adds `dev/tests/lulu-minimap-keys.lua`. Nothing else
+moves.
+
+## What changed and why it needs testing
+
+- Lulu Mode used to force **one** EllesmereUI minimap key, `shape`. It now forces
+  **eighteen**: the shape, and the position and offsets of the clock, the zone
+  text, the FPS/MS readout, the mail icon, the difficulty text, and the minimap
+  button row's distance from the map.
+- A round minimap moves nothing on its own. Everything above was anchored for a
+  square and sat wrong the moment the corners went. These values were tuned in
+  game against the circle.
+- Every one of the eighteen takes its own note, so switching Lulu off puts each one
+  back to exactly what the user had, one at a time. **That is the risk this section
+  exists for.** A note that is missed leaves a setting held forever; a note that
+  records KitnUI's own forced value hands back the wrong thing.
+- Someone who already had Lulu Mode on before this release gets **asked once**.
+  The background re-apply is not allowed to write down what a setting was before;
+  only a click may. So a popup appears saying the minimap positions are not
+  applied yet, and accepting it applies them.
+- No reload is needed for any of this. It applies on the toggle, and on that
+  popup's accept.
+
+## Read this before starting
+
+- **Write down what your minimap looks like before you start**, or better, run the
+  snapshot probe from "Shared tools" after switching Lulu on and keep the output.
+  Check 3 compares against it and there is no other record.
+- Lulu Mode still reloads when toggled, for its action bar and Edit Mode halves.
+  The minimap half applies before the reload, not because of it.
+- EllesmereUI's own clock and FPS/MS box are hidden **per readout**, not per bar:
+  the Top Bar takes the host's clock only while the bar is up AND the bar's clock
+  element is on, and takes the host's FPS box only while the bar's own FPS readout
+  is showing. Hiding the whole Top Bar is the simplest way to see both host
+  readouts, and that is what checks 2 and 3 assume.
+- The difficulty text only appears when "Show Instance Difficulty as Text" is on
+  in EllesmereUI's minimap options, and you need to be in an instance for it to
+  say anything. Lulu deliberately does not switch it on for you.
+- The mail offsets only apply when Mail Position is a corner rather than "Minimap
+  Button". Lulu forces the corner, so under Lulu they always apply.
+
+## The checks
+
+- [ ] **1. It goes round and everything moves with it.** Start with Lulu Mode off.
+  Switch it on and accept. After the reload the minimap is a circle, and the zone
+  text, mail icon, difficulty text and button row have all moved. If the minimap is
+  round but any of those four is still sitting where it was, that key is not being
+  written -- say which one.
+- [ ] **2. The clock and FPS/MS moved too.** With Lulu on, hide the Top Bar. The
+  clock sits at the bottom of the minimap and the FPS/MS readout just below it,
+  not overlapping. Show the Top Bar again; both disappear, which is correct.
+- [ ] **2b. Per readout, not per bar.** Put the Top Bar back up, then switch OFF
+  just its clock element in the Top Bar options. EllesmereUI's own clock returns to
+  the minimap, and it must be in Lulu's bottom position, not its old one.
+- [ ] **3. Everything comes back.** Switch Lulu Mode off and accept. Every one of
+  the six things above returns to exactly where it was before check 1, including
+  the small sideways nudges the clock, zone and FPS had. Then run the snapshot
+  probe: it must print **`NOTES 0`**. A number other than zero names a setting
+  KitnUI is still holding after it said it let go.
+- [ ] **4. An already-on Lulu is ASKED, not changed behind your back.** This is the
+  only check for the upgrade path and it cannot be done after check 3, so do it on
+  a character where Lulu Mode was already on before this build. Log in without
+  touching the switch. A popup must appear saying Lulu Mode is on but its minimap
+  positions are not applied. **Before you accept, look at the minimap: nothing has
+  moved yet.** A minimap that has already moved means the re-apply claimed on its
+  own, which is the defect this design exists to prevent.
+- [ ] **4b. Accepting applies it, with no reload.** Accept the popup. The six
+  things move to their circle positions immediately and the screen does NOT
+  reload. Then switch Lulu off: all six come back to what that character had
+  before, and the probe reads `NOTES 0`.
+- [ ] **4c. Declining leaves everything alone.** On another such character, decline
+  the popup. Nothing moves, and the probe shows only the one shape note. The popup
+  must come back at the next login or profile switch, not be gone for good.
+- [ ] **5. It survives a profile switch.** With Lulu on, switch to another
+  EllesmereUI profile and back. The circle layout is still correct and the probe
+  count has not changed. Switching to a profile whose Lulu is off must NOT leave
+  the text positions forced.
+- [ ] **6. The tooltip tells the truth.** Hover the Lulu Mode switch with Lulu on.
+  The ownership sentence names the minimap shape and the readouts, not the shape
+  alone.
+- [ ] **7. Two off in a row is not an error.** Switch Lulu off twice, by toggling
+  it on and off and then off again from another profile if you can reach that
+  state. Nothing is printed twice, nothing errors, and the probe still reads
+  `NOTES 0`.
+- [ ] **8. BugSack is empty.** Through all of the above. Any error at all is a
+  fail, even one that looks unrelated.
+
+## Result
+
+- Date: 2026-08-21
+- Reported by Kitn: **all checks passed.**
+- The eighteen keys applying and coming back (checks 1, 2, 2b, 3): pass
+- The upgrade prompt (checks 4, 4b, 4c): pass
+- Profile switch, tooltip, double-off (checks 5, 6, 7): pass
+- BugSack (check 8): pass
 - Notes: the individual boxes above are left unticked on purpose. This file says
   no agent may record a check as passed, and a tick written by an agent looks
   exactly like one written by the tester. The line above is Kitn's own report,

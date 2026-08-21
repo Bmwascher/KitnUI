@@ -547,7 +547,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "Round minimap, Blizzard's own action bars, and a dedicated Edit Mode layout. Asks first, then reloads.",
             "lulu",
             function() return ns.LuluEnabled and ns.LuluEnabled() end,
-            "your minimap shape"));
+            "your minimap shape and where its clock, zone, FPS, mail, difficulty and button row sit"));
                                                                                    y = y - h
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
