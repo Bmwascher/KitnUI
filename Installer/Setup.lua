@@ -1199,6 +1199,10 @@ end
 -- Off on every install, with no condition attached: KitnUI either replaces
 -- these with a dedicated addon or leaves the job to Blizzard. Disabling Blizz
 -- UI Enhanced also takes its Dragon Riding skin, which lives in the same folder.
+--
+-- DataBars is the "leaves the job to Blizzard" case: the Edit Mode payload
+-- already places Blizzard's own StatusTrackingBarManager, so the module is a
+-- second experience and reputation bar competing with the one KitnUI ships.
 local ALWAYS_DISABLED = {
     "EllesmereUIQoL",
     "EllesmereUIAuraBuffReminders",
@@ -1208,6 +1212,7 @@ local ALWAYS_DISABLED = {
     "EllesmereUIFriends",
     "EllesmereUIChat",
     "EllesmereUIBags",
+    "EllesmereUIDataBars",
 }
 
 function ns.GetEUIModuleSet()
