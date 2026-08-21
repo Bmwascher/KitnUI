@@ -1100,6 +1100,11 @@ ns.TopBar.Elements = {
         tooltip = function(tt)
             tt:AddLine("Clock", 1, 1, 1)
             tt:AddLine(" ")
+            -- Lockouts and reset clocks live in Readouts.lua with the other
+            -- tooltip bodies that read live game state. It always adds lines, so
+            -- the spacer below is always paid for.
+            if ns.TopBar.ClockTooltip then ns.TopBar.ClockTooltip(tt) end
+            tt:AddLine(" ")
             tt:AddLine(CLICK_L .. " Calendar", 1, 1, 1)
             tt:AddLine(CLICK_R .. " Stopwatch and Alarm", 1, 1, 1)
             tt:AddLine(CLICK_M .. " Reload UI", 1, 1, 1)

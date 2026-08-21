@@ -87,13 +87,9 @@ function ns.TopBar.SizeClockButton()
                 clockText:GetStringHeight() + CLOCK_PAD)
 end
 
-local function ClockString()
-    local hour, minute
-    if Get("tbServerTime", ns.EUI_DEFAULTS.tbServerTime) then
-        hour, minute = GetGameTime()
-    else
-        hour, minute = tonumber(date("%H")), tonumber(date("%M"))
-    end
+-- Split out of ClockString so the clock's own tooltip can print realm time and
+-- local time side by side in the same 12h/24h style the face is using.
+local function FormatHM(hour, minute)
     if not (hour and minute) then return "--:--" end
     if Get("tbUse24h", ns.EUI_DEFAULTS.tbUse24h) then
         return format("%02d:%02d", hour, minute)
@@ -101,6 +97,13 @@ local function ClockString()
     local h12 = hour % 12
     if h12 == 0 then h12 = 12 end
     return format("%d:%02d %s", h12, minute, hour < 12 and "AM" or "PM")
+end
+
+local function ClockString()
+    if Get("tbServerTime", ns.EUI_DEFAULTS.tbServerTime) then
+        return FormatHM(GetGameTime())
+    end
+    return FormatHM(tonumber(date("%H")), tonumber(date("%M")))
 end
 
 local function UpdateClock()
@@ -1059,6 +1062,135 @@ function ns.TopBar.VaultTooltip(tt)
             end
         end
     end
+end
+
+---------------------------------------------------------------------------------
+-- The clock's tooltip body: this character's raid and dungeon lockouts, then the
+-- reset clocks. Elements.lua's clock element hands its tooltip straight here.
+--
+-- THE COST, because this hangs off a hover and the hover is free today.
+-- GetNumSavedInstances and GetSavedInstanceInfo read the client's own cached
+-- lockout table -- no server round trip -- and the walk is over a handful of
+-- entries, a dozen at the outside. The reset calls and GetGameTime are the same
+-- local reads the clock face already makes on its own ticker. Formatting happens
+-- only while the tooltip is actually open, and nothing here runs on a timer.
+--
+-- The ONE call that reaches the server is RequestRaidInfo, so it is throttled
+-- exactly like the guild roster's request above rather than fired per hover. Its
+-- answer arrives later, on UPDATE_INSTANCE_INFO, and updates the same client
+-- cache the walk reads -- so the NEXT hover shows it. There is deliberately no
+-- event registration and no refresh ticker here: the list only moves when a
+-- lockout is earned or a reset lands.
+--
+-- Neither GetNumSavedInstances nor GetSavedInstanceInfo has a generated-doc
+-- entry (both predate the C_ namespace, exactly like GetNumGuildMembers above),
+-- so the proof they are not Secret is Blizzard's own live use of them:
+-- Blizzard_RaidFrame/Mainline/RaidFrame.lua:139-150 branches on
+-- `extended or locked` and passes `reset` straight to SecondsToTime. A Secret
+-- boolean cannot be tested in a condition and a Secret number cannot be
+-- formatted, so neither line could exist if these returns were marked.
+---------------------------------------------------------------------------------
+
+-- 30s, not the roster's 15: a lockout changes when a boss dies or a reset
+-- lands, never minute to minute.
+local raidInfoLastRequest = 0
+local function RequestLockouts()
+    local now = GetTime()
+    if now - raidInfoLastRequest < 30 then return end
+    raidInfoLastRequest = now
+    if RequestRaidInfo then RequestRaidInfo() end
+end
+
+-- Bounds the tooltip's height on an alt with a long history. Counting continues
+-- past the cap so the overflow line can say how many were left out, the same
+-- rule ROSTER_CAP follows above.
+local LOCKOUT_CAP = 12
+
+-- SecondsToTime's fourth argument is the maximum number of units, so 2 gives
+-- "2 Days 7 Hr" rather than Blizzard's own three-unit "2 Days 7 Hr 4 Min". The
+-- rows are read at a glance and the minutes on a multi-day lockout are noise.
+local function ResetText(seconds)
+    if type(seconds) ~= "number" or seconds <= 0 then return nil end
+    if not SecondsToTime then return nil end
+    return SecondsToTime(seconds, true, nil, 2)
+end
+
+-- Collected before anything is drawn, not written as the walk goes: the
+-- "Saved to" heading has to be printed ABOVE rows whose existence is only known
+-- once the walk is finished, and a heading over an empty list is exactly the
+-- kind of line the friends roster is careful never to leave behind.
+--
+-- Returns the number held, drawn or not, so the caller knows whether the block
+-- was written at all.
+local function AddLockouts(tt)
+    if not (GetNumSavedInstances and GetSavedInstanceInfo) then return 0 end
+    local total = GetNumSavedInstances()
+    if type(total) ~= "number" or total <= 0 then return 0 end
+
+    local rows, held = {}, 0
+    for i = 1, total do
+        local name, _, reset, _, locked, extended, _, isRaid, maxPlayers, difficultyName,
+              numEncounters, encounterProgress = GetSavedInstanceInfo(i)
+        -- `extended` without `locked` is a lockout the player asked to keep, so
+        -- both count as held. A row that is neither has already expired and is
+        -- only still in the table because the client has not pruned it yet.
+        if name and (locked or extended) then
+            held = held + 1
+            if #rows < LOCKOUT_CAP then
+                -- Size and difficulty read as one phrase ("20 Heroic"), and the
+                -- boss count is appended only when the instance actually reports
+                -- encounters: a world boss or a scenario reports none, and
+                -- "0/0" would be worse than saying nothing.
+                local detail = difficultyName or (isRaid and "Raid" or "Dungeon")
+                if type(maxPlayers) == "number" and maxPlayers > 0 then
+                    detail = format("%d %s", maxPlayers, detail)
+                end
+                if type(numEncounters) == "number" and numEncounters > 0
+                   and type(encounterProgress) == "number" then
+                    detail = format("%s %d/%d", detail, encounterProgress, numEncounters)
+                end
+                rows[#rows + 1] = {
+                    format("%s |cff9d9d9d(%s)|r", name, detail),
+                    ResetText(reset) or "",
+                }
+            end
+        end
+    end
+    if held == 0 then return 0 end
+
+    tt:AddLine("Saved to", 1, 0.82, 0)
+    for _, row in ipairs(rows) do
+        tt:AddDoubleLine(row[1], row[2], 1, 1, 1, 0.7, 0.7, 0.7)
+    end
+    if held > #rows then
+        tt:AddLine(format("and %d more", held - #rows), 0.6, 0.6, 0.6)
+    end
+    return held
+end
+
+function ns.TopBar.ClockTooltip(tt)
+    if not tt then return end
+    RequestLockouts()
+
+    if AddLockouts(tt) > 0 then tt:AddLine(" ") end
+
+    local daily = C_DateAndTime and C_DateAndTime.GetSecondsUntilDailyReset
+        and ResetText(C_DateAndTime.GetSecondsUntilDailyReset())
+    local weekly = C_DateAndTime and C_DateAndTime.GetSecondsUntilWeeklyReset
+        and ResetText(C_DateAndTime.GetSecondsUntilWeeklyReset())
+    if daily then
+        tt:AddDoubleLine("Daily reset", daily, 0.7, 0.7, 0.7, 1, 1, 1)
+    end
+    if weekly then
+        tt:AddDoubleLine("Weekly reset", weekly, 0.7, 0.7, 0.7, 1, 1, 1)
+    end
+
+    -- Both times, always, rather than whichever one the face is not showing:
+    -- tbServerTime can be flipped at any moment and a tooltip that silently
+    -- swapped which clock it was naming would be worse than one extra line.
+    tt:AddDoubleLine("Realm time", FormatHM(GetGameTime()), 0.7, 0.7, 0.7, 1, 1, 1)
+    tt:AddDoubleLine("Local time", FormatHM(tonumber(date("%H")), tonumber(date("%M"))),
+        0.7, 0.7, 0.7, 1, 1, 1)
 end
 
 -- Badge FontStrings. Fixed size, like CLOCK_PAD above: not exposed as a setting.

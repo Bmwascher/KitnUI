@@ -111,6 +111,10 @@ read_globals = {
     "date", "GetTime", "GetGameTime", "GetFramerate", "GetNetStats",
     "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
 
+    -- Top bar: the clock tooltip's saved lockouts and reset clocks
+    "GetNumSavedInstances", "GetSavedInstanceInfo", "RequestRaidInfo",
+    "SecondsToTime", "C_DateAndTime",
+
     -- Top bar rosters (Readouts.lua): class colour for the friends and guild
     -- tooltips, and the Secret-value test that guards every field read off a
     -- roster structure before it is used as a key or concatenated.

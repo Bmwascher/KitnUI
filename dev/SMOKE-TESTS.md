@@ -578,6 +578,11 @@ and two names in `.luacheckrc`. Nothing else moves.
   unchanged. Its tooltip gained a title and the same three pictures.
 - **Home** and **volume** now use the same pictures in place of the words
   "Left-click:" and friends.
+- The **clock tooltip** gained a body: the raid and dungeon lockouts this
+  character holds, then the daily and weekly reset clocks and realm and local
+  time. Nothing here runs on a timer; it is read only while the tooltip is open.
+  The one call that reaches the server, `RequestRaidInfo`, is throttled to once
+  per 30 seconds, so its answer lands on a LATER hover by design.
 - Every tooltip whose title has content under it gained a **blank line** between
   the two, so the name reads as a heading. Tooltips that are their title alone
   (Toy Box, Talents, Game Menu, Mythic+ Portals, every other passthrough) must
@@ -640,7 +645,27 @@ and two names in `.luacheckrc`. Nothing else moves.
 - [ ] **15. No gap under an empty roster.** Zone into a dungeon or raid, then
   hover friends and guild. Each must be its name alone with no empty row: in
   there the name lists are withheld, and the gap must be withheld with them.
-- [ ] **16. BugSack is empty.** After all of the above, including hovering every
+- [ ] **16. The clock lists your lockouts.** On a character saved to something,
+  hover the clock. Under a gold **Saved to** heading there is one row per
+  lockout: the instance name, its size and difficulty in grey, the boss count
+  where the instance has one, and the time left on the right.
+- [ ] **17. It matches Blizzard.** Open the game's own raid info panel (the Raid
+  tab of the social window). The same lockouts, the same boss counts, the same
+  times give or take a minute of rounding.
+- [ ] **18. No heading with nothing under it.** On a character saved to nothing,
+  hover the clock. There is **no** Saved to heading and no empty row - the
+  tooltip goes straight from the title to the reset lines.
+- [ ] **19. The reset clocks are right.** Daily reset and Weekly reset both show
+  a time, and both count down rather than up if you hover again later.
+- [ ] **20. Both clocks are named.** Realm time and Local time both appear. Flip
+  the Top Bar's server-time setting: the face changes, and BOTH tooltip lines
+  stay, still correctly labelled. Flip the 12/24 hour setting: both lines follow
+  it.
+- [ ] **21. Hovering is cheap.** Hover the clock, move away, hover again, twenty
+  times in a row. No stutter, no chat spam, and nothing in BugSack. This is the
+  check for the throttle: a fresh lockout you just earned may take up to 30
+  seconds and a second hover to appear, and that is expected, not a defect.
+- [ ] **22. BugSack is empty.** After all of the above, including hovering every
   button while in combat.
 
 ## Result
@@ -649,7 +674,8 @@ Kitn, record the outcome here.
 
 - Date:
 - Hearthstone tooltip (checks 1-7):
-- Clock (checks 8-11):
+- Clock clicks (checks 8-11):
 - Spacing and pictures elsewhere (checks 12-15):
-- BugSack (check 16):
+- Clock tooltip body (checks 16-21):
+- BugSack (check 22):
 - Notes:
