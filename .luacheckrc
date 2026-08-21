@@ -95,7 +95,7 @@ read_globals = {
 
     -- Top bar launchers (gamemenu, clock: insecure toggles, refuse in combat)
     "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",
-    "ShowUIPanel", "HideUIPanel", "ToggleCalendar",
+    "ShowUIPanel", "HideUIPanel", "ToggleCalendar", "ToggleTimeManager",
 
     -- Top bar frame (Bar.lua): tooltip owner, Unlock Mode drag, the visibility
     -- state driver Task 8 wires up
@@ -110,6 +110,14 @@ read_globals = {
     -- Top bar readouts (Readouts.lua): clock and the FPS/latency readout
     "date", "GetTime", "GetGameTime", "GetFramerate", "GetNetStats",
     "UpdateAddOnMemoryUsage", "GetAddOnMemoryUsage",
+
+    -- Top bar: the clock tooltip's saved lockouts and reset clocks
+    "GetNumSavedInstances", "GetSavedInstanceInfo", "RequestRaidInfo",
+    "SecondsToTime", "C_DateAndTime",
+
+    -- Top bar: instance art for the lockout rows, read off the Encounter Journal
+    "EJ_GetNumTiers", "EJ_GetCurrentTier", "EJ_SelectTier",
+    "EJ_GetInstanceByIndex", "EncounterJournal",
 
     -- Top bar rosters (Readouts.lua): class colour for the friends and guild
     -- tooltips, and the Secret-value test that guards every field read off a
@@ -131,7 +139,7 @@ read_globals = {
     "C_WeeklyRewards", "WeeklyRewards_ShowUI",
 
     -- Top bar: hearthstone ownership scan and macro building
-    "C_Item", "PlayerHasToy", "C_ToyBox", "Item",
+    "C_Item", "PlayerHasToy", "C_ToyBox", "Item", "GetBindLocation",
 
     -- Top bar: portals flyout (spell knowledge and cooldowns)
     "C_Spell", "C_SpellBook",

@@ -30,6 +30,7 @@ an agent.**
 | 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
 | 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
+| 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -554,3 +555,171 @@ Kitn, record the outcome here.
 - Looks (checks 10-15b):
 - BugSack (check 16):
 - Notes:
+
+---
+
+# Item 5 — Mouse-button pictures in the Top Bar tooltips
+
+Branch `feature/topbar-click-tooltips`. Touches `KitnUI_EUI/TopBar/Elements.lua`,
+`KitnUI_EUI/TopBar/Readouts.lua`, and twelve names in `.luacheckrc`. Nothing else
+moves.
+
+## What changed and why it needs testing
+
+- The **hearthstone** tooltip is now one row per mouse button: the button's own
+  picture, the stone's icon, the stone's name, and that stone's own cooldown in
+  the right-hand column. It used to be one shared cooldown line at the top and
+  three plain sentences under it.
+- The cooldown is now asked **per stone**, not once for the button. That is the
+  point: the Dalaran Hearthstone and the Key to the Arcantina run on cooldowns
+  separate from the main pool, so three rows can honestly disagree.
+- A last line names where a plain hearthstone sends you (`GetBindLocation`).
+- The **clock** gained a **right click**: the stopwatch and alarm window
+  (`ToggleTimeManager`). Left click (calendar) and middle click (reload) are
+  unchanged. Its tooltip gained a title and the same three pictures.
+- **Home** and **volume** now use the same pictures in place of the words
+  "Left-click:" and friends.
+- The **clock tooltip** gained a body: the raid and dungeon lockouts this
+  character holds, then the daily and weekly reset clocks, then ONE time line
+  naming whichever clock the face is not showing. Nothing here runs on a
+  timer; it is read only while the tooltip is open, apart from a one-time
+  Encounter Journal walk on the first hover that needs the instance art.
+  The one call that reaches the server, `RequestRaidInfo`, is throttled to once
+  per 30 seconds, so its answer lands on a LATER hover by design.
+- Every tooltip whose title has content under it gained a **blank line** between
+  the two, so the name reads as a heading. Tooltips that are their title alone
+  (Toy Box, Talents, Game Menu, Mythic+ Portals, every other passthrough) must
+  NOT gain one, and friends and guild pay theirs from inside `Readouts.lua`
+  because in a dungeon or raid they list nothing at all.
+- The three pictures are cut out of Blizzard's own `UI-TUTORIAL-FRAME` sheet by
+  pixel coordinates. **Nothing offline can prove the three crops are the right
+  way round** - that is check 2 and it is the reason this section exists.
+
+## Read this before starting
+
+- The stone names and icons resolve asynchronously after login. A tooltip opened
+  in the first seconds of a session can legitimately show a name with no icon.
+- The tooltip redraws every 0.5s while hovered. That is existing behaviour, not
+  new.
+- Tooltips must be switched ON in the Top Bar options, or none of this appears.
+
+## The checks
+
+- [ ] **1. Three rows, four parts each.** Hover the hearthstone button. There are
+  exactly three rows. Each has a mouse picture, a stone icon, a stone name, and
+  either a green **Ready** or a red countdown at the right.
+- [ ] **2. The pictures match the buttons.** Row one's picture must be a mouse
+  with the **left** button highlighted, row two the **scroll wheel**, row three
+  the **right** button. If any two are swapped, say which - the fix is swapping
+  two coordinate strings.
+- [ ] **3. The countdown is real.** Use the left-click stone. Its row switches to
+  a red countdown that ticks down while you keep hovering, and reaches Ready
+  again on its own.
+- [ ] **3b. The global cooldown is not a cooldown.** Use any item at all, or any
+  stone, then hover immediately. No row may flash `0:01`. A stone that is
+  genuinely ready says **Ready** the whole time; a stone you actually used shows
+  a countdown. If any stone you own reports a real cooldown of two seconds or
+  less, this check fails and the filter needs revisiting - say which stone.
+- [ ] **4. The rows can disagree.** Set one button to the Dalaran Hearthstone or
+  the Key to the Arcantina and another to any ordinary stone. Use the ordinary
+  one. The other row must still read **Ready** - a single shared cooldown line
+  was the old bug this replaces.
+- [ ] **5. Random says so.** Set a button to Random. Its row reads
+  `Random: <stone name>` with that stone's icon. Click the button, hover again:
+  the name and the icon have changed to the next roll.
+- [ ] **5b. The row names what WILL be used, not what was.** Hover, read the
+  Random row, then click that button. The stone that actually goes off must be
+  the one the row was naming. Hover again: a different stone is named, and
+  clicking again uses THAT one. This is the check for the defect Kitn found on
+  2026-08-21, where the row named the stone just used.
+- [ ] **5c. One click does not disturb the other buttons.** Set two buttons to
+  Random. Note both rows, click one. The OTHER row must still name the same
+  stone it did before.
+- [ ] **5d. Random never lands somewhere fixed.** Click a Random button twenty
+  times, hovering between clicks. It must never name the **Dalaran Hearthstone**
+  or the **Personal Key to the Arcantina**: those two go to a fixed place rather
+  than to your hearth. Both must still be pickable by hand in all three
+  dropdowns.
+- [ ] **6. The destination is right.** The last line reads `Hearth set to` and
+  your actual inn. Hearth somewhere else, `/reload`, hover again: it has changed.
+- [ ] **7. A stone you do not own is not offered.** Nothing in the three rows may
+  show a bare number instead of a name once you have been logged in a few
+  seconds.
+- [ ] **7b. Nor on the very first hover.** Log in fresh, or `/reload`, and hover
+  the hearthstone as fast as you can. No row may read `Random: 6948` or any
+  other bare number: a stone whose name has not arrived yet must say
+  **Hearthstone** and then correct itself within a second while you keep
+  hovering. This is the check for the defect Kitn found on 2026-08-21.
+- [ ] **8. The clock's right click opens the stopwatch.** Right click the clock.
+  The Time Manager window opens, with the stopwatch and the alarm in it. Right
+  click again: it closes.
+- [ ] **9. The other two clock clicks are untouched.** Left click still opens the
+  calendar. Middle click still reloads.
+- [ ] **10. The clock tooltip reads as three choices.** Hover the clock: a
+  **Clock** title, then three rows with the same three pictures, reading
+  Calendar, Stopwatch and Alarm, Reload UI.
+- [ ] **11. Combat is refused.** Pull a target dummy. Right click the clock: the
+  red "not in combat" message, and no window opens.
+- [ ] **12. Home and volume read the same way.** Hover each. Home shows a left
+  and a right picture; volume shows left, right and scroll. No line anywhere on
+  the bar still reads "Left-click:" in words.
+- [ ] **13. Every title has a gap under it.** Hover friends, guild, Great Vault,
+  hearthstone, home, volume and the clock. Each shows its name, one blank row,
+  then its content.
+- [ ] **14. No gap where there is nothing to say.** Hover Toy Box, Talents, Game
+  Menu, Mythic+ Portals. Each is its name alone, with **no** empty row under it.
+- [ ] **15. No gap under an empty roster.** Zone into a dungeon or raid, then
+  hover friends and guild. Each must be its name alone with no empty row: in
+  there the name lists are withheld, and the gap must be withheld with them.
+- [ ] **16. The clock lists your lockouts.** On a character saved to something,
+  hover the clock. Under a **Saved Raid(s)** heading in your accent colour there
+  is one row per lockout: the instance picture, its name, its size and difficulty
+  in grey, the boss count where the instance has one, and the time left on the
+  right.
+- [ ] **16b. The pictures are the right instances.** Each row's picture is that
+  instance's own art from the Encounter Journal, cropped square. A row with no
+  picture is not a fault by itself - the join is by name - but tell me which
+  instance, because a missing one means its name does not match the journal's.
+- [ ] **16c. The journal is not disturbed.** Open the Encounter Journal, pick an
+  expansion that is NOT the current one, leave it open, and hover the clock. The
+  journal must still be on the expansion you chose. Close it and hover again:
+  the pictures appear from then on.
+- [ ] **17. It matches Blizzard.** Open the game's own raid info panel (the Raid
+  tab of the social window). The same lockouts, the same boss counts, the same
+  times give or take a minute of rounding. **Read the boss counts carefully.**
+  They come from two fields Blizzard's own code never uses, so if they are the
+  wrong fields the row shows a plausible but WRONG count rather than showing
+  nothing. A count that disagrees with Blizzard's panel is the finding.
+- [ ] **18. No heading with nothing under it.** On a character saved to nothing,
+  hover the clock. There is **no** Saved Raid(s) heading and no empty row - the
+  tooltip goes straight from the title to the reset lines.
+- [ ] **19. The reset clocks are right.** Daily reset and Weekly reset both show
+  a time, and both count down rather than up if you hover again later.
+- [ ] **20. The time line shows the OTHER clock.** Exactly ONE time line shows,
+  and it is never the one on the bar. With the Top Bar's server-time setting on,
+  the face shows realm time and the line reads **Local time**; with it off, the
+  reverse. If the two ever read the same number, that is the bug. Flip the 12/24
+  hour setting: the line follows it.
+- [ ] **20b. The labels lead.** On the Daily reset, Weekly reset and time lines
+  the left-hand label is white and the time on the right is grey. That is the
+  reverse of what it was.
+- [ ] **21. Hovering is cheap.** Hover the clock, move away, hover again, twenty
+  times in a row. No stutter, no chat spam, and nothing in BugSack. This is the
+  check for the throttle: a fresh lockout you just earned may take up to 30
+  seconds and a second hover to appear, and that is expected, not a defect.
+- [ ] **22. BugSack is empty.** After all of the above, including hovering every
+  button while in combat.
+
+## Result
+
+- Date: 2026-08-21
+- Reported by Kitn: **all checks passed.**
+- Hearthstone tooltip (checks 1-7): pass
+- Clock clicks (checks 8-11): pass
+- Spacing and pictures elsewhere (checks 12-15): pass
+- Clock tooltip body (checks 16-21, including 16b, 16c and 20b): pass
+- BugSack (check 22): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.

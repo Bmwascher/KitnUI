@@ -17,6 +17,21 @@ local function Icon(id)
     return ICON_DIR .. "icon-" .. id .. ".tga"
 end
 
+-- Mouse-button pictures for tooltip lines, cut out of Blizzard's own tutorial
+-- sheet by pixel coordinates, so there is no art of our own to ship and nothing
+-- to keep in step with the Media folder.
+--
+-- Read the trailing numbers as: draw 13x11 pixels, from a 512x512 sheet, taking
+-- the box x=12..66 and the y range that differs per button.
+local CLICK_L = "|TInterface\\TUTORIALFRAME\\UI-TUTORIAL-FRAME:13:11:0:-1:512:512:12:66:230:307|t"
+local CLICK_R = "|TInterface\\TUTORIALFRAME\\UI-TUTORIAL-FRAME:13:11:0:-1:512:512:12:66:333:410|t"
+local CLICK_M = "|TInterface\\TUTORIALFRAME\\UI-TUTORIAL-FRAME:13:11:0:-1:512:512:12:66:127:204|t"
+
+-- An item icon inline in a tooltip line. The crop trims the stock icon border
+-- the same way the bar's own launcher textures are trimmed, so a row of these
+-- reads as icons rather than as bordered tiles.
+local ITEM_ICON = "|T%s:16:16:0:0:64:64:5:59:5:59|t"
+
 -- A launcher's whole job is to click something Blizzard already owns. Secure,
 -- because several of the targets are protected, and a macro is the only way to
 -- reach them from a click the player made.
@@ -179,8 +194,15 @@ local homeElement = {
     attrs = HomeAttrs,
     tooltip = function(tt)
         tt:AddLine("Home", 1, 1, 1)
-        tt:AddLine("Left-click: Teleport Home", 1, 1, 1)
-        tt:AddLine("Right-click: Housing Dashboard", 1, 1, 1)
+        -- A blank line under every title that has content beneath it, so the
+        -- name reads as a heading rather than as the first item in the list.
+        -- Only where content is CERTAIN to follow: an element whose tooltip is
+        -- its title alone (every Macro() passthrough, portals, gamemenu) must
+        -- not add one, and friends and guild pay theirs from inside
+        -- Readouts.lua, where whether a roster follows at all is known.
+        tt:AddLine(" ")
+        tt:AddLine(CLICK_L .. " Teleport Home", 1, 1, 1)
+        tt:AddLine(CLICK_R .. " Housing Dashboard", 1, 1, 1)
     end,
 }
 
@@ -243,16 +265,16 @@ local vaultElement = {
 ---------------------------------------------------------------------------------
 -- Hearthstone: three independently-configurable mouse buttons (tbHearthLeft/
 -- Middle/Right), each set to a specific owned stone's item id or "RANDOM".
--- Pinned raw item ids rather than EllesmereUI's Dalaran resolver, which
--- conflates the Dalaran Hearthstone with the Key to the Arcantina and prefers
--- the key, so it can never hand back Dalaran once the key is owned.
+-- Raw item ids rather than the host's Dalaran resolver, which conflates the
+-- Dalaran Hearthstone with the Key to the Arcantina and prefers the key, so it
+-- can never hand back Dalaran once the key is owned.
 --
 -- HEARTH_IDS is the shared-cooldown pool only. Deliberately excluded:
 -- Engineering Wormholes (a zone teleport, which is the portals element's job),
 -- Garrison Hearthstone (its own cooldown, separate from the shared pool),
 -- Flight Master's Whistle and Translocation Cypher (not hearthstones), and the
--- Timerunner's Hearthstone (it appears in a portal-flyout pool but not in any
--- shared-cooldown table, and this file will not resolve that by guessing).
+-- Timerunner's Hearthstone (no shared-cooldown table lists it, and this file
+-- will not resolve that by guessing).
 local HEARTH_IDS = {
     6948, 54452, 64488, 93672, 142542, 162973, 163045, 165669, 165670, 165802,
     166746, 166747, 168907, 172179, 180290, 182773, 183716, 184353, 188952,
@@ -261,10 +283,23 @@ local HEARTH_IDS = {
     140192, 253629, 264367, 190237,
 }
 
+-- Excluded from the RANDOM pool, never from the dropdowns: both of these go to a
+-- FIXED destination rather than to the player's own hearth, so a roll that lands
+-- on one sends them somewhere they did not ask for. Picking one deliberately is
+-- still a perfectly good choice, which is why they stay in the list and in
+-- HEARTH_IDS.
+--
+-- Exactly these two and no more. The test is the DESTINATION, not the cooldown.
+local FIXED_DESTINATION = {
+    [140192] = true, -- Dalaran Hearthstone
+    [253629] = true, -- Personal Key to the Arcantina
+}
+
 -- The ownership scan is the expensive part of this element and is paid once
 -- (ScanOwned, run at PLAYER_LOGIN), then shared by all three dropdowns and
 -- all three mouse buttons through these tables.
 local owned = {}                           -- numeric item ids the player owns, scan order
+local randomPool = {}                      -- `owned` minus FIXED_DESTINATION; what RANDOM rolls out of
 local hearthValues = { RANDOM = "Random" } -- [stringKey] = display name; mutated in place as
                                             -- C_Item resolves names, which Options.lua's dropdown
                                             -- refresh reads live off this same table reference
@@ -283,23 +318,31 @@ end
 -- roll independently rather than sharing a single "last stone" memory.
 local randomCache = {}
 
--- Avoids repeating the immediately previous roll when more than one stone is
--- owned. Bounded at 10 attempts against a pathological repeat.
+-- Rolls out of `randomPool`, not `owned`: the pool is the owned stones minus the
+-- fixed-destination ones above. Avoids repeating the immediately previous roll
+-- when more than one is in the pool, bounded at 10 attempts against a
+-- pathological repeat.
+--
+-- The empty-pool fallback is the plain Hearthstone and nothing else. Falling
+-- back to the first OWNED stone would be warmer, and it was wrong: a player who
+-- owns nothing but the two fixed-destination stones would have RANDOM hand back
+-- one of them, defeating the exclusion above on the one character where it
+-- matters most. A macro that may fail is the better failure.
 local function PickRandom(slot)
-    if #owned == 0 then return 6948 end
-    if #owned == 1 then return owned[1] end
+    if #randomPool == 0 then return 6948 end
+    if #randomPool == 1 then return randomPool[1] end
     local last = randomCache[slot]
-    local id = owned[math.random(#owned)]
+    local id = randomPool[math.random(#randomPool)]
     for _ = 1, 10 do
         if id ~= last then break end
-        id = owned[math.random(#owned)]
+        id = randomPool[math.random(#randomPool)]
     end
     return id
 end
 
--- `owned` is the numeric-item-id array ScanOwned populates -- not a set, so
--- this is a linear scan. HEARTH_IDS tops out at 39 entries, so the cost is
--- trivial and it is only ever paid from a click or an Apply(), never a tick.
+-- `owned` is the numeric-item-id array ScanOwned populates -- not a set, so this
+-- is a linear scan. HEARTH_IDS is a few dozen entries at most, and the cost is
+-- only ever paid from a click or an Apply(), never a tick.
 local function IsOwned(id)
     for _, ownedID in ipairs(owned) do
         if ownedID == id then return true end
@@ -317,7 +360,7 @@ end
 -- "RANDOM" (and now an unowned fixed id) resolves to whatever this slot last
 -- rolled, WITHOUT rolling again here -- rolling on every call would mean an
 -- unrelated Apply() (an opacity slider, say) silently swapped the stone
--- nobody clicked. Only RerollAll(), called from an actual click, advances it.
+-- nobody clicked. Only RerollSlot(), called after an actual click, advances it.
 local function ResolveID(setting, slot)
     local id = tonumber(setting)
     if id and IsOwned(id) then return id end
@@ -325,24 +368,34 @@ local function ResolveID(setting, slot)
     return randomCache[slot]
 end
 
--- Rerolls every slot currently set to RANDOM. Called from PreClick, so each
--- click uses a freshly rolled stone and the immediately preceding roll is
--- never repeated -- "rerolls after use" in effect, since the only way to use
--- one roll is to trigger the next PreClick, which replaces it before firing.
-local function RerollAll()
-    if ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft) == "RANDOM" then
-        randomCache.left = PickRandom("left")
-    end
-    if ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle) == "RANDOM" then
-        randomCache.mid = PickRandom("mid")
-    end
-    if ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight) == "RANDOM" then
-        randomCache.right = PickRandom("right")
-    end
+local SLOT_BY_BUTTON  = { LeftButton = "left", RightButton = "right", MiddleButton = "mid" }
+local SETTING_BY_SLOT = { left = "tbHearthLeft", right = "tbHearthRight", mid = "tbHearthMiddle" }
+
+-- Rerolls ONE slot, and only if that slot is actually set to RANDOM: an unowned
+-- fixed id also resolves through randomCache (see ResolveID above) and must keep
+-- the stone it settled on rather than wandering on every click.
+--
+-- Called AFTER the click, never before. Rolling first was the original design
+-- and it was wrong in the one way that matters: the roll it wrote was the stone
+-- that then fired, so from the moment the click ended the tooltip was naming the
+-- stone just USED, and the next click would replace it with something else
+-- before firing. Rolling afterwards means what the tooltip shows is what the
+-- next click will actually use.
+--
+-- Rerolling only the clicked slot, not all three, follows from the same rule: a
+-- left click must not silently change what the right button is about to do, and
+-- the tooltip is showing all three at once.
+local function RerollSlot(slot)
+    if not slot then return end
+    local key = SETTING_BY_SLOT[slot]
+    if not key then return end
+    if ns.TopBar.Get(key, ns.EUI_DEFAULTS[key]) ~= "RANDOM" then return end
+    randomCache[slot] = PickRandom(slot)
 end
 
--- Toys must be used by NAME, not item:ID: item:ID only resolves for something
--- actually in the bags, and most of HEARTH_IDS are Toy Box entries.
+-- A toy is used by NAME where the name is known, and by item id otherwise. Both
+-- work, including for a toy that is not in the bags, so an uncached name costs
+-- nothing.
 local function MacroText(id)
     if not id then return "" end
     local toyName = C_ToyBox and C_ToyBox.GetToyInfo and select(2, C_ToyBox.GetToyInfo(id))
@@ -350,18 +403,40 @@ local function MacroText(id)
     return "/use item:" .. id
 end
 
+-- Names and icons normally come from ScanOwned's asynchronous Item load, and on
+-- a fresh login that answer can be a second or two behind the first hover. These
+-- two fall back through the caches that ARE warm by then -- the Toy Box for a
+-- toy, the client's own item cache for anything else -- and end at the word
+-- "Hearthstone", never at a raw item id. Printing `6948` told the player nothing
+-- and read as a fault; the ticker's next pass replaces the fallback with the
+-- real name a half second later either way.
 local function StoneLabel(id)
     if not id then return "Hearthstone" end
-    return hearthValues[tostring(id)] or tostring(id)
+    local key = tostring(id)
+    -- ScanOwned seeds this table with the id itself, so "the cache holds the
+    -- key" means the name has NOT landed yet, not that the name is that number.
+    local cached = hearthValues[key]
+    if cached and cached ~= key then return cached end
+
+    local toyName = C_ToyBox and C_ToyBox.GetToyInfo and select(2, C_ToyBox.GetToyInfo(id))
+    if toyName and toyName ~= "" then return toyName end
+
+    local itemName = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
+    if itemName and itemName ~= "" then return itemName end
+
+    -- Nothing knows it yet: ask, so the next pass has something to print.
+    if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+    return "Hearthstone"
 end
 
--- The stone the left click currently resolves to. The tooltip reads THIS id's
--- own cooldown rather than an assumed shared one, because the Dalaran
--- Hearthstone and the Key to the Arcantina -- both valid choices here -- run on
--- cooldowns separate from the main pool. Querying the resolved id is correct
--- whichever pool it belongs to; it just means the tooltip reflects the LEFT
--- slot's cooldown only.
-local _hearthId
+local function StoneIcon(id)
+    if not id then return nil end
+    local cached = hearthIcons[tostring(id)]
+    if cached then return cached end
+    local toyIcon = C_ToyBox and C_ToyBox.GetToyInfo and select(3, C_ToyBox.GetToyInfo(id))
+    if toyIcon then return toyIcon end
+    return C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id) or nil
+end
 
 local function FmtCD(sec)
     sec = math.floor(sec + 0.5)
@@ -375,32 +450,72 @@ end
 -- Cooldown WIDGET's GetCooldownTimes/GetCooldownDuration, which are marked
 -- Enum.SecretAspect.Cooldown. This reads the item API, never a Cooldown frame,
 -- so the arithmetic below is safe.
-local function HearthCooldownRemaining()
-    if not _hearthId then return nil end
+--
+-- Asked per stone rather than once for the button: not every stone here shares
+-- the main pool's cooldown, so three rows can legitimately disagree.
+--
+-- GCD_MAX is why the rows do not all blink "0:01" the moment anything is used.
+-- Using any item puts every other item on the global cooldown, and
+-- GetItemCooldown reports that exactly like a real one. The rule, stated as what
+-- the code does rather than as a claim about any item: a reported DURATION at or
+-- under two seconds is read as the global cooldown and the row says Ready; a
+-- longer one is shown as a countdown. Duration and not REMAINING, or the last
+-- two seconds of a real cooldown would vanish.
+local GCD_MAX = 2
+
+local function HearthCooldownRemaining(id)
+    if not id then return nil end
     if not (C_Item and C_Item.GetItemCooldown) then return nil end
-    local start, duration = C_Item.GetItemCooldown(_hearthId)
-    if type(start) == "number" and type(duration) == "number" and duration > 0 then
+    local start, duration = C_Item.GetItemCooldown(id)
+    if type(start) == "number" and type(duration) == "number" and duration > GCD_MAX then
         local remaining = start + duration - GetTime()
         if remaining > 0 then return remaining end
     end
     return nil
 end
 
+-- One tooltip row per mouse button: the button's own picture, the stone's icon,
+-- its name, and its cooldown in the right-hand column.
+--
+-- The icon can still be missing on the first hover after login even with
+-- StoneIcon's fallbacks, so the row drops the picture and keeps the text rather
+-- than drawing a blank square.
+local HEARTH_ROWS = {
+    { click = CLICK_L, setting = "tbHearthLeft",   slot = "left"  },
+    { click = CLICK_M, setting = "tbHearthMiddle", slot = "mid"   },
+    { click = CLICK_R, setting = "tbHearthRight",  slot = "right" },
+}
+
 local function HearthTooltip(tt)
     tt:AddLine("Hearthstone", 1, 1, 1)
-    local remaining = HearthCooldownRemaining()
-    if remaining then
-        tt:AddDoubleLine("Cooldown", FmtCD(remaining), 0.7, 0.7, 0.7, 1, 0.3, 0.3)
-    else
-        tt:AddDoubleLine("Cooldown", "Ready", 0.7, 0.7, 0.7, 0.3, 1, 0.3)
-    end
     tt:AddLine(" ")
-    tt:AddLine("Left-click: " .. StoneLabel(ResolveID(
-        ns.TopBar.Get("tbHearthLeft", ns.EUI_DEFAULTS.tbHearthLeft), "left")), 1, 1, 1)
-    tt:AddLine("Middle-click: " .. StoneLabel(ResolveID(
-        ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle), "mid")), 1, 1, 1)
-    tt:AddLine("Right-click: " .. StoneLabel(ResolveID(
-        ns.TopBar.Get("tbHearthRight", ns.EUI_DEFAULTS.tbHearthRight), "right")), 1, 1, 1)
+    for _, row in ipairs(HEARTH_ROWS) do
+        local setting = ns.TopBar.Get(row.setting, ns.EUI_DEFAULTS[row.setting])
+        local id = ResolveID(setting, row.slot)
+        local icon = StoneIcon(id)
+        local label = StoneLabel(id)
+        if setting == "RANDOM" then label = "Random: " .. label end
+
+        local left = row.click .. " "
+        if icon then left = left .. format(ITEM_ICON, icon) .. " " end
+        left = left .. label
+
+        local remaining = HearthCooldownRemaining(id)
+        if remaining then
+            tt:AddDoubleLine(left, FmtCD(remaining), 1, 1, 1, 1, 0.3, 0.3)
+        else
+            tt:AddDoubleLine(left, "Ready", 1, 1, 1, 0.3, 1, 0.3)
+        end
+    end
+
+    -- Where a plain hearthstone sends you. Its own line rather than a suffix on
+    -- each row, because the two fixed-destination stones do not honour it and a
+    -- per-row suffix would state a destination that is wrong for those rows.
+    -- GetBindLocation carries no secret marking (PlayerScriptDocumentation.lua).
+    local bind = GetBindLocation and GetBindLocation()
+    if type(bind) == "string" and bind ~= "" then
+        tt:AddDoubleLine("Hearth set to", bind, 0.7, 0.7, 0.7, 1, 1, 1)
+    end
 end
 
 -- Forward-declared: the defer watcher below closes over it before it is
@@ -408,25 +523,32 @@ end
 -- assignment further down has long since run.
 local HearthAttrs
 
--- "The Random reroll... rewrites the macro after use: defer it out of combat
--- rather than dropping it" -- a PreClick that finds InCombatLockdown() true
--- cannot write the reroll now, but must not forget it either, or the button
--- would keep firing a stale roll until some later click happens to land
--- outside combat. This is Bar.lua's own Defer()/pendingApply shape, scoped
--- down to this one button.
+-- A click under lockdown cannot write its reroll, and must not forget it either.
+-- A hearthstone CAN be used in combat, so that click really did consume the
+-- roll; dropping the reroll would make the next click repeat the stone just
+-- used. Deferred to PLAYER_REGEN_ENABLED instead, in Bar.lua's own
+-- Defer()/pendingApply shape scoped down to this one button.
+--
+-- A SET of slots, not one, because a single lockout can hold clicks on more than
+-- one mouse button and the second must not erase the first.
 local hearthDeferPending, hearthDeferBtn = false, nil
+local hearthDeferSlots = {}
 local hearthDeferFrame = CreateFrame("Frame")
 hearthDeferFrame:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     hearthDeferPending = false
     if hearthDeferBtn then
-        RerollAll()
+        for slot in pairs(hearthDeferSlots) do RerollSlot(slot) end
+        hearthDeferSlots = {}
         HearthAttrs(hearthDeferBtn)
     end
 end)
 
-local function DeferHearthRefresh(btn)
+local function DeferHearthRefresh(btn, slot)
     hearthDeferBtn = btn
+    -- A click on a button outside the three mapped ones has no slot to roll.
+    -- Recording nothing is what keeps it from discarding a pending one.
+    if slot then hearthDeferSlots[slot] = true end
     if hearthDeferPending then return end
     hearthDeferPending = true
     hearthDeferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -440,7 +562,6 @@ HearthAttrs = function(btn)
     local leftID  = ResolveID(ns.TopBar.Get("tbHearthLeft",   ns.EUI_DEFAULTS.tbHearthLeft),   "left")
     local rightID = ResolveID(ns.TopBar.Get("tbHearthRight",  ns.EUI_DEFAULTS.tbHearthRight),  "right")
     local midID   = ResolveID(ns.TopBar.Get("tbHearthMiddle", ns.EUI_DEFAULTS.tbHearthMiddle), "mid")
-    _hearthId = leftID
 
     btn:SetAttribute("type1", "macro")
     btn:SetAttribute("macrotext1", MacroText(leftID))
@@ -450,14 +571,28 @@ HearthAttrs = function(btn)
     btn:SetAttribute("macrotext3", MacroText(midID))
 
     if not btn._hearthWired then
-        -- Toy names may not be cached at login, so every click re-resolves all
-        -- three macros fresh rather than trusting whatever Apply() last wrote.
+        -- Two halves of one click, and the split is the whole point.
+        --
+        -- BEFORE: rewrite the three macros from the CURRENT rolls, without
+        -- rolling. An Apply() deferred by combat can leave the attributes a step
+        -- behind the rolls; this repairs that in place. Because it does not roll,
+        -- the stone that fires is still the one the tooltip was naming a moment
+        -- earlier.
         btn:SetScript("PreClick", function(self)
+            if InCombatLockdown() then return end
+            HearthAttrs(self)
+        end)
+
+        -- AFTER: roll the clicked slot on for next time and write that. The
+        -- tooltip's next pass shows the new stone, which is the one the next
+        -- click will use.
+        btn:SetScript("PostClick", function(self, button)
+            local slot = SLOT_BY_BUTTON[button]
             if InCombatLockdown() then
-                DeferHearthRefresh(self)
+                DeferHearthRefresh(self, slot)
                 return
             end
-            RerollAll()
+            RerollSlot(slot)
             HearthAttrs(self)
         end)
 
@@ -516,6 +651,7 @@ local function ScanOwned()
         local count = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(id)
         if isToy or (count and count > 0) then
             owned[#owned + 1] = id
+            if not FIXED_DESTINATION[id] then randomPool[#randomPool + 1] = id end
             local key = tostring(id)
             hearthValues[key] = key
             hearthOrder[#hearthOrder + 1] = key
@@ -553,30 +689,20 @@ local hearthstoneElement = {
 --
 -- KitnUI's own season list, and the Top Bar's first choice for it.
 --
--- EllesmereUI owns SEASON_PORTALS, and it has stopped moving: the list in the
--- 8.7.5 and 8.8.2 references and in the live 8.9.2 install is identical, so
--- waiting for the host to roll the season over is waiting for something that is
--- not arriving on time. KitnUI cannot fix it at the source either, because
--- editing EllesmereUI's own files is forbidden.
+-- The host owns a SEASON_PORTALS list of its own, and it lags a season. This
+-- table exists so the Top Bar does not have to wait for it. Editing the host's
+-- files to fix it at the source is forbidden, and assigning over its table was
+-- rejected: that would silently overwrite a newer host list on the day one ships.
 --
--- The reach is deliberately SMALL. This feeds the Top Bar flyout and nothing
--- else, so EllesmereUI's minimap flyout, chat flyout and /keys resolver still
--- read the host's and can disagree with this one until the host catches up.
--- Assigning over EllesmereUI.SEASON_PORTALS would make the whole UI agree, and
--- was rejected (Kitn, 2026-08-18) because it would also overwrite a newer host
--- list, silently, on the day one finally ships.
---
--- SOURCE, and it is not guesswork: BigWigs v419.2, `Tools/Keystones.lua:367` for
--- the spell ids and `Loader.lua:346` for which maps are this season, both read
--- from the live install on 2026-08-18. BigWigs gates these eight behind build
--- 120100 (`Loader.lua:183`) and the live client is 12.1.0.69382, so they are
--- current rather than pending. Altar of Fangs was cross-checked against Wowhead
--- on its own. The host's eight are the season BEFORE these, which is the whole
--- reason this table exists.
+-- The reach is therefore deliberately SMALL. This feeds the Top Bar flyout and
+-- nothing else, so the host's own minimap flyout, chat flyout and keystone
+-- resolver keep reading its list and can disagree with this one until it catches
+-- up.
 --
 -- Only spellID is read. mapID and short ride along for whoever next has to check
--- this against BigWigs; note mapID is the CHALLENGE MODE map, while the host's
--- entries carry an LFG dungeonID, so the two lists do not diff field for field.
+-- these against another source; note mapID is the CHALLENGE MODE map, while the
+-- host's entries carry an LFG dungeonID, so the two lists do not diff field for
+-- field.
 --
 -- Replace the whole table each season.
 local KITN_SEASON_PORTALS = {
@@ -613,11 +739,10 @@ local portalFlyout, portalFlyoutBtns
 -- from C_SpellBook.IsSpellKnownOrInSpellBook, which carries no secret marker,
 -- rather than the deprecated IsPlayerSpell global that only exists behind a CVar.
 --
--- Not the narrower IsSpellKnown, which this used until 2026-08-18. Dungeon
--- teleports are account-wide and sit in the General tab of the spellbook rather
--- than being "known" the way a class spell is, so IsSpellKnown answers false for
--- a teleport the player has earned and every icon dims. BigWigs asks the wider
--- question for the same list, and for the same reason (its Loader.lua:157).
+-- Not the narrower IsSpellKnown. Dungeon teleports are account-wide and sit in
+-- the General tab of the spellbook rather than being "known" the way a class
+-- spell is, so IsSpellKnown answers false for a teleport the player has earned
+-- and every icon dims.
 --
 -- C_Spell.GetSpellCooldown IS a secret-value risk: it is marked
 -- SecretWhenCooldownsRestricted, and the SpellCooldownInfo it returns marks only
@@ -741,11 +866,10 @@ local function CreatePortalFlyout()
             -- apply, and ticks itself without an OnUpdate.
             --
             -- Abbreviation OFF is what produces "8h" and "45m" instead of
-            -- "7:59:12". A threshold below one minute performs no abbreviation at
-            -- all, so every remaining time keeps its unit suffix
-            -- (FrameAPICooldownDocumentation.lua:349). Guarded because it is the
-            -- newer of the two calls; without it the text still shows, just
-            -- abbreviated.
+            -- "7:59:12": a threshold below one minute performs no abbreviation at
+            -- all, so every remaining time keeps its unit suffix. Guarded because
+            -- it is the newer of the two calls; without it the text still shows,
+            -- just abbreviated.
             cooldown:SetHideCountdownNumbers(false)
             if cooldown.SetCountdownAbbrevThreshold then
                 cooldown:SetCountdownAbbrevThreshold(0)
@@ -875,11 +999,12 @@ end
 
 local function VolumeTooltip(tt)
     tt:AddLine("Volume", 1, 1, 1)
+    tt:AddLine(" ")
     tt:AddDoubleLine("Master", format("%d%%", VolumePercent() * 100), 0.7, 0.7, 0.7, 1, 1, 1)
     tt:AddLine(" ")
-    tt:AddLine("Left-click: +10%", 1, 1, 1)
-    tt:AddLine("Right-click: -10%", 1, 1, 1)
-    tt:AddLine("Middle-click: Mute", 1, 1, 1)
+    tt:AddLine(CLICK_L .. " +10%", 1, 1, 1)
+    tt:AddLine(CLICK_R .. " -10%", 1, 1, 1)
+    tt:AddLine(CLICK_M .. " Mute", 1, 1, 1)
 end
 
 -- Live percentage while hovered, the same ticker shape HearthTooltip uses above:
@@ -1021,26 +1146,42 @@ ns.TopBar.Elements = {
     -- element declining a toggle. Bar.lua creates its button as
     -- "KitnUITopBar_clock" like any other element; Readouts.lua reaches that
     -- stable global name to attach the time FontString and size it from
-    -- tbClockSize. Left click opens the calendar, middle click reloads; both are
-    -- insecure and refuse in combat like gamemenu above.
+    -- tbClockSize. Left click opens the calendar, right click the stopwatch and
+    -- alarm, middle click reloads; all three are insecure and refuse in combat
+    -- like gamemenu above.
+    --
+    -- ToggleTimeManager is the global Blizzard exposes precisely so the panel can
+    -- be opened from outside its own addon: it loads that addon on demand, then
+    -- toggles. Nil-guarded like every other call out of this file.
     {
         id = "clock", label = "Clock", panel = "centre",
         kind = "readout", secure = false,
         onClick = function(_self, button)
-            if button ~= "LeftButton" and button ~= "MiddleButton" then return end
+            if button ~= "LeftButton" and button ~= "MiddleButton"
+               and button ~= "RightButton" then return end
             if InCombatLockdown() then
                 UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
                 return
             end
             if button == "LeftButton" then
                 ToggleCalendar()
+            elseif button == "RightButton" then
+                if ToggleTimeManager then ToggleTimeManager() end
             else
                 ReloadUI()
             end
         end,
         tooltip = function(tt)
-            tt:AddLine("Left-click: Calendar", 1, 1, 1)
-            tt:AddLine("Middle-click: Reload UI", 1, 1, 1)
+            tt:AddLine("Clock", 1, 1, 1)
+            tt:AddLine(" ")
+            -- Lockouts and reset clocks live in Readouts.lua with the other
+            -- tooltip bodies that read live game state. It always adds lines, so
+            -- the spacer below is always paid for.
+            if ns.TopBar.ClockTooltip then ns.TopBar.ClockTooltip(tt) end
+            tt:AddLine(" ")
+            tt:AddLine(CLICK_L .. " Calendar", 1, 1, 1)
+            tt:AddLine(CLICK_R .. " Stopwatch and Alarm", 1, 1, 1)
+            tt:AddLine(CLICK_M .. " Reload UI", 1, 1, 1)
         end,
     },
 
