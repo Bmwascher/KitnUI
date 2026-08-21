@@ -19,10 +19,7 @@ end
 
 -- Mouse-button pictures for tooltip lines, cut out of Blizzard's own tutorial
 -- sheet by pixel coordinates, so there is no art of our own to ship and nothing
--- to keep in step with the Media folder. The three crops are ElvUI_WindTools'
--- (v4.19, Modules/Misc/GameBar.lua:81-83), and the right-button crop is
--- corroborated independently by DetailsFramework's own "right click to close"
--- label (NSRT 12.1.3, Libs/LibDFramework-1.0/panel.lua:420).
+-- to keep in step with the Media folder.
 --
 -- Read the trailing numbers as: draw 13x11 pixels, from a 512x512 sheet, taking
 -- the box x=12..66 and the y range that differs per button.
@@ -292,11 +289,9 @@ local HEARTH_IDS = {
 -- still a perfectly good choice, which is why they stay in the list and in
 -- HEARTH_IDS.
 --
--- Exactly these two and no more. The host's own annotated list separates them
--- from the pool for the same reason (EllesmereUI 8.8.2,
--- EllesmereUIDataBars_Blocks.lua:2346 "TRAVEL_EXTRAS"), and confirms that the
--- other two odd ids in HEARTH_IDS, the Broker Translocation Matrix and the
--- Mushroom, DO return to the bind point and belong in the pool.
+-- Exactly these two and no more. The test is the DESTINATION, not the cooldown:
+-- several stones in HEARTH_IDS run on their own cooldown and still return the
+-- player to their own hearth, and those belong in the pool.
 local FIXED_DESTINATION = {
     [140192] = true, -- Dalaran Hearthstone
     [253629] = true, -- Personal Key to the Arcantina

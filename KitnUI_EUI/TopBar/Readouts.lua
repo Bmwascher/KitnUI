@@ -1095,10 +1095,13 @@ end
 -- boolean cannot be tested in a condition and a Secret number cannot be
 -- formatted, so neither line could exist if those returns were marked.
 --
--- That covers positions 1, 3, 5 and 6 and NO MORE. This file also branches on
--- and formats positions 8, 9, 11 and 12, which Blizzard's own callers only ever
--- destructure into throwaways, so their status is genuinely unproven -- hence
--- the pcall at the call site in ClockTooltip.
+-- That covers positions 1, 3, 5 and 6. It does NOT cover the rest of what this
+-- file reads: positions 8, 9, 10, 11 and 12 are all branched on or formatted
+-- here, and Blizzard's own callers either never touch them or only ever hand
+-- them to SetText, which proves nothing -- display accepts a Secret value, which
+-- is the entire distinction the system draws. Their status is therefore
+-- genuinely unproven, and that is what the pcall at the call site in
+-- ClockTooltip contains.
 ---------------------------------------------------------------------------------
 
 -- 30s, not the roster's 15: a lockout changes when a boss dies or a reset
