@@ -617,8 +617,9 @@ moves.
   again on its own.
 - [ ] **3b. The global cooldown is not a cooldown.** Use any item at all, or any
   stone, then hover immediately. No row may flash `0:01`. A stone that is
-  genuinely ready says **Ready** the whole time; only a real 15-minute-or-longer
-  hearth cooldown shows a countdown.
+  genuinely ready says **Ready** the whole time; a stone you actually used shows
+  a countdown. If any stone you own reports a real cooldown of two seconds or
+  less, this check fails and the threshold needs raising - say which stone.
 - [ ] **4. The rows can disagree.** Set one button to the Dalaran Hearthstone or
   the Key to the Arcantina and another to any ordinary stone. Use the ordinary
   one. The other row must still read **Ready** - a single shared cooldown line
