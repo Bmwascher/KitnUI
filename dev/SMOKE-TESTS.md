@@ -624,6 +624,11 @@ and two names in `.luacheckrc`. Nothing else moves.
 - [ ] **7. A stone you do not own is not offered.** Nothing in the three rows may
   show a bare number instead of a name once you have been logged in a few
   seconds.
+- [ ] **7b. Nor on the very first hover.** Log in fresh, or `/reload`, and hover
+  the hearthstone as fast as you can. No row may read `Random: 6948` or any
+  other bare number: a stone whose name has not arrived yet must say
+  **Hearthstone** and then correct itself within a second while you keep
+  hovering. This is the check for the defect Kitn found on 2026-08-21.
 - [ ] **8. The clock's right click opens the stopwatch.** Right click the clock.
   The Time Manager window opens, with the stopwatch and the alarm in it. Right
   click again: it closes.

@@ -375,9 +375,39 @@ local function MacroText(id)
     return "/use item:" .. id
 end
 
+-- Names and icons normally come from ScanOwned's asynchronous Item load, and on
+-- a fresh login that answer can be a second or two behind the first hover. These
+-- two fall back through the caches that ARE warm by then -- the Toy Box for a
+-- toy, the client's own item cache for anything else -- and end at the word
+-- "Hearthstone", never at a raw item id. Printing `6948` told the player nothing
+-- and read as a fault; the ticker's next pass replaces the fallback with the
+-- real name a half second later either way.
 local function StoneLabel(id)
     if not id then return "Hearthstone" end
-    return hearthValues[tostring(id)] or tostring(id)
+    local key = tostring(id)
+    -- ScanOwned seeds this table with the id itself, so "the cache holds the
+    -- key" means the name has NOT landed yet, not that the name is that number.
+    local cached = hearthValues[key]
+    if cached and cached ~= key then return cached end
+
+    local toyName = C_ToyBox and C_ToyBox.GetToyInfo and select(2, C_ToyBox.GetToyInfo(id))
+    if toyName and toyName ~= "" then return toyName end
+
+    local itemName = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
+    if itemName and itemName ~= "" then return itemName end
+
+    -- Nothing knows it yet: ask, so the next pass has something to print.
+    if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+    return "Hearthstone"
+end
+
+local function StoneIcon(id)
+    if not id then return nil end
+    local cached = hearthIcons[tostring(id)]
+    if cached then return cached end
+    local toyIcon = C_ToyBox and C_ToyBox.GetToyInfo and select(3, C_ToyBox.GetToyInfo(id))
+    if toyIcon then return toyIcon end
+    return C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id) or nil
 end
 
 local function FmtCD(sec)
@@ -411,9 +441,9 @@ end
 -- One tooltip row per mouse button: the button's own picture, the stone's icon,
 -- its name, and its cooldown in the right-hand column.
 --
--- The icon comes from hearthIcons, which ScanOwned fills asynchronously, so it
--- can still be missing on the first hover after login. The row drops the picture
--- and keeps the text in that case rather than drawing a blank square.
+-- The icon can still be missing on the first hover after login even with
+-- StoneIcon's fallbacks, so the row drops the picture and keeps the text rather
+-- than drawing a blank square.
 local HEARTH_ROWS = {
     { click = CLICK_L, setting = "tbHearthLeft",   slot = "left"  },
     { click = CLICK_M, setting = "tbHearthMiddle", slot = "mid"   },
@@ -426,7 +456,7 @@ local function HearthTooltip(tt)
     for _, row in ipairs(HEARTH_ROWS) do
         local setting = ns.TopBar.Get(row.setting, ns.EUI_DEFAULTS[row.setting])
         local id = ResolveID(setting, row.slot)
-        local icon = id and hearthIcons[tostring(id)]
+        local icon = StoneIcon(id)
         local label = StoneLabel(id)
         if setting == "RANDOM" then label = "Random: " .. label end
 
