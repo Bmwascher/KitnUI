@@ -576,6 +576,13 @@ and two names in `.luacheckrc`. Nothing else moves.
 - The **clock** gained a **right click**: the stopwatch and alarm window
   (`ToggleTimeManager`). Left click (calendar) and middle click (reload) are
   unchanged. Its tooltip gained a title and the same three pictures.
+- **Home** and **volume** now use the same pictures in place of the words
+  "Left-click:" and friends.
+- Every tooltip whose title has content under it gained a **blank line** between
+  the two, so the name reads as a heading. Tooltips that are their title alone
+  (Toy Box, Talents, Game Menu, Mythic+ Portals, every other passthrough) must
+  NOT gain one, and friends and guild pay theirs from inside `Readouts.lua`
+  because in a dungeon or raid they list nothing at all.
 - The three pictures are cut out of Blizzard's own `UI-TUTORIAL-FRAME` sheet by
   pixel coordinates. **Nothing offline can prove the three crops are the right
   way round** - that is check 2 and it is the reason this section exists.
@@ -622,8 +629,19 @@ and two names in `.luacheckrc`. Nothing else moves.
   Calendar, Stopwatch and Alarm, Reload UI.
 - [ ] **11. Combat is refused.** Pull a target dummy. Right click the clock: the
   red "not in combat" message, and no window opens.
-- [ ] **12. BugSack is empty.** After all of the above, including hovering both
-  buttons while in combat.
+- [ ] **12. Home and volume read the same way.** Hover each. Home shows a left
+  and a right picture; volume shows left, right and scroll. No line anywhere on
+  the bar still reads "Left-click:" in words.
+- [ ] **13. Every title has a gap under it.** Hover friends, guild, Great Vault,
+  hearthstone, home, volume and the clock. Each shows its name, one blank row,
+  then its content.
+- [ ] **14. No gap where there is nothing to say.** Hover Toy Box, Talents, Game
+  Menu, Mythic+ Portals. Each is its name alone, with **no** empty row under it.
+- [ ] **15. No gap under an empty roster.** Zone into a dungeon or raid, then
+  hover friends and guild. Each must be its name alone with no empty row: in
+  there the name lists are withheld, and the gap must be withheld with them.
+- [ ] **16. BugSack is empty.** After all of the above, including hovering every
+  button while in combat.
 
 ## Result
 
@@ -632,5 +650,6 @@ Kitn, record the outcome here.
 - Date:
 - Hearthstone tooltip (checks 1-7):
 - Clock (checks 8-11):
-- BugSack (check 12):
+- Spacing and pictures elsewhere (checks 12-15):
+- BugSack (check 16):
 - Notes:

@@ -197,8 +197,15 @@ local homeElement = {
     attrs = HomeAttrs,
     tooltip = function(tt)
         tt:AddLine("Home", 1, 1, 1)
-        tt:AddLine("Left-click: Teleport Home", 1, 1, 1)
-        tt:AddLine("Right-click: Housing Dashboard", 1, 1, 1)
+        -- A blank line under every title that has content beneath it, so the
+        -- name reads as a heading rather than as the first item in the list.
+        -- Only where content is CERTAIN to follow: an element whose tooltip is
+        -- its title alone (every Macro() passthrough, portals, gamemenu) must
+        -- not add one, and friends and guild pay theirs from inside
+        -- Readouts.lua, where whether a roster follows at all is known.
+        tt:AddLine(" ")
+        tt:AddLine(CLICK_L .. " Teleport Home", 1, 1, 1)
+        tt:AddLine(CLICK_R .. " Housing Dashboard", 1, 1, 1)
     end,
 }
 
@@ -415,6 +422,7 @@ local HEARTH_ROWS = {
 
 local function HearthTooltip(tt)
     tt:AddLine("Hearthstone", 1, 1, 1)
+    tt:AddLine(" ")
     for _, row in ipairs(HEARTH_ROWS) do
         local setting = ns.TopBar.Get(row.setting, ns.EUI_DEFAULTS[row.setting])
         local id = ResolveID(setting, row.slot)
@@ -916,11 +924,12 @@ end
 
 local function VolumeTooltip(tt)
     tt:AddLine("Volume", 1, 1, 1)
+    tt:AddLine(" ")
     tt:AddDoubleLine("Master", format("%d%%", VolumePercent() * 100), 0.7, 0.7, 0.7, 1, 1, 1)
     tt:AddLine(" ")
-    tt:AddLine("Left-click: +10%", 1, 1, 1)
-    tt:AddLine("Right-click: -10%", 1, 1, 1)
-    tt:AddLine("Middle-click: Mute", 1, 1, 1)
+    tt:AddLine(CLICK_L .. " +10%", 1, 1, 1)
+    tt:AddLine(CLICK_R .. " -10%", 1, 1, 1)
+    tt:AddLine(CLICK_M .. " Mute", 1, 1, 1)
 end
 
 -- Live percentage while hovered, the same ticker shape HearthTooltip uses above:
@@ -1090,6 +1099,7 @@ ns.TopBar.Elements = {
         end,
         tooltip = function(tt)
             tt:AddLine("Clock", 1, 1, 1)
+            tt:AddLine(" ")
             tt:AddLine(CLICK_L .. " Calendar", 1, 1, 1)
             tt:AddLine(CLICK_R .. " Stopwatch and Alarm", 1, 1, 1)
             tt:AddLine(CLICK_M .. " Reload UI", 1, 1, 1)

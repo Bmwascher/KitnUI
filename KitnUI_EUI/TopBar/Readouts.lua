@@ -899,6 +899,12 @@ end
 function ns.TopBar.FriendsTooltip(tt)
     if not tt then return end
     if not RosterReadable() then return end
+    -- The blank line under the element's title is paid HERE, not in Elements.lua,
+    -- and only past the gate above: inside a dungeon or raid this function adds
+    -- nothing at all, and a spacer added by the caller would leave the tooltip
+    -- showing its own name over an empty row. The one case that still can is a
+    -- pcall failure below, which is the exceptional path rather than a nightly one.
+    tt:AddLine(" ")
     -- A pcall failure here costs the tooltip, never the bar. An empty roster
     -- says so rather than leaving a gap the reader has to interpret; a FAILED
     -- one says nothing, because it does not know whether the list was empty.
@@ -1011,6 +1017,8 @@ function ns.TopBar.GuildTooltip(tt)
     if not tt then return end
     RequestGuildRoster()
     if not RosterReadable() then return end
+    -- Past the gate, so the same reasoning as the friends tooltip above.
+    tt:AddLine(" ")
     -- Same split as the friends tooltip: an empty roster says so, a failed or
     -- not-yet-ready one stays quiet. BuildGuildRoster also returns nothing on
     -- its several early exits, which is why the test is `shown == 0` and not
@@ -1032,6 +1040,9 @@ end
 -- Elements.lua's vault element hands its tooltip straight here.
 function ns.TopBar.VaultTooltip(tt)
     if not tt then return end
+    -- Unconditional, unlike the two rosters above: every path from here adds at
+    -- least one line, including the no-progress one.
+    tt:AddLine(" ")
     local activities = C_WeeklyRewards and C_WeeklyRewards.GetActivities and C_WeeklyRewards.GetActivities()
     if type(activities) ~= "table" or #activities == 0 then
         tt:AddLine("No progress yet this week.", 0.7, 0.7, 0.7)
