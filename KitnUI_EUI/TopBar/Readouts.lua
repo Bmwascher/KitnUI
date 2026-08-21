@@ -1082,13 +1082,23 @@ end
 -- event registration and no refresh ticker here: the list only moves when a
 -- lockout is earned or a reset lands.
 --
+-- The one exception is the FIRST hover that reaches the icon map: it also walks
+-- the Encounter Journal once (InstanceIcons below), roughly three hundred reads,
+-- and caches the result for the session. That is a one-time cost, not a
+-- per-hover one, but it is not nothing and is stated here rather than glossed.
+--
 -- Neither GetNumSavedInstances nor GetSavedInstanceInfo has a generated-doc
 -- entry (both predate the C_ namespace, exactly like GetNumGuildMembers above),
--- so the proof they are not Secret is Blizzard's own live use of them:
--- Blizzard_RaidFrame/Mainline/RaidFrame.lua:139-150 branches on
+-- so the evidence they are not Secret is Blizzard's own live use of them:
+-- Blizzard_RaidFrame/Mainline/RaidFrame.lua:142-143 branches on
 -- `extended or locked` and passes `reset` straight to SecondsToTime. A Secret
 -- boolean cannot be tested in a condition and a Secret number cannot be
--- formatted, so neither line could exist if these returns were marked.
+-- formatted, so neither line could exist if those returns were marked.
+--
+-- That covers positions 1, 3, 5 and 6 and NO MORE. This file also branches on
+-- and formats positions 8, 9, 11 and 12, which Blizzard's own callers only ever
+-- destructure into throwaways, so their status is genuinely unproven -- hence
+-- the pcall at the call site in ClockTooltip.
 ---------------------------------------------------------------------------------
 
 -- 30s, not the roster's 15: a lockout changes when a boss dies or a reset
@@ -1229,7 +1239,15 @@ function ns.TopBar.ClockTooltip(tt)
     if not tt then return end
     RequestLockouts()
 
-    if AddLockouts(tt) > 0 then tt:AddLine(" ") end
+    -- pcall'd for the reason the friends roster above is: several of the
+    -- GetSavedInstanceInfo fields this walk branches on and formats are ones no
+    -- Blizzard caller uses, so their secret status is unproven, and a Secret
+    -- value used in a condition throws rather than answering. A failure costs
+    -- the lockout block and leaves the reset clocks below intact. Nothing is
+    -- half-drawn either way: AddLockouts collects its rows first and draws only
+    -- once the walk has finished.
+    local ok, held = pcall(AddLockouts, tt)
+    if ok and held and held > 0 then tt:AddLine(" ") end
 
     local daily = C_DateAndTime and C_DateAndTime.GetSecondsUntilDailyReset
         and ResetText(C_DateAndTime.GetSecondsUntilDailyReset())

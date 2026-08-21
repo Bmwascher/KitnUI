@@ -330,15 +330,13 @@ local randomCache = {}
 -- when more than one is in the pool, bounded at 10 attempts against a
 -- pathological repeat.
 --
--- The fallbacks walk outward one step at a time. A player who owns nothing but
--- the two fixed-destination stones has an empty POOL but a non-empty `owned`, and
--- rolling one of those is better than firing a plain Hearthstone they do not
--- have.
+-- The empty-pool fallback is the plain Hearthstone and nothing else. Falling
+-- back to the first OWNED stone would be warmer, and it was wrong: a player who
+-- owns nothing but the two fixed-destination stones would have RANDOM hand back
+-- one of them, defeating the exclusion above on the one character where it
+-- matters most. A macro that may fail is the better failure.
 local function PickRandom(slot)
-    if #randomPool == 0 then
-        if #owned > 0 then return owned[1] end
-        return 6948
-    end
+    if #randomPool == 0 then return 6948 end
     if #randomPool == 1 then return randomPool[1] end
     local last = randomCache[slot]
     local id = randomPool[math.random(#randomPool)]
@@ -465,10 +463,15 @@ end
 -- three rows can legitimately show three different states.
 --
 -- GCD_MAX is why the rows do not all blink "0:01" the moment anything is used:
--- using any item puts every other item on the 1.5s global cooldown, and
--- GetItemCooldown reports that exactly like a real one. A hearthstone's own
--- cooldown is a quarter of an hour at the shortest, so anything at or under two
--- seconds is the global cooldown and the stone is in fact ready.
+-- using any item puts every other item on the global cooldown, and
+-- GetItemCooldown reports that exactly like a real one.
+--
+-- The rule, stated as what the code does rather than as a claim about any item:
+-- a reported DURATION at or under two seconds is treated as the global cooldown
+-- and the row reads Ready; a longer one is shown as a countdown. Duration and
+-- not REMAINING, or the last two seconds of a real cooldown would vanish. No
+-- item's own cooldown length is asserted here, because the local reference
+-- documents return types and not durations.
 local GCD_MAX = 2
 
 local function HearthCooldownRemaining(id)
@@ -520,7 +523,7 @@ local function HearthTooltip(tt)
     -- appended to each row: only the shared-pool stones honour it, and the
     -- Dalaran Hearthstone and the Key to the Arcantina in HEARTH_IDS do not, so a
     -- per-row suffix would state a destination that is wrong for those rows.
-    -- GetBindLocation carries no secret marking (PlayerScriptDocumentation.lua:246).
+    -- GetBindLocation carries no secret marking (PlayerScriptDocumentation.lua:247).
     local bind = GetBindLocation and GetBindLocation()
     if type(bind) == "string" and bind ~= "" then
         tt:AddDoubleLine("Hearth set to", bind, 0.7, 0.7, 0.7, 1, 1, 1)
@@ -539,22 +542,32 @@ local HearthAttrs
 -- This is Bar.lua's own Defer()/pendingApply shape, scoped down to this one
 -- button.
 --
--- The slot is remembered with the button: the deferred work is the reroll for
--- the mouse button that was actually clicked, not for all three.
-local hearthDeferPending, hearthDeferBtn, hearthDeferSlot = false, nil, nil
+-- The slots are remembered with the button: the deferred work is the reroll for
+-- each mouse button that was actually clicked, not for all three.
+--
+-- A SET rather than one slot, because one lockout can hold clicks on more than
+-- one button and the second must not erase the first. Keeping the deferral at
+-- all is deliberate: dropping it would rest on "a hearthstone cannot fire in
+-- combat", which nothing in the local API reference states, and a set is correct
+-- whether that holds or not.
+local hearthDeferPending, hearthDeferBtn = false, nil
+local hearthDeferSlots = {}
 local hearthDeferFrame = CreateFrame("Frame")
 hearthDeferFrame:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     hearthDeferPending = false
     if hearthDeferBtn then
-        RerollSlot(hearthDeferSlot)
+        for slot in pairs(hearthDeferSlots) do RerollSlot(slot) end
+        hearthDeferSlots = {}
         HearthAttrs(hearthDeferBtn)
     end
 end)
 
 local function DeferHearthRefresh(btn, slot)
     hearthDeferBtn = btn
-    hearthDeferSlot = slot
+    -- A click on a button outside the three mapped ones has no slot to roll.
+    -- Recording nothing is what keeps it from discarding a pending one.
+    if slot then hearthDeferSlots[slot] = true end
     if hearthDeferPending then return end
     hearthDeferPending = true
     hearthDeferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")

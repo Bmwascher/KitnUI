@@ -560,8 +560,9 @@ Kitn, record the outcome here.
 
 # Item 5 — Mouse-button pictures in the Top Bar tooltips
 
-Branch `feature/topbar-click-tooltips`. Touches `KitnUI_EUI/TopBar/Elements.lua`
-and two names in `.luacheckrc`. Nothing else moves.
+Branch `feature/topbar-click-tooltips`. Touches `KitnUI_EUI/TopBar/Elements.lua`,
+`KitnUI_EUI/TopBar/Readouts.lua`, and twelve names in `.luacheckrc`. Nothing else
+moves.
 
 ## What changed and why it needs testing
 
@@ -579,8 +580,10 @@ and two names in `.luacheckrc`. Nothing else moves.
 - **Home** and **volume** now use the same pictures in place of the words
   "Left-click:" and friends.
 - The **clock tooltip** gained a body: the raid and dungeon lockouts this
-  character holds, then the daily and weekly reset clocks and realm and local
-  time. Nothing here runs on a timer; it is read only while the tooltip is open.
+  character holds, then the daily and weekly reset clocks, then ONE time line
+  naming whichever clock the face is not showing. Nothing here runs on a
+  timer; it is read only while the tooltip is open, apart from a one-time
+  Encounter Journal walk on the first hover that needs the instance art.
   The one call that reaches the server, `RequestRaidInfo`, is throttled to once
   per 30 seconds, so its answer lands on a LATER hover by design.
 - Every tooltip whose title has content under it gained a **blank line** between
@@ -682,9 +685,12 @@ and two names in `.luacheckrc`. Nothing else moves.
   the pictures appear from then on.
 - [ ] **17. It matches Blizzard.** Open the game's own raid info panel (the Raid
   tab of the social window). The same lockouts, the same boss counts, the same
-  times give or take a minute of rounding.
+  times give or take a minute of rounding. **Read the boss counts carefully.**
+  They come from two fields Blizzard's own code never uses, so if they are the
+  wrong fields the row shows a plausible but WRONG count rather than showing
+  nothing. A count that disagrees with Blizzard's panel is the finding.
 - [ ] **18. No heading with nothing under it.** On a character saved to nothing,
-  hover the clock. There is **no** Saved to heading and no empty row - the
+  hover the clock. There is **no** Saved Raid(s) heading and no empty row - the
   tooltip goes straight from the title to the reset lines.
 - [ ] **19. The reset clocks are right.** Daily reset and Weekly reset both show
   a time, and both count down rather than up if you hover again later.
