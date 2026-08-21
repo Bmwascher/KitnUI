@@ -265,16 +265,16 @@ local vaultElement = {
 ---------------------------------------------------------------------------------
 -- Hearthstone: three independently-configurable mouse buttons (tbHearthLeft/
 -- Middle/Right), each set to a specific owned stone's item id or "RANDOM".
--- Pinned raw item ids rather than EllesmereUI's Dalaran resolver, which
--- conflates the Dalaran Hearthstone with the Key to the Arcantina and prefers
--- the key, so it can never hand back Dalaran once the key is owned.
+-- Raw item ids rather than the host's Dalaran resolver, which conflates the
+-- Dalaran Hearthstone with the Key to the Arcantina and prefers the key, so it
+-- can never hand back Dalaran once the key is owned.
 --
 -- HEARTH_IDS is the shared-cooldown pool only. Deliberately excluded:
 -- Engineering Wormholes (a zone teleport, which is the portals element's job),
 -- Garrison Hearthstone (its own cooldown, separate from the shared pool),
 -- Flight Master's Whistle and Translocation Cypher (not hearthstones), and the
--- Timerunner's Hearthstone (it appears in a portal-flyout pool but not in any
--- shared-cooldown table, and this file will not resolve that by guessing).
+-- Timerunner's Hearthstone (no shared-cooldown table lists it, and this file
+-- will not resolve that by guessing).
 local HEARTH_IDS = {
     6948, 54452, 64488, 93672, 142542, 162973, 163045, 165669, 165670, 165802,
     166746, 166747, 168907, 172179, 180290, 182773, 183716, 184353, 188952,
@@ -340,9 +340,9 @@ local function PickRandom(slot)
     return id
 end
 
--- `owned` is the numeric-item-id array ScanOwned populates -- not a set, so
--- this is a linear scan. HEARTH_IDS tops out at 39 entries, so the cost is
--- trivial and it is only ever paid from a click or an Apply(), never a tick.
+-- `owned` is the numeric-item-id array ScanOwned populates -- not a set, so this
+-- is a linear scan. HEARTH_IDS is a few dozen entries at most, and the cost is
+-- only ever paid from a click or an Apply(), never a tick.
 local function IsOwned(id)
     for _, ownedID in ipairs(owned) do
         if ownedID == id then return true end
@@ -393,8 +393,9 @@ local function RerollSlot(slot)
     randomCache[slot] = PickRandom(slot)
 end
 
--- Toys must be used by NAME, not item:ID: item:ID only resolves for something
--- actually in the bags, and most of HEARTH_IDS are Toy Box entries.
+-- A toy is used by NAME where the name is known, and by item id otherwise. Both
+-- work, including for a toy that is not in the bags, so an uncached name costs
+-- nothing.
 local function MacroText(id)
     if not id then return "" end
     local toyName = C_ToyBox and C_ToyBox.GetToyInfo and select(2, C_ToyBox.GetToyInfo(id))
@@ -450,21 +451,16 @@ end
 -- Enum.SecretAspect.Cooldown. This reads the item API, never a Cooldown frame,
 -- so the arithmetic below is safe.
 --
--- Asked per stone rather than once for the button, because an assumed shared
--- cooldown would be wrong: the Dalaran Hearthstone and the Key to the Arcantina
--- -- both valid choices here -- run on cooldowns separate from the main pool, so
--- three rows can legitimately show three different states.
+-- Asked per stone rather than once for the button: not every stone here shares
+-- the main pool's cooldown, so three rows can legitimately disagree.
 --
--- GCD_MAX is why the rows do not all blink "0:01" the moment anything is used:
--- using any item puts every other item on the global cooldown, and
--- GetItemCooldown reports that exactly like a real one.
---
--- The rule, stated as what the code does rather than as a claim about any item:
--- a reported DURATION at or under two seconds is treated as the global cooldown
--- and the row reads Ready; a longer one is shown as a countdown. Duration and
--- not REMAINING, or the last two seconds of a real cooldown would vanish. No
--- item's own cooldown length is asserted here, because the local reference
--- documents return types and not durations.
+-- GCD_MAX is why the rows do not all blink "0:01" the moment anything is used.
+-- Using any item puts every other item on the global cooldown, and
+-- GetItemCooldown reports that exactly like a real one. The rule, stated as what
+-- the code does rather than as a claim about any item: a reported DURATION at or
+-- under two seconds is read as the global cooldown and the row says Ready; a
+-- longer one is shown as a countdown. Duration and not REMAINING, or the last
+-- two seconds of a real cooldown would vanish.
 local GCD_MAX = 2
 
 local function HearthCooldownRemaining(id)
@@ -512,11 +508,10 @@ local function HearthTooltip(tt)
         end
     end
 
-    -- Where a plain hearthstone sends you. Deliberately its own line rather than
-    -- appended to each row: only the shared-pool stones honour it, and the
-    -- Dalaran Hearthstone and the Key to the Arcantina in HEARTH_IDS do not, so a
+    -- Where a plain hearthstone sends you. Its own line rather than a suffix on
+    -- each row, because the two fixed-destination stones do not honour it and a
     -- per-row suffix would state a destination that is wrong for those rows.
-    -- GetBindLocation carries no secret marking (PlayerScriptDocumentation.lua:247).
+    -- GetBindLocation carries no secret marking (PlayerScriptDocumentation.lua).
     local bind = GetBindLocation and GetBindLocation()
     if type(bind) == "string" and bind ~= "" then
         tt:AddDoubleLine("Hearth set to", bind, 0.7, 0.7, 0.7, 1, 1, 1)
@@ -528,21 +523,14 @@ end
 -- assignment further down has long since run.
 local HearthAttrs
 
--- "The Random reroll... rewrites the macro after use: defer it out of combat
--- rather than dropping it" -- a click that finds InCombatLockdown() true cannot
--- write the reroll now, but must not forget it either, or the button would keep
--- firing the same roll until some later click happens to land outside combat.
--- This is Bar.lua's own Defer()/pendingApply shape, scoped down to this one
--- button.
+-- A click under lockdown cannot write its reroll, and must not forget it either.
+-- A hearthstone CAN be used in combat, so that click really did consume the
+-- roll; dropping the reroll would make the next click repeat the stone just
+-- used. Deferred to PLAYER_REGEN_ENABLED instead, in Bar.lua's own
+-- Defer()/pendingApply shape scoped down to this one button.
 --
--- The slots are remembered with the button: the deferred work is the reroll for
--- each mouse button that was actually clicked, not for all three.
---
--- A SET rather than one slot, because one lockout can hold clicks on more than
--- one button and the second must not erase the first. Keeping the deferral at
--- all is deliberate: dropping it would rest on "a hearthstone cannot fire in
--- combat", which nothing in the local API reference states, and a set is correct
--- whether that holds or not.
+-- A SET of slots, not one, because a single lockout can hold clicks on more than
+-- one mouse button and the second must not erase the first.
 local hearthDeferPending, hearthDeferBtn = false, nil
 local hearthDeferSlots = {}
 local hearthDeferFrame = CreateFrame("Frame")
@@ -586,11 +574,10 @@ HearthAttrs = function(btn)
         -- Two halves of one click, and the split is the whole point.
         --
         -- BEFORE: rewrite the three macros from the CURRENT rolls, without
-        -- rolling. Toy names may not have been cached when Apply() last wrote
-        -- them, and a macro still reading "/use item:<id>" for a toy that is not
-        -- in the bags does nothing at all. This repairs that in place, and
-        -- because it does not roll, the stone that fires is the one the tooltip
-        -- was naming a moment earlier.
+        -- rolling. An Apply() deferred by combat can leave the attributes a step
+        -- behind the rolls; this repairs that in place. Because it does not roll,
+        -- the stone that fires is still the one the tooltip was naming a moment
+        -- earlier.
         btn:SetScript("PreClick", function(self)
             if InCombatLockdown() then return end
             HearthAttrs(self)
@@ -702,30 +689,20 @@ local hearthstoneElement = {
 --
 -- KitnUI's own season list, and the Top Bar's first choice for it.
 --
--- EllesmereUI owns SEASON_PORTALS, and it has stopped moving: the list in the
--- 8.7.5 and 8.8.2 references and in the live 8.9.2 install is identical, so
--- waiting for the host to roll the season over is waiting for something that is
--- not arriving on time. KitnUI cannot fix it at the source either, because
--- editing EllesmereUI's own files is forbidden.
+-- The host owns a SEASON_PORTALS list of its own, and it lags a season. This
+-- table exists so the Top Bar does not have to wait for it. Editing the host's
+-- files to fix it at the source is forbidden, and assigning over its table was
+-- rejected: that would silently overwrite a newer host list on the day one ships.
 --
--- The reach is deliberately SMALL. This feeds the Top Bar flyout and nothing
--- else, so EllesmereUI's minimap flyout, chat flyout and /keys resolver still
--- read the host's and can disagree with this one until the host catches up.
--- Assigning over EllesmereUI.SEASON_PORTALS would make the whole UI agree, and
--- was rejected (Kitn, 2026-08-18) because it would also overwrite a newer host
--- list, silently, on the day one finally ships.
---
--- SOURCE, and it is not guesswork: BigWigs v419.2, `Tools/Keystones.lua:367` for
--- the spell ids and `Loader.lua:346` for which maps are this season, both read
--- from the live install on 2026-08-18. BigWigs gates these eight behind build
--- 120100 (`Loader.lua:183`) and the live client is 12.1.0.69382, so they are
--- current rather than pending. Altar of Fangs was cross-checked against Wowhead
--- on its own. The host's eight are the season BEFORE these, which is the whole
--- reason this table exists.
+-- The reach is therefore deliberately SMALL. This feeds the Top Bar flyout and
+-- nothing else, so the host's own minimap flyout, chat flyout and keystone
+-- resolver keep reading its list and can disagree with this one until it catches
+-- up.
 --
 -- Only spellID is read. mapID and short ride along for whoever next has to check
--- this against BigWigs; note mapID is the CHALLENGE MODE map, while the host's
--- entries carry an LFG dungeonID, so the two lists do not diff field for field.
+-- these against another source; note mapID is the CHALLENGE MODE map, while the
+-- host's entries carry an LFG dungeonID, so the two lists do not diff field for
+-- field.
 --
 -- Replace the whole table each season.
 local KITN_SEASON_PORTALS = {
@@ -762,11 +739,10 @@ local portalFlyout, portalFlyoutBtns
 -- from C_SpellBook.IsSpellKnownOrInSpellBook, which carries no secret marker,
 -- rather than the deprecated IsPlayerSpell global that only exists behind a CVar.
 --
--- Not the narrower IsSpellKnown, which this used until 2026-08-18. Dungeon
--- teleports are account-wide and sit in the General tab of the spellbook rather
--- than being "known" the way a class spell is, so IsSpellKnown answers false for
--- a teleport the player has earned and every icon dims. BigWigs asks the wider
--- question for the same list, and for the same reason (its Loader.lua:157).
+-- Not the narrower IsSpellKnown. Dungeon teleports are account-wide and sit in
+-- the General tab of the spellbook rather than being "known" the way a class
+-- spell is, so IsSpellKnown answers false for a teleport the player has earned
+-- and every icon dims.
 --
 -- C_Spell.GetSpellCooldown IS a secret-value risk: it is marked
 -- SecretWhenCooldownsRestricted, and the SpellCooldownInfo it returns marks only
@@ -890,11 +866,10 @@ local function CreatePortalFlyout()
             -- apply, and ticks itself without an OnUpdate.
             --
             -- Abbreviation OFF is what produces "8h" and "45m" instead of
-            -- "7:59:12". A threshold below one minute performs no abbreviation at
-            -- all, so every remaining time keeps its unit suffix
-            -- (FrameAPICooldownDocumentation.lua:349). Guarded because it is the
-            -- newer of the two calls; without it the text still shows, just
-            -- abbreviated.
+            -- "7:59:12": a threshold below one minute performs no abbreviation at
+            -- all, so every remaining time keeps its unit suffix. Guarded because
+            -- it is the newer of the two calls; without it the text still shows,
+            -- just abbreviated.
             cooldown:SetHideCountdownNumbers(false)
             if cooldown.SetCountdownAbbrevThreshold then
                 cooldown:SetCountdownAbbrevThreshold(0)
@@ -1175,10 +1150,9 @@ ns.TopBar.Elements = {
     -- alarm, middle click reloads; all three are insecure and refuse in combat
     -- like gamemenu above.
     --
-    -- ToggleTimeManager is a global Blizzard defines in a bootstrap file
-    -- (Blizzard_TimeManager_Bootstrap.lua:7) precisely so the panel can be opened
-    -- from outside its own addon: it loads the addon on demand, then toggles.
-    -- Nil-guarded like every other host call here.
+    -- ToggleTimeManager is the global Blizzard exposes precisely so the panel can
+    -- be opened from outside its own addon: it loads that addon on demand, then
+    -- toggles. Nil-guarded like every other call out of this file.
     {
         id = "clock", label = "Clock", panel = "centre",
         kind = "readout", secure = false,
