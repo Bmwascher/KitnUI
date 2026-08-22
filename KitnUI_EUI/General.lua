@@ -531,8 +531,14 @@ end
 -- switch and leaves the note behind. Kitn hit precisely this in game on
 -- 2026-08-21 -- the master read ON for a profile with no accent note at all, and
 -- both colour rows accepted input and silently did nothing.
--- Every guard ApplyAccentColor bails on, in the same order, then the note. Two
--- conditions that must agree are exactly the shape that rots apart, and the defect
+-- The same GUARDS ApplyAccentColor bails on, plus the note. Not the same ORDER:
+-- that function peeks first and checks the host after, and this one is the other
+-- way round. Equivalent because all five are pure conjuncts and ns.EUIPeekSnap
+-- never creates a per-profile record (Core.lua:321-330) -- reordering would only
+-- matter if one of them had a side effect, which is exactly why the peek and NOT
+-- ns.EUISnap belongs here.
+--
+-- Two conditions that must agree are the shape that rots apart, and the defect
 -- this whole warning exists to report IS a condition that silently did not match.
 local function AccentColorHeld()
     if not AccentEnabled() then return false end
