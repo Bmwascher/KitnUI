@@ -1368,37 +1368,64 @@ end
 ---------------------------------------------------------------------------------
 
 -- BetterFriendlist ships no import format, so this is a direct write to its one
--- account-wide table rather than a Data/AddOns payload. Three keys, and they are
--- the same three its own first-run appearance flow writes (RestoreSnapshot in
--- that addon's AppearanceOnboarding module):
+-- account-wide table rather than a Data/AddOns payload. The list below is the
+-- whole profile: anything not named in it is left exactly as the player has it.
 --
---   theme                       -- "blizzard" by default; KitnUI skins for "dark"
---   friendsFrameStyle           -- "modern" or "legacy"
---   appearanceOnboardingVersion -- how far that first-run flow has got
+-- appearanceOnboardingVersion is stamped alongside them for the same reason
+-- KitnUI tells EllesmereUI it owns the first-run experience (Core.lua): left
+-- behind, BetterFriendlist asks the player to choose a look on the next login
+-- and writes theme and style itself, undoing this. Its "already done" test is
+-- stored >= current, and the current value is a private constant in that addon
+-- (BFL.APPEARANCE_ONBOARDING_VERSION, 3 as shipped 2026-08-22) that cannot be
+-- read from outside, so it is written literally. Too LOW simply runs their flow
+-- again, which is why this number is never raised on a guess.
 --
--- The third is stamped for the same reason KitnUI tells EllesmereUI it owns the
--- first-run experience (Core.lua): left behind, BetterFriendlist asks the player
--- to choose a look on the next login and writes the other two itself, undoing
--- this. Its "already done" test is stored >= current, and the current value is a
--- private constant in that addon (BFL.APPEARANCE_ONBOARDING_VERSION, 3 as
--- shipped 2026-08-22) that cannot be read from outside, so it is written
--- literally. Too LOW simply runs their flow again, which is why this number is
--- never raised on a guess.
---
--- Takes effect on the ReloadUI at the end of the flow: the addon reads all three
--- through its own database layer at load.
+-- Takes effect on the ReloadUI at the end of the flow: the addon reads all of
+-- these through its own database layer at load.
 local BFL_ONBOARDING_VERSION = 3
 
--- Do the three keys currently read the way this file writes them?
+-- Stored in place of a key that was ABSENT, so the reset can tell "they had
+-- false" from "they had nothing". A string, not a table: this rides in saved
+-- variables, and a table would come back as a different table every login.
+local BFL_ABSENT = "__kitnui_absent"
+
+local BFL_SETTINGS = {
+    -- Friendlist UI
+    friendsFrameStyle       = "legacy",
+    theme                   = "dark",
+
+    -- Display Options
+    colorClassNames         = true,
+    showFactionIcons        = true,
+    showFactionBg           = false,
+    grayOtherFaction        = false,
+    showMultiAccountBadge   = true,
+    showMultiAccountInfo    = true,
+    showRealmName           = false,
+    hideMaxLevel            = true,
+    showMobileAsAFK         = false,
+    treatMobileAsOffline    = false,
+    showGameIcon            = true,
+    colorLevelByDifficulty  = true,
+    hideEmptyGroups         = false,
+    showBlizzardOption      = false,
+    enableFavoriteIcon      = true,
+    favoriteIconStyle       = "bfl",
+}
+
+-- Does the addon currently read the way this file writes it?
 local function BFLHolds(bfl)
-    return bfl.theme == "dark"
-        and bfl.friendsFrameStyle == "modern"
-        and (tonumber(bfl.appearanceOnboardingVersion) or 0) >= BFL_ONBOARDING_VERSION
+    for key, want in pairs(BFL_SETTINGS) do
+        if bfl[key] ~= want then return false end
+    end
+    return (tonumber(bfl.appearanceOnboardingVersion) or 0) >= BFL_ONBOARDING_VERSION
 end
 
 local function WriteBFL(bfl)
-    bfl.theme = "dark"
-    bfl.friendsFrameStyle = "modern"
+    for key, want in pairs(BFL_SETTINGS) do
+        bfl[key] = want
+    end
+
     -- Never LOWER their number. A newer BetterFriendlist raises this constant,
     -- and stamping 3 over a 4 would tell that addon its own newer flow is
     -- unfinished and reopen it on every login, every time KitnUI finishes.
@@ -1413,36 +1440,42 @@ local function WriteBFL(bfl)
     bfl.appearanceOnboardingResume = false
 end
 
+-- What the player had, recorded so /kitn reset can hand it back.
+local function TakeSnapshot(snap, bfl, base)
+    snap.taken = true
+    snap.prev = {}
+    for key in pairs(BFL_SETTINGS) do
+        local value = bfl[key]
+        -- The picker's own rollback record wins for the two keys it holds: while
+        -- it is open, the live values are a preview the player never accepted.
+        -- Its field names are the picker's, not the saved variable's.
+        if base then
+            if key == "theme" and base.theme ~= nil then value = base.theme end
+            if key == "friendsFrameStyle" and base.style ~= nil then value = base.style end
+        end
+        if value == nil then value = BFL_ABSENT end
+        snap.prev[key] = value
+    end
+    snap.appearanceOnboardingVersion = (base and base.completedVersion)
+        or bfl.appearanceOnboardingVersion or BFL_ABSENT
+    snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
+end
+
 function ns.ApplyBetterFriendlistAppearance()
     if not IsAddOnLoaded("BetterFriendlist") then return end
     local bfl = _G.BetterFriendlistDB
     if type(bfl) ~= "table" then return end
 
-    -- Snapshot ONCE, the first time KitnUI takes these settings. Re-snapshotting
-    -- on a second install would record KitnUI's own values as the player's and
-    -- leave the reset with nothing to put back. false means "the key was absent",
-    -- which restores as nil rather than as the string "false".
     ns.db.bflSnap = ns.db.bflSnap or {}
     local snap = ns.db.bflSnap
-    if not snap.taken then
-        snap.taken = true
-        -- Prefer BetterFriendlist's OWN rollback record over the live keys. While
-        -- its picker is open the live values are a preview the player has not
-        -- accepted yet, and that record holds what they had before it opened.
-        -- Its field names are the picker's, not the saved variable's.
+
+    -- ONCE. Re-snapshotting on a second install would record KitnUI's own values
+    -- as the player's and leave the reset with nothing to put back.
+    if not snap.taken or not snap.prev then
         local resume = bfl.appearanceOnboardingResume
         local base = type(resume) == "table" and type(resume.snapshot) == "table"
             and resume.snapshot or nil
-        if base then
-            snap.theme = base.theme or false
-            snap.friendsFrameStyle = base.style or false
-            snap.appearanceOnboardingVersion = base.completedVersion or false
-        else
-            snap.theme = bfl.theme or false
-            snap.friendsFrameStyle = bfl.friendsFrameStyle or false
-            snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
-        end
-        snap.appearanceOnboardingResume = resume or false
+        TakeSnapshot(snap, bfl, base)
     end
 
     WriteBFL(bfl)
@@ -1452,15 +1485,15 @@ end
 
 -- Second half of the write above, one reload later.
 --
--- BetterFriendlist's appearance flow puts its own three keys back when the game
+-- BetterFriendlist's appearance flow puts its own keys back when the game
 -- unloads with its picker still open, so the reload that is meant to APPLY the
 -- write can be the thing that undoes it -- and a brand new player meets both
 -- first-run flows on the same login, which makes that the likely case rather
 -- than an exotic one. Nothing outside that addon can see whether its picker is
 -- open, so this reads the result instead.
 --
--- ONCE, and only on the login right after a finish: a player who changes the
--- theme themselves a week later is not argued with.
+-- ONCE, and only on the login right after a finish: a player who changes these
+-- settings themselves a week later is not argued with.
 function ns.RecheckBetterFriendlistAppearance()
     local snap = ns.db and ns.db.bflSnap
     if not (snap and snap.pending) then return end
@@ -1474,13 +1507,10 @@ function ns.RecheckBetterFriendlistAppearance()
     -- BetterFriendlist has just put ITS values back, so the live keys are the
     -- player's real ones -- a better record than the one taken at finish, where
     -- an open picker may have been showing a preview they never accepted.
-    snap.theme = bfl.theme or false
-    snap.friendsFrameStyle = bfl.friendsFrameStyle or false
-    snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
-    snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
+    TakeSnapshot(snap, bfl, nil)
 
     WriteBFL(bfl)
-    print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set the Dark theme again. Type " .. ns.Color("/reload") .. " to see it.")
+    print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set it again. Type " .. ns.Color("/reload") .. " to see it.")
 end
 
 -- Undo, for /kitn reset. The wipe there takes the snapshot with it, so this has
@@ -1489,13 +1519,20 @@ end
 -- that case, because nothing else remembers the player's values.
 function ns.RestoreBetterFriendlistAppearance()
     local snap = ns.db and ns.db.bflSnap
-    if not (snap and snap.taken) then return true end
+    if not (snap and snap.taken and snap.prev) then return true end
     local bfl = _G.BetterFriendlistDB
     if type(bfl) ~= "table" then return false end
 
-    bfl.theme = snap.theme or nil
-    bfl.friendsFrameStyle = snap.friendsFrameStyle or nil
-    bfl.appearanceOnboardingVersion = snap.appearanceOnboardingVersion or nil
+    for key, prev in pairs(snap.prev) do
+        if prev == BFL_ABSENT then
+            bfl[key] = nil
+        else
+            bfl[key] = prev
+        end
+    end
+
+    local version = snap.appearanceOnboardingVersion
+    bfl.appearanceOnboardingVersion = version ~= BFL_ABSENT and version or nil
     -- false rather than nil on the way back: that is this key's own default, and
     -- a snapshot taken when it was already false stores false.
     bfl.appearanceOnboardingResume = snap.appearanceOnboardingResume or false
