@@ -8,7 +8,7 @@ Everything under `dev/` is **git-tracked but stripped from the player zip** by
 | `dev/Annotations/` | yes | wowlua-ls `---@meta` type stubs (`KitnUI.lua` = the `ns` namespace, `Types.lua` = companion-addon APIs). LS-only; never loaded by WoW, never shipped. |
 | `dev/claude-hooks/` | yes | Durable copies of the Claude Code hooks (`luacheck-postedit.ps1` edit-time lint, `git-guard.ps1` destructive-git-command guard) + their `settings.template.json`. `.claude/` is gitignored, so these templates are what survive a re-clone. |
 | `dev/githooks/` | yes | `pre-push` — release-tag guard + luacheck gate; `commit-msg` — upstream-name / AI-trailer guard; `pre-commit` — comment-rules guard on staged addon source. Opt in with `git config core.hooksPath dev/githooks` (the installer does this for you). |
-| `dev/scripts/` | yes | `install-claude-hooks.ps1` — restores the hooks + `core.hooksPath` config after a re-clone or PC reset. |
+| `dev/scripts/` | yes | `install-claude-hooks.ps1` — restores the hooks + `core.hooksPath` config after a re-clone or PC reset. `lint-plan-fences.lua` — lints the ```` ```lua ```` blocks in a markdown plan (run by hand before a plan freezes). |
 | `dev/tests/` | yes | Standalone Lua 5.1 gates. `cdm-fingerprint.lua` loads the shipped `Installer/Core.lua` and `Data/Classes/BlizzardCDM.lua` as chunks and checks the CDM fingerprint scheme against fixed golden vectors. |
 | `dev/docs/` | **no** (gitignored) | Local-only: the CurseForge readme (`CURSEFORGE_README.md`), art masters (`art/` — the `.png` the shipped `.tga` is baked from), and planning / Superpowers artifacts (`superpowers/`). |
 | `dev/tools/` | **no** (gitignored) | Local-only art tooling: the top bar icon generator (`topbar-icons/`) and `png-to-wow-tga.ps1`. |
