@@ -1405,6 +1405,12 @@ local function WriteBFL(bfl)
     if (tonumber(bfl.appearanceOnboardingVersion) or 0) < BFL_ONBOARDING_VERSION then
         bfl.appearanceOnboardingVersion = BFL_ONBOARDING_VERSION
     end
+
+    -- Their reload-resume record, cleared for the same reason the version is
+    -- stamped. Left behind it force-shows the friends window at every login and
+    -- then refuses to run their flow, because the stamp above says it is done.
+    -- false, not nil: false is that key's own default.
+    bfl.appearanceOnboardingResume = false
 end
 
 function ns.ApplyBetterFriendlistAppearance()
@@ -1420,9 +1426,23 @@ function ns.ApplyBetterFriendlistAppearance()
     local snap = ns.db.bflSnap
     if not snap.taken then
         snap.taken = true
-        snap.theme = bfl.theme or false
-        snap.friendsFrameStyle = bfl.friendsFrameStyle or false
-        snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
+        -- Prefer BetterFriendlist's OWN rollback record over the live keys. While
+        -- its picker is open the live values are a preview the player has not
+        -- accepted yet, and that record holds what they had before it opened.
+        -- Its field names are the picker's, not the saved variable's.
+        local resume = bfl.appearanceOnboardingResume
+        local base = type(resume) == "table" and type(resume.snapshot) == "table"
+            and resume.snapshot or nil
+        if base then
+            snap.theme = base.theme or false
+            snap.friendsFrameStyle = base.style or false
+            snap.appearanceOnboardingVersion = base.completedVersion or false
+        else
+            snap.theme = bfl.theme or false
+            snap.friendsFrameStyle = bfl.friendsFrameStyle or false
+            snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
+        end
+        snap.appearanceOnboardingResume = resume or false
     end
 
     WriteBFL(bfl)
@@ -1451,6 +1471,14 @@ function ns.RecheckBetterFriendlistAppearance()
     if type(bfl) ~= "table" then return end
     if BFLHolds(bfl) then return end
 
+    -- BetterFriendlist has just put ITS values back, so the live keys are the
+    -- player's real ones -- a better record than the one taken at finish, where
+    -- an open picker may have been showing a preview they never accepted.
+    snap.theme = bfl.theme or false
+    snap.friendsFrameStyle = bfl.friendsFrameStyle or false
+    snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
+    snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
+
     WriteBFL(bfl)
     print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set the Dark theme again. Type " .. ns.Color("/reload") .. " to see it.")
 end
@@ -1468,6 +1496,9 @@ function ns.RestoreBetterFriendlistAppearance()
     bfl.theme = snap.theme or nil
     bfl.friendsFrameStyle = snap.friendsFrameStyle or nil
     bfl.appearanceOnboardingVersion = snap.appearanceOnboardingVersion or nil
+    -- false rather than nil on the way back: that is this key's own default, and
+    -- a snapshot taken when it was already false stores false.
+    bfl.appearanceOnboardingResume = snap.appearanceOnboardingResume or false
     return true
 end
 
@@ -1486,11 +1517,13 @@ function ns.FinishInstallation()
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
 
-    -- Install and load only. /kitn cdm and /kitn update reuse this same finish,
-    -- and neither of those promises to touch another addon's account-wide
-    -- appearance. On the load path it is right: these keys are account-wide, so
-    -- an alt simply rewrites what is already there.
-    if not ns.installerIsCDMMode and not ns.installerIsUpdateMode then
+    -- INSTALL ONLY. All four flows share this one finish function, and the other
+    -- three must not write here: these keys are account-wide, so a player who
+    -- moved BetterFriendlist back to Blizzard or Legacy after installing would
+    -- have that undone merely by accepting the load prompt on an alt. The same
+    -- rule the account-wide EllesmereUI look already follows.
+    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
+        and not ns.installerIsUpdateMode then
         ns.ApplyBetterFriendlistAppearance()
     end
 

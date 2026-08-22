@@ -581,6 +581,10 @@ KitnCommands["reset"] = function()
     local bflOwed
     if ns.RestoreBetterFriendlistAppearance and ns.RestoreBetterFriendlistAppearance() == false then
         bflOwed = ns.db.bflSnap
+        -- Said out loud, because a reset that quietly leaves another addon on
+        -- KitnUI's settings looks like a reset that worked. The line is queued
+        -- rather than printed: the reload below tears the chat frame down.
+        ns.QueueMessage(ns.title .. ": BetterFriendlist is not loaded, so its appearance could not be put back. KitnUI kept the record -- enable BetterFriendlist and run " .. ns.Color("/kitn reset") .. " again to finish it.")
     end
 
     -- That teardown queues a line for anything it could NOT put back, and the
