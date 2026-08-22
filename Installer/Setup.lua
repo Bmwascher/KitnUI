@@ -601,9 +601,13 @@ setupFunctions["NSRT"] = function(addonKey, import)
             if NSRT.MainProfile == imported then NSRT.MainProfile = ns.profileName end
         end
 
-        -- Also on Finish, which is what covers a profile imported by an older
-        -- KitnUI. Here as well so a wizard closed before Finish still leaves
-        -- what it just imported locked; the write is idempotent.
+        -- Here and nowhere else. Locking from the wizard's Finish instead would
+        -- reach a profile the player never asked this run to touch: the NSRT
+        -- page is optional, the profile is account-wide, and someone who skipped
+        -- the page and had deliberately unlocked a frame would find it locked
+        -- again. Tied to the import, it only ever changes what was just written.
+        -- Existing installs reach it through the X-NSRT-Version bump, which puts
+        -- NSRT in the update list and brings them back through this same path.
         LockNSRTReminderFrames()
         CompleteSetup(addonKey)
         return true
@@ -1805,21 +1809,6 @@ function ns.FinishInstallation()
 
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
-
-    -- NSRT's three reminder note frames, locked. Their unlock state does not
-    -- travel in that addon's export, so every import lands with the resize
-    -- grips showing over the world.
-    --
-    -- INSTALL ONLY, and doubly guarded: the function itself writes the live
-    -- settings only when KitnUI's own NSRT profile is active, and load, update
-    -- and CDM runs skip it entirely. The profile is account-wide, so a player
-    -- who deliberately unlocked a frame would otherwise have that undone by
-    -- accepting the load prompt on an alt -- the same rule the BetterFriendlist
-    -- write follows below.
-    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
-        and not ns.installerIsUpdateMode then
-        LockNSRTReminderFrames()
-    end
 
     -- INSTALL ONLY. All four flows share this one finish function, and the other
     -- three must not write here: these keys are account-wide, so a player who
