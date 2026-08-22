@@ -533,7 +533,7 @@ end
 -- both colour rows accepted input and silently did nothing.
 -- The same GUARDS ApplyAccentColor bails on, plus the note. Not the same ORDER:
 -- that function peeks first and checks the host after, and this one is the other
--- way round. Equivalent because all five are pure conjuncts and ns.EUIPeekSnap
+-- way round. Equivalent because all six are pure conjuncts and ns.EUIPeekSnap
 -- never creates a per-profile record (Core.lua:321-330) -- reordering would only
 -- matter if one of them had a side effect, which is exactly why the peek and NOT
 -- ns.EUISnap belongs here.
@@ -544,6 +544,15 @@ local function AccentColorHeld()
     if not AccentEnabled() then return false end
     local EUI = _G.EllesmereUI
     if not EUI then return false end
+    -- The write is guarded on this too (General.lua:418), so a host missing it
+    -- skips the write while every other guard passes -- a silent failure, which is
+    -- the exact thing this predicate exists to catch. Reachable: the tab's
+    -- capability gate asks only for RegisterModule (Core.lua:985).
+    --
+    -- Truthiness, matching the write exactly rather than type-checking here and
+    -- not there. A predicate STRICTER than the write would report a refusal that
+    -- never happened, which is the same defect pointing the other way.
+    if not EUI.SetAccentColor then return false end
     local profile = EUI.GetActiveProfileData and EUI.GetActiveProfileData()
     if type(profile) ~= "table" then return false end
     local saved = ns.EUIPeekSnap("accent", "color")

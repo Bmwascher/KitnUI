@@ -950,7 +950,12 @@ moves.
     master reads off while the notes are still there to restore from.
   - All the scoped places are back to your originals.
   - KitnUI Accent Coloring reads OFF, Use KitnUI Pink reads ON.
-  - Re-opening the swatch shows pink, because the stored colour reset too.
+  - The accent shows PINK, and the reason matters: `accentUseDefault` reset to
+    true, NOT because the stored colour reset to pink. It reset to white.
+  - To see that, turn KitnUI Accent Coloring back ON first, because with the
+    master off the two rows below are veiled and the swatch will not open. Then
+    switch Use KitnUI Pink off: the accent goes WHITE. That is the stored default
+    and it proves the reset reached `accentCustom`.
 - [ ] **14. BugSack is empty.** Through all of the above. Any error at all is a
   fail, even one that looks unrelated.
 
