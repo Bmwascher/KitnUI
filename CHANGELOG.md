@@ -7,6 +7,8 @@
 
 ### Profiles
 - BigWigs profiles refreshed, including its per-boss settings, and KitnEssentials
+- **NEW:** The BigWigs profile now turns off **Boss debuffs on you**. BigWigs cannot put that setting in an export string, so the installer writes it into KitnUI's own BigWigs profile
+- **NEW:** Northern Sky Raid Tools reminder frames arrive locked. Their lock state is not part of an NSRT export, which is why every import used to leave a resize grip floating over the world
 
 ## v2.1.0
 
