@@ -1566,6 +1566,12 @@ function ns.ApplyBetterFriendlistAppearance()
     -- attempts, because one reload is not always enough (the same picker that
     -- rolls the write back can still be open when the repair runs).
     snap.pending = 3
+    -- A reset's unsettled check, dropped here. It can still be set: a reset that
+    -- restored while the addon was loaded sets it, and a following login without
+    -- BetterFriendlist leaves it standing. Carried into an install, it would win
+    -- over the repair at the next login and put THIS write back to the values
+    -- the reset already handed over.
+    snap.verify = nil
 end
 
 -- Everything this pair of writes still owes, settled at login.
@@ -1623,13 +1629,23 @@ function ns.RecheckBetterFriendlistAppearance()
     --
     -- The other 28 keys are never re-recorded: their rollback does not touch
     -- them, so what is in the table is this file's write either way.
-    local rolledBack = bfl.theme ~= BFL_SETTINGS.theme
-        or bfl.friendsFrameStyle ~= BFL_SETTINGS.friendsFrameStyle
-    if rolledBack then
+    -- Key by key, not as a group: a player who changes only the theme inside the
+    -- repair window would otherwise have KitnUI's own "legacy" recorded as their
+    -- style, which is wrong for anyone whose style was the retail default.
+    local rolledBack = false
+    if bfl.theme ~= BFL_SETTINGS.theme then
+        rolledBack = true
+        if snap.prev then snap.prev.theme = bfl.theme or BFL_ABSENT end
+    end
+    if bfl.friendsFrameStyle ~= BFL_SETTINGS.friendsFrameStyle then
+        rolledBack = true
         if snap.prev then
-            snap.prev.theme = bfl.theme or BFL_ABSENT
             snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
         end
+    end
+    if rolledBack then
+        -- These two ride with the pair above: the rollback that moves theme or
+        -- style is the same one that puts the version and the resume record back.
         snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
         snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
     end

@@ -1005,9 +1005,10 @@ boot:SetScript("OnEvent", function()
     -- Login message + outdated profile notification
     C_Timer.After(2, function()
         -- In the same delayed block because it can print: BetterFriendlist may
-        -- have undone the installer's appearance write during the reload that
-        -- was meant to apply it (Setup.lua). One shot, and silent unless it
-        -- actually had to write again.
+        -- have undone the installer's appearance write, or a /kitn reset's
+        -- restore, during the reload that was meant to apply it (Setup.lua).
+        -- Bounded on both sides -- three logins for the write, one for the
+        -- reset -- and silent unless it actually had to write again.
         if ns.RecheckBetterFriendlistAppearance then ns.RecheckBetterFriendlistAppearance() end
 
         local outdated = ns.GetOutdatedAddons()
