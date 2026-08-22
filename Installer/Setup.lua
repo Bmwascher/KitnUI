@@ -810,110 +810,138 @@ end
 -- action, never on PLAYER_LOGIN, so changes the user makes inside the profile
 -- survive a reload.
 --
--- Category groups are decoded from a JSON export string (Baganator's
--- Customise > Categories > Export) and merged into the profile. Array fields are
--- converted to the hashmap form Baganator stores internally.
+-- The payload is Baganator's own General export string (Customise > Export).
+-- That one string is the whole profile: every setting, plus the category groups
+-- already in the internal format Baganator stores. Decoding it yields the
+-- profile table directly, so nothing here rebuilds category data by hand.
 ---------------------------------------------------------------------------------
 
-local function DecodeBaganatorCategories(jsonString)
-    if not C_EncodingUtil or not C_EncodingUtil.DeserializeJSON then
-        return nil, "C_EncodingUtil.DeserializeJSON not available"
+-- Frame positions and the remembered bank/guild tab. Baganator fills every
+-- missing key with its own default when the profile goes live
+-- (Core/Config.lua Config.Install), so dropping these gives each user
+-- Baganator's placement instead of the author's screen coordinates. The two
+-- anchor-to-frame positions are worse than merely personal: they name a
+-- skin-specific frame that need not exist on the installing character.
+local BAGANATOR_DROP_KEYS = {
+    bag_view_position = true,
+    bank_view_position = true,
+    guild_view_position_2 = true,
+    guild_view_dialog_position = true,
+    character_select_position = true,
+    currency_panel_position = true,
+    bank_current_tab = true,
+    character_bank_current_tab = true,
+    warband_current_tab = true,
+    guild_current_tab = true,
+}
+
+-- What the export says about itself, rather than a setting to keep.
+local BAGANATOR_META_KEYS = {
+    addon = true,
+    version = true,
+    kind = true,
+}
+
+-- Baganator stringifies the keys of these tables on export and maps them back on
+-- import (Core/Config.lua MapKeysForExport, CustomiseDialog/ImportExport.lua).
+-- We are the importer here, so we owe the same reversal.
+local BAGANATOR_NUMERIC_KEY_FIELDS = {
+    "hide_special_container",
+}
+
+local function DecodeBaganatorProfile(exportString)
+    if not C_EncodingUtil or not C_EncodingUtil.DecodeBase64
+        or not C_EncodingUtil.DecompressString or not C_EncodingUtil.DeserializeCBOR then
+        return nil, "C_EncodingUtil is not available"
     end
 
-    local success, import = pcall(C_EncodingUtil.DeserializeJSON, jsonString)
-    if not success or type(import) ~= "table" or type(import.categories) ~= "table" then
-        return nil, "invalid Baganator export"
+    local payload = exportString:match("^BGR!1!(.+)$")
+    if not payload then
+        return nil, "not a BGR!1! export string"
     end
 
-    local out = {
-        custom_categories = {},
-        category_sections = {},
-        category_modifications = {},
-        category_hidden = {},
-        category_display_order = {},
-        -- Sentinels that stop Baganator from reimporting its stock defaults over
-        -- our data on first boot (CategoryViews/Initialize.lua:144). 999 stays
-        -- above any DefaultImportVersion Baganator will realistically ship.
-        category_default_import = 999,
-        -- Our data is written in the post-migration format; skip the
-        -- MigrateFormat loop (CategoryViews/Initialize.lua:3-77).
-        category_migration = 5,
-    }
-
-    for _, c in ipairs(import.categories) do
-        local source = c.source or c.name
-        out.custom_categories[source] = {
-            name = c.name,
-            search = c.search or "",
-        }
+    local ok, decoded = pcall(C_EncodingUtil.DecodeBase64, payload)
+    if not ok or type(decoded) ~= "string" then
+        return nil, "base64 decode failed"
     end
 
-    for _, m in ipairs(import.modifications or {}) do
-        if m.source then
-            local mod = {}
-            if type(m.priority) == "number" then mod.priority = m.priority end
-            if m.showGroupPrefix ~= nil then mod.showGroupPrefix = m.showGroupPrefix end
-            if m.group then mod.group = m.group end
-            if m.color then mod.color = m.color end
-            if type(m.items) == "table" then
-                mod.addedItems = mod.addedItems or {}
-                for _, itemID in ipairs(m.items) do
-                    mod.addedItems["i:" .. tostring(itemID)] = true
-                end
+    local inflated
+    ok, inflated = pcall(C_EncodingUtil.DecompressString, decoded)
+    if not ok or type(inflated) ~= "string" then
+        return nil, "decompress failed"
+    end
+
+    local decodedProfile
+    ok, decodedProfile = pcall(C_EncodingUtil.DeserializeCBOR, inflated)
+    if not ok or type(decodedProfile) ~= "table" then
+        return nil, "CBOR decode failed"
+    end
+
+    if decodedProfile.addon ~= "Baganator" then
+        return nil, "not a Baganator export"
+    end
+
+    -- The Categories button exports kind "categories", a subset that is not a
+    -- profile. Name that mistake instead of writing a profile with almost
+    -- nothing in it.
+    if decodedProfile.kind ~= "profile" then
+        return nil, "wrong export: use the General page, not Categories"
+    end
+
+    if type(decodedProfile.custom_categories) ~= "table"
+        or type(decodedProfile.category_display_order) ~= "table" then
+        return nil, "export carries no category data"
+    end
+
+    local profile = {}
+    for key, value in pairs(decodedProfile) do
+        if not BAGANATOR_META_KEYS[key] and not BAGANATOR_DROP_KEYS[key] then
+            profile[key] = value
+        end
+    end
+
+    for _, field in ipairs(BAGANATOR_NUMERIC_KEY_FIELDS) do
+        if type(profile[field]) == "table" then
+            local mapped = {}
+            for key, value in pairs(profile[field]) do
+                mapped[tonumber(key) or key] = value
             end
-            if type(m.pets) == "table" then
-                mod.addedItems = mod.addedItems or {}
-                for _, petID in ipairs(m.pets) do
-                    mod.addedItems["p:" .. tostring(petID)] = true
-                end
-            end
-            if type(m.hideIn) == "table" then
-                local h = {}
-                for _, key in ipairs(m.hideIn) do
-                    h[key] = true
-                end
-                mod.hideIn = h
-            end
-            out.category_modifications[m.source] = mod
+            profile[field] = mapped
         end
     end
 
-    -- Every custom category needs a modifications entry with a priority, matching
-    -- Baganator's own import behaviour.
-    for source in pairs(out.custom_categories) do
-        out.category_modifications[source] = out.category_modifications[source] or { priority = 0 }
-        if out.category_modifications[source].priority == nil then
-            out.category_modifications[source].priority = 0
-        end
+    -- Baganator's category importer allocates a fresh source id every run and
+    -- never reuses the old one, so re-importing our own categories on top of an
+    -- already installed profile leaves the previous copies behind with nothing
+    -- pointing at them. They are invisible in game, which is exactly why they
+    -- survive an eyeball check of the export. The display order is the only list
+    -- that decides what is real, so drop whatever it does not name.
+    local inUse = {}
+    for _, source in ipairs(profile.category_display_order) do
+        inUse[source] = true
     end
-
-    -- C_EncodingUtil.DeserializeJSON converts numeric-string object keys (e.g.
-    -- "1") into Lua numbers. Baganator looks up sections via the string form
-    -- (derived from display_order entries like "_1"), so coerce keys back to
-    -- strings here.
-    if type(import.sections) == "table" then
-        for id, s in pairs(import.sections) do
-            if type(s) == "table" and type(s.name) == "string" then
-                local entry = { name = s.name }
-                if s.color then entry.color = s.color end
-                out.category_sections[tostring(id)] = entry
+    for source in pairs(profile.custom_categories) do
+        if not inUse[source] then
+            profile.custom_categories[source] = nil
+            if type(profile.category_modifications) == "table" then
+                profile.category_modifications[source] = nil
+            end
+            if type(profile.category_hidden) == "table" then
+                profile.category_hidden[source] = nil
             end
         end
     end
 
-    if type(import.hidden) == "table" then
-        for _, source in ipairs(import.hidden) do
-            out.category_hidden[source] = true
-        end
-    end
+    -- Sentinels that stop Baganator reimporting its stock defaults over our data
+    -- on first boot (CategoryViews/Initialize.lua SetupCategories), and skip the
+    -- MigrateFormat loop at the top of the same file. Forced rather than trusted
+    -- from the export, because a profile exported before either was set would
+    -- carry a value that undoes the whole import. 999 stays above any
+    -- DefaultImportVersion Baganator will realistically ship.
+    profile.category_default_import = 999
+    profile.category_migration = 5
 
-    if type(import.order) == "table" then
-        for i, entry in ipairs(import.order) do
-            out.category_display_order[i] = entry
-        end
-    end
-
-    return out
+    return profile
 end
 
 setupFunctions["Baganator"] = function(addonKey, import)
@@ -926,41 +954,34 @@ setupFunctions["Baganator"] = function(addonKey, import)
         local src = ns.data[addonKey]
 
         -- Decode BEFORE touching BAGANATOR_CONFIG, and bail on failure the same
-        -- way the NSRT decode above does. Both view modes ship as "category", so
-        -- a profile written without its category groups is a broken bag display
-        -- -- and writing one would replace a good existing profile, activate it,
-        -- and stamp the install as done.
-        -- A missing or blank categoriesJSON is refused too, not skipped. HasData
+        -- way the NSRT decode above does. A profile written from a half-read
+        -- export is a broken bag display, and writing one would replace a good
+        -- existing profile, activate it, and stamp the install as done.
+        -- A missing or blank profileString is refused too, not skipped. HasData
         -- only proves the payload table is non-empty, so an edit that emptied
         -- this one field would otherwise sail past the decode and write exactly
         -- the profile this gate exists to prevent.
-        if type(src.categoriesJSON) ~= "string" or strtrim(src.categoriesJSON) == "" then
-            print(ns.title .. ": Baganator category data is missing from this build.")
+        if type(src.profileString) ~= "string" or strtrim(src.profileString) == "" then
+            print(ns.title .. ": Baganator profile data is missing from this build.")
             return false
         end
 
-        local decoded, err = DecodeBaganatorCategories(src.categoriesJSON)
-        if not decoded then
-            print(ns.title .. ": Baganator categories decode failed - " .. (err or "unknown error"))
+        local profile, err = DecodeBaganatorProfile(src.profileString)
+        if not profile then
+            print(ns.title .. ": Baganator profile decode failed - " .. (err or "unknown error"))
             return false
         end
 
-        BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
-        BAGANATOR_CONFIG.Profiles = BAGANATOR_CONFIG.Profiles or {}
-
-        local profile = {}
-
-        -- Copy the non-JSON fields (view modes, seen_welcome) into the profile.
+        -- Anything else in the payload table overrides the export, so a one-off
+        -- correction does not need the whole string regenerated.
         for k, v in pairs(src) do
-            if k ~= "categoriesJSON" then
+            if k ~= "profileString" then
                 profile[k] = type(v) == "table" and CopyTable(v) or v
             end
         end
 
-        for k, v in pairs(decoded) do
-            profile[k] = v
-        end
-
+        BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
+        BAGANATOR_CONFIG.Profiles = BAGANATOR_CONFIG.Profiles or {}
         BAGANATOR_CONFIG.Profiles[ns.profileName] = profile
 
         -- Activate the KitnUI profile for this character (per-character SavedVar).

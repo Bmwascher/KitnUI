@@ -17,7 +17,7 @@
 ## X-EditMode-Version: 2026.08.11
 ## X-KitnEssentials-Version: 2026.08.11
 ## X-BuffReminders-Version: 2026.08.11
-## X-Baganator-Version: 2026.08.11
+## X-Baganator-Version: 2026.08.22
 
 # Load model: per-directory XML manifests (matching KitnEssentials). Each .xml
 # <Script>-lists its .lua in load order; edit the manifest, not this list.
