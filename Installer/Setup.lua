@@ -406,6 +406,39 @@ end
 -- in git history; it cannot decode current exports at all.
 ---------------------------------------------------------------------------------
 
+-- Lock the personal reminder frame.
+--
+-- NSRT's export carries that frame's geometry but not its LOCK state, so the
+-- imported profile arrives with PersonalReminderFrame.Moveable still true and
+-- NSRT draws the little diagonal resize grip over the world at every login
+-- (CreateNoteMoverFrame in its Reminders.lua shows the Resizer whenever the
+-- frame is enabled and Moveable; MakeDraggable hides it again when it is not).
+--
+-- A setting write rather than a Hide() on the frame: locking is exactly what
+-- NSRT's own unlock button toggles, while hiding the frame behind its back
+-- would come back at the next reload and would leave the thing draggable in
+-- the meantime.
+--
+-- Written in BOTH places NSRT keeps a profile -- the live root, which is what
+-- is on screen now, and the stored copy under NSRT.Profiles, which is what a
+-- later profile switch loads from. Every step is type-checked because this
+-- runs against another addon's saved variables.
+local function LockNSRTPersonalReminder()
+    if type(NSRT) ~= "table" then return end
+
+    local live = NSRT.ReminderSettings
+    if type(live) == "table" and type(live.PersonalReminderFrame) == "table" then
+        live.PersonalReminderFrame.Moveable = false
+    end
+
+    local profiles = NSRT.Profiles
+    local stored = type(profiles) == "table" and profiles[ns.profileName] or nil
+    stored = type(stored) == "table" and stored.ReminderSettings or nil
+    if type(stored) == "table" and type(stored.PersonalReminderFrame) == "table" then
+        stored.PersonalReminderFrame.Moveable = false
+    end
+end
+
 setupFunctions["NSRT"] = function(addonKey, import)
     if not IsAddOnLoaded("NorthernSkyRaidTools") then
         print(ns.title .. ": NorthernSkyRaidTools is not loaded.")
@@ -528,6 +561,7 @@ setupFunctions["NSRT"] = function(addonKey, import)
             if NSRT.MainProfile == imported then NSRT.MainProfile = ns.profileName end
         end
 
+        LockNSRTPersonalReminder()
         CompleteSetup(addonKey)
         return true
     end
