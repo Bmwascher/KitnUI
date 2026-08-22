@@ -1,10 +1,10 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
-## v2.1.0 (unreleased)
+## v2.1.0
 
-Accents you can choose yourself, a Tweaks section in the settings tab, richer Top
-Bar tooltips, and a set of fixes for switches that said they were holding a
-setting when they were not.
+Every bundled profile refreshed for 12.1, accents you can choose yourself, a
+Tweaks section in the settings tab, richer Top Bar tooltips, and a set of fixes
+for switches that said they were holding a setting when they were not.
 
 ### Settings Tab
 - **NEW:** Pick your own accent colour. The pink switch became two rows: **KitnUI Accent Coloring** decides whether KitnUI colours your accent at all, and **Use KitnUI Pink** decides which colour it uses. Turn the second one off and a colour swatch appears; the places KitnUI colours, and the places it deliberately leaves alone, stay exactly the same
