@@ -34,6 +34,10 @@ setting when they were not.
 - The clock tooltip shows the clock the face is not showing, rather than repeating it
 - The friends and guild counts walk the friends list once per update instead of once per event
 
+### Profiles
+- Every bundled profile refreshed for this release: EllesmereUI, BigWigs and its per-boss settings, BuffReminders, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode (both the normal and Lulu layouts) and all 40 Cooldown Manager layouts
+- Edit Mode layouts rebuilt on the 12.1 format, which adds new frames the old layout did not know about
+
 ### Installer
 - **NEW:** A nickname box on the Northern Sky Raid Tools step, on every one of its pages
 - **NEW:** Dark and Colored buttons appear on the EllesmereUI step once the profile is imported

@@ -10,13 +10,13 @@
 ## X-Curse-Project-ID: 1493282
 ## X-Wago-ID: rNkyB8Ka
 
-## X-EllesmereUI-Version: 2026.08.11
+## X-EllesmereUI-Version: 2026.08.22
 ## X-Plater-Version: 2026.07.07
-## X-BigWigs-Version: 2026.08.11
-## X-NSRT-Version: 2026.08.11
-## X-EditMode-Version: 2026.08.11
-## X-KitnEssentials-Version: 2026.08.11
-## X-BuffReminders-Version: 2026.08.11
+## X-BigWigs-Version: 2026.08.22
+## X-NSRT-Version: 2026.08.22
+## X-EditMode-Version: 2026.08.22
+## X-KitnEssentials-Version: 2026.08.22
+## X-BuffReminders-Version: 2026.08.22
 ## X-Baganator-Version: 2026.08.11
 
 # Load model: per-directory XML manifests (matching KitnEssentials). Each .xml
