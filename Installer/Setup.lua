@@ -437,8 +437,10 @@ local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraRemin
 -- lock switch a player would use for this lives in the companion UI addon
 -- (NorthernSkyRaidTools_UI), not in NSRT itself. isNote is true because all
 -- three of these are note frames.
--- pcall'd and method-checked throughout: this is another addon's furniture and
--- a locking failure must not abort an install.
+-- The call INTO NSRT's code is pcall'd, because this is another addon's
+-- furniture and a locking failure must not abort an install; the two frame
+-- methods either side of it are method-checked only, which is all a plain
+-- Frame needs.
 local function LockLiveMover(NSI, key, settings)
     if type(NSI) ~= "table" then return end
     local mover = NSI[key .. "Mover"]
