@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/General.lua                                      ║
--- ║  Purpose: The General page: appearance preset, Lulu Mode,    ║
--- ║           accent scoping.                                    ║
+-- ║  Purpose: The General page: appearance preset, accent, and   ║
+-- ║           the Tweaks switches.                               ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -336,8 +336,33 @@ local ACCENT_KEYS = {
     { folder = "EllesmereUIFriends",      sub = "friends",      key = "useAccentTab",     refresh = "_EFR_ApplyFriends"},
 }
 
--- FF008C, the same pink ns.Color uses for the chat prefix.
-local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 140 / 255
+-- FF008C, the same pink ns.Color uses for the chat prefix. A literal, and it has
+-- to be: accentCustom defaults to WHITE, so the registered defaults no longer carry
+-- this colour anywhere it could be read back from. Keep it in step with
+-- npArrowColor in Core.lua and with ns.KITN_PINK in Installer/Wizard.lua -- that
+-- one is POSITIONAL and the other two are KEYED.
+local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 0.549
+
+-- Tested against false rather than read for truthiness, because the registered
+-- default is TRUE and an absent key must therefore mean pink. The settings
+-- fallback path merges no defaults, so absent is reachable.
+local function AccentUsesDefault()
+    return ns.EUISettings().accentUseDefault ~= false
+end
+
+-- The colour the master switch forces right now. Falls back to the shipped pink
+-- whenever the stored custom colour is not three numbers, so a hand-edited saved
+-- variable cannot make SetAccentColor throw.
+local function AccentColor()
+    if not AccentUsesDefault() then
+        local c = ns.EUISettings().accentCustom
+        if type(c) == "table" and type(c.r) == "number"
+           and type(c.g) == "number" and type(c.b) == "number" then
+            return c.r, c.g, c.b
+        end
+    end
+    return ACCENT_R, ACCENT_G, ACCENT_B
+end
 
 -- Read and write the switch directly on the settings table, never through a
 -- sub-table: in that shape it was the only switch that did not survive a reload.
@@ -391,7 +416,7 @@ local function ApplyAccentColor(claiming)
             end
         end
         if EUI.SetAccentColor then
-            EUI.SetAccentColor(ACCENT_R, ACCENT_G, ACCENT_B)
+            EUI.SetAccentColor(AccentColor())
         end
     elseif saved.prev ~= nil then
         -- ResetAccentColor is deliberately NOT used here: it clears the legacy
@@ -482,10 +507,204 @@ local function ApplyAccent(claiming)
     ApplyAccentScope(claiming)
 end
 
+-- The two colour setters. NEITHER CLAIMS, and the false each passes is the whole
+-- reason they are functions rather than inline setValues.
+--
+-- The note recording what the user's accent was before KitnUI touched it belongs
+-- to the master switch and is created once, by it. Passing true from here would
+-- let a colour change re-record KitnUI's own forced colour as the user's original,
+-- and turning the master off would then hand back KitnUI's colour instead of
+-- theirs. Neither of these touches ns.EUIOverride, ns.EUISnap or the scoping.
+--
+-- Consequence worth knowing: while the master reads ON but KitnUI is not actually
+-- holding the accent -- the copied-profile state the ownership tooltip warns about
+-- -- ApplyAccentColor finds no note and writes nothing, so these appear to do
+-- nothing until the user toggles the master off and on again. That is the same
+-- answer the tooltip already gives, so it is not a second surprise.
+
+-- Is KitnUI really holding the accent COLOUR right now? This is the exact
+-- condition ApplyAccentColor writes under, asked ahead of time so the setters can
+-- say when nothing happened.
+--
+-- The state it detects is real and reachable: switch states live in the
+-- EllesmereUI profile and notes live in KitnUIDB, so copying a profile carries the
+-- switch and leaves the note behind. Kitn hit precisely this in game on
+-- 2026-08-21 -- the master read ON for a profile with no accent note at all, and
+-- both colour rows accepted input and silently did nothing.
+-- The same GUARDS ApplyAccentColor bails on, plus the note. Not the same ORDER:
+-- that function peeks first and checks the host after, and this one is the other
+-- way round. Equivalent because all six are pure conjuncts and ns.EUIPeekSnap
+-- never creates a per-profile record (Core.lua:321-330) -- reordering would only
+-- matter if one of them had a side effect, which is exactly why the peek and NOT
+-- ns.EUISnap belongs here.
+--
+-- Two conditions that must agree are the shape that rots apart, and the defect
+-- this whole warning exists to report IS a condition that silently did not match.
+local function AccentColorHeld()
+    if not AccentEnabled() then return false end
+    local EUI = _G.EllesmereUI
+    if not EUI then return false end
+    -- The write is guarded on this too (General.lua:418), so a host missing it
+    -- skips the write while every other guard passes -- a silent failure, which is
+    -- the exact thing this predicate exists to catch. Reachable: the tab's
+    -- capability gate asks only for RegisterModule (Core.lua:985).
+    --
+    -- Truthiness, matching the write exactly rather than type-checking here and
+    -- not there. A predicate STRICTER than the write would report a refusal that
+    -- never happened, which is the same defect pointing the other way.
+    if not EUI.SetAccentColor then return false end
+    local profile = EUI.GetActiveProfileData and EUI.GetActiveProfileData()
+    if type(profile) ~= "table" then return false end
+    local saved = ns.EUIPeekSnap("accent", "color")
+    return saved ~= nil and saved.prev ~= nil
+end
+
+-- Colour equality on 8-BIT values, never on the raw doubles. The picker builds
+-- colours out of hex -- EllesmereUI_Widgets.lua:2271 turns "8C" into 140/255,
+-- which is 0.5490196... and is NOT equal to the 0.549 literal above -- and it
+-- round-trips everything through HSV besides. Comparing doubles would leave "Use
+-- KitnUI Pink" reading off under an accent that is byte-identically KitnUI pink,
+-- which is the exact label-versus-reality problem the switch was renamed to avoid.
+local function Byte(v)
+    return math.floor((tonumber(v) or 0) * 255 + 0.5)
+end
+
+local function IsKitnPink(r, g, b)
+    return Byte(r) == Byte(ACCENT_R)
+       and Byte(g) == Byte(ACCENT_G)
+       and Byte(b) == Byte(ACCENT_B)
+end
+
+-- Said by both setters whenever a colour change stored fine but could not reach
+-- the screen. Every forcing control in this addon says when it refused; a colour
+-- row that quietly does nothing is the same defect wearing a different hat.
+--
+-- LATCHED, and that is not optional. The host's colour picker calls the swatch
+-- setter on every preview change while the user drags, so an unlatched print would
+-- put a line in chat per frame. The latch clears the moment the accent is held
+-- again, so a later relapse still warns.
+local warnedUnheld = false
+
+local function WarnUnheld()
+    if not (AccentEnabled() and not AccentColorHeld()) then
+        warnedUnheld = false
+        return
+    end
+    if warnedUnheld then return end
+    warnedUnheld = true
+    print(ns.title .. ": Color saved, but KitnUI is not holding the accent for this profile, so nothing changed on screen. Turn KitnUI Accent Coloring off and on to take it.")
+end
+
+local function SetAccentUsesDefault(v)
+    ns.EUISettings().accentUseDefault = v and true or false
+    ApplyAccentColor(false)
+    WarnUnheld()
+end
+
+local function SetAccentCustom(r, g, b)
+    local s = ns.EUISettings()
+
+    -- The switch above MIRRORS whether the chosen colour is KitnUI pink, rather
+    -- than being turned off one-way by any pick. The host's colour picker calls
+    -- this setter on EVERY preview change and then AGAIN with the click-time
+    -- colour when the user presses Cancel (EllesmereUI_Widgets.lua:2598-2617), so
+    -- a one-way flip would leave the switch reading off after a cancel that had
+    -- already put the colour back to pink.
+    if IsKitnPink(r, g, b) then
+        -- Pink chosen: do NOT overwrite the remembered custom colour with it, or
+        -- switching the row above off again would hand back pink and look dead.
+        s.accentUseDefault = true
+    else
+        -- Replace the whole table, never write into it. See the DEFAULTS comment
+        -- in Core.lua: an in-place write into a table-valued default is the one
+        -- shape that does not survive a logout here.
+        s.accentCustom = { r = r, g = g, b = b }
+        s.accentUseDefault = false
+    end
+
+    ApplyAccentColor(false)
+    WarnUnheld()
+end
+
 -- Wrapped rather than registered bare. A bare registration would hand the
 -- registry's own arguments straight through as the claim, so the day the
 -- registry starts passing one, every re-apply silently becomes a claim.
-ns.EUIRegisterReapply(function() ApplyAccent(false) end)
+--
+-- The latch is cleared here too, and that is the only place it can be cleared
+-- CORRECTLY. Clearing it inside WarnUnheld alone means it clears on the next
+-- setter call while held, never on BECOMING held: a user warned on one unowned
+-- profile who switched to a second unowned profile got silence on the second.
+-- This registration fires on every profile switch, spec switch, profile apply and
+-- at login, which is exactly the set of moments the answer can change.
+ns.EUIRegisterReapply(function()
+    warnedUnheld = false
+    ApplyAccent(false)
+end)
+
+---------------------------------------------------------------------------------
+-- Row veil
+---------------------------------------------------------------------------------
+
+-- Lays a dead pane over a finished row. EnableMouse(true) on the veil is what makes
+-- it work: the veil swallows the click, so the control underneath cannot fire and
+-- needs no disabled state of its own. W:Toggle and W:ColorPicker take no disabled
+-- argument (EllesmereUI_Widgets.lua:1715-1738, :2725-2747) -- only the multi-part
+-- rows do, through a per-half cfg.disabled (:2904-2950) -- so this is how a plain
+-- row is switched off here.
+--
+-- `text` is optional. With it the veil carries a labelled box and means "not built
+-- yet"; without it the veil is a plain dim and means "not applicable right now".
+--
+-- A veil is STATIC: it is built or not built at page build time and never
+-- re-evaluated. That is safe for both callers. Bite Mode never changes, and the
+-- master accent switch forces a full page rebuild through
+-- ns.EUIRebuildForOwnership (Core.lua:479-496), so the accent rows are rebuilt
+-- every time the thing they depend on changes.
+--
+-- Adapted from NaowhUI, which does this on its own unfinished row
+-- (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_Core.lua:381-410, read
+-- 2026-08-21), recoloured to KitnUI pink and generalised to the unlabelled case.
+--
+-- PanelPP rather than PP, matching NaowhUI: both carry CreateBorder (EllesmereUI
+-- itself aliases one onto the other at EllesmereUI/EllesmereUI.lua:2956, in the
+-- MAIN addon and not in EllesmereUIOptions), but the settings panel runs at its
+-- own scale and PanelPP is the one that snaps to it. Guarded anyway: losing the
+-- border must cost a border, not the page.
+local function Veil(row, text)
+    if not row then return end
+
+    local veil = CreateFrame("Frame", nil, row)
+    veil:SetAllPoints(row)
+    veil:SetFrameLevel(row:GetFrameLevel() + 20)
+    veil:EnableMouse(true)
+
+    local grey = veil:CreateTexture(nil, "BACKGROUND")
+    grey:SetAllPoints()
+    grey:SetColorTexture(0.04, 0.04, 0.05, text and 0.72 or 0.6)
+
+    if not text then return end
+
+    local box = CreateFrame("Frame", nil, veil)
+    box:SetSize(130, 26)
+    box:SetPoint("CENTER")
+
+    local boxBg = box:CreateTexture(nil, "ARTWORK")
+    boxBg:SetAllPoints()
+    boxBg:SetColorTexture(0.08, 0.08, 0.10, 0.95)
+
+    local PP = _G.EllesmereUI and EllesmereUI.PanelPP
+    if PP and PP.CreateBorder then
+        PP.CreateBorder(box, ACCENT_R, ACCENT_G, ACCENT_B, 0.55, 1, "OVERLAY", 7)
+    end
+
+    local label = box:CreateFontString(nil, "OVERLAY")
+    local font = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath())
+        or STANDARD_TEXT_FONT
+    label:SetFont(font, 12, "")
+    label:SetPoint("CENTER")
+    label:SetText(text)
+    label:SetTextColor(ACCENT_R, ACCENT_G, ACCENT_B, 0.95)
+end
 
 ---------------------------------------------------------------------------------
 -- Page
@@ -520,17 +739,92 @@ ns.EUIPages["General"] = function(parent, yOffset)
         function() PickLook("dark") end,
         function() PickLook("color") end);                                        y = y - h
 
+    -- ACCENTS is a SUBSECTION of Appearance, and the only thing that says so is the
+    -- missing spacer above it. Sections on these pages are separated by the 20px
+    -- spacer the caller puts above the header, never by anything the header draws,
+    -- so dropping the spacer is what joins the two blocks visually.
+    _, h = W:SectionHeader(parent, "ACCENTS", y);                                  y = y - h
+
+    -- The MASTER, and the only one of the three that claims anything. Unchanged
+    -- from the switch this replaces except for its label and its tooltip: same
+    -- setter, same ApplyAccent(true), same rebuild.
+    _, h = W:Toggle(parent, "KitnUI Accent Coloring", y,
+        AccentEnabled,
+        function(v)
+            SetAccentEnabled(v)
+            ApplyAccent(true)
+            -- The claim is complete, so the ownership sentence can be recomputed.
+            -- This rebuild is ALSO what re-evaluates the veils on the two rows
+            -- below, which is why they can be built statically.
+            ns.EUIRebuildForOwnership()
+        end,
+        ns.EUIOwnershipTip(
+            "Colors EllesmereUI's accent for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab. The two rows below choose which color.",
+            "accent",
+            AccentEnabled,
+            -- US spelling, changed from the shipped "colour". EUIOwnershipTip
+            -- concatenates this onto the sentence above it, so the two halves land
+            -- in ONE displayed tooltip and a mixed pair reads as a typo.
+            "EllesmereUI's accent color and the settings it is scoped to"));
+                                                                                   y = y - h
+
+    -- Neither of the next two claims anything, so neither needs a combat guard,
+    -- unlike the look and the resource bar. Each writes one KitnUI setting and asks
+    -- the host to repaint its own frames; nothing here is protected and nothing is
+    -- deferred, so there is no state to get out of step.
+    local pinkRow
+    pinkRow, h = W:Toggle(parent, "Use KitnUI Pink", y,
+        AccentUsesDefault,
+        function(v)
+            SetAccentUsesDefault(v)
+            -- Unforced: the swatch below redraws through its registered widget
+            -- refresh, and no ownership sentence changed.
+            if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                pcall(EllesmereUI.RefreshPage, EllesmereUI)
+            end
+        end,
+        "On, the accent is KitnUI pink. Off, it is the color in the row below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.")
+                                                                                   y = y - h
+
+    -- Shows the colour that is ACTIVE, not the one that is stored: pink while the
+    -- row above is on, the custom colour while it is off. Showing the stored custom
+    -- colour under a pink accent would put green in the swatch and pink on screen.
+    local colorRow
+    colorRow, h = W:ColorPicker(parent, "Accent Color", y,
+        AccentColor,
+        function(r, g, b)
+            SetAccentCustom(r, g, b)
+            -- Unforced, like the row above, even though this ALSO switches "Use
+            -- KitnUI Pink" off. W:Toggle registers its own knob redraw as a widget
+            -- refresh (EllesmereUI_Widgets.lua:1727-1733), so the fast path moves
+            -- that switch for us. Nothing structural changes here: the veils depend
+            -- on the MASTER, which this cannot touch.
+            if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                pcall(EllesmereUI.RefreshPage, EllesmereUI)
+            end
+        end)
+                                                                                   y = y - h
+
+    -- Both rows are meaningless until the master is on, so they are dimmed and
+    -- made dead rather than hidden: a user who has not turned the master on should
+    -- still see that a colour choice exists.
+    if not AccentEnabled() then
+        Veil(pinkRow)
+        Veil(colorRow)
+    end
+
+    _, h = W:Spacer(parent, y, 20);                                                y = y - h
+    _, h = W:SectionHeader(parent, "TWEAKS", y);                                   y = y - h
+
     -- Its own switch, not part of the preset. EllesmereUI splits the resource
     -- bar out of its own dark mode master for the same reason: a dark bar over
-    -- coloured frames, or the reverse, is a normal thing to want.
+    -- coloured frames, or the reverse, is a normal thing to want. It sits under
+    -- Tweaks rather than Appearance because it is a switch, not a look.
     _, h = W:Toggle(parent, "Dark Class Resource Bar", y,
         function() return DarkModeState(IsResourceBars) == true end,
         function(v) SetResourceBarDark(v) end,
         "Darkens the class resource bar on its own, without changing the unit frames or raid frames.");
                                                                                    y = y - h
-
-    _, h = W:Spacer(parent, y, 20);                                                y = y - h
-    _, h = W:SectionHeader(parent, "LULU MODE", y);                                y = y - h
 
     _, h = W:Toggle(parent, "Lulu Mode", y,
         function()
@@ -550,23 +844,16 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "your minimap shape and where its clock, zone, FPS, mail, difficulty and button row sit"));
                                                                                    y = y - h
 
-    _, h = W:Spacer(parent, y, 20);                                                y = y - h
-    _, h = W:SectionHeader(parent, "ACCENT", y);                                   y = y - h
-
-    _, h = W:Toggle(parent, "KitnUI Pink Accent", y,
-        AccentEnabled,
-        function(v)
-            SetAccentEnabled(v)
-            ApplyAccent(true)
-            -- The claim is complete, so the ownership sentence can be recomputed.
-            ns.EUIRebuildForOwnership()
-        end,
-        ns.EUIOwnershipTip(
-            "Sets EllesmereUI's accent to KitnUI pink for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab.",
-            "accent",
-            AccentEnabled,
-            "EllesmereUI's accent colour"));
-                                                                                   y = y - h
+    -- Built as a real row and then covered, rather than left out until the feature
+    -- exists, so the row is visible and its shape is already settled. It carries NO
+    -- saved setting: a stored key nothing reads still has to be defaulted, migrated
+    -- and reset forever. The key arrives with the feature.
+    local biteRow
+    biteRow, h = W:Toggle(parent, "Bite Mode", y,
+        function() return false end,
+        function() end,
+        "Bitebtw's own look: a set of EllesmereUI settings held down, plus a dedicated Edit Mode layout, behind one switch. The same shape as Lulu Mode. Not built yet.")
+    Veil(biteRow, "Coming Soon");                                                  y = y - h
 
     return math.abs(y)
 end
