@@ -579,12 +579,21 @@ KitnCommands["reset"] = function()
     -- would strand KitnUI's values in BetterFriendlist forever: nothing else
     -- remembers what the player had.
     local bflOwed
-    if ns.RestoreBetterFriendlistAppearance and ns.RestoreBetterFriendlistAppearance() == false then
-        bflOwed = ns.db.bflSnap
-        -- Said out loud, because a reset that quietly leaves another addon on
-        -- KitnUI's settings looks like a reset that worked. The line is queued
-        -- rather than printed: the reload below tears the chat frame down.
-        ns.QueueMessage(ns.title .. ": BetterFriendlist is not loaded, so its appearance could not be put back. KitnUI kept the record -- enable BetterFriendlist and run " .. ns.Color("/kitn reset") .. " again to finish it.")
+    if ns.RestoreBetterFriendlistAppearance then
+        if ns.RestoreBetterFriendlistAppearance() == false then
+            bflOwed = ns.db.bflSnap
+            -- Said out loud, because a reset that quietly leaves another addon
+            -- on KitnUI's settings looks like a reset that worked. The line is
+            -- queued rather than printed: the reload below tears the chat frame
+            -- down.
+            ns.QueueMessage(ns.title .. ": BetterFriendlist is not loaded, so its appearance could not be put back. KitnUI kept the record -- enable BetterFriendlist and run " .. ns.Color("/kitn reset") .. " again to finish it.")
+        elseif ns.db.bflSnap and ns.db.bflSnap.verify then
+            -- Put back, but that addon's own picker can roll its keys off again
+            -- during the reload below, exactly as it can undo an install. So the
+            -- record rides across the wipe for ONE check at the next login;
+            -- RecheckBetterFriendlistAppearance settles it and drops it.
+            bflOwed = ns.db.bflSnap
+        end
     end
 
     -- That teardown queues a line for anything it could NOT put back, and the

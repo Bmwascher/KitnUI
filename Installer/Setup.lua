@@ -1509,6 +1509,34 @@ local function TakeSnapshot(snap, bfl, base)
     snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
 end
 
+-- Put the recorded values back into the addon.
+local function RestorePrev(bfl, snap)
+    for key, prev in pairs(snap.prev) do
+        if prev == BFL_ABSENT then
+            bfl[key] = nil
+        else
+            bfl[key] = prev
+        end
+    end
+
+    local version = snap.appearanceOnboardingVersion
+    bfl.appearanceOnboardingVersion = version ~= BFL_ABSENT and version or nil
+    -- false rather than nil on the way back: that is this key's own default, and
+    -- a snapshot taken when it was already false stores false.
+    bfl.appearanceOnboardingResume = snap.appearanceOnboardingResume or false
+end
+
+-- Did a RestorePrev survive? Only the keys BetterFriendlist's own rollback can
+-- reach are worth testing, because only those can be taken back.
+local function PrevHolds(bfl, snap)
+    for _, key in ipairs({ "theme", "friendsFrameStyle" }) do
+        local want = snap.prev[key]
+        if want == BFL_ABSENT then want = nil end
+        if bfl[key] ~= want then return false end
+    end
+    return true
+end
+
 function ns.ApplyBetterFriendlistAppearance()
     if not IsAddOnLoaded("BetterFriendlist") then return end
     local bfl = _G.BetterFriendlistDB
@@ -1520,50 +1548,77 @@ function ns.ApplyBetterFriendlistAppearance()
     -- ONCE. Re-snapshotting on a second install would record KitnUI's own values
     -- as the player's and leave the reset with nothing to put back.
     if not snap.taken or not snap.prev then
+        -- Validated the way BetterFriendlist validates it (GetResumeState in its
+        -- AppearanceOnboarding module): a record from an older onboarding
+        -- version is one THAT addon ignores, so its embedded values are stale
+        -- and the live keys are the player's real ones.
         local resume = bfl.appearanceOnboardingResume
-        local base = type(resume) == "table" and type(resume.snapshot) == "table"
-            and resume.snapshot or nil
+        local base
+        if type(resume) == "table" and type(resume.snapshot) == "table"
+            and tonumber(resume.version) == BFL_ONBOARDING_VERSION then
+            base = resume.snapshot
+        end
         TakeSnapshot(snap, bfl, base)
     end
 
     WriteBFL(bfl)
-    -- Checked once on the far side of the installer's reload; see below.
-    snap.pending = true
+    -- Settled on the far side of the installer's reload; see below. Three
+    -- attempts, because one reload is not always enough (the same picker that
+    -- rolls the write back can still be open when the repair runs).
+    snap.pending = 3
 end
 
--- Second half of the write above, one reload later.
+-- Everything this pair of writes still owes, settled at login.
 --
 -- BetterFriendlist's appearance flow puts its own keys back when the game
 -- unloads with its picker still open, so the reload that is meant to APPLY the
--- write can be the thing that undoes it -- and a brand new player meets both
--- first-run flows on the same login, which makes that the likely case rather
--- than an exotic one. Nothing outside that addon can see whether its picker is
--- open, so this reads the result instead.
+-- installer's write can be the thing that undoes it -- and a brand new player
+-- meets both first-run flows on the same login, which makes that ordinary
+-- rather than exotic. The same rollback can undo a /kitn reset. Nothing outside
+-- that addon can see whether its picker is open, so both cases are settled by
+-- reading the result on the next login instead.
 --
--- ONCE, and only on the login right after a finish: a player who changes these
--- settings themselves a week later is not argued with.
+-- Both are bounded. The repair gives up after three logins and the reset check
+-- runs once, so a player who changes these settings themselves is never argued
+-- with for long.
 function ns.RecheckBetterFriendlistAppearance()
     local snap = ns.db and ns.db.bflSnap
-    if not (snap and snap.pending) then return end
-
+    if not snap then return end
+    if not (snap.pending or snap.verify) then return end
     if not IsAddOnLoaded("BetterFriendlist") then return end
     local bfl = _G.BetterFriendlistDB
     if type(bfl) ~= "table" then return end
-    -- Consumed only once the addon is actually here to be read. Spent earlier,
-    -- a login with BetterFriendlist switched off would burn the one check.
-    snap.pending = nil
-    if BFLHolds(bfl) then return end
 
-    -- Something put values back, and their rollback is the likely something. It
-    -- touches SIX keys, of which this file manages two: theme and
-    -- friendsFrameStyle, plus the version stamp. Those three are now the
-    -- player's real values and are worth re-recording, because the record taken
-    -- at finish may have caught an open picker's unaccepted preview.
+    -- After a reset: the addon was handed its old values back, and the reload
+    -- that followed may have rolled them off again.
+    if snap.verify then
+        if snap.prev and not PrevHolds(bfl, snap) then
+            RestorePrev(bfl, snap)
+            print(ns.title .. ": BetterFriendlist had overwritten the settings the reset put back, so KitnUI has restored them again. Type " .. ns.Color("/reload") .. " to see it.")
+        end
+        -- Settled either way: KitnUI is no longer holding anything of theirs.
+        ns.db.bflSnap = nil
+        return
+    end
+
+    -- After an install: did the write survive?
+    if BFLHolds(bfl) then
+        snap.pending = nil
+        return
+    end
+
+    snap.pending = snap.pending - 1
+    if snap.pending <= 0 then snap.pending = nil end
+
+    -- Their rollback touches six keys, of which this file manages two: theme and
+    -- friendsFrameStyle, plus the version stamp. Those three are the player's
+    -- real values again and are worth re-recording, because the record taken at
+    -- finish may have caught an open picker's unaccepted preview.
     --
-    -- The other 28 keys are NOT re-recorded. Their rollback never touches them,
-    -- so what is in the table now is this file's own finish write, and copying
-    -- it into the snapshot would hand KitnUI's values back at the next reset as
-    -- though the player had chosen them.
+    -- The other 28 are NOT re-recorded. Their rollback never touches them, so
+    -- what is in the table now is this file's own write, and copying it into the
+    -- snapshot would hand KitnUI's values back at the next reset as though the
+    -- player had chosen them.
     if snap.prev then
         snap.prev.theme = bfl.theme or BFL_ABSENT
         snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
@@ -1585,19 +1640,13 @@ function ns.RestoreBetterFriendlistAppearance()
     local bfl = _G.BetterFriendlistDB
     if type(bfl) ~= "table" then return false end
 
-    for key, prev in pairs(snap.prev) do
-        if prev == BFL_ABSENT then
-            bfl[key] = nil
-        else
-            bfl[key] = prev
-        end
-    end
+    RestorePrev(bfl, snap)
 
-    local version = snap.appearanceOnboardingVersion
-    bfl.appearanceOnboardingVersion = version ~= BFL_ABSENT and version or nil
-    -- false rather than nil on the way back: that is this key's own default, and
-    -- a snapshot taken when it was already false stores false.
-    bfl.appearanceOnboardingResume = snap.appearanceOnboardingResume or false
+    -- Checked once after the reset's reload, which that addon's own rollback can
+    -- undo exactly as it undoes an install. The caller carries the record across
+    -- the wipe for it.
+    snap.verify = true
+    snap.pending = nil
     return true
 end
 
