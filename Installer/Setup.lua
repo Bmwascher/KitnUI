@@ -816,12 +816,14 @@ end
 -- profile table directly, so nothing here rebuilds category data by hand.
 ---------------------------------------------------------------------------------
 
--- Frame positions and the remembered bank/guild tab. Baganator fills every
--- missing key with its own default when the profile goes live
--- (Core/Config.lua Config.Install), so dropping these gives each user
--- Baganator's placement instead of the author's screen coordinates. The two
--- anchor-to-frame positions are worse than merely personal: they name a
--- skin-specific frame that need not exist on the installing character.
+-- Frame positions and the remembered bank/guild tab. Baganator refills every
+-- missing key from its own defaults when the profile goes live
+-- (Core/Config.lua ImportDefaultsToProfile, run from InitializeData and from
+-- ChangeProfile), so dropping these gives each user Baganator's placement
+-- instead of the author's screen coordinates. The two anchor-to-frame positions
+-- are worse than merely personal: the exported values name a skin-suffixed
+-- frame, Baganator_CategoryViewBackpackViewFrameblizzard, which does not exist
+-- for a user on a different skin.
 local BAGANATOR_DROP_KEYS = {
     bag_view_position = true,
     bank_view_position = true,
@@ -928,6 +930,19 @@ local function DecodeBaganatorProfile(exportString)
             end
             if type(profile.category_hidden) == "table" then
                 profile.category_hidden[source] = nil
+            end
+        end
+    end
+
+    -- Sections are reached only through their "_id" entry in the same order
+    -- (CategoryViews/ComposeCategories.lua, the source:sub(1, 1) == "_" branch),
+    -- so the same rule prunes them. Only the unreferenced ones go: that branch
+    -- indexes the section without a nil check, so an order entry must never
+    -- outlive its section.
+    if type(profile.category_sections) == "table" then
+        for id in pairs(profile.category_sections) do
+            if not inUse["_" .. tostring(id)] then
+                profile.category_sections[id] = nil
             end
         end
     end
