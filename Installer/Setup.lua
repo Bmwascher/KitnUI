@@ -294,6 +294,45 @@ local function ImportBigWigsBosses()
     end
 end
 
+-- Boss debuffs on you: OFF.
+--
+-- BigWigs' own export cannot carry this. Its share feature exports nine groups
+-- -- bar, message and countdown positions and settings, the three colour sets,
+-- nameplates, Mythic+, battle res, Private Auras and the combat timer -- and
+-- the Auras plugin, which draws boss debuffs on you and on the tank, is not one
+-- of them (Sharing.lua in BigWigs_Options, read 2026-08-22). The one aura group
+-- it does export belongs to Private Auras, a plugin this Auras one REPLACED --
+-- PrivateAuras.lua is gone from BigWigs_Plugins, so that export is dead code
+-- and no aura setting travels at all today. The profile string lands complete
+-- and this setting is still at its default, which is the gap the installer
+-- exists to fill.
+--
+-- Written into KITNUI'S OWN BigWigs profile, so unlike the BetterFriendlist
+-- keys there is nothing of the player's to back up: that table did not exist
+-- until KitnUI's profile did, and no other profile is touched. It is written on
+-- import only, so a player who turns the auras back on afterwards keeps them
+-- until they import again -- the same deal as every other setting in the
+-- profile.
+--
+-- Structure is BigWigs3DB.namespaces[plugin].profiles[name], which is AceDB's
+-- own shape; building the empty tables by hand is safe because AceDB fills in
+-- its defaults over whatever is there at load.
+local function ApplyBigWigsAuraSettings()
+    if type(BigWigs3DB) ~= "table" then return end
+
+    BigWigs3DB.namespaces = BigWigs3DB.namespaces or {}
+    local spaces = BigWigs3DB.namespaces
+    spaces["BigWigs_Plugins_Auras"] = spaces["BigWigs_Plugins_Auras"] or {}
+
+    local auras = spaces["BigWigs_Plugins_Auras"]
+    auras.profiles = auras.profiles or {}
+    auras.profiles[ns.profileName] = auras.profiles[ns.profileName] or {}
+
+    local profile = auras.profiles[ns.profileName]
+    profile.player = profile.player or {}
+    profile.player.disabled = true
+end
+
 setupFunctions["BigWigs"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
@@ -314,6 +353,7 @@ setupFunctions["BigWigs"] = function(addonKey, import)
                 -- addon complete regardless is also what keeps the installer
                 -- from offering BigWigs again on every later run.
                 ImportBigWigsBosses()
+                ApplyBigWigsAuraSettings()
                 CompleteSetup(addonKey)
             else
                 -- Printed, not returned. RegisterProfile is asynchronous: the
@@ -365,6 +405,83 @@ end
 -- importer this replaces (AceSerializer, per-module {enabled, data} shape) is
 -- in git history; it cannot decode current exports at all.
 ---------------------------------------------------------------------------------
+
+-- Lock the three reminder note frames.
+--
+-- NSRT's export carries their geometry but not their LOCK state, so an imported
+-- profile arrives with Moveable still true and NSRT draws a little diagonal
+-- resize grip over the world at every login (CreateNoteMoverFrame in its
+-- Reminders.lua shows the Resizer whenever a frame is enabled and Moveable;
+-- MakeDraggable hides it again when it is not).
+--
+-- A setting write rather than a Hide() on the frames: locking is exactly what
+-- NSRT's own unlock button toggles, while hiding them behind its back would
+-- come back at the next reload and would leave them draggable in the meantime.
+--
+-- Written in BOTH places NSRT keeps a profile -- the live root, which is what
+-- is on screen now, and the stored copy under NSRT.Profiles, which is what a
+-- later profile switch loads from. Every step is type-checked because this
+-- runs against another addon's saved variables.
+local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraReminderFrame" }
+
+-- A mover that NSRT has ALREADY built keeps its unlocked behaviour until the
+-- addon rebuilds it, so the settings write alone would land at the next reload
+-- -- which the installer's Finish does anyway, but a wizard closed before
+-- Finish would leave a grip on screen and a frame that still eats clicks.
+--
+-- NSRT's own unlock is mirrored rather than reimplemented, exactly inverted:
+-- CreateNoteMoverFrame unlocks with MakeDraggable(enable=true) plus Resizer:Show
+-- and SetResizable(true) (Reminders.lua), so this passes enable=false and does
+-- the other two in reverse. MakeDraggable's disable branch is what hides the
+-- border, disables the mouse and clears the drag scripts (Functions.lua). The
+-- lock switch a player would use for this lives in the companion UI addon
+-- (NorthernSkyRaidTools_UI), not in NSRT itself. isNote is true because all
+-- three of these are note frames.
+-- pcall'd and method-checked throughout: this is another addon's furniture and
+-- a locking failure must not abort an install.
+local function LockLiveMover(NSI, key, settings)
+    if type(NSI) ~= "table" then return end
+    local mover = NSI[key .. "Mover"]
+    if type(mover) ~= "table" then return end
+
+    if type(NSI.MakeDraggable) == "function" then
+        pcall(NSI.MakeDraggable, NSI, mover, settings, false, true)
+    end
+    if mover.Resizer and mover.Resizer.Hide then mover.Resizer:Hide() end
+    if mover.SetResizable then mover:SetResizable(false) end
+end
+
+local function LockNSRTReminderFrames()
+    if type(NSRT) ~= "table" then return end
+
+    -- The live root is whatever profile is ACTIVE, which is only ours to write
+    -- when the active profile is ours. A player who skipped the NSRT step, or
+    -- who has since moved to a profile of their own, keeps their unlock state.
+    -- The frames on screen belong to that active profile too, which is why they
+    -- are locked in here rather than in a pass of their own.
+    if NSRT.CurrentProfile == ns.profileName and type(NSRT.ReminderSettings) == "table" then
+        local live = NSRT.ReminderSettings
+        local NSI = _G.NorthernSkyRaidTools
+        for _, key in ipairs(NSRT_LOCK_FRAMES) do
+            local settings = live[key]
+            if type(settings) == "table" then
+                settings.Moveable = false
+                LockLiveMover(NSI, key, settings)
+            end
+        end
+    end
+
+    local profiles = NSRT.Profiles
+    local stored = type(profiles) == "table" and profiles[ns.profileName] or nil
+    stored = type(stored) == "table" and stored.ReminderSettings or nil
+    if type(stored) == "table" then
+        for _, key in ipairs(NSRT_LOCK_FRAMES) do
+            if type(stored[key]) == "table" then
+                stored[key].Moveable = false
+            end
+        end
+    end
+end
 
 setupFunctions["NSRT"] = function(addonKey, import)
     if not IsAddOnLoaded("NorthernSkyRaidTools") then
@@ -488,6 +605,14 @@ setupFunctions["NSRT"] = function(addonKey, import)
             if NSRT.MainProfile == imported then NSRT.MainProfile = ns.profileName end
         end
 
+        -- Here and nowhere else. Locking from the wizard's Finish instead would
+        -- reach a profile the player never asked this run to touch: the NSRT
+        -- page is optional, the profile is account-wide, and someone who skipped
+        -- the page and had deliberately unlocked a frame would find it locked
+        -- again. Tied to the import, it only ever changes what was just written.
+        -- Existing installs reach it through the X-NSRT-Version bump, which puts
+        -- NSRT in the update list and brings them back through this same path.
+        LockNSRTReminderFrames()
         CompleteSetup(addonKey)
         return true
     end
