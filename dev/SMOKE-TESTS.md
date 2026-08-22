@@ -26,10 +26,10 @@ an agent.**
 
 | Item | Branch | Built | Reviewed | In-game |
 |---|---|---|---|---|
-| 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PENDING** |
-| 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PENDING** |
-| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PENDING** |
-| 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
+| 1. Unowned switch | `feature/unowned-switch` | yes, `e90048b` | Sol PASS, Fable PASS | **PASS** (Kitn, 2026-08-21) |
+| 2. Every loader says when it refused | `feature/unowned-switch` | yes, `f81b8d7` | Sol PASS, Fable PASS | **PASS** (Kitn, 2026-08-21) |
+| 3. Ownership tooltip on forcing switches | `feature/ownership-tooltip` | yes, `792a53b` | Sol PASS, Fable PASS | **PASS** (Kitn, 2026-08-21) |
+| 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 | 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 | 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
 | 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..5ff1521` | plan: Sol PASS (3 rounds), Fable PASS. Diff: Sol PASS (3 rounds) and Fable PASS, both on `5ff1521` | **PASS** (Kitn, 2026-08-21) |
@@ -63,7 +63,7 @@ only. The account-wide popup colour lives in `euiSnapGlobal` and is NOT covered 
 # Item 1 — A switch that is on without owning the setting
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-11-unowned-switch.md` (local only).
-**Commit:** `e90048b` (rebased onto v2.0.1). **Status: awaiting Kitn.**
+**Commit:** `e90048b` (rebased onto v2.0.1). **Status: passed in game, Kitn, 2026-08-21.**
 
 ## What changed and why it needs testing
 
@@ -177,21 +177,23 @@ failure.
 
 ## Result
 
-Kitn, record the outcome here.
-
-- Date:
-- Pass A:
-- Pass B:
-- Check 13:
-- Check 14 (accepting the Lulu prompt):
-- Notes:
+- Date: 2026-08-21 (reported)
+- Reported by Kitn: **all checks passed.**
+- Pass A (Lulu off): pass
+- Pass B (Lulu alone): pass
+- Check 13: pass
+- Check 14 (accepting the Lulu prompt): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
 
 ---
 
 # Item 2 — Every loader says when it refused
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-11-refusal-contract.md` (local only).
-**Status: awaiting Kitn.**
+**Status: passed in game, Kitn, 2026-08-21.**
 
 ## What changed and why it needs testing
 
@@ -311,22 +313,24 @@ paths that CAN be reached, by deleting a profile or layout rather than an API.
 
 ## Result
 
-Kitn, record the outcome here.
-
-- Date:
-- Regression (checks 1-2):
-- Disabled-addon (checks 3-5):
-- BigWigs decline (check 6):
-- Deleted profiles (checks 7-9):
-- Edit Mode activation and CDM import (checks 9b-10b):
-- Notes:
+- Date: 2026-08-21 (reported)
+- Reported by Kitn: **all checks passed.**
+- Regression (checks 1-2): pass
+- Disabled-addon (checks 3-5): pass
+- BigWigs decline (check 6): pass
+- Deleted profiles (checks 7-9): pass
+- Edit Mode activation and CDM import (checks 9b-10b): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
 
 ---
 
 # Item 3 — Each forcing switch says whether it is really holding your setting
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-11-ownership-tooltip.md` (local only).
-**Commit:** `792a53b` (rebased onto v2.0.1). **Status: awaiting Kitn.**
+**Commit:** `792a53b` (rebased onto v2.0.1). **Status: passed in game, Kitn, 2026-08-21.**
 
 ## What is changing and why it needs testing
 
@@ -422,16 +426,18 @@ proves the rejected design did not sneak back in as a thrown Lua error.
 
 ## Result
 
-Kitn, record the outcome here.
-
-- Date:
-- Off / on / off (checks 1-3):
-- Copied profile and claiming (checks 4-5):
-- Beginner Mode names only what it holds (check 6):
-- Untouched switches (check 7):
-- Narrow panel, BugSack (check 8):
-- Search, rebuild, Lulu wording (checks 10-12):
-- Notes:
+- Date: 2026-08-21 (reported)
+- Reported by Kitn: **all checks passed.**
+- Off / on / off (checks 1-3): pass
+- Copied profile and claiming (checks 4-5): pass
+- Beginner Mode names only what it holds (check 6): pass
+- Untouched switches (check 7): pass
+- Narrow panel, BugSack (check 8): pass
+- Search, rebuild, Lulu wording (checks 10-12): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
 
 
 ---
@@ -549,14 +555,16 @@ to show up here.
 
 ## Result
 
-Kitn, record the outcome here.
-
-- Date:
-- Sidebar and version (checks 1-2c):
-- Nickname (checks 3-9, including 3b, 3c and 6b):
-- Looks (checks 10-15b):
-- BugSack (check 16):
-- Notes:
+- Date: 2026-08-21 (reported)
+- Reported by Kitn: **all checks passed.**
+- Sidebar and version (checks 1-2c): pass
+- Nickname (checks 3-9, including 3b, 3c and 6b): pass
+- Looks (checks 10-15b): pass
+- BugSack (check 16): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
 
 ---
 
@@ -837,7 +845,7 @@ moves.
 
 **Plan:** `dev/docs/superpowers/plans/2026-08-21-tweaks-and-accents.md` (local only).
 **Branch** `feature/tweaks-and-accents`. Touches `KitnUI_EUI/Core.lua` and
-`KitnUI_EUI/General.lua`. Nothing else moves. **Status: awaiting Kitn.**
+`KitnUI_EUI/General.lua`. Nothing else moves. **Status: passed in game, Kitn, 2026-08-21.**
 
 ## What changed and why it needs testing
 
