@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.1 (unreleased)
+
+### Installer
+- **NEW:** BetterFriendlist is set up for you. The installer applies the Legacy interface style, the Dark theme, the General display options and the Expressway fonts, and marks that addon's own look picker as done so it does not ask you to choose again. Everything it writes is saved first, so `/kitn reset` gives your old settings back
+
+### Profiles
+- BigWigs and KitnEssentials profiles refreshed
+
 ## v2.1.0
 
 Every bundled profile refreshed for 12.1, accents you can choose yourself, a
