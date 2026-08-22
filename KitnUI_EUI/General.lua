@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/General.lua                                      ║
--- ║  Purpose: The General page: appearance preset, Lulu Mode,    ║
--- ║           accent scoping.                                    ║
+-- ║  Purpose: The General page: appearance preset, accent, and   ║
+-- ║           the Tweaks switches.                               ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -554,6 +554,71 @@ end
 ns.EUIRegisterReapply(function() ApplyAccent(false) end)
 
 ---------------------------------------------------------------------------------
+-- Row veil
+---------------------------------------------------------------------------------
+
+-- Lays a dead pane over a finished row. EnableMouse(true) on the veil is what makes
+-- it work: the veil swallows the click, so the control underneath cannot fire and
+-- needs no disabled state of its own. W:Toggle and W:ColorPicker take no disabled
+-- argument (EllesmereUI_Widgets.lua:1715-1738, :2725-2747) -- only the multi-part
+-- rows do, through a per-half cfg.disabled (:2904-2950) -- so this is how a plain
+-- row is switched off here.
+--
+-- `text` is optional. With it the veil carries a labelled box and means "not built
+-- yet"; without it the veil is a plain dim and means "not applicable right now".
+--
+-- A veil is STATIC: it is built or not built at page build time and never
+-- re-evaluated. That is safe for both callers. Bite Mode never changes, and the
+-- master accent switch forces a full page rebuild through
+-- ns.EUIRebuildForOwnership (Core.lua:479-496), so the accent rows are rebuilt
+-- every time the thing they depend on changes.
+--
+-- Adapted from NaowhUI, which does this on its own unfinished row
+-- (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_Core.lua:381-410, read
+-- 2026-08-21), recoloured to KitnUI pink and generalised to the unlabelled case.
+--
+-- PanelPP rather than PP, matching NaowhUI: both carry CreateBorder (EllesmereUI
+-- itself aliases one onto the other at EllesmereUI/EllesmereUI.lua:2956, in the
+-- MAIN addon and not in EllesmereUIOptions), but the settings panel runs at its
+-- own scale and PanelPP is the one that snaps to it. Guarded anyway: losing the
+-- border must cost a border, not the page.
+local function Veil(row, text)
+    if not row then return end
+
+    local veil = CreateFrame("Frame", nil, row)
+    veil:SetAllPoints(row)
+    veil:SetFrameLevel(row:GetFrameLevel() + 20)
+    veil:EnableMouse(true)
+
+    local grey = veil:CreateTexture(nil, "BACKGROUND")
+    grey:SetAllPoints()
+    grey:SetColorTexture(0.04, 0.04, 0.05, text and 0.72 or 0.6)
+
+    if not text then return end
+
+    local box = CreateFrame("Frame", nil, veil)
+    box:SetSize(130, 26)
+    box:SetPoint("CENTER")
+
+    local boxBg = box:CreateTexture(nil, "ARTWORK")
+    boxBg:SetAllPoints()
+    boxBg:SetColorTexture(0.08, 0.08, 0.10, 0.95)
+
+    local PP = _G.EllesmereUI and EllesmereUI.PanelPP
+    if PP and PP.CreateBorder then
+        PP.CreateBorder(box, ACCENT_R, ACCENT_G, ACCENT_B, 0.55, 1, "OVERLAY", 7)
+    end
+
+    local label = box:CreateFontString(nil, "OVERLAY")
+    local font = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath())
+        or STANDARD_TEXT_FONT
+    label:SetFont(font, 12, "")
+    label:SetPoint("CENTER")
+    label:SetText(text)
+    label:SetTextColor(ACCENT_R, ACCENT_G, ACCENT_B, 0.95)
+end
+
+---------------------------------------------------------------------------------
 -- Page
 ---------------------------------------------------------------------------------
 
@@ -586,17 +651,92 @@ ns.EUIPages["General"] = function(parent, yOffset)
         function() PickLook("dark") end,
         function() PickLook("color") end);                                        y = y - h
 
+    -- ACCENTS is a SUBSECTION of Appearance, and the only thing that says so is the
+    -- missing spacer above it. Sections on these pages are separated by the 20px
+    -- spacer the caller puts above the header, never by anything the header draws,
+    -- so dropping the spacer is what joins the two blocks visually.
+    _, h = W:SectionHeader(parent, "ACCENTS", y);                                  y = y - h
+
+    -- The MASTER, and the only one of the three that claims anything. Unchanged
+    -- from the switch this replaces except for its label and its tooltip: same
+    -- setter, same ApplyAccent(true), same rebuild.
+    _, h = W:Toggle(parent, "KitnUI Accent Coloring", y,
+        AccentEnabled,
+        function(v)
+            SetAccentEnabled(v)
+            ApplyAccent(true)
+            -- The claim is complete, so the ownership sentence can be recomputed.
+            -- This rebuild is ALSO what re-evaluates the veils on the two rows
+            -- below, which is why they can be built statically.
+            ns.EUIRebuildForOwnership()
+        end,
+        ns.EUIOwnershipTip(
+            "Colors EllesmereUI's accent for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab. The two rows below choose which color.",
+            "accent",
+            AccentEnabled,
+            -- US spelling, changed from the shipped "colour". EUIOwnershipTip
+            -- concatenates this onto the sentence above it, so the two halves land
+            -- in ONE displayed tooltip and a mixed pair reads as a typo.
+            "EllesmereUI's accent color and the settings it is scoped to"));
+                                                                                   y = y - h
+
+    -- Neither of the next two claims anything, so neither needs a combat guard,
+    -- unlike the look and the resource bar. Each writes one KitnUI setting and asks
+    -- the host to repaint its own frames; nothing here is protected and nothing is
+    -- deferred, so there is no state to get out of step.
+    local pinkRow
+    pinkRow, h = W:Toggle(parent, "Use KitnUI Pink", y,
+        AccentUsesDefault,
+        function(v)
+            SetAccentUsesDefault(v)
+            -- Unforced: the swatch below redraws through its registered widget
+            -- refresh, and no ownership sentence changed.
+            if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                pcall(EllesmereUI.RefreshPage, EllesmereUI)
+            end
+        end,
+        "On, the accent is KitnUI pink. Off, it is the color you pick below. Turning this off does not change which settings the accent is scoped to.")
+                                                                                   y = y - h
+
+    -- Shows the colour that is ACTIVE, not the one that is stored: pink while the
+    -- row above is on, the custom colour while it is off. Showing the stored custom
+    -- colour under a pink accent would put green in the swatch and pink on screen.
+    local colorRow
+    colorRow, h = W:ColorPicker(parent, "Accent Color", y,
+        AccentColor,
+        function(r, g, b)
+            SetAccentCustom(r, g, b)
+            -- Unforced, like the row above, even though this ALSO switches "Use
+            -- KitnUI Pink" off. W:Toggle registers its own knob redraw as a widget
+            -- refresh (EllesmereUI_Widgets.lua:1727-1733), so the fast path moves
+            -- that switch for us. Nothing structural changes here: the veils depend
+            -- on the MASTER, which this cannot touch.
+            if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                pcall(EllesmereUI.RefreshPage, EllesmereUI)
+            end
+        end)
+                                                                                   y = y - h
+
+    -- Both rows are meaningless until the master is on, so they are dimmed and
+    -- made dead rather than hidden: a user who has not turned the master on should
+    -- still see that a colour choice exists.
+    if not AccentEnabled() then
+        Veil(pinkRow)
+        Veil(colorRow)
+    end
+
+    _, h = W:Spacer(parent, y, 20);                                                y = y - h
+    _, h = W:SectionHeader(parent, "TWEAKS", y);                                   y = y - h
+
     -- Its own switch, not part of the preset. EllesmereUI splits the resource
     -- bar out of its own dark mode master for the same reason: a dark bar over
-    -- coloured frames, or the reverse, is a normal thing to want.
+    -- coloured frames, or the reverse, is a normal thing to want. It sits under
+    -- Tweaks rather than Appearance because it is a switch, not a look.
     _, h = W:Toggle(parent, "Dark Class Resource Bar", y,
         function() return DarkModeState(IsResourceBars) == true end,
         function(v) SetResourceBarDark(v) end,
         "Darkens the class resource bar on its own, without changing the unit frames or raid frames.");
                                                                                    y = y - h
-
-    _, h = W:Spacer(parent, y, 20);                                                y = y - h
-    _, h = W:SectionHeader(parent, "LULU MODE", y);                                y = y - h
 
     _, h = W:Toggle(parent, "Lulu Mode", y,
         function()
@@ -616,23 +756,16 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "your minimap shape and where its clock, zone, FPS, mail, difficulty and button row sit"));
                                                                                    y = y - h
 
-    _, h = W:Spacer(parent, y, 20);                                                y = y - h
-    _, h = W:SectionHeader(parent, "ACCENT", y);                                   y = y - h
-
-    _, h = W:Toggle(parent, "KitnUI Pink Accent", y,
-        AccentEnabled,
-        function(v)
-            SetAccentEnabled(v)
-            ApplyAccent(true)
-            -- The claim is complete, so the ownership sentence can be recomputed.
-            ns.EUIRebuildForOwnership()
-        end,
-        ns.EUIOwnershipTip(
-            "Sets EllesmereUI's accent to KitnUI pink for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab.",
-            "accent",
-            AccentEnabled,
-            "EllesmereUI's accent colour"));
-                                                                                   y = y - h
+    -- Built as a real row and then covered, rather than left out until the feature
+    -- exists, so the row is visible and its shape is already settled. It carries NO
+    -- saved setting: a stored key nothing reads still has to be defaulted, migrated
+    -- and reset forever. The key arrives with the feature.
+    local biteRow
+    biteRow, h = W:Toggle(parent, "Bite Mode", y,
+        function() return false end,
+        function() end,
+        "Bitebtw's own look: a set of EllesmereUI settings held down, plus a dedicated Edit Mode layout, behind one switch. The same shape as Lulu Mode. Not built yet.")
+    Veil(biteRow, "Coming Soon");                                                  y = y - h
 
     return math.abs(y)
 end
