@@ -1,6 +1,10 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
-## v2.1.1 (unreleased)
+## v2.1.1
+
+Three settings that no profile export can carry, set for you at install:
+BetterFriendlist's whole look, BigWigs' boss debuffs, and the lock on Northern
+Sky Raid Tools' reminder frames.
 
 ### Installer
 - **NEW:** BetterFriendlist is set up for you. The installer applies the Legacy interface style, the Dark theme, the General display options and the Expressway fonts, and marks that addon's own look picker as done so it does not ask you to choose again. Everything it writes is saved first, so `/kitn reset` gives your old settings back
