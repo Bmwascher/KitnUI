@@ -1174,17 +1174,25 @@ ns.TopBar.Elements = {
                 ReloadUI()
             end
         end,
+        -- No title line, unlike every other element here. The body below opens
+        -- with its own heading and this tooltip is the only one long enough to
+        -- need one, so a "Clock" line on top only named the icon the cursor is
+        -- already sitting on.
         tooltip = function(tt)
-            tt:AddLine("Clock", 1, 1, 1)
-            tt:AddLine(" ")
             -- Lockouts and reset clocks live in Readouts.lua with the other
             -- tooltip bodies that read live game state. It always adds lines, so
             -- the spacer below is always paid for.
             if ns.TopBar.ClockTooltip then ns.TopBar.ClockTooltip(tt) end
             tt:AddLine(" ")
-            tt:AddLine(CLICK_L .. " Calendar", 1, 1, 1)
-            tt:AddLine(CLICK_R .. " EllesmereUI Settings", 1, 1, 1)
-            tt:AddLine(CLICK_M .. " Reload UI", 1, 1, 1)
+            -- Two columns, like the reset clocks above: what you press on the
+            -- left, what it opens on the right. Gold on the right rather than
+            -- the grey those rows use, so the actions do not read as more data.
+            tt:AddDoubleLine(CLICK_L .. " Left Button", "Calendar",
+                1, 1, 1, 1, 0.82, 0)
+            tt:AddDoubleLine(CLICK_R .. " Right Button", "EllesmereUI Settings",
+                1, 1, 1, 1, 0.82, 0)
+            tt:AddDoubleLine(CLICK_M .. " Middle Button", "Reload UI",
+                1, 1, 1, 1, 0.82, 0)
         end,
     },
 

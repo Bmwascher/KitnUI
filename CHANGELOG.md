@@ -24,6 +24,7 @@ setting when they were not.
 ### Top Bar
 - **NEW:** Mouse-button pictures in the hearthstone and clock tooltips, so left, middle and right click are shown rather than described
 - Right clicking the clock now opens EllesmereUI's settings instead of the stopwatch and alarm window. Left click still opens the calendar and middle click still reloads
+- The clock tooltip drops its title and lays the three clicks out in two columns: which button on the left, what it opens on the right
 - **NEW:** The clock tooltip lists your saved raid lockouts and the daily and weekly reset clocks
 - **NEW:** Mythic+ portals on cooldown count down in the flyout, reading `8h`, `45m` or `30s`
 - The portal flyout carries its own list of this season's eight dungeons instead of waiting for EllesmereUI's list to catch up

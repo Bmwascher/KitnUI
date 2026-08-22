@@ -1060,8 +1060,11 @@ moves.
   window. It now opens **EllesmereUI's settings**. The stopwatch is no longer
   reachable from the bar at all.
 - Left click (calendar) and middle click (reload) are unchanged.
-- The tooltip's third line changed to match. A tooltip still naming the stopwatch
-  is a fail on its own.
+- **The tooltip was rebuilt.** The "Clock" title is gone, so the tooltip now
+  opens straight into the lockouts. The three click lines became two columns like
+  the reset clocks above them: `Left Button` / `Right Button` / `Middle Button`
+  on the left with their mouse pictures, and what each one opens on the right in
+  gold. A tooltip still naming the stopwatch is a fail on its own.
 - **The right click no longer refuses in combat**, and that is deliberate rather
   than an oversight. The other two still refuse. EllesmereUI's toggle only shows
   that addon's own window and reaches nothing protected, so refusing it would
@@ -1082,9 +1085,14 @@ build. Do not re-run them against this branch; run the checks below instead.
   alarm window any more. That is the intended loss, not a defect.
 - [ ] **4. The other two clicks are untouched.** Left click still opens the
   calendar. Middle click still reloads.
-- [ ] **5. The tooltip tells the truth.** Hover the clock: a **Clock** title, the
-  lockouts and reset clocks, then three rows reading Calendar, **EllesmereUI
-  Settings**, Reload UI, each with its mouse picture.
+- [ ] **5. The tooltip has no title.** Hover the clock. The FIRST line is
+  `Saved Raid(s)`, or `Daily reset` if you hold no lockouts. There is no `Clock`
+  line above it.
+- [ ] **5b. The click rows are two columns.** Below the reset clocks and a blank
+  line, three rows: a mouse picture then `Left Button`, `Right Button`,
+  `Middle Button` down the left, and `Calendar`, `EllesmereUI Settings`,
+  `Reload UI` down the right in gold. The right column lines up, the same way
+  the reset times above it do.
 - [ ] **6. Right click works IN combat.** Pull a target dummy. Right click the
   clock: the settings open and NOTHING is printed about combat.
 - [ ] **7. The other two still refuse in combat.** Still on the dummy, left click
