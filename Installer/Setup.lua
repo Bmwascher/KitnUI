@@ -294,6 +294,41 @@ local function ImportBigWigsBosses()
     end
 end
 
+-- Boss debuffs on you: OFF.
+--
+-- BigWigs' own export cannot carry this. Its share feature exports nine groups
+-- -- bar, message and countdown positions and settings, the three colour sets,
+-- nameplates, Mythic+, battle res, Private Auras and the combat timer -- and
+-- the Auras plugin, which draws boss debuffs on you and on the tank, is not one
+-- of them (Sharing.lua in BigWigs_Options, read 2026-08-22). Private Auras is a
+-- DIFFERENT plugin with a similar name; only that one travels. So the profile
+-- string lands complete and this setting is still at its default, which is
+-- exactly the gap the installer exists to fill.
+--
+-- Written into KITNUI'S OWN BigWigs profile, so unlike the BetterFriendlist
+-- keys there is nothing of the player's to back up: that table did not exist
+-- until KitnUI's profile did, and no other profile is touched. It is written on
+-- import only, so a player who turns the auras back on afterwards keeps them.
+--
+-- Structure is BigWigs3DB.namespaces[plugin].profiles[name], which is AceDB's
+-- own shape; building the empty tables by hand is safe because AceDB fills in
+-- its defaults over whatever is there at load.
+local function ApplyBigWigsAuraSettings()
+    if type(BigWigs3DB) ~= "table" then return end
+
+    BigWigs3DB.namespaces = BigWigs3DB.namespaces or {}
+    local spaces = BigWigs3DB.namespaces
+    spaces["BigWigs_Plugins_Auras"] = spaces["BigWigs_Plugins_Auras"] or {}
+
+    local auras = spaces["BigWigs_Plugins_Auras"]
+    auras.profiles = auras.profiles or {}
+    auras.profiles[ns.profileName] = auras.profiles[ns.profileName] or {}
+
+    local profile = auras.profiles[ns.profileName]
+    profile.player = profile.player or {}
+    profile.player.disabled = true
+end
+
 setupFunctions["BigWigs"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
@@ -314,6 +349,7 @@ setupFunctions["BigWigs"] = function(addonKey, import)
                 -- addon complete regardless is also what keeps the installer
                 -- from offering BigWigs again on every later run.
                 ImportBigWigsBosses()
+                ApplyBigWigsAuraSettings()
                 CompleteSetup(addonKey)
             else
                 -- Printed, not returned. RegisterProfile is asynchronous: the
