@@ -449,6 +449,25 @@ local function LockNSRTReminderFrames()
             end
         end
     end
+
+    -- The settings above are read when NSRT builds its movers, so on their own
+    -- they land at the next reload -- which the installer's Finish does anyway.
+    -- A wizard closed before Finish would otherwise leave a grip on screen and
+    -- the frame still draggable, so the frames that already exist are locked
+    -- now as well. NSI[<name>Mover] is where NSRT keeps them; every method is
+    -- checked because this is another addon's furniture.
+    local NSI = _G.NorthernSkyRaidTools
+    if type(NSI) ~= "table" then return end
+    for _, key in ipairs(NSRT_LOCK_FRAMES) do
+        local mover = NSI[key .. "Mover"]
+        if type(mover) == "table" then
+            if mover.Resizer and mover.Resizer.Hide then mover.Resizer:Hide() end
+            if mover.SetResizable then mover:SetResizable(false) end
+            -- Kills the drag as well: StartMoving refuses on a frame that is
+            -- not movable, so NSRT's own drag script becomes a no-op.
+            if mover.SetMovable then mover:SetMovable(false) end
+        end
+    end
 end
 
 setupFunctions["NSRT"] = function(addonKey, import)
@@ -1780,10 +1799,18 @@ function ns.FinishInstallation()
 
     -- NSRT's three reminder note frames, locked. Their unlock state does not
     -- travel in that addon's export, so every import lands with the resize
-    -- grips showing over the world. Guarded inside: the live settings are only
-    -- written when KitnUI's own NSRT profile is the active one, so a player who
-    -- skipped that step keeps their own unlock state.
-    LockNSRTReminderFrames()
+    -- grips showing over the world.
+    --
+    -- INSTALL ONLY, and doubly guarded: the function itself writes the live
+    -- settings only when KitnUI's own NSRT profile is active, and load, update
+    -- and CDM runs skip it entirely. The profile is account-wide, so a player
+    -- who deliberately unlocked a frame would otherwise have that undone by
+    -- accepting the load prompt on an alt -- the same rule the BetterFriendlist
+    -- write follows below.
+    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
+        and not ns.installerIsUpdateMode then
+        LockNSRTReminderFrames()
+    end
 
     -- INSTALL ONLY. All four flows share this one finish function, and the other
     -- three must not write here: these keys are account-wide, so a player who
