@@ -914,11 +914,19 @@ moves.
   you have never picked a colour, switch Use KitnUI Pink off. The accent goes
   WHITE, not pink. A default of pink is what made this switch look dead the first
   time round.
+- [ ] **7d2. Pink typed as hex re-arms the switch.** With Use KitnUI Pink OFF and
+  a custom colour set, open the swatch and type `FF008C` into the Hex box, or click
+  the pink favourite. The accent goes pink AND Use KitnUI Pink switches itself back
+  ON. It staying off would be a fail: the comparison is on 8-bit values precisely
+  so that a hex-entered pink counts as pink.
 - [ ] **7e. The refusal speaks.** Force the unowned state: with the master ON,
   switch to an EllesmereUI profile KitnUI has never claimed, or clear the accent
   note. Change the colour. Chat prints "Color saved, but KitnUI is not holding the
   accent for this profile...". Then drag inside the picker for several seconds:
   that line must appear **once**, not once per frame.
+- [ ] **7f. The refusal speaks again on a second profile.** Still unowned, switch
+  to a DIFFERENT profile KitnUI has never claimed and change the colour there. The
+  message appears again. Silence would mean the warning latch is stuck.
 - [ ] **8. The custom colour survives a logout.** With the master on and a custom
   colour set, `/reload`. Both the colour and the Use KitnUI Pink state come back as
   you left them. Then log out to character select and back in, and check again —

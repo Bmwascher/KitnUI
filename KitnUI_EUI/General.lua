@@ -531,10 +531,33 @@ end
 -- switch and leaves the note behind. Kitn hit precisely this in game on
 -- 2026-08-21 -- the master read ON for a profile with no accent note at all, and
 -- both colour rows accepted input and silently did nothing.
+-- Every guard ApplyAccentColor bails on, in the same order, then the note. Two
+-- conditions that must agree are exactly the shape that rots apart, and the defect
+-- this whole warning exists to report IS a condition that silently did not match.
 local function AccentColorHeld()
     if not AccentEnabled() then return false end
+    local EUI = _G.EllesmereUI
+    if not EUI then return false end
+    local profile = EUI.GetActiveProfileData and EUI.GetActiveProfileData()
+    if type(profile) ~= "table" then return false end
     local saved = ns.EUIPeekSnap("accent", "color")
     return saved ~= nil and saved.prev ~= nil
+end
+
+-- Colour equality on 8-BIT values, never on the raw doubles. The picker builds
+-- colours out of hex -- EllesmereUI_Widgets.lua:2271 turns "8C" into 140/255,
+-- which is 0.5490196... and is NOT equal to the 0.549 literal above -- and it
+-- round-trips everything through HSV besides. Comparing doubles would leave "Use
+-- KitnUI Pink" reading off under an accent that is byte-identically KitnUI pink,
+-- which is the exact label-versus-reality problem the switch was renamed to avoid.
+local function Byte(v)
+    return math.floor((tonumber(v) or 0) * 255 + 0.5)
+end
+
+local function IsKitnPink(r, g, b)
+    return Byte(r) == Byte(ACCENT_R)
+       and Byte(g) == Byte(ACCENT_G)
+       and Byte(b) == Byte(ACCENT_B)
 end
 
 -- Said by both setters whenever a colour change stored fine but could not reach
@@ -572,7 +595,7 @@ local function SetAccentCustom(r, g, b)
     -- colour when the user presses Cancel (EllesmereUI_Widgets.lua:2598-2617), so
     -- a one-way flip would leave the switch reading off after a cancel that had
     -- already put the colour back to pink.
-    if r == ACCENT_R and g == ACCENT_G and b == ACCENT_B then
+    if IsKitnPink(r, g, b) then
         -- Pink chosen: do NOT overwrite the remembered custom colour with it, or
         -- switching the row above off again would hand back pink and look dead.
         s.accentUseDefault = true
@@ -591,7 +614,17 @@ end
 -- Wrapped rather than registered bare. A bare registration would hand the
 -- registry's own arguments straight through as the claim, so the day the
 -- registry starts passing one, every re-apply silently becomes a claim.
-ns.EUIRegisterReapply(function() ApplyAccent(false) end)
+--
+-- The latch is cleared here too, and that is the only place it can be cleared
+-- CORRECTLY. Clearing it inside WarnUnheld alone means it clears on the next
+-- setter call while held, never on BECOMING held: a user warned on one unowned
+-- profile who switched to a second unowned profile got silence on the second.
+-- This registration fires on every profile switch, spec switch, profile apply and
+-- at login, which is exactly the set of moments the answer can change.
+ns.EUIRegisterReapply(function()
+    warnedUnheld = false
+    ApplyAccent(false)
+end)
 
 ---------------------------------------------------------------------------------
 -- Row veil
