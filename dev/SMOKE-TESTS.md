@@ -32,7 +32,7 @@ an agent.**
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
 | 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 | 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
-| 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..778f65c` | plan: Sol PASS (3 rounds); Fable PASS on the earlier single-switch design only | **PENDING** |
+| 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..5ff1521` | plan: Sol PASS (3 rounds), Fable PASS. Diff: Sol PASS (3 rounds) and Fable PASS, both on `5ff1521` | **PASS** (Kitn, 2026-08-21) |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -964,6 +964,23 @@ moves.
 
 ## Result
 
-- Date:
-- Reported by Kitn:
-- Notes:
+- Date: 2026-08-21
+- Reported by Kitn: **all checks passed**, on the final build `5ff1521` after a
+  re-smoke. An earlier run on an older build found the real defect this branch
+  now fixes — see the note below.
+- The three blocks, and the dead rows under an off master (checks 1, 2, 3, 4): pass
+- Dark Class Resource Bar from its new home (check 5): pass
+- Colour without losing the scoping (checks 6, 7, 7b, 7c, 7d, 7d2): pass
+- The refusal speaks, on both profiles (checks 7e, 7f): pass
+- Logout, pink returning, master off, search, profile switch (checks 8 to 12): pass
+- `/kitn reset`, live against selected (check 13): pass
+- BugSack (check 14): pass
+- Notes: the individual boxes above are left unticked on purpose. This file says
+  no agent may record a check as passed, and a tick written by an agent looks
+  exactly like one written by the tester. The line above is Kitn's own report,
+  attributed; tick the boxes yourself if you want them ticked.
+- Note on the first run: Kitn's first smoke found that switching Use KitnUI Pink
+  off and picking a colour did nothing. The cause was not the new rows. The
+  active profile had been copied from another, so it carried the switch but not
+  the ownership note, and the write correctly refused. The defect was that the
+  refusal was SILENT. Checks 7e and 7f exist because of that run.
