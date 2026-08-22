@@ -424,17 +424,45 @@ end
 -- runs against another addon's saved variables.
 local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraReminderFrame" }
 
+-- A mover that NSRT has ALREADY built keeps its unlocked behaviour until the
+-- addon rebuilds it, so the settings write alone would land at the next reload
+-- -- which the installer's Finish does anyway, but a wizard closed before
+-- Finish would leave a grip on screen and a frame that still eats clicks.
+--
+-- NSRT's own lock button is mirrored rather than reimplemented: MakeDraggable
+-- with enable=false hides the border, disables the mouse and clears the drag
+-- scripts (Functions.lua), and the two resizer calls are what that button does
+-- either side of it. isNote is true because all three of these are note frames.
+-- pcall'd and method-checked throughout: this is another addon's furniture and
+-- a locking failure must not abort an install.
+local function LockLiveMover(NSI, key, settings)
+    if type(NSI) ~= "table" then return end
+    local mover = NSI[key .. "Mover"]
+    if type(mover) ~= "table" then return end
+
+    if type(NSI.MakeDraggable) == "function" then
+        pcall(NSI.MakeDraggable, NSI, mover, settings, false, true)
+    end
+    if mover.Resizer and mover.Resizer.Hide then mover.Resizer:Hide() end
+    if mover.SetResizable then mover:SetResizable(false) end
+end
+
 local function LockNSRTReminderFrames()
     if type(NSRT) ~= "table" then return end
 
     -- The live root is whatever profile is ACTIVE, which is only ours to write
     -- when the active profile is ours. A player who skipped the NSRT step, or
     -- who has since moved to a profile of their own, keeps their unlock state.
+    -- The frames on screen belong to that active profile too, which is why they
+    -- are locked in here rather than in a pass of their own.
     if NSRT.CurrentProfile == ns.profileName and type(NSRT.ReminderSettings) == "table" then
         local live = NSRT.ReminderSettings
+        local NSI = _G.NorthernSkyRaidTools
         for _, key in ipairs(NSRT_LOCK_FRAMES) do
-            if type(live[key]) == "table" then
-                live[key].Moveable = false
+            local settings = live[key]
+            if type(settings) == "table" then
+                settings.Moveable = false
+                LockLiveMover(NSI, key, settings)
             end
         end
     end
@@ -447,25 +475,6 @@ local function LockNSRTReminderFrames()
             if type(stored[key]) == "table" then
                 stored[key].Moveable = false
             end
-        end
-    end
-
-    -- The settings above are read when NSRT builds its movers, so on their own
-    -- they land at the next reload -- which the installer's Finish does anyway.
-    -- A wizard closed before Finish would otherwise leave a grip on screen and
-    -- the frame still draggable, so the frames that already exist are locked
-    -- now as well. NSI[<name>Mover] is where NSRT keeps them; every method is
-    -- checked because this is another addon's furniture.
-    local NSI = _G.NorthernSkyRaidTools
-    if type(NSI) ~= "table" then return end
-    for _, key in ipairs(NSRT_LOCK_FRAMES) do
-        local mover = NSI[key .. "Mover"]
-        if type(mover) == "table" then
-            if mover.Resizer and mover.Resizer.Hide then mover.Resizer:Hide() end
-            if mover.SetResizable then mover:SetResizable(false) end
-            -- Kills the drag as well: StartMoving refuses on a frame that is
-            -- not movable, so NSRT's own drag script becomes a no-op.
-            if mover.SetMovable then mover:SetMovable(false) end
         end
     end
 end
