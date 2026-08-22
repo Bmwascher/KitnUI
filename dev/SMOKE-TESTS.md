@@ -943,19 +943,22 @@ moves.
 - [ ] **12. Profile switch.** With the master on and a custom colour, switch to
   another EllesmereUI profile and back. The colour and the scoping are still right,
   and nothing is printed twice.
-- [ ] **13. `/kitn reset`, run while the master is ON with a custom colour.** Four
-  things, and the obvious guess is wrong:
+- [ ] **13. `/kitn reset`, run while the master is ON with a custom colour.** The
+  obvious guess is wrong, and the difference between what is LIVE and what is
+  merely SELECTED is the whole point of this check:
   - EllesmereUI's live accent is **your own original colour**, NOT pink and NOT the
     custom one. Reset re-merges the defaults and only then re-applies, so the
     master reads off while the notes are still there to restore from.
   - All the scoped places are back to your originals.
   - KitnUI Accent Coloring reads OFF, Use KitnUI Pink reads ON.
-  - The accent shows PINK, and the reason matters: `accentUseDefault` reset to
-    true, NOT because the stored colour reset to pink. It reset to white.
-  - To see that, turn KitnUI Accent Coloring back ON first, because with the
-    master off the two rows below are veiled and the swatch will not open. Then
-    switch Use KitnUI Pink off: the accent goes WHITE. That is the stored default
-    and it proves the reset reached `accentCustom`.
+  - The Accent Color swatch, dimmed under its veil, shows PINK. That is only what
+    is SELECTED, never what is live: the accent on screen is still your original.
+    Pink is selected because `accentUseDefault` reset to true, NOT because the
+    stored colour reset to pink. It reset to white.
+  - Prove that last part: turn KitnUI Accent Coloring back ON, which lifts the veil
+    and makes the accent pink for real. Then switch Use KitnUI Pink off: the accent
+    goes WHITE. That is the stored default, and it shows the reset reached
+    `accentCustom`.
 - [ ] **14. BugSack is empty.** Through all of the above. Any error at all is a
   fail, even one that looks unrelated.
 
