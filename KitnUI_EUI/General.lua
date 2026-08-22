@@ -336,8 +336,40 @@ local ACCENT_KEYS = {
     { folder = "EllesmereUIFriends",      sub = "friends",      key = "useAccentTab",     refresh = "_EFR_ApplyFriends"},
 }
 
--- FF008C, the same pink ns.Color uses for the chat prefix.
-local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 140 / 255
+-- The shipped pink, lifted out of the registered default so there is exactly one
+-- literal in the addon. Copied into three scalars rather than kept as a reference
+-- to that table: a reference is one careless write away from editing the defaults
+-- themselves, which is the shape Core.lua's DEFAULTS comment exists to forbid.
+--
+-- The fallback covers ns.EUISettings()'s own fallback path, which returns a bare
+-- table that no defaults were ever merged into.
+local ACCENT_R, ACCENT_G, ACCENT_B do
+    local d = ns.EUI_DEFAULTS and ns.EUI_DEFAULTS.accentCustom
+    ACCENT_R = (d and d.r) or 1
+    ACCENT_G = (d and d.g) or 0
+    ACCENT_B = (d and d.b) or 0.549
+end
+
+-- Tested against false rather than read for truthiness, because the registered
+-- default is TRUE and an absent key must therefore mean pink. The settings
+-- fallback path merges no defaults, so absent is reachable.
+local function AccentUsesDefault()
+    return ns.EUISettings().accentUseDefault ~= false
+end
+
+-- The colour the master switch forces right now. Falls back to the shipped pink
+-- whenever the stored custom colour is not three numbers, so a hand-edited saved
+-- variable cannot make SetAccentColor throw.
+local function AccentColor()
+    if not AccentUsesDefault() then
+        local c = ns.EUISettings().accentCustom
+        if type(c) == "table" and type(c.r) == "number"
+           and type(c.g) == "number" and type(c.b) == "number" then
+            return c.r, c.g, c.b
+        end
+    end
+    return ACCENT_R, ACCENT_G, ACCENT_B
+end
 
 -- Read and write the switch directly on the settings table, never through a
 -- sub-table: in that shape it was the only switch that did not survive a reload.
@@ -391,7 +423,7 @@ local function ApplyAccentColor(claiming)
             end
         end
         if EUI.SetAccentColor then
-            EUI.SetAccentColor(ACCENT_R, ACCENT_G, ACCENT_B)
+            EUI.SetAccentColor(AccentColor())
         end
     elseif saved.prev ~= nil then
         -- ResetAccentColor is deliberately NOT used here: it clears the legacy
@@ -480,6 +512,40 @@ end
 local function ApplyAccent(claiming)
     ApplyAccentColor(claiming)
     ApplyAccentScope(claiming)
+end
+
+-- The two colour setters. NEITHER CLAIMS, and the false each passes is the whole
+-- reason they are functions rather than inline setValues.
+--
+-- The note recording what the user's accent was before KitnUI touched it belongs
+-- to the master switch and is created once, by it. Passing true from here would
+-- let a colour change re-record KitnUI's own forced colour as the user's original,
+-- and turning the master off would then hand back KitnUI's colour instead of
+-- theirs. Neither of these touches ns.EUIOverride, ns.EUISnap or the scoping.
+--
+-- Consequence worth knowing: while the master reads ON but KitnUI is not actually
+-- holding the accent -- the copied-profile state the ownership tooltip warns about
+-- -- ApplyAccentColor finds no note and writes nothing, so these appear to do
+-- nothing until the user toggles the master off and on again. That is the same
+-- answer the tooltip already gives, so it is not a second surprise.
+
+local function SetAccentUsesDefault(v)
+    ns.EUISettings().accentUseDefault = v and true or false
+    ApplyAccentColor(false)
+end
+
+local function SetAccentCustom(r, g, b)
+    local s = ns.EUISettings()
+    -- Replace the whole table, never write into it. See the DEFAULTS comment in
+    -- Core.lua: an in-place write into a table-valued default is the one shape
+    -- that does not survive a logout here.
+    s.accentCustom = { r = r, g = g, b = b }
+    -- Picking a colour is how a user says they want it, so it turns the pink row
+    -- off as well. EllesmereUI's own trio swatch does exactly this
+    -- (EllesmereUI_Widgets.lua:2645-2655 calls setMode("custom") from setValue).
+    -- The pink is not lost: it is a literal, and the row above puts it back.
+    s.accentUseDefault = false
+    ApplyAccentColor(false)
 end
 
 -- Wrapped rather than registered bare. A bare registration would hand the

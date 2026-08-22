@@ -173,7 +173,22 @@ local DEFAULTS = {
         -- safely for the same reason: its setter REPLACES the table rather than
         -- writing into it. An in-place write into a table-valued default is the
         -- one shape that is unverified, so nothing here uses it.
+        -- The MASTER accent switch, and the only accent control that claims. Its
+        -- name is historical: it now means "KitnUI is colouring your accent",
+        -- not "your accent is pink" -- which colour is a separate question, asked
+        -- by accentUseDefault below. Renaming a saved key costs a migration for
+        -- every existing user, so it keeps the name and carries this comment.
         accentPink              = false,
+        -- Which colour the master forces. A scalar, so the rule above applies
+        -- without further thought. Default true: an install that never touches
+        -- these rows behaves exactly as it did before they existed.
+        accentUseDefault        = true,
+        -- The user's own accent colour, used when accentUseDefault is false. A
+        -- TABLE, and safe as one for the same reason npArrowColor below is: its
+        -- setter REPLACES the table rather than writing a key into it. Defaults
+        -- to the same pink so nothing jumps the first time the switch above goes
+        -- off.
+        accentCustom            = { r = 1, g = 0, b = 0.549 },
         -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
         -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
         -- and a registered default has to be a literal.
