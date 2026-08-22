@@ -14,6 +14,7 @@ KitnUI walks you through configuring EllesmereUI and its companion addons with a
 - **One-click loading** — apply every installed profile to a new character with `/kitn load`
 - **Smart updates** — reimport only the profiles that have changed
 - **Per-spec CDM** — Blizzard Cooldown Manager layouts tailored per spec, tracked per spec so one edited layout does not prompt you to reimport the rest
+- **Settings no export can carry** — some addons leave settings out of their own export format, so the installer writes those directly: BetterFriendlist's whole appearance, BigWigs' boss debuffs, and the lock on Northern Sky Raid Tools' reminder frames
 - **Extras** — optional one-click chat setup, KitnEssentials settings optimization, and companion minimap-icon cleanup
 - **Live status** — traffic-light state per profile (Imported / Update available / Not Imported) with an install summary at the end
 
@@ -23,10 +24,11 @@ KitnUI walks you through configuring EllesmereUI and its companion addons with a
 |---|---|
 | **EllesmereUI** *(required)* | Full UI — unit frames, action bars, nameplates, cast bars; Dark and Colored looks |
 | BuffReminders | Missing buff / food / flask reminders |
-| BigWigs | Boss timers and warnings, plus per-boss settings |
-| Northern Sky Raid Tools | Raid assignments, timers, and note sync |
+| BigWigs | Boss timers and warnings, plus per-boss settings; boss debuffs on you switched off |
+| Northern Sky Raid Tools | Raid assignments, timers, and note sync; reminder frames locked in place |
 | KitnEssentials | Combat, dungeon, and QoL profiles |
 | Baganator | Category-sorted bags and bank |
+| BetterFriendlist | Appearance only — Legacy style, Dark theme, display options and fonts; no separate step, applied on finish |
 | Blizzard Edit Mode | HUD frame layout |
 | Blizzard CDM | Per-spec Cooldown Manager layouts |
 
@@ -49,7 +51,7 @@ Every companion is optional — KitnUI installs profiles only for the addons you
 | `/kitn cdm` | Open the Blizzard CDM importer for the current class |
 | `/kitn options` | Open the KitnUI tab in EllesmereUI's config panel |
 | `/kitn version` | Show addon and per-profile version info |
-| `/kitn reset` | Reset installer state (does not remove addon profiles) |
+| `/kitn reset` | Reset installer state and hand back the settings KitnUI holds for other addons (does not remove addon profiles) |
 
 ## Credits
 
