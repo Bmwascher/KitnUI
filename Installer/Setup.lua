@@ -406,36 +406,48 @@ end
 -- in git history; it cannot decode current exports at all.
 ---------------------------------------------------------------------------------
 
--- Lock the personal reminder frame.
+-- Lock the three reminder note frames.
 --
--- NSRT's export carries that frame's geometry but not its LOCK state, so the
--- imported profile arrives with PersonalReminderFrame.Moveable still true and
--- NSRT draws the little diagonal resize grip over the world at every login
--- (CreateNoteMoverFrame in its Reminders.lua shows the Resizer whenever the
--- frame is enabled and Moveable; MakeDraggable hides it again when it is not).
+-- NSRT's export carries their geometry but not their LOCK state, so an imported
+-- profile arrives with Moveable still true and NSRT draws a little diagonal
+-- resize grip over the world at every login (CreateNoteMoverFrame in its
+-- Reminders.lua shows the Resizer whenever a frame is enabled and Moveable;
+-- MakeDraggable hides it again when it is not).
 --
--- A setting write rather than a Hide() on the frame: locking is exactly what
--- NSRT's own unlock button toggles, while hiding the frame behind its back
--- would come back at the next reload and would leave the thing draggable in
--- the meantime.
+-- A setting write rather than a Hide() on the frames: locking is exactly what
+-- NSRT's own unlock button toggles, while hiding them behind its back would
+-- come back at the next reload and would leave them draggable in the meantime.
 --
 -- Written in BOTH places NSRT keeps a profile -- the live root, which is what
 -- is on screen now, and the stored copy under NSRT.Profiles, which is what a
 -- later profile switch loads from. Every step is type-checked because this
 -- runs against another addon's saved variables.
-local function LockNSRTPersonalReminder()
+local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraReminderFrame" }
+
+local function LockNSRTReminderFrames()
     if type(NSRT) ~= "table" then return end
 
-    local live = NSRT.ReminderSettings
-    if type(live) == "table" and type(live.PersonalReminderFrame) == "table" then
-        live.PersonalReminderFrame.Moveable = false
+    -- The live root is whatever profile is ACTIVE, which is only ours to write
+    -- when the active profile is ours. A player who skipped the NSRT step, or
+    -- who has since moved to a profile of their own, keeps their unlock state.
+    if NSRT.CurrentProfile == ns.profileName and type(NSRT.ReminderSettings) == "table" then
+        local live = NSRT.ReminderSettings
+        for _, key in ipairs(NSRT_LOCK_FRAMES) do
+            if type(live[key]) == "table" then
+                live[key].Moveable = false
+            end
+        end
     end
 
     local profiles = NSRT.Profiles
     local stored = type(profiles) == "table" and profiles[ns.profileName] or nil
     stored = type(stored) == "table" and stored.ReminderSettings or nil
-    if type(stored) == "table" and type(stored.PersonalReminderFrame) == "table" then
-        stored.PersonalReminderFrame.Moveable = false
+    if type(stored) == "table" then
+        for _, key in ipairs(NSRT_LOCK_FRAMES) do
+            if type(stored[key]) == "table" then
+                stored[key].Moveable = false
+            end
+        end
     end
 end
 
@@ -561,7 +573,10 @@ setupFunctions["NSRT"] = function(addonKey, import)
             if NSRT.MainProfile == imported then NSRT.MainProfile = ns.profileName end
         end
 
-        LockNSRTPersonalReminder()
+        -- Also on Finish, which is what covers a profile imported by an older
+        -- KitnUI. Here as well so a wizard closed before Finish still leaves
+        -- what it just imported locked; the write is idempotent.
+        LockNSRTReminderFrames()
         CompleteSetup(addonKey)
         return true
     end
@@ -1762,6 +1777,13 @@ function ns.FinishInstallation()
 
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
+
+    -- NSRT's three reminder note frames, locked. Their unlock state does not
+    -- travel in that addon's export, so every import lands with the resize
+    -- grips showing over the world. Guarded inside: the live settings are only
+    -- written when KitnUI's own NSRT profile is the active one, so a player who
+    -- skipped that step keeps their own unlock state.
+    LockNSRTReminderFrames()
 
     -- INSTALL ONLY. All four flows share this one finish function, and the other
     -- three must not write here: these keys are account-wide, so a player who
