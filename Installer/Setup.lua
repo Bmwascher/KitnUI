@@ -1389,6 +1389,24 @@ end
 -- through its own database layer at load.
 local BFL_ONBOARDING_VERSION = 3
 
+-- Do the three keys currently read the way this file writes them?
+local function BFLHolds(bfl)
+    return bfl.theme == "dark"
+        and bfl.friendsFrameStyle == "modern"
+        and (tonumber(bfl.appearanceOnboardingVersion) or 0) >= BFL_ONBOARDING_VERSION
+end
+
+local function WriteBFL(bfl)
+    bfl.theme = "dark"
+    bfl.friendsFrameStyle = "modern"
+    -- Never LOWER their number. A newer BetterFriendlist raises this constant,
+    -- and stamping 3 over a 4 would tell that addon its own newer flow is
+    -- unfinished and reopen it on every login, every time KitnUI finishes.
+    if (tonumber(bfl.appearanceOnboardingVersion) or 0) < BFL_ONBOARDING_VERSION then
+        bfl.appearanceOnboardingVersion = BFL_ONBOARDING_VERSION
+    end
+end
+
 function ns.ApplyBetterFriendlistAppearance()
     if not IsAddOnLoaded("BetterFriendlist") then return end
     local bfl = _G.BetterFriendlistDB
@@ -1407,24 +1425,51 @@ function ns.ApplyBetterFriendlistAppearance()
         snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
     end
 
-    bfl.theme = "dark"
-    bfl.friendsFrameStyle = "modern"
-    bfl.appearanceOnboardingVersion = BFL_ONBOARDING_VERSION
+    WriteBFL(bfl)
+    -- Checked once on the far side of the installer's reload; see below.
+    snap.pending = true
+end
+
+-- Second half of the write above, one reload later.
+--
+-- BetterFriendlist's appearance flow puts its own three keys back when the game
+-- unloads with its picker still open, so the reload that is meant to APPLY the
+-- write can be the thing that undoes it -- and a brand new player meets both
+-- first-run flows on the same login, which makes that the likely case rather
+-- than an exotic one. Nothing outside that addon can see whether its picker is
+-- open, so this reads the result instead.
+--
+-- ONCE, and only on the login right after a finish: a player who changes the
+-- theme themselves a week later is not argued with.
+function ns.RecheckBetterFriendlistAppearance()
+    local snap = ns.db and ns.db.bflSnap
+    if not (snap and snap.pending) then return end
+    snap.pending = nil
+
+    if not IsAddOnLoaded("BetterFriendlist") then return end
+    local bfl = _G.BetterFriendlistDB
+    if type(bfl) ~= "table" then return end
+    if BFLHolds(bfl) then return end
+
+    WriteBFL(bfl)
+    print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set the Dark theme again. Type " .. ns.Color("/reload") .. " to see it.")
 end
 
 -- Undo, for /kitn reset. The wipe there takes the snapshot with it, so this has
--- to run before it. Silent when KitnUI never took the settings.
+-- to run before it. Returns false ONLY when there is something to put back and
+-- BetterFriendlist is not here to take it -- the caller keeps the snapshot in
+-- that case, because nothing else remembers the player's values.
 function ns.RestoreBetterFriendlistAppearance()
     local snap = ns.db and ns.db.bflSnap
-    if not (snap and snap.taken) then return end
+    if not (snap and snap.taken) then return true end
     local bfl = _G.BetterFriendlistDB
-    if type(bfl) ~= "table" then return end
+    if type(bfl) ~= "table" then return false end
 
     bfl.theme = snap.theme or nil
     bfl.friendsFrameStyle = snap.friendsFrameStyle or nil
     bfl.appearanceOnboardingVersion = snap.appearanceOnboardingVersion or nil
+    return true
 end
-
 
 ---------------------------------------------------------------------------------
 -- Finish installation
@@ -1441,9 +1486,13 @@ function ns.FinishInstallation()
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
 
-    -- Same on both paths as the module set above: these are account-wide keys in
-    -- another addon, so an alt running /kitn load simply rewrites what is there.
-    ns.ApplyBetterFriendlistAppearance()
+    -- Install and load only. /kitn cdm and /kitn update reuse this same finish,
+    -- and neither of those promises to touch another addon's account-wide
+    -- appearance. On the load path it is right: these keys are account-wide, so
+    -- an alt simply rewrites what is already there.
+    if not ns.installerIsCDMMode and not ns.installerIsUpdateMode then
+        ns.ApplyBetterFriendlistAppearance()
+    end
 
     -- Chat Setup, same reasoning as the module set above: the opt-in is account
     -- wide but WoW's chat layout is per character, so an alt that only runs

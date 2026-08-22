@@ -573,7 +573,15 @@ KitnCommands["reset"] = function()
     -- what they held. Put them back first. After the EllesmereUI teardown on
     -- purpose: that one can still refuse, and a refusal must leave everything as
     -- it was.
-    if ns.RestoreBetterFriendlistAppearance then ns.RestoreBetterFriendlistAppearance() end
+    --
+    -- A false answer means the addon is not loaded to take its settings back, so
+    -- the snapshot rides across the wipe with the other debts below. Dropping it
+    -- would strand KitnUI's values in BetterFriendlist forever: nothing else
+    -- remembers what the player had.
+    local bflOwed
+    if ns.RestoreBetterFriendlistAppearance and ns.RestoreBetterFriendlistAppearance() == false then
+        bflOwed = ns.db.bflSnap
+    end
 
     -- That teardown queues a line for anything it could NOT put back, and the
     -- queue lives in the very table this function is about to delete. Printing
@@ -604,10 +612,11 @@ KitnCommands["reset"] = function()
     end
 
     local fresh
-    if (carried and #carried > 0) or owed then
+    if (carried and #carried > 0) or owed or bflOwed then
         fresh = {}
         if carried and #carried > 0 then fresh.pendingMessages = carried end
         if owed then fresh.euiSnapGlobal = owed end
+        if bflOwed then fresh.bflSnap = bflOwed end
     end
     KitnUIDB = fresh
     ReloadUI()
@@ -982,6 +991,12 @@ boot:SetScript("OnEvent", function()
 
     -- Login message + outdated profile notification
     C_Timer.After(2, function()
+        -- In the same delayed block because it can print: BetterFriendlist may
+        -- have undone the installer's appearance write during the reload that
+        -- was meant to apply it (Setup.lua). One shot, and silent unless it
+        -- actually had to write again.
+        if ns.RecheckBetterFriendlistAppearance then ns.RecheckBetterFriendlistAppearance() end
+
         local outdated = ns.GetOutdatedAddons()
         if #outdated > 0 then
             local updated, new = {}, {}
