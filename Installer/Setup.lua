@@ -1407,16 +1407,58 @@ local BFL_SETTINGS = {
     treatMobileAsOffline    = false,
     showGameIcon            = true,
     colorLevelByDifficulty  = true,
+    showWelcomeMessage      = false,
     hideEmptyGroups         = false,
     showBlizzardOption      = false,
     enableFavoriteIcon      = true,
     favoriteIconStyle       = "bfl",
+
+    -- Fonts: friend name, friend info, tab text. Expressway is EllesmereUI's
+    -- face, shared through LibSharedMedia, and EllesmereUI is required, so it is
+    -- there to be picked. BetterFriendlist falls back on its own if it is not.
+    -- The Raid Name and Group Header blocks on that tab are deliberately left
+    -- alone.
+    fontFriendName          = "Expressway",
+    fontSizeFriendName      = 14,
+    fontOutlineFriendName   = "SLUG",
+    fontShadowFriendName    = false,
+    fontFriendInfo          = "Expressway",
+    fontSizeFriendInfo      = 12,
+    fontOutlineFriendInfo   = "SLUG",
+    fontShadowFriendInfo    = false,
+    fontTabText             = "Friz Quadrata TT",
+    fontSizeTabText         = 12,
+    fontOutlineTabText      = "SLUG",
+    fontShadowTabText       = false,
 }
+
+-- The three font colours, kept apart from the scalars above because each one is
+-- a TABLE: it has to be copied in rather than assigned (BetterFriendlist owns
+-- what it stores and is free to mutate it, and a shared reference would let it
+-- edit this file's constants), and compared field by field.
+local BFL_COLORS = {
+    fontColorFriendName = { r = 0.51,  g = 0.773, b = 1,    a = 1 },  -- Battle.net blue
+    fontColorFriendInfo = { r = 0.51,  g = 0.51,  b = 0.51, a = 1 },  -- grey
+    fontColorTabText    = { r = 1,     g = 0.82,  b = 0,    a = 1 },  -- Blizzard yellow
+}
+
+local function ColorMatches(have, want)
+    if type(have) ~= "table" then return false end
+    return have.r == want.r and have.g == want.g and have.b == want.b and have.a == want.a
+end
+
+local function CopyColor(color)
+    if type(color) ~= "table" then return nil end
+    return { r = color.r, g = color.g, b = color.b, a = color.a }
+end
 
 -- Does the addon currently read the way this file writes it?
 local function BFLHolds(bfl)
     for key, want in pairs(BFL_SETTINGS) do
         if bfl[key] ~= want then return false end
+    end
+    for key, want in pairs(BFL_COLORS) do
+        if not ColorMatches(bfl[key], want) then return false end
     end
     return (tonumber(bfl.appearanceOnboardingVersion) or 0) >= BFL_ONBOARDING_VERSION
 end
@@ -1424,6 +1466,9 @@ end
 local function WriteBFL(bfl)
     for key, want in pairs(BFL_SETTINGS) do
         bfl[key] = want
+    end
+    for key, want in pairs(BFL_COLORS) do
+        bfl[key] = CopyColor(want)
     end
 
     -- Never LOWER their number. A newer BetterFriendlist raises this constant,
@@ -1455,6 +1500,9 @@ local function TakeSnapshot(snap, bfl, base)
         end
         if value == nil then value = BFL_ABSENT end
         snap.prev[key] = value
+    end
+    for key in pairs(BFL_COLORS) do
+        snap.prev[key] = CopyColor(bfl[key]) or BFL_ABSENT
     end
     snap.appearanceOnboardingVersion = (base and base.completedVersion)
         or bfl.appearanceOnboardingVersion or BFL_ABSENT
