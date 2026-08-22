@@ -57,14 +57,26 @@ local function SlotShowsName(settings, slot)
     return NAME_CONTENT[settings[slot.content]] or false
 end
 
+-- No stored power text colour is EllesmereUI's white default, so an absent
+-- colour and a stored white paint the same pixels and must read the same. The
+-- write below stores nothing; only a hand edit can store the white itself.
+local function IsWhitePowerText(c)
+    return c == nil or (c.r == 1 and c.g == 1 and c.b == 1)
+end
+
 -- Whichever element carries the class colour, the other goes neutral, so the
 -- readable one stays readable. That is the whole rule.
+--
+-- The power text obeys it against its own bar rather than against the class
+-- colour: Dark leaves the power bar dark, so the text carries the power colour;
+-- Coloured fills the bar with the power colour, so the text goes white.
 local LOOKS = {
     dark = {
         label       = "Dark",
         darkMode    = true,
         healthClass = false,
         nameClass   = true,
+        powerColor  = true,
         raidName    = "class",
     },
     color = {
@@ -72,6 +84,7 @@ local LOOKS = {
         darkMode    = false,
         healthClass = true,
         nameClass   = false,
+        powerColor  = false,
         raidName    = "custom",
     },
 }
@@ -157,6 +170,17 @@ local function ApplyLook(key)
             local settings = uf[unit]
             if type(settings) == "table" then
                 settings.healthClassColored = look.healthClass
+                -- Written on every unit, including the ones showing no power
+                -- text: the flag is inert while the text is off, and writing it
+                -- anyway is what lets the look survive the user switching that
+                -- text on later, exactly as the Bottom Text Bar slots do.
+                --
+                -- Clearing the custom colour is what EllesmereUI's own swatch
+                -- does when it turns power colouring on, and an absent colour
+                -- renders white, which is the Coloured value. So one write
+                -- serves both looks.
+                settings.powerPercentTextPowerColor = look.powerColor
+                settings.powerTextColor = nil
                 for _, slot in ipairs(TEXT_SLOTS) do
                     if SlotShowsName(settings, slot) then
                         settings[slot.color] = look.nameClass
@@ -220,6 +244,19 @@ local function MatchesLook(key)
             if type(settings) == "table" then
                 if (settings.healthClassColored and true or false) ~= look.healthClass then
                     return false
+                end
+                -- Power text switched off is written but not read back, the same
+                -- rule the Bottom Text Bar slots follow: text that renders
+                -- nothing must not be what decides Custom.
+                if (settings.powerPercentText or "none") ~= "none" then
+                    if (settings.powerPercentTextPowerColor and true or false) ~= look.powerColor then
+                        return false
+                    end
+                    -- The custom colour only reaches the screen while power
+                    -- colouring is off, so it can only decide Custom there.
+                    if not look.powerColor and not IsWhitePowerText(settings.powerTextColor) then
+                        return false
+                    end
                 end
                 for _, slot in ipairs(TEXT_SLOTS) do
                     -- A slot on a switched-off Bottom Text Bar is written but not

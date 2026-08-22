@@ -33,6 +33,7 @@ an agent.**
 | 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 | 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
 | 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..5ff1521` | plan: Sol PASS (3 rounds), Fable PASS. Diff: Sol PASS (3 rounds) and Fable PASS, both on `5ff1521` | **PASS** (Kitn, 2026-08-21) |
+| 8. The power text follows the look | `feature/power-text-look` | yes | not yet | not yet |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -992,3 +993,49 @@ moves.
   active profile had been copied from another, so it carried the switch but not
   the ownership note, and the write correctly refused. The defect was that the
   refusal was SILENT. Checks 7e and 7f exist because of that run.
+
+---
+
+# Item 8 — The power text follows the look
+
+**Branch** `feature/power-text-look`. Touches `KitnUI_EUI/General.lua` only.
+**Status: not yet tested in game.**
+
+## What changed and why it needs testing
+
+- Dark and Coloured now also set the **power text colour** on every unit frame,
+  next to the health and name colours they already set.
+- **Dark** puts the power colour on the text, because the bar behind it is dark.
+  **Coloured** makes the text white, because the bar behind it already carries
+  the power colour. Same rule as health and names: one of the two stays plain.
+- The shipped profile only shows power text on the **Focus** frame, so Focus is
+  where you can see this. The setting is written on all seven frames anyway, so
+  turning power text on elsewhere later still follows the look.
+- Coloured also **clears any custom power text colour** you had set. Nothing is
+  recorded and nothing is handed back, exactly like the health and name colours.
+- The section header can now read `CUSTOM` for one more reason: a power text
+  colour that does not match the look. It only counts on a frame whose power
+  text is actually on screen.
+
+## Checks
+
+- [ ] **1. Dark colours the text.** Open KitnUI's EllesmereUI tab, click **Dark**.
+  Set a focus target. The percentage on the Focus frame's power bar is in the
+  unit's power colour (blue for mana, yellow for energy, red for rage), not white.
+- [ ] **2. Coloured whitens the text.** Click **Colored**. The same number turns
+  **white**, while the bar behind it stays power-coloured.
+- [ ] **3. The header agrees.** After each click the `APPEARANCE` header names the
+  look you clicked, not `CUSTOM`.
+- [ ] **4. A hand change reads Custom.** In EllesmereUI's Unit Frames settings,
+  Focus, Power section, click the other Text Color swatch. Come back to KitnUI's
+  tab: the header now reads `CUSTOM`. Click Colored again and it returns.
+- [ ] **5. It survives a logout.** On Coloured, log out to character select and
+  back in. The text is still white and the header still reads `COLORED`.
+- [ ] **6. Combat still refuses.** In combat, clicking Dark or Colored prints the
+  refusal and changes nothing, as before.
+- [ ] **7. BugSack is empty.** Through all of the above.
+
+## Result
+
+- Date:
+- Reported by Kitn:
