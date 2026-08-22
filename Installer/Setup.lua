@@ -1363,6 +1363,316 @@ function ns.ApplyEUIModuleSet()
         end
     end
 end
+---------------------------------------------------------------------------------
+-- BetterFriendlist: the appearance KitnUI's skinning expects
+---------------------------------------------------------------------------------
+
+-- BetterFriendlist ships no import format, so this is a direct write to its one
+-- account-wide table rather than a Data/AddOns payload. The list below is the
+-- whole profile: anything not named in it is left exactly as the player has it.
+--
+-- appearanceOnboardingVersion is stamped alongside them for the same reason
+-- KitnUI tells EllesmereUI it owns the first-run experience (Core.lua): left
+-- behind, BetterFriendlist asks the player to choose a look on the next login
+-- and writes theme and style itself, undoing this. Its "already done" test is
+-- stored >= current, and the current value is a private constant in that addon
+-- (BFL.APPEARANCE_ONBOARDING_VERSION, 3 as shipped 2026-08-22) that cannot be
+-- read from outside, so it is written literally. Too LOW simply runs their flow
+-- again, which is why this number is never raised on a guess.
+--
+-- Takes effect on the ReloadUI at the end of the flow: the addon reads all of
+-- these through its own database layer at load.
+local BFL_ONBOARDING_VERSION = 3
+
+-- Stored in place of a key that was ABSENT, so the reset can tell "they had
+-- false" from "they had nothing". A string, not a table: this rides in saved
+-- variables, and a table would come back as a different table every login.
+local BFL_ABSENT = "__kitnui_absent"
+
+local BFL_SETTINGS = {
+    -- Friendlist UI
+    friendsFrameStyle       = "legacy",
+    theme                   = "dark",
+
+    -- Display Options
+    colorClassNames         = true,
+    showFactionIcons        = true,
+    showFactionBg           = false,
+    grayOtherFaction        = false,
+    showMultiAccountBadge   = true,
+    showMultiAccountInfo    = true,
+    showRealmName           = false,
+    hideMaxLevel            = true,
+    showMobileAsAFK         = false,
+    treatMobileAsOffline    = false,
+    showGameIcon            = true,
+    colorLevelByDifficulty  = true,
+    showWelcomeMessage      = false,
+    hideEmptyGroups         = false,
+    showBlizzardOption      = false,
+    enableFavoriteIcon      = true,
+    favoriteIconStyle       = "bfl",
+
+    -- Fonts: friend name, friend info, tab text. Expressway is EllesmereUI's
+    -- face, shared through LibSharedMedia, and EllesmereUI is required, so it is
+    -- there to be picked. BetterFriendlist falls back on its own if it is not.
+    -- The Raid Name and Group Header blocks on that tab are deliberately left
+    -- alone.
+    fontFriendName          = "Expressway",
+    fontSizeFriendName      = 14,
+    fontOutlineFriendName   = "SLUG",
+    fontShadowFriendName    = false,
+    fontFriendInfo          = "Expressway",
+    fontSizeFriendInfo      = 12,
+    fontOutlineFriendInfo   = "SLUG",
+    fontShadowFriendInfo    = false,
+    fontTabText             = "Expressway",
+    fontSizeTabText         = 12,
+    fontOutlineTabText      = "SLUG",
+    fontShadowTabText       = false,
+}
+
+-- The three font colours, kept apart from the scalars above because each one is
+-- a TABLE: it has to be copied in rather than assigned (BetterFriendlist owns
+-- what it stores and is free to mutate it, and a shared reference would let it
+-- edit this file's constants), and compared field by field.
+local BFL_COLORS = {
+    fontColorFriendName = { r = 0.51,  g = 0.773, b = 1,    a = 1 },  -- Battle.net blue
+    fontColorFriendInfo = { r = 0.51,  g = 0.51,  b = 0.51, a = 1 },  -- grey
+    fontColorTabText    = { r = 1,     g = 0.82,  b = 0,    a = 1 },  -- Blizzard yellow
+}
+
+local function ColorMatches(have, want)
+    if type(have) ~= "table" then return false end
+    return have.r == want.r and have.g == want.g and have.b == want.b and have.a == want.a
+end
+
+local function CopyColor(color)
+    if type(color) ~= "table" then return nil end
+    return { r = color.r, g = color.g, b = color.b, a = color.a }
+end
+
+-- Does the addon currently read the way this file writes it?
+local function BFLHolds(bfl)
+    for key, want in pairs(BFL_SETTINGS) do
+        if bfl[key] ~= want then return false end
+    end
+    for key, want in pairs(BFL_COLORS) do
+        if not ColorMatches(bfl[key], want) then return false end
+    end
+    return (tonumber(bfl.appearanceOnboardingVersion) or 0) >= BFL_ONBOARDING_VERSION
+end
+
+local function WriteBFL(bfl)
+    for key, want in pairs(BFL_SETTINGS) do
+        bfl[key] = want
+    end
+    for key, want in pairs(BFL_COLORS) do
+        bfl[key] = CopyColor(want)
+    end
+
+    -- Never LOWER their number. A newer BetterFriendlist raises this constant,
+    -- and stamping 3 over a 4 would tell that addon its own newer flow is
+    -- unfinished and reopen it on every login, every time KitnUI finishes.
+    if (tonumber(bfl.appearanceOnboardingVersion) or 0) < BFL_ONBOARDING_VERSION then
+        bfl.appearanceOnboardingVersion = BFL_ONBOARDING_VERSION
+    end
+
+    -- Their reload-resume record, cleared for the same reason the version is
+    -- stamped. Left behind it force-shows the friends window at every login and
+    -- then refuses to run their flow, because the stamp above says it is done.
+    -- false, not nil: false is that key's own default.
+    bfl.appearanceOnboardingResume = false
+end
+
+-- What the player had, recorded so /kitn reset can hand it back.
+local function TakeSnapshot(snap, bfl, base)
+    snap.taken = true
+    snap.prev = {}
+    for key in pairs(BFL_SETTINGS) do
+        local value = bfl[key]
+        -- The picker's own rollback record wins for the two keys it holds: while
+        -- it is open, the live values are a preview the player never accepted.
+        -- Its field names are the picker's, not the saved variable's.
+        if base then
+            if key == "theme" and base.theme ~= nil then value = base.theme end
+            if key == "friendsFrameStyle" and base.style ~= nil then value = base.style end
+        end
+        if value == nil then value = BFL_ABSENT end
+        snap.prev[key] = value
+    end
+    for key in pairs(BFL_COLORS) do
+        snap.prev[key] = CopyColor(bfl[key]) or BFL_ABSENT
+    end
+    snap.appearanceOnboardingVersion = (base and base.completedVersion)
+        or bfl.appearanceOnboardingVersion or BFL_ABSENT
+    snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
+end
+
+-- Put the recorded values back into the addon.
+local function RestorePrev(bfl, snap)
+    for key, prev in pairs(snap.prev) do
+        if prev == BFL_ABSENT then
+            bfl[key] = nil
+        else
+            bfl[key] = prev
+        end
+    end
+
+    local version = snap.appearanceOnboardingVersion
+    bfl.appearanceOnboardingVersion = version ~= BFL_ABSENT and version or nil
+    -- false rather than nil on the way back: that is this key's own default, and
+    -- a snapshot taken when it was already false stores false.
+    bfl.appearanceOnboardingResume = snap.appearanceOnboardingResume or false
+end
+
+-- Did a RestorePrev survive? Only the keys BetterFriendlist's own rollback can
+-- reach are worth testing, because only those can be taken back.
+local function PrevHolds(bfl, snap)
+    for _, key in ipairs({ "theme", "friendsFrameStyle" }) do
+        local want = snap.prev[key]
+        if want == BFL_ABSENT then want = nil end
+        if bfl[key] ~= want then return false end
+    end
+    return true
+end
+
+function ns.ApplyBetterFriendlistAppearance()
+    if not IsAddOnLoaded("BetterFriendlist") then return end
+    local bfl = _G.BetterFriendlistDB
+    if type(bfl) ~= "table" then return end
+
+    ns.db.bflSnap = ns.db.bflSnap or {}
+    local snap = ns.db.bflSnap
+
+    -- ONCE. Re-snapshotting on a second install would record KitnUI's own values
+    -- as the player's and leave the reset with nothing to put back.
+    if not snap.taken or not snap.prev then
+        -- Validated the way BetterFriendlist validates it (GetResumeState in its
+        -- AppearanceOnboarding module): a record from an older onboarding
+        -- version is one THAT addon ignores, so its embedded values are stale
+        -- and the live keys are the player's real ones.
+        local resume = bfl.appearanceOnboardingResume
+        local base
+        if type(resume) == "table" and type(resume.snapshot) == "table"
+            and tonumber(resume.version) == BFL_ONBOARDING_VERSION then
+            base = resume.snapshot
+        end
+        TakeSnapshot(snap, bfl, base)
+    end
+
+    WriteBFL(bfl)
+    -- Settled on the far side of the installer's reload; see below. Three
+    -- attempts, because one reload is not always enough (the same picker that
+    -- rolls the write back can still be open when the repair runs).
+    snap.pending = 3
+    -- A reset's unsettled check, dropped here. It can still be set: a reset that
+    -- restored while the addon was loaded sets it, and a following login without
+    -- BetterFriendlist leaves it standing. Carried into an install, it would win
+    -- over the repair at the next login and put THIS write back to the values
+    -- the reset already handed over.
+    snap.verify = nil
+end
+
+-- Everything this pair of writes still owes, settled at login.
+--
+-- BetterFriendlist's appearance flow puts its own keys back when the game
+-- unloads with its picker still open, so the reload that is meant to APPLY the
+-- installer's write can be the thing that undoes it -- and a brand new player
+-- meets both first-run flows on the same login, which makes that ordinary
+-- rather than exotic. The same rollback can undo a /kitn reset. Nothing outside
+-- that addon can see whether its picker is open, so both cases are settled by
+-- reading the result on the next login instead.
+--
+-- Both are bounded. The repair gives up after three logins and the reset check
+-- runs once, so a player who changes these settings themselves is never argued
+-- with for long.
+function ns.RecheckBetterFriendlistAppearance()
+    local snap = ns.db and ns.db.bflSnap
+    if not snap then return end
+    if not (snap.pending or snap.verify) then return end
+    if not IsAddOnLoaded("BetterFriendlist") then return end
+    local bfl = _G.BetterFriendlistDB
+    if type(bfl) ~= "table" then return end
+
+    -- After a reset: the addon was handed its old values back, and the reload
+    -- that followed may have rolled them off again.
+    if snap.verify then
+        if snap.prev and not PrevHolds(bfl, snap) then
+            RestorePrev(bfl, snap)
+            print(ns.title .. ": BetterFriendlist had overwritten the settings the reset put back, so KitnUI has restored them again. Type " .. ns.Color("/reload") .. " to see it.")
+        end
+        -- Settled either way: KitnUI is no longer holding anything of theirs.
+        ns.db.bflSnap = nil
+        return
+    end
+
+    -- After an install: did the write survive?
+    if BFLHolds(bfl) then
+        snap.pending = nil
+        return
+    end
+
+    snap.pending = snap.pending - 1
+    if snap.pending <= 0 then snap.pending = nil end
+
+    -- Their rollback touches six keys, of which this file manages two: theme and
+    -- friendsFrameStyle, plus the version stamp. When those have moved, they are
+    -- the player's real values again and are worth re-recording, because the
+    -- record taken at finish may have caught an open picker's unaccepted
+    -- preview.
+    --
+    -- Only when THOSE moved, though. Any managed option the player edits
+    -- themselves also fails the test above, and in that case theme and style
+    -- still hold KitnUI's own values -- re-recording them there would overwrite
+    -- the real backup with our own write.
+    --
+    -- The other 28 keys are never re-recorded: their rollback does not touch
+    -- them, so what is in the table is this file's write either way.
+    -- Key by key, not as a group: a player who changes only the theme inside the
+    -- repair window would otherwise have KitnUI's own "legacy" recorded as their
+    -- style, which is wrong for anyone whose style was the retail default.
+    local rolledBack = false
+    if bfl.theme ~= BFL_SETTINGS.theme then
+        rolledBack = true
+        if snap.prev then snap.prev.theme = bfl.theme or BFL_ABSENT end
+    end
+    if bfl.friendsFrameStyle ~= BFL_SETTINGS.friendsFrameStyle then
+        rolledBack = true
+        if snap.prev then
+            snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
+        end
+    end
+    if rolledBack then
+        -- These two ride with the pair above: the rollback that moves theme or
+        -- style is the same one that puts the version and the resume record back.
+        snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
+        snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
+    end
+
+    WriteBFL(bfl)
+    print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set it again. Type " .. ns.Color("/reload") .. " to see it.")
+end
+
+-- Undo, for /kitn reset. The wipe there takes the snapshot with it, so this has
+-- to run before it. Returns false ONLY when there is something to put back and
+-- BetterFriendlist is not here to take it -- the caller keeps the snapshot in
+-- that case, because nothing else remembers the player's values.
+function ns.RestoreBetterFriendlistAppearance()
+    local snap = ns.db and ns.db.bflSnap
+    if not (snap and snap.taken and snap.prev) then return true end
+    local bfl = _G.BetterFriendlistDB
+    if type(bfl) ~= "table" then return false end
+
+    RestorePrev(bfl, snap)
+
+    -- Checked once after the reset's reload, which that addon's own rollback can
+    -- undo exactly as it undoes an install. The caller carries the record across
+    -- the wipe for it.
+    snap.verify = true
+    snap.pending = nil
+    return true
+end
 
 ---------------------------------------------------------------------------------
 -- Finish installation
@@ -1378,6 +1688,16 @@ function ns.FinishInstallation()
 
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
+
+    -- INSTALL ONLY. All four flows share this one finish function, and the other
+    -- three must not write here: these keys are account-wide, so a player who
+    -- moved BetterFriendlist back to Blizzard or Legacy after installing would
+    -- have that undone merely by accepting the load prompt on an alt. The same
+    -- rule the account-wide EllesmereUI look already follows.
+    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
+        and not ns.installerIsUpdateMode then
+        ns.ApplyBetterFriendlistAppearance()
+    end
 
     -- Chat Setup, same reasoning as the module set above: the opt-in is account
     -- wide but WoW's chat layout is per character, so an alt that only runs

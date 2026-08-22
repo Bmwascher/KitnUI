@@ -959,6 +959,10 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     end
     ns.SnapshotProfiles()
     ns.installerIsLoadMode = profileLoadMode or false
+    -- Read by FinishInstallation: all three finish pages share one finish
+    -- function, and two of the modes must not write another addon's settings.
+    ns.installerIsCDMMode = cdmMode or false
+    ns.installerIsUpdateMode = updateKeys ~= nil
     -- Track Extras clicks for the Finish recap; only the plain install flow has an
     -- Extras page, so nil in load/update/cdm mode (which skip the recap).
     ns.sessionExtras = (not profileLoadMode and not updateKeys and not cdmMode) and {} or nil

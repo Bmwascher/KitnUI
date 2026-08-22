@@ -12,10 +12,10 @@
 
 ## X-EllesmereUI-Version: 2026.08.22
 ## X-Plater-Version: 2026.07.07
-## X-BigWigs-Version: 2026.08.22
+## X-BigWigs-Version: 2026.08.22.1
 ## X-NSRT-Version: 2026.08.22
 ## X-EditMode-Version: 2026.08.22
-## X-KitnEssentials-Version: 2026.08.22
+## X-KitnEssentials-Version: 2026.08.22.1
 ## X-BuffReminders-Version: 2026.08.22
 ## X-Baganator-Version: 2026.08.22
 

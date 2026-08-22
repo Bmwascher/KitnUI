@@ -425,6 +425,7 @@ local defaults = {
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
+    bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
@@ -567,6 +568,34 @@ KitnCommands["reset"] = function()
     end
     if ns.EUIResetAll() == false then return end
 
+    -- BetterFriendlist's appearance keys live in ITS saved variables, so the wipe
+    -- below cannot reach them -- only the snapshot it is about to delete knows
+    -- what they held. Put them back first. After the EllesmereUI teardown on
+    -- purpose: that one can still refuse, and a refusal must leave everything as
+    -- it was.
+    --
+    -- A false answer means the addon is not loaded to take its settings back, so
+    -- the snapshot rides across the wipe with the other debts below. Dropping it
+    -- would strand KitnUI's values in BetterFriendlist forever: nothing else
+    -- remembers what the player had.
+    local bflOwed
+    if ns.RestoreBetterFriendlistAppearance then
+        if ns.RestoreBetterFriendlistAppearance() == false then
+            bflOwed = ns.db.bflSnap
+            -- Said out loud, because a reset that quietly leaves another addon
+            -- on KitnUI's settings looks like a reset that worked. The line is
+            -- queued rather than printed: the reload below tears the chat frame
+            -- down.
+            ns.QueueMessage(ns.title .. ": BetterFriendlist is not loaded, so its appearance could not be put back. KitnUI kept the record -- enable BetterFriendlist and run " .. ns.Color("/kitn reset") .. " again to finish it.")
+        elseif ns.db.bflSnap and ns.db.bflSnap.verify then
+            -- Put back, but that addon's own picker can roll its keys off again
+            -- during the reload below, exactly as it can undo an install. So the
+            -- record rides across the wipe for ONE check at the next login;
+            -- RecheckBetterFriendlistAppearance settles it and drops it.
+            bflOwed = ns.db.bflSnap
+        end
+    end
+
     -- That teardown queues a line for anything it could NOT put back, and the
     -- queue lives in the very table this function is about to delete. Printing
     -- here instead does not work: the reload two lines down destroys the chat
@@ -596,10 +625,11 @@ KitnCommands["reset"] = function()
     end
 
     local fresh
-    if (carried and #carried > 0) or owed then
+    if (carried and #carried > 0) or owed or bflOwed then
         fresh = {}
         if carried and #carried > 0 then fresh.pendingMessages = carried end
         if owed then fresh.euiSnapGlobal = owed end
+        if bflOwed then fresh.bflSnap = bflOwed end
     end
     KitnUIDB = fresh
     ReloadUI()
@@ -767,6 +797,7 @@ local function InitDB()
     ns.db.euiSettings = ns.db.euiSettings or {}
     ns.db.euiSnap = ns.db.euiSnap or {}
     ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}
+    ns.db.bflSnap = ns.db.bflSnap or {}
 end
 
 local boot = CreateFrame("Frame")
@@ -973,6 +1004,13 @@ boot:SetScript("OnEvent", function()
 
     -- Login message + outdated profile notification
     C_Timer.After(2, function()
+        -- In the same delayed block because it can print: BetterFriendlist may
+        -- have undone the installer's appearance write, or a /kitn reset's
+        -- restore, during the reload that was meant to apply it (Setup.lua).
+        -- Bounded on both sides -- three logins for the write, one for the
+        -- reset -- and silent unless it actually had to write again.
+        if ns.RecheckBetterFriendlistAppearance then ns.RecheckBetterFriendlistAppearance() end
+
         local outdated = ns.GetOutdatedAddons()
         if #outdated > 0 then
             local updated, new = {}, {}
