@@ -9,6 +9,7 @@ exclude_files = {
     "References/**",
     "Legacy/**",  -- dormant v1 ElvUI installer; kept for reference, not linted
     "dev/Annotations/**",  -- ---@meta LS type stubs, not real code
+    ".claude/worktrees/**",  -- agent worktrees: a whole second checkout, linted on its own branch
 }
 
 -- Globals this addon sets
