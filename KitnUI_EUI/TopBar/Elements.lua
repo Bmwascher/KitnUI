@@ -1146,27 +1146,30 @@ ns.TopBar.Elements = {
     -- element declining a toggle. Bar.lua creates its button as
     -- "KitnUITopBar_clock" like any other element; Readouts.lua reaches that
     -- stable global name to attach the time FontString and size it from
-    -- tbClockSize. Left click opens the calendar, right click the stopwatch and
-    -- alarm, middle click reloads; all three are insecure and refuse in combat
-    -- like gamemenu above.
+    -- tbClockSize. Left click opens the calendar, right click opens
+    -- EllesmereUI's settings, middle click reloads.
     --
-    -- ToggleTimeManager is the global Blizzard exposes precisely so the panel can
-    -- be opened from outside its own addon: it loads that addon on demand, then
-    -- toggles. Nil-guarded like every other call out of this file.
+    -- Only two of the three refuse in combat. EllesmereUI's Toggle creates and
+    -- shows that addon's own frame and reaches nothing protected, so gating it
+    -- would refuse a click that is perfectly safe -- and the bar's own
+    -- EllesmereUI launcher, three icons away, does not refuse either.
     {
         id = "clock", label = "Clock", panel = "centre",
         kind = "readout", secure = false,
         onClick = function(_self, button)
-            if button ~= "LeftButton" and button ~= "MiddleButton"
-               and button ~= "RightButton" then return end
+            -- Taken before the combat gate, deliberately: see the note above.
+            if button == "RightButton" then
+                local EUI = _G.EllesmereUI
+                if EUI and EUI.Toggle then EUI:Toggle() end
+                return
+            end
+            if button ~= "LeftButton" and button ~= "MiddleButton" then return end
             if InCombatLockdown() then
                 UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
                 return
             end
             if button == "LeftButton" then
                 ToggleCalendar()
-            elseif button == "RightButton" then
-                if ToggleTimeManager then ToggleTimeManager() end
             else
                 ReloadUI()
             end
@@ -1180,7 +1183,7 @@ ns.TopBar.Elements = {
             if ns.TopBar.ClockTooltip then ns.TopBar.ClockTooltip(tt) end
             tt:AddLine(" ")
             tt:AddLine(CLICK_L .. " Calendar", 1, 1, 1)
-            tt:AddLine(CLICK_R .. " Stopwatch and Alarm", 1, 1, 1)
+            tt:AddLine(CLICK_R .. " EllesmereUI Settings", 1, 1, 1)
             tt:AddLine(CLICK_M .. " Reload UI", 1, 1, 1)
         end,
     },

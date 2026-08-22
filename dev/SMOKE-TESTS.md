@@ -34,6 +34,7 @@ an agent.**
 | 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
 | 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..5ff1521` | plan: Sol PASS (3 rounds), Fable PASS. Diff: Sol PASS (3 rounds) and Fable PASS, both on `5ff1521` | **PASS** (Kitn, 2026-08-21) |
 | 8. The power text follows the look | `feature/power-text-look` | yes, `b898fce` | not yet | **PASS** (Kitn, 2026-08-21) |
+| 9. The clock's right click opens EUI settings | `feature/topbar-right-click-config` | yes | not yet | not yet |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -1045,3 +1046,56 @@ moves.
   may record a check as passed, and a tick written by an agent looks exactly like
   one written by the tester. The line above is Kitn's own report, attributed;
   tick the boxes yourself if you want them ticked.
+
+---
+
+# Item 9 — The clock's right click opens EllesmereUI's settings
+
+**Branch** `feature/topbar-right-click-config`. Touches
+`KitnUI_EUI/TopBar/Elements.lua` only. **Status: not yet tested in game.**
+
+## What changed and why it needs testing
+
+- The Top Bar clock's **right click** used to open Blizzard's stopwatch and alarm
+  window. It now opens **EllesmereUI's settings**. The stopwatch is no longer
+  reachable from the bar at all.
+- Left click (calendar) and middle click (reload) are unchanged.
+- The tooltip's third line changed to match. A tooltip still naming the stopwatch
+  is a fail on its own.
+- **The right click no longer refuses in combat**, and that is deliberate rather
+  than an oversight. The other two still refuse. EllesmereUI's toggle only shows
+  that addon's own window and reaches nothing protected, so refusing it would
+  block a click that is safe, while the bar's own EllesmereUI icon a few places
+  away has never refused.
+
+## This supersedes two checks in Item 5
+
+Item 5 checks **10** and **11** describe the old right click and its combat
+refusal. They passed on 2026-08-21 and are left in place as the record of that
+build. Do not re-run them against this branch; run the checks below instead.
+
+## Checks
+
+- [ ] **1. It opens.** Right click the clock. EllesmereUI's settings window opens.
+- [ ] **2. It closes.** Right click the clock again. The window closes.
+- [ ] **3. The stopwatch is gone.** No click on the clock opens the stopwatch and
+  alarm window any more. That is the intended loss, not a defect.
+- [ ] **4. The other two clicks are untouched.** Left click still opens the
+  calendar. Middle click still reloads.
+- [ ] **5. The tooltip tells the truth.** Hover the clock: a **Clock** title, the
+  lockouts and reset clocks, then three rows reading Calendar, **EllesmereUI
+  Settings**, Reload UI, each with its mouse picture.
+- [ ] **6. Right click works IN combat.** Pull a target dummy. Right click the
+  clock: the settings open and NOTHING is printed about combat.
+- [ ] **7. The other two still refuse in combat.** Still on the dummy, left click
+  the clock: the red "not in combat" message and no calendar. Middle click: the
+  same message and no reload.
+- [ ] **8. The rest of the bar is unaffected.** Right click the volume icon: the
+  volume still steps down. Right click the hearthstone: it still uses the
+  right-click stone. Right click the bar's empty background: nothing happens.
+- [ ] **9. BugSack is empty.** Through all of the above.
+
+## Result
+
+- Date:
+- Reported by Kitn:
