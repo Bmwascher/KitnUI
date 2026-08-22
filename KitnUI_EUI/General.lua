@@ -336,19 +336,12 @@ local ACCENT_KEYS = {
     { folder = "EllesmereUIFriends",      sub = "friends",      key = "useAccentTab",     refresh = "_EFR_ApplyFriends"},
 }
 
--- The shipped pink, lifted out of the registered default so there is exactly one
--- literal in the addon. Copied into three scalars rather than kept as a reference
--- to that table: a reference is one careless write away from editing the defaults
--- themselves, which is the shape Core.lua's DEFAULTS comment exists to forbid.
---
--- The fallback covers ns.EUISettings()'s own fallback path, which returns a bare
--- table that no defaults were ever merged into.
-local ACCENT_R, ACCENT_G, ACCENT_B do
-    local d = ns.EUI_DEFAULTS and ns.EUI_DEFAULTS.accentCustom
-    ACCENT_R = (d and d.r) or 1
-    ACCENT_G = (d and d.g) or 0
-    ACCENT_B = (d and d.b) or 0.549
-end
+-- FF008C, the same pink ns.Color uses for the chat prefix. A literal, and it has
+-- to be: accentCustom defaults to WHITE, so the registered defaults no longer carry
+-- this colour anywhere it could be read back from. Keep it in step with
+-- npArrowColor in Core.lua and with ns.KITN_PINK in Installer/Wizard.lua -- that
+-- one is POSITIONAL and the other two are KEYED.
+local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 0.549
 
 -- Tested against false rather than read for truthiness, because the registered
 -- default is TRUE and an absent key must therefore mean pink. The settings
@@ -529,23 +522,70 @@ end
 -- nothing until the user toggles the master off and on again. That is the same
 -- answer the tooltip already gives, so it is not a second surprise.
 
+-- Is KitnUI really holding the accent COLOUR right now? This is the exact
+-- condition ApplyAccentColor writes under, asked ahead of time so the setters can
+-- say when nothing happened.
+--
+-- The state it detects is real and reachable: switch states live in the
+-- EllesmereUI profile and notes live in KitnUIDB, so copying a profile carries the
+-- switch and leaves the note behind. Kitn hit precisely this in game on
+-- 2026-08-21 -- the master read ON for a profile with no accent note at all, and
+-- both colour rows accepted input and silently did nothing.
+local function AccentColorHeld()
+    if not AccentEnabled() then return false end
+    local saved = ns.EUIPeekSnap("accent", "color")
+    return saved ~= nil and saved.prev ~= nil
+end
+
+-- Said by both setters whenever a colour change stored fine but could not reach
+-- the screen. Every forcing control in this addon says when it refused; a colour
+-- row that quietly does nothing is the same defect wearing a different hat.
+--
+-- LATCHED, and that is not optional. The host's colour picker calls the swatch
+-- setter on every preview change while the user drags, so an unlatched print would
+-- put a line in chat per frame. The latch clears the moment the accent is held
+-- again, so a later relapse still warns.
+local warnedUnheld = false
+
+local function WarnUnheld()
+    if not (AccentEnabled() and not AccentColorHeld()) then
+        warnedUnheld = false
+        return
+    end
+    if warnedUnheld then return end
+    warnedUnheld = true
+    print(ns.title .. ": Color saved, but KitnUI is not holding the accent for this profile, so nothing changed on screen. Turn KitnUI Accent Coloring off and on to take it.")
+end
+
 local function SetAccentUsesDefault(v)
     ns.EUISettings().accentUseDefault = v and true or false
     ApplyAccentColor(false)
+    WarnUnheld()
 end
 
 local function SetAccentCustom(r, g, b)
     local s = ns.EUISettings()
-    -- Replace the whole table, never write into it. See the DEFAULTS comment in
-    -- Core.lua: an in-place write into a table-valued default is the one shape
-    -- that does not survive a logout here.
-    s.accentCustom = { r = r, g = g, b = b }
-    -- Picking a colour is how a user says they want it, so it turns the pink row
-    -- off as well. EllesmereUI's own trio swatch does exactly this
-    -- (EllesmereUI_Widgets.lua:2645-2655 calls setMode("custom") from setValue).
-    -- The pink is not lost: it is a literal, and the row above puts it back.
-    s.accentUseDefault = false
+
+    -- The switch above MIRRORS whether the chosen colour is KitnUI pink, rather
+    -- than being turned off one-way by any pick. The host's colour picker calls
+    -- this setter on EVERY preview change and then AGAIN with the click-time
+    -- colour when the user presses Cancel (EllesmereUI_Widgets.lua:2598-2617), so
+    -- a one-way flip would leave the switch reading off after a cancel that had
+    -- already put the colour back to pink.
+    if r == ACCENT_R and g == ACCENT_G and b == ACCENT_B then
+        -- Pink chosen: do NOT overwrite the remembered custom colour with it, or
+        -- switching the row above off again would hand back pink and look dead.
+        s.accentUseDefault = true
+    else
+        -- Replace the whole table, never write into it. See the DEFAULTS comment
+        -- in Core.lua: an in-place write into a table-valued default is the one
+        -- shape that does not survive a logout here.
+        s.accentCustom = { r = r, g = g, b = b }
+        s.accentUseDefault = false
+    end
+
     ApplyAccentColor(false)
+    WarnUnheld()
 end
 
 -- Wrapped rather than registered bare. A bare registration would hand the
@@ -695,7 +735,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
                 pcall(EllesmereUI.RefreshPage, EllesmereUI)
             end
         end,
-        "On, the accent is KitnUI pink. Off, it is the color you pick below. Turning this off does not change which settings the accent is scoped to.")
+        "On, the accent is KitnUI pink. Off, it is the color in the row below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.")
                                                                                    y = y - h
 
     -- Shows the colour that is ACTIVE, not the one that is stored: pink while the

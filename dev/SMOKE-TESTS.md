@@ -907,6 +907,18 @@ moves.
 - [ ] **7b. Pick a colour straight from the swatch while Use KitnUI Pink is ON.**
   The colour applies AND Use KitnUI Pink switches itself off, in the same click,
   without a reload.
+- [ ] **7c. Cancel the picker.** Open the swatch while Use KitnUI Pink is ON, drag
+  around so the preview changes, then press **cancel**. The accent returns to pink
+  AND Use KitnUI Pink is still ON. It flipping off would be a fail.
+- [ ] **7d. Switching pink off is visible on a fresh profile.** On a profile where
+  you have never picked a colour, switch Use KitnUI Pink off. The accent goes
+  WHITE, not pink. A default of pink is what made this switch look dead the first
+  time round.
+- [ ] **7e. The refusal speaks.** Force the unowned state: with the master ON,
+  switch to an EllesmereUI profile KitnUI has never claimed, or clear the accent
+  note. Change the colour. Chat prints "Color saved, but KitnUI is not holding the
+  accent for this profile...". Then drag inside the picker for several seconds:
+  that line must appear **once**, not once per frame.
 - [ ] **8. The custom colour survives a logout.** With the master on and a custom
   colour set, `/reload`. Both the colour and the Use KitnUI Pink state come back as
   you left them. Then log out to character select and back in, and check again —

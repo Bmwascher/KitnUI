@@ -185,10 +185,16 @@ local DEFAULTS = {
         accentUseDefault        = true,
         -- The user's own accent colour, used when accentUseDefault is false. A
         -- TABLE, and safe as one for the same reason npArrowColor below is: its
-        -- setter REPLACES the table rather than writing a key into it. Defaults
-        -- to the same pink so nothing jumps the first time the switch above goes
-        -- off.
-        accentCustom            = { r = 1, g = 0, b = 0.549 },
+        -- setter REPLACES the table rather than writing a key into it.
+        --
+        -- WHITE, and deliberately NOT the pink. It shipped as the pink so that
+        -- nothing would jump the first time the switch above went off, and that
+        -- was wrong in both directions (Kitn, in game, 2026-08-21): switching off
+        -- pink changed pink to pink, so the switch read as broken, and it left the
+        -- switch unable to mirror the colour, which is what makes the picker's
+        -- Cancel behave. A starting colour that is visibly not the pink fixes
+        -- both. White means "you have not chosen yet".
+        accentCustom            = { r = 1, g = 1, b = 1 },
         -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
         -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
         -- and a registered default has to be a literal.
