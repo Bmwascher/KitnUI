@@ -32,6 +32,7 @@ an agent.**
 | 4. Installer polish (sidebar, version, NSRT nickname, EUI looks) | `feature/ownership-tooltip` | yes, `a9ea04b..20601ae` | Kimi PASS (3 rounds), Fable PASS (2 rounds) | **PENDING** |
 | 5. Mouse-button pictures in the Top Bar tooltips | `feature/topbar-click-tooltips` | yes, `df7e962` | Sol PASS (7 rounds), Fable PASS (2 rounds) | **PASS** (Kitn, 2026-08-21) |
 | 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
+| 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..778f65c` | plan: Sol PASS (3 rounds); Fable PASS on the earlier single-switch design only | **PENDING** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -829,3 +830,112 @@ moves.
   no agent may record a check as passed, and a tick written by an agent looks
   exactly like one written by the tester. The line above is Kitn's own report,
   attributed; tick the boxes yourself if you want them ticked.
+
+---
+
+# Item 7 — A Tweaks section, and Accents folded into Appearance
+
+**Plan:** `dev/docs/superpowers/plans/2026-08-21-tweaks-and-accents.md` (local only).
+**Branch** `feature/tweaks-and-accents`. Touches `KitnUI_EUI/Core.lua` and
+`KitnUI_EUI/General.lua`. Nothing else moves. **Status: awaiting Kitn.**
+
+## What changed and why it needs testing
+
+- The General page is regrouped. `APPEARANCE` keeps the Dark/Colored buttons.
+  `ACCENTS` sits directly under it with no gap, so it reads as part of Appearance.
+  `TWEAKS` is a new section below a gap, holding Dark Class Resource Bar, Lulu
+  Mode, and a not-yet-built Bite Mode.
+- The single accent switch became **three rows**, and this is the part that can go
+  wrong. It used to do two jobs at once: set the accent to KitnUI pink, and scope
+  the accent (put it on the quest tracker header, keep it off the tracker's divider
+  lines, the Mythic+ timer, the damage meter and the Friends tab). Those two jobs
+  are now split:
+  - **KitnUI Accent Coloring** is the master. It is the ONLY control that records
+    what you had before and the ONLY one that hands it back. Its mechanics did not
+    change.
+  - **Use KitnUI Pink** chooses the colour and must NEVER touch the scoping.
+  - **Accent Color** stores your own colour. Picking one also switches Use KitnUI
+    Pink off.
+- Two new saved settings, `accentUseDefault` and `accentCustom`. The second is a
+  table, and tables in this addon have vanished at logout before when written the
+  wrong way. Check 8 is what proves this one does not.
+- Bite Mode is a real row with a dead veil over it. No saved setting at all.
+
+## Read this before starting
+
+- **Start from a profile where you have set your OWN accent colour**, something you
+  will recognise and that is neither KitnUI pink nor the test colour. Several
+  checks below are meaningless without it, because they ask whether YOUR colour
+  comes back.
+- Have the quest tracker, the Friends tab and, if you can, the damage meter
+  visible. Those are where the scoping shows.
+- Use the snapshot probe from "Shared tools" above whenever a check mentions
+  `NOTES`.
+
+## The checks
+
+- [ ] **1. The page reads in three blocks.** Open the KitnUI tab, General page.
+  Top to bottom: `APPEARANCE (...)`, the Dark/Colored buttons, then `ACCENTS` with
+  **no gap above it**, then its three rows, then a gap, then `TWEAKS`. If ACCENTS
+  looks like a separate island rather than part of Appearance, say so — that is the
+  one judgement call in this item and it is yours.
+- [ ] **2. With the master OFF, the two rows below it are dead.** Use KitnUI Pink
+  and Accent Color are both dimmed. Click each one. Nothing moves, nothing opens,
+  BugSack stays empty.
+- [ ] **3. TWEAKS holds three rows, in order.** Dark Class Resource Bar, Lulu Mode,
+  Bite Mode.
+- [ ] **4. Bite Mode is dead.** Dimmed, with a pink-bordered "Coming Soon" box.
+  Clicking it does nothing at all: the switch does not move. Hovering may or may
+  not show its tooltip through the veil — **either is fine**, just note which
+  happened.
+- [ ] **5. Dark Class Resource Bar still works from its new home.** Toggle it and
+  watch the class resource bar. Then pull a target, and while in combat try it
+  again: it must refuse with the usual message rather than half-applying.
+- [ ] **6. Turn the master ON.** `KitnUI Accent Coloring`. The accent goes KitnUI
+  pink exactly as the old switch did, the quest tracker header takes it, and the
+  two rows below come alive. The probe shows notes present.
+- [ ] **7. The one that matters most — colour without losing the scoping.** Switch
+  **Use KitnUI Pink** off and pick something obviously different, say green. Then
+  check all four scoped places:
+  - the quest tracker header is green, not class-coloured,
+  - the tracker's divider lines are still NOT tinted,
+  - the Mythic+ timer title is still NOT tinted,
+  - the damage meter and the Friends tab are still NOT tinted.
+
+  **If any of those changed, stop and report it.** That is the defect this whole
+  split exists to prevent.
+- [ ] **7b. Pick a colour straight from the swatch while Use KitnUI Pink is ON.**
+  The colour applies AND Use KitnUI Pink switches itself off, in the same click,
+  without a reload.
+- [ ] **8. The custom colour survives a logout.** With the master on and a custom
+  colour set, `/reload`. Both the colour and the Use KitnUI Pink state come back as
+  you left them. Then log out to character select and back in, and check again —
+  the reload is the weaker test of the two.
+- [ ] **9. Pink comes back, and so does your colour.** Switch Use KitnUI Pink ON:
+  the accent is pink. Switch it OFF: **your green comes back**, not black and not
+  pink. Scoping unchanged throughout.
+- [ ] **10. Turn the master OFF.** Your own original accent from before check 6
+  comes back — NOT pink, NOT green. All the scoped places return to how you had
+  them. The probe reads `NOTES 0`. This is the check that proves the colour rows
+  never touched the ownership record.
+- [ ] **11. Search still finds it.** Type `pink` into EllesmereUI's settings
+  search. The KitnUI accent block comes up.
+- [ ] **12. Profile switch.** With the master on and a custom colour, switch to
+  another EllesmereUI profile and back. The colour and the scoping are still right,
+  and nothing is printed twice.
+- [ ] **13. `/kitn reset`, run while the master is ON with a custom colour.** Four
+  things, and the obvious guess is wrong:
+  - EllesmereUI's live accent is **your own original colour**, NOT pink and NOT the
+    custom one. Reset re-merges the defaults and only then re-applies, so the
+    master reads off while the notes are still there to restore from.
+  - All the scoped places are back to your originals.
+  - KitnUI Accent Coloring reads OFF, Use KitnUI Pink reads ON.
+  - Re-opening the swatch shows pink, because the stored colour reset too.
+- [ ] **14. BugSack is empty.** Through all of the above. Any error at all is a
+  fail, even one that looks unrelated.
+
+## Result
+
+- Date:
+- Reported by Kitn:
+- Notes:
