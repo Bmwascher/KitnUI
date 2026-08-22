@@ -1611,20 +1611,28 @@ function ns.RecheckBetterFriendlistAppearance()
     if snap.pending <= 0 then snap.pending = nil end
 
     -- Their rollback touches six keys, of which this file manages two: theme and
-    -- friendsFrameStyle, plus the version stamp. Those three are the player's
-    -- real values again and are worth re-recording, because the record taken at
-    -- finish may have caught an open picker's unaccepted preview.
+    -- friendsFrameStyle, plus the version stamp. When those have moved, they are
+    -- the player's real values again and are worth re-recording, because the
+    -- record taken at finish may have caught an open picker's unaccepted
+    -- preview.
     --
-    -- The other 28 are NOT re-recorded. Their rollback never touches them, so
-    -- what is in the table now is this file's own write, and copying it into the
-    -- snapshot would hand KitnUI's values back at the next reset as though the
-    -- player had chosen them.
-    if snap.prev then
-        snap.prev.theme = bfl.theme or BFL_ABSENT
-        snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
+    -- Only when THOSE moved, though. Any managed option the player edits
+    -- themselves also fails the test above, and in that case theme and style
+    -- still hold KitnUI's own values -- re-recording them there would overwrite
+    -- the real backup with our own write.
+    --
+    -- The other 28 keys are never re-recorded: their rollback does not touch
+    -- them, so what is in the table is this file's write either way.
+    local rolledBack = bfl.theme ~= BFL_SETTINGS.theme
+        or bfl.friendsFrameStyle ~= BFL_SETTINGS.friendsFrameStyle
+    if rolledBack then
+        if snap.prev then
+            snap.prev.theme = bfl.theme or BFL_ABSENT
+            snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
+        end
+        snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
+        snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
     end
-    snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
-    snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
 
     WriteBFL(bfl)
     print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set it again. Type " .. ns.Color("/reload") .. " to see it.")
