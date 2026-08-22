@@ -429,10 +429,14 @@ local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraRemin
 -- -- which the installer's Finish does anyway, but a wizard closed before
 -- Finish would leave a grip on screen and a frame that still eats clicks.
 --
--- NSRT's own lock button is mirrored rather than reimplemented: MakeDraggable
--- with enable=false hides the border, disables the mouse and clears the drag
--- scripts (Functions.lua), and the two resizer calls are what that button does
--- either side of it. isNote is true because all three of these are note frames.
+-- NSRT's own unlock is mirrored rather than reimplemented, exactly inverted:
+-- CreateNoteMoverFrame unlocks with MakeDraggable(enable=true) plus Resizer:Show
+-- and SetResizable(true) (Reminders.lua), so this passes enable=false and does
+-- the other two in reverse. MakeDraggable's disable branch is what hides the
+-- border, disables the mouse and clears the drag scripts (Functions.lua). The
+-- lock switch a player would use for this lives in the companion UI addon
+-- (NorthernSkyRaidTools_UI), not in NSRT itself. isNote is true because all
+-- three of these are note frames.
 -- pcall'd and method-checked throughout: this is another addon's furniture and
 -- a locking failure must not abort an install.
 local function LockLiveMover(NSI, key, settings)
