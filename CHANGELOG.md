@@ -20,6 +20,7 @@ setting when they were not.
 - Four forcing switches say on hover whether KitnUI is really holding your setting, or is only switched on. Nothing on screen distinguished those two states before
 - **Lulu Mode** now holds the whole round minimap layout instead of the shape alone, and hands all of it back when you switch it off. On an upgrade it asks before claiming the extra settings
 - The installer no longer reports success over a step that did nothing. A step that cannot import or load prints why, and the wizard counts it
+- The installer now opens by itself on a first install. It was opening during login and the game closed it again a moment later, so a fresh setup saw no wizard at all, with nothing in chat to say why
 
 ### Top Bar
 - **NEW:** Mouse-button pictures in the hearthstone and clock tooltips, so left, middle and right click are shown rather than described
