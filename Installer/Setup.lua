@@ -1545,17 +1545,31 @@ end
 function ns.RecheckBetterFriendlistAppearance()
     local snap = ns.db and ns.db.bflSnap
     if not (snap and snap.pending) then return end
-    snap.pending = nil
 
     if not IsAddOnLoaded("BetterFriendlist") then return end
     local bfl = _G.BetterFriendlistDB
     if type(bfl) ~= "table" then return end
+    -- Consumed only once the addon is actually here to be read. Spent earlier,
+    -- a login with BetterFriendlist switched off would burn the one check.
+    snap.pending = nil
     if BFLHolds(bfl) then return end
 
-    -- BetterFriendlist has just put ITS values back, so the live keys are the
-    -- player's real ones -- a better record than the one taken at finish, where
-    -- an open picker may have been showing a preview they never accepted.
-    TakeSnapshot(snap, bfl, nil)
+    -- Something put values back, and their rollback is the likely something. It
+    -- touches SIX keys, of which this file manages two: theme and
+    -- friendsFrameStyle, plus the version stamp. Those three are now the
+    -- player's real values and are worth re-recording, because the record taken
+    -- at finish may have caught an open picker's unaccepted preview.
+    --
+    -- The other 28 keys are NOT re-recorded. Their rollback never touches them,
+    -- so what is in the table now is this file's own finish write, and copying
+    -- it into the snapshot would hand KitnUI's values back at the next reset as
+    -- though the player had chosen them.
+    if snap.prev then
+        snap.prev.theme = bfl.theme or BFL_ABSENT
+        snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
+    end
+    snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
+    snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
 
     WriteBFL(bfl)
     print(ns.title .. ": BetterFriendlist put its own appearance back during the reload, so KitnUI has set it again. Type " .. ns.Color("/reload") .. " to see it.")
