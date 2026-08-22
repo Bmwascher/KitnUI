@@ -987,14 +987,12 @@ setupFunctions["Baganator"] = function(addonKey, import)
             return false
         end
 
-        -- Anything else in the payload table overrides the export, so a one-off
-        -- correction does not need the whole string regenerated.
-        for k, v in pairs(src) do
-            if k ~= "profileString" then
-                profile[k] = type(v) == "table" and CopyTable(v) or v
-            end
-        end
-
+        -- The decoded table is written exactly as DecodeBaganatorProfile returned
+        -- it. There is deliberately no override pass from the payload table over
+        -- the top: it would run after the drop list, the key reversal, the orphan
+        -- sweep and the forced sentinels, so a field added here as a quick fix
+        -- would defeat every one of them silently. Correct the export string, or
+        -- change the decoder.
         BAGANATOR_CONFIG = BAGANATOR_CONFIG or {}
         BAGANATOR_CONFIG.Profiles = BAGANATOR_CONFIG.Profiles or {}
         BAGANATOR_CONFIG.Profiles[ns.profileName] = profile
