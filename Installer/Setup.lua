@@ -1363,6 +1363,68 @@ function ns.ApplyEUIModuleSet()
         end
     end
 end
+---------------------------------------------------------------------------------
+-- BetterFriendlist: the appearance KitnUI's skinning expects
+---------------------------------------------------------------------------------
+
+-- BetterFriendlist ships no import format, so this is a direct write to its one
+-- account-wide table rather than a Data/AddOns payload. Three keys, and they are
+-- the same three its own first-run appearance flow writes (RestoreSnapshot in
+-- that addon's AppearanceOnboarding module):
+--
+--   theme                       -- "blizzard" by default; KitnUI skins for "dark"
+--   friendsFrameStyle           -- "modern" or "legacy"
+--   appearanceOnboardingVersion -- how far that first-run flow has got
+--
+-- The third is stamped for the same reason KitnUI tells EllesmereUI it owns the
+-- first-run experience (Core.lua): left behind, BetterFriendlist asks the player
+-- to choose a look on the next login and writes the other two itself, undoing
+-- this. Its "already done" test is stored >= current, and the current value is a
+-- private constant in that addon (BFL.APPEARANCE_ONBOARDING_VERSION, 3 as
+-- shipped 2026-08-22) that cannot be read from outside, so it is written
+-- literally. Too LOW simply runs their flow again, which is why this number is
+-- never raised on a guess.
+--
+-- Takes effect on the ReloadUI at the end of the flow: the addon reads all three
+-- through its own database layer at load.
+local BFL_ONBOARDING_VERSION = 3
+
+function ns.ApplyBetterFriendlistAppearance()
+    if not IsAddOnLoaded("BetterFriendlist") then return end
+    local bfl = _G.BetterFriendlistDB
+    if type(bfl) ~= "table" then return end
+
+    -- Snapshot ONCE, the first time KitnUI takes these settings. Re-snapshotting
+    -- on a second install would record KitnUI's own values as the player's and
+    -- leave the reset with nothing to put back. false means "the key was absent",
+    -- which restores as nil rather than as the string "false".
+    ns.db.bflSnap = ns.db.bflSnap or {}
+    local snap = ns.db.bflSnap
+    if not snap.taken then
+        snap.taken = true
+        snap.theme = bfl.theme or false
+        snap.friendsFrameStyle = bfl.friendsFrameStyle or false
+        snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or false
+    end
+
+    bfl.theme = "dark"
+    bfl.friendsFrameStyle = "modern"
+    bfl.appearanceOnboardingVersion = BFL_ONBOARDING_VERSION
+end
+
+-- Undo, for /kitn reset. The wipe there takes the snapshot with it, so this has
+-- to run before it. Silent when KitnUI never took the settings.
+function ns.RestoreBetterFriendlistAppearance()
+    local snap = ns.db and ns.db.bflSnap
+    if not (snap and snap.taken) then return end
+    local bfl = _G.BetterFriendlistDB
+    if type(bfl) ~= "table" then return end
+
+    bfl.theme = snap.theme or nil
+    bfl.friendsFrameStyle = snap.friendsFrameStyle or nil
+    bfl.appearanceOnboardingVersion = snap.appearanceOnboardingVersion or nil
+end
+
 
 ---------------------------------------------------------------------------------
 -- Finish installation
@@ -1378,6 +1440,10 @@ function ns.FinishInstallation()
 
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
+
+    -- Same on both paths as the module set above: these are account-wide keys in
+    -- another addon, so an alt running /kitn load simply rewrites what is there.
+    ns.ApplyBetterFriendlistAppearance()
 
     -- Chat Setup, same reasoning as the module set above: the opt-in is account
     -- wide but WoW's chat layout is per character, so an alt that only runs

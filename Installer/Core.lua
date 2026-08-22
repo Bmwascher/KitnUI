@@ -425,6 +425,7 @@ local defaults = {
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
+    bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
@@ -566,6 +567,13 @@ KitnCommands["reset"] = function()
         return
     end
     if ns.EUIResetAll() == false then return end
+
+    -- BetterFriendlist's appearance keys live in ITS saved variables, so the wipe
+    -- below cannot reach them -- only the snapshot it is about to delete knows
+    -- what they held. Put them back first. After the EllesmereUI teardown on
+    -- purpose: that one can still refuse, and a refusal must leave everything as
+    -- it was.
+    if ns.RestoreBetterFriendlistAppearance then ns.RestoreBetterFriendlistAppearance() end
 
     -- That teardown queues a line for anything it could NOT put back, and the
     -- queue lives in the very table this function is about to delete. Printing
@@ -767,6 +775,7 @@ local function InitDB()
     ns.db.euiSettings = ns.db.euiSettings or {}
     ns.db.euiSnap = ns.db.euiSnap or {}
     ns.db.euiSnapGlobal = ns.db.euiSnapGlobal or {}
+    ns.db.bflSnap = ns.db.bflSnap or {}
 end
 
 local boot = CreateFrame("Frame")
