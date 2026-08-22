@@ -15,7 +15,7 @@ setting when they were not.
 - Dark and Colored now also set the power text colour on the unit frames. Dark puts the unit's own power colour on the number over the power bar; Colored makes it white, because the bar behind it already carries that colour
 
 ### Fixes
-- Fixed a Cooldown Manager error that could clear your active layout and import nothing. Reimporting a CDM layout for a spec whose layout was already active made Blizzard's Cooldown Manager redraw inside KitnUI's call stack, which the game refuses. Present since 2026-07-06
+- Fixed a Cooldown Manager error that could clear your active layout and import nothing. Reimporting a CDM layout for a spec whose layout was already active made Blizzard's Cooldown Manager redraw inside KitnUI's call stack, which the game refuses.
 - A switch that is ON no longer hands you KitnUI's own value back as though it were your original. Copying an EllesmereUI profile carried the switch but not the record of what was there before, and a re-apply then recorded KitnUI's forced value as yours. Only a real user action can write that record now
 - Four forcing switches say on hover whether KitnUI is really holding your setting, or is only switched on. Nothing on screen distinguished those two states before
 - **Lulu Mode** now holds the whole round minimap layout instead of the shape alone, and hands all of it back when you switch it off. On an upgrade it asks before claiming the extra settings
@@ -27,18 +27,23 @@ setting when they were not.
 - The clock tooltip drops its title and lays the three clicks out in two columns: which button on the left, what it opens on the right
 - **NEW:** The clock tooltip lists your saved raid lockouts and the daily and weekly reset clocks
 - **NEW:** Mythic+ portals on cooldown count down in the flyout, reading `8h`, `45m` or `30s`
-- The portal flyout carries its own list of this season's eight dungeons instead of waiting for EllesmereUI's list to catch up
+- The portal flyout carries its own list of this season's eight dungeons
 - Portal icons now light up correctly for account-wide teleports, which sit in the General spellbook
 - The random hearthstone is rolled after you click, not before, so it cannot be spoiled by a tooltip. Fixed-destination stones are kept out of the roll
 - The hearthstone tooltip no longer prints a raw item number while a stone's name is still loading
 - The clock tooltip shows the clock the face is not showing, rather than repeating it
 - The friends and guild counts walk the friends list once per update instead of once per event
 
+### Profiles
+- Every bundled profile refreshed for this release: EllesmereUI, BigWigs and its per-boss settings, BuffReminders, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode (both the normal and Lulu layouts) and all 40 Cooldown Manager layouts
+- Edit Mode layouts rebuilt on the 12.1 format, which adds new frames the old layout did not know about
+
 ### Installer
 - **NEW:** A nickname box on the Northern Sky Raid Tools step, on every one of its pages
 - **NEW:** Dark and Colored buttons appear on the EllesmereUI step once the profile is imported
 - Step names in the sidebar moved closer to the panel edge, with a smaller tick to make room
 - The version number is printed once, through one helper, and is never stale
+- The Baganator step now installs the whole Baganator profile, not the category groups alone. Bag and bank widths, icon corners, sorting, the skin and the junk plugin come with it. Window positions deliberately do not, so Baganator places its frames where it normally would
 
 ## v2.0.1
 
