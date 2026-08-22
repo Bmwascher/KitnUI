@@ -883,9 +883,20 @@ boot:SetScript("OnEvent", function()
 
     local hasProfiles = ns.db.profiles and next(ns.db.profiles)
 
-    -- First run: launch the installer
+    -- First run: launch the installer a moment AFTER login rather than during
+    -- it. The wizard is a UISpecialFrames member (Wizard.lua), and a
+    -- window shown while login is still finishing is swept closed with the rest
+    -- of them: an in-game probe on 2026-08-22 found the frame built, paged to
+    -- step 1 and at full alpha, yet hidden, with nothing printed and no error.
+    -- The delay matches the login notification at the bottom of this handler.
+    -- Re-tested at fire time because two seconds is long enough for the user to
+    -- have run /kitn install by hand.
     if not hasProfiles and not ns.db.installedVersion then
-        if ns.OpenInstaller then ns.OpenInstaller() end
+        C_Timer.After(2, function()
+            if not ns.db or ns.db.installedVersion then return end
+            if ns.db.profiles and next(ns.db.profiles) then return end
+            if ns.OpenInstaller then ns.OpenInstaller() end
+        end)
 
     -- Version update: prompt to re-install (overall version or per-addon versions).
     -- Dev-mode: always show popup when version is unresolved (@project-version@).
