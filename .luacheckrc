@@ -29,6 +29,7 @@ globals = {
     "PlaterDB",
     "KitnEssentialsDB",
     "BAGANATOR_CONFIG", "BAGANATOR_CURRENT_PROFILE",
+    "BigWigs3DB",   -- read for the profile check, written for the Auras plugin setting
 
     -- Third-party globals we mutate during profile import
     "NSRT",
@@ -176,7 +177,7 @@ read_globals = {
     -- Optional addon globals (read-only access for detection)
     "Plater",
     "BigWigsLoader",
-    "BigWigsAPI", "BigWigs3DB",
+    "BigWigsAPI",
     "WarpDeplete",
     "MRT", "MRT_DB",
     "Ayije_CDM",
