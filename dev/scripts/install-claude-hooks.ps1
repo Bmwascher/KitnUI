@@ -1,14 +1,15 @@
 # Restores the local dev gates after a re-clone or PC reset. Everything under
-# .claude/ is gitignored, so the live edit-time lint hook dies with the
-# checkout; the tracked templates (dev/claude-hooks/) are the durable copies.
+# .claude/ is gitignored, so the live hooks die with the checkout; the tracked
+# templates (dev/claude-hooks/) are the durable copies.
 #
 #   pwsh dev/scripts/install-claude-hooks.ps1
 #
-# Idempotent: copies the hook script, merges the hooks block into
-# .claude/settings.json only when absent (never overwrites an existing hooks
-# config or personal permissions), and sets core.hooksPath for the pre-push
-# gate. Safe to re-run any time. (KitnUI has no branch-guard hook — luacheck
-# on edit + the pre-push gate are the only local gates.)
+# Idempotent: copies the hook scripts, merges missing hook entries into
+# .claude/settings.json per event and per script (never overwrites existing
+# entries or personal permissions), and sets core.hooksPath for the git-hook
+# gates (pre-push, commit-msg, pre-commit). Safe to re-run any time.
+# (KitnUI has no branch-guard hook — feature-branch discipline is
+# self-enforced.)
 
 $ErrorActionPreference = 'Stop'
 
@@ -17,38 +18,74 @@ $templates = Join-Path $root 'dev\claude-hooks'
 $hooksDir = Join-Path $root '.claude\hooks'
 $settingsPath = Join-Path $root '.claude\settings.json'
 
-# 1. Hook script: the template copy is canonical - always refresh.
+# 1. Hook scripts: template copies are canonical - always refresh.
 New-Item -ItemType Directory -Force $hooksDir | Out-Null
-foreach ($name in @('luacheck-postedit.ps1')) {
+foreach ($name in @('luacheck-postedit.ps1', 'git-guard.ps1')) {
     Copy-Item (Join-Path $templates $name) (Join-Path $hooksDir $name) -Force
     Write-Host "[install] .claude/hooks/$name refreshed from dev/claude-hooks/"
 }
 
-# 2. settings.json: create from template, or inject the hooks block if the
-#    file exists without one. An existing hooks block is left untouched -
-#    diff against dev/claude-hooks/settings.template.json by hand if needed.
+# 2. settings.json: create from template, or merge missing hook entries in.
+#    Merge is per event and per entry, keyed on the hook script filename in
+#    args - existing entries and personal settings are never touched, so new
+#    tracked hooks land in a settings.json that already has a hooks block.
 $template = Get-Content (Join-Path $templates 'settings.template.json') -Raw | ConvertFrom-Json
 if (-not (Test-Path $settingsPath)) {
     Copy-Item (Join-Path $templates 'settings.template.json') $settingsPath
     Write-Host "[install] .claude/settings.json created from template"
 } else {
     $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
-    if ($settings.PSObject.Properties.Name -contains 'hooks') {
-        Write-Host "[install] .claude/settings.json already has a hooks block - left as is"
-    } else {
+    $changed = $false
+    if (-not ($settings.PSObject.Properties.Name -contains 'hooks')) {
         $settings | Add-Member -MemberType NoteProperty -Name 'hooks' -Value $template.hooks
-        $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
+        $changed = $true
         Write-Host "[install] hooks block injected into existing .claude/settings.json"
+    } else {
+        foreach ($eventProp in $template.hooks.PSObject.Properties) {
+            $event = $eventProp.Name
+            if (-not ($settings.hooks.PSObject.Properties.Name -contains $event)) {
+                $settings.hooks | Add-Member -MemberType NoteProperty -Name $event -Value $eventProp.Value
+                $changed = $true
+                Write-Host "[install] hooks.$event added from template"
+                continue
+            }
+            $existing = @($settings.hooks.$event)
+            foreach ($entry in @($eventProp.Value)) {
+                $script = ''
+                foreach ($h in @($entry.hooks)) {
+                    if (($h.args -join ' ') -match '([\w-]+\.ps1)') { $script = $Matches[1]; break }
+                }
+                if (-not $script) { continue }
+                $present = $false
+                foreach ($e in $existing) {
+                    foreach ($h in @($e.hooks)) {
+                        if (($h.args -join ' ') -match [regex]::Escape($script)) { $present = $true; break }
+                    }
+                    if ($present) { break }
+                }
+                if (-not $present) {
+                    $existing += $entry
+                    $changed = $true
+                    Write-Host "[install] hooks.$event entry for $script appended"
+                }
+            }
+            $settings.hooks.$event = $existing
+        }
+    }
+    if ($changed) {
+        $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
+    } else {
+        Write-Host "[install] .claude/settings.json already has all tracked hook entries"
     }
 }
 
-# 3. Pre-push gate (per-clone config; dies on re-clone without this).
+# 3. Git-hook gates (per-clone config; dies on re-clone without this).
 $current = git -C $root config core.hooksPath 2>$null
 if ($current -eq 'dev/githooks') {
     Write-Host "[install] core.hooksPath already dev/githooks"
 } else {
     git -C $root config core.hooksPath dev/githooks
-    Write-Host "[install] core.hooksPath set to dev/githooks (pre-push gate active)"
+    Write-Host "[install] core.hooksPath set to dev/githooks (pre-push, commit-msg and pre-commit gates active)"
 }
 
 Write-Host "[install] done - Claude Code picks up hooks on next session start"

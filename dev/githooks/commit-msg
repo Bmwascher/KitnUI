@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Commit-message guard: upstream/reference addon names are banned from commit
+# messages (family AGENTS.md git rules) — provenance is a release-visible
+# brand leak. KitnUI's main already carries violations from before this hook
+# existed.
+# Also blocks AI-attribution trailers (family rule: never append them).
+# Deliberate exception: git commit --no-verify
+set -uo pipefail
+
+msg_file="$1"
+# Scan the whole file, comment lines included: -m messages keep '#' lines
+# under git's default cleanup, so stripping them would open a false-negative
+# hole; a '#' comment line tripping the guard on an editor commit is rare and
+# has the --no-verify escape. But stop at the scissors line — `git commit -v`
+# appends the full staged diff below it, which git never commits and which
+# legitimately contains addon names (installer detection code).
+msg="$(sed '/^# -\{8,\} >8 -\{8,\}/q' "$msg_file")"
+
+# Two passes: distinctive stems match anywhere in a token (catches
+# "atrocityUI"-style embeddings); short shorthand tokens need word boundaries
+# to avoid mangling ordinary words ("KitnUI_EUI" is one \w token, so it
+# passes). ElvUI is NOT listed: it is a public compatibility target (the v1
+# path) and legitimately appears in user-facing entries — as do the profile
+# targets (BigWigs, NSRT, Baganator, BetterFriendList, BuffReminders).
+# No `head` inside the pipelines: under pipefail, grep dying on SIGPIPE when
+# head exits early reads as "no match" and waves the commit through.
+stems='atrocity|ellesmere|naowh|exwind|windtools'
+shorts='aes|eui|nui'
+hit="$(printf '%s\n' "$msg" | grep -ioE "$stems" | sort -u | tr '\n' ' ' || true)"
+hit2="$(printf '%s\n' "$msg" | grep -iwoE "$shorts" | sort -u | tr '\n' ' ' || true)"
+if [ -n "$hit$hit2" ]; then
+    echo "[commit-msg] BLOCKED: commit message contains upstream addon name(s): $hit$hit2" >&2
+    echo "[commit-msg] Reference provenance belongs in local docs, never in published history. Reword the message, or override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
+fi
+
+if printf '%s\n' "$msg" | grep -qiE '^(co-authored-by:|claude-session)'; then
+    echo "[commit-msg] BLOCKED: AI-attribution trailer in commit message (family rule: never append them). Remove it, or override with: git commit --no-verify" >&2
+    exit 1
+fi
+
+exit 0

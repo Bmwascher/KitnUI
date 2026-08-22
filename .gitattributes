@@ -5,3 +5,4 @@
 *.toc text eol=lf
 *.yml text eol=lf
 *.sh text eol=lf
+dev/githooks/** text eol=lf
