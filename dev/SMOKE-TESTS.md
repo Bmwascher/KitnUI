@@ -1011,8 +1011,10 @@ moves.
 - The shipped profile only shows power text on the **Focus** frame, so Focus is
   where you can see this. The setting is written on all seven frames anyway, so
   turning power text on elsewhere later still follows the look.
-- Coloured also **clears any custom power text colour** you had set. Nothing is
-  recorded and nothing is handed back, exactly like the health and name colours.
+- **Both** looks clear any custom power text colour you had set, not Coloured
+  alone. That is what EllesmereUI's own swatch does when it turns power colouring
+  on. Nothing is recorded and nothing is handed back, exactly like the health and
+  name colours.
 - The section header can now read `CUSTOM` for one more reason: a power text
   colour that does not match the look. It only counts on a frame whose power
   text is actually on screen.
