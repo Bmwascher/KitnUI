@@ -889,13 +889,33 @@ boot:SetScript("OnEvent", function()
     -- of them: an in-game probe on 2026-08-22 found the frame built, paged to
     -- step 1 and at full alpha, yet hidden, with nothing printed and no error.
     -- The delay matches the login notification at the bottom of this handler.
-    -- Re-tested at fire time because two seconds is long enough for the user to
-    -- have run /kitn install by hand.
     if not hasProfiles and not ns.db.installedVersion then
-        C_Timer.After(2, function()
-            if not ns.db or ns.db.installedVersion then return end
-            if ns.db.profiles and next(ns.db.profiles) then return end
+        -- Every reason to stand down is re-tested at fire time, because two
+        -- seconds is long enough for the user to act first. Returns false only
+        -- when combat is the one thing in the way, which the retry below waits
+        -- out; every other answer is final for this session.
+        local function OpenFirstRun()
+            if not ns.db or ns.db.installedVersion then return true end
+            if ns.db.profiles and next(ns.db.profiles) then return true end
+            -- /kitn install during the wait opens this same wizard, and
+            -- re-queueing it would throw the user back to page 1.
+            if ns.Wizard and ns.Wizard.frame and ns.Wizard.frame:IsShown() then return true end
+            if InCombatLockdown() then return false end
             if ns.OpenInstaller then ns.OpenInstaller() end
+            return true
+        end
+
+        C_Timer.After(2, function()
+            if OpenFirstRun() then return end
+            -- Logging in mid-combat would otherwise spend the only automatic
+            -- open on a refusal -- OpenInstaller declines in combat -- and
+            -- leave a first-run player with no wizard for the whole session.
+            local retry = CreateFrame("Frame")
+            retry:RegisterEvent("PLAYER_REGEN_ENABLED")
+            retry:SetScript("OnEvent", function(self)
+                self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+                OpenFirstRun()
+            end)
         end)
 
     -- Version update: prompt to re-install (overall version or per-addon versions).
