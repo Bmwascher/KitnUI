@@ -1,5 +1,42 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.0 (unreleased)
+
+Accents you can choose yourself, a Tweaks section in the settings tab, richer Top
+Bar tooltips, and a set of fixes for switches that said they were holding a
+setting when they were not.
+
+### Settings Tab
+- **NEW:** Pick your own accent colour. The pink switch became two rows: **KitnUI Accent Coloring** decides whether KitnUI colours your accent at all, and **Use KitnUI Pink** decides which colour it uses. Turn the second one off and a colour swatch appears; the places KitnUI colours, and the places it deliberately leaves alone, stay exactly the same
+- **NEW:** A **Tweaks** section on the General page, holding Dark Class Resource Bar, Lulu Mode and a **Bite Mode** row marked Coming Soon
+- The General page is now three labelled blocks: Appearance, Accents and Tweaks. Accent settings sit inside Appearance instead of standing alone
+- The KitnUI pink accent now colours the quest tracker header instead of skipping the tracker entirely
+- A colour change that cannot take effect now says so in chat instead of appearing to work. This happens on a profile copied from another one, where the switch travelled but the record of your original colour did not
+
+### Fixes
+- Fixed a Cooldown Manager error that could clear your active layout and import nothing. Reimporting a CDM layout for a spec whose layout was already active made Blizzard's Cooldown Manager redraw inside KitnUI's call stack, which the game refuses. Present since 2026-07-06
+- A switch that is ON no longer hands you KitnUI's own value back as though it were your original. Copying an EllesmereUI profile carried the switch but not the record of what was there before, and a re-apply then recorded KitnUI's forced value as yours. Only a real user action can write that record now
+- Four forcing switches say on hover whether KitnUI is really holding your setting, or is only switched on. Nothing on screen distinguished those two states before
+- **Lulu Mode** now holds the whole round minimap layout instead of the shape alone, and hands all of it back when you switch it off. On an upgrade it asks before claiming the extra settings
+- The installer no longer reports success over a step that did nothing. A step that cannot import or load prints why, and the wizard counts it
+
+### Top Bar
+- **NEW:** Mouse-button pictures in the hearthstone and clock tooltips, so left, middle and right click are shown rather than described
+- **NEW:** The clock tooltip lists your saved raid lockouts and the daily and weekly reset clocks
+- **NEW:** Mythic+ portals on cooldown count down in the flyout, reading `8h`, `45m` or `30s`
+- The portal flyout carries its own list of this season's eight dungeons instead of waiting for EllesmereUI's list to catch up
+- Portal icons now light up correctly for account-wide teleports, which sit in the General spellbook
+- The random hearthstone is rolled after you click, not before, so it cannot be spoiled by a tooltip. Fixed-destination stones are kept out of the roll
+- The hearthstone tooltip no longer prints a raw item number while a stone's name is still loading
+- The clock tooltip shows the clock the face is not showing, rather than repeating it
+- The friends and guild counts walk the friends list once per update instead of once per event
+
+### Installer
+- **NEW:** A nickname box on the Northern Sky Raid Tools step, on every one of its pages
+- **NEW:** Dark and Colored buttons appear on the EllesmereUI step once the profile is imported
+- Step names in the sidebar moved closer to the panel edge, with a smaller tick to make room
+- The version number is printed once, through one helper, and is never stale
+
 ## v2.0.1
 
 A compatibility release: EllesmereUI 8.8 and the newest Northern Sky Raid Tools
