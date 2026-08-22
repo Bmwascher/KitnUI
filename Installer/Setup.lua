@@ -300,15 +300,19 @@ end
 -- -- bar, message and countdown positions and settings, the three colour sets,
 -- nameplates, Mythic+, battle res, Private Auras and the combat timer -- and
 -- the Auras plugin, which draws boss debuffs on you and on the tank, is not one
--- of them (Sharing.lua in BigWigs_Options, read 2026-08-22). Private Auras is a
--- DIFFERENT plugin with a similar name; only that one travels. So the profile
--- string lands complete and this setting is still at its default, which is
--- exactly the gap the installer exists to fill.
+-- of them (Sharing.lua in BigWigs_Options, read 2026-08-22). The one aura group
+-- it does export belongs to Private Auras, a plugin this Auras one REPLACED --
+-- PrivateAuras.lua is gone from BigWigs_Plugins, so that export is dead code
+-- and no aura setting travels at all today. The profile string lands complete
+-- and this setting is still at its default, which is the gap the installer
+-- exists to fill.
 --
 -- Written into KITNUI'S OWN BigWigs profile, so unlike the BetterFriendlist
 -- keys there is nothing of the player's to back up: that table did not exist
 -- until KitnUI's profile did, and no other profile is touched. It is written on
--- import only, so a player who turns the auras back on afterwards keeps them.
+-- import only, so a player who turns the auras back on afterwards keeps them
+-- until they import again -- the same deal as every other setting in the
+-- profile.
 --
 -- Structure is BigWigs3DB.namespaces[plugin].profiles[name], which is AceDB's
 -- own shape; building the empty tables by hand is safe because AceDB fills in
