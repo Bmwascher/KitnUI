@@ -12,6 +12,7 @@ setting when they were not.
 - The General page is now three labelled blocks: Appearance, Accents and Tweaks. Accent settings sit inside Appearance instead of standing alone
 - The KitnUI pink accent now colours the quest tracker header instead of skipping the tracker entirely
 - A colour change that cannot take effect now says so in chat instead of appearing to work. This happens on a profile copied from another one, where the switch travelled but the record of your original colour did not
+- Dark and Colored now also set the power text colour on the unit frames. Dark puts the unit's own power colour on the number over the power bar; Colored makes it white, because the bar behind it already carries that colour
 
 ### Fixes
 - Fixed a Cooldown Manager error that could clear your active layout and import nothing. Reimporting a CDM layout for a spec whose layout was already active made Blizzard's Cooldown Manager redraw inside KitnUI's call stack, which the game refuses. Present since 2026-07-06
