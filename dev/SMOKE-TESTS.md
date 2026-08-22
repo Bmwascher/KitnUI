@@ -34,7 +34,7 @@ an agent.**
 | 6. Lulu Mode holds the whole circle layout | `feature/lulu-circle-layout` | yes, `eb0c6ab..c8d94a2` | plan panel: Kimi PASS, Fable PASS, Sol FIX applied. Diff: Fable PASS on `75862c6`, one should-fix applied as `c8d94a2` | **PASS** (Kitn, 2026-08-21) |
 | 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..5ff1521` | plan: Sol PASS (3 rounds), Fable PASS. Diff: Sol PASS (3 rounds) and Fable PASS, both on `5ff1521` | **PASS** (Kitn, 2026-08-21) |
 | 8. The power text follows the look | `feature/power-text-look` | yes, `b898fce` | not yet | **PASS** (Kitn, 2026-08-21) |
-| 9. The clock's right click opens EUI settings | `feature/topbar-right-click-config` | yes | not yet | not yet |
+| 9. The clock's right click opens EUI settings | `feature/topbar-right-click-config` | yes, `1b75979..61106da` | none run | **approved by Kitn, 2026-08-22** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -1052,7 +1052,7 @@ moves.
 # Item 9 — The clock's right click opens EllesmereUI's settings
 
 **Branch** `feature/topbar-right-click-config`. Touches
-`KitnUI_EUI/TopBar/Elements.lua` only. **Status: not yet tested in game.**
+`KitnUI_EUI/TopBar/Elements.lua` only. **Status: approved by Kitn, 2026-08-22.**
 
 ## What changed and why it needs testing
 
@@ -1105,5 +1105,10 @@ build. Do not re-run them against this branch; run the checks below instead.
 
 ## Result
 
-- Date:
-- Reported by Kitn:
+- Date: 2026-08-22
+- Kitn approved the merge on build `61106da` after looking at the change, and the
+  boxes above were NOT worked through one by one. This is an approval, not a
+  recorded pass: no check in this item has been ticked by anyone, and an agent may
+  not tick them. Run them if you want the record.
+- No cross-agent diff review was run on this branch. The power text item before it
+  had one; this one was merged on Kitn's word alone.
