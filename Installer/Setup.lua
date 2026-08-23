@@ -1290,25 +1290,39 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         if GetSpecializationInfoForClassID then
             specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
         end
-        local layoutName = "KUI - " .. (specName or ("Spec" .. specIndex))
-        local removedExisting = false
+        local specLabel = specName or ("Spec" .. specIndex)
+        local layoutName = "KitnUI - " .. specLabel
+        -- The name shipped before the rename. Matched as well as the current one
+        -- so an upgrade REPLACES the old layout: left behind it would hold one
+        -- of the five slots the next spec needs, under a name the user has no
+        -- reason to connect to this addon any more.
+        local legacyName = "KUI - " .. specLabel
+
+        -- Collected first, removed after. RemoveLayout mutates the very table
+        -- being walked, and both names can be present at once.
+        local doomed = {}
         local _, layouts = lm:EnumerateLayouts()
         if layouts then
             for layoutID, layout in pairs(layouts) do
-                if layout and layout.layoutName == layoutName then
-                    local quietRemove = SilenceCDM(lm)
-                    lm:RemoveLayout(layoutID)
-                    RestoreCDM(lm, quietRemove)
-                    removedExisting = true
-                    break
+                if layout and (layout.layoutName == layoutName or layout.layoutName == legacyName) then
+                    doomed[#doomed + 1] = layoutID
                 end
             end
+        end
+
+        local removedExisting = #doomed > 0
+        if removedExisting then
+            local quietRemove = SilenceCDM(lm)
+            for _, layoutID in ipairs(doomed) do
+                lm:RemoveLayout(layoutID)
+            end
+            RestoreCDM(lm, quietRemove)
         end
 
         -- If we didn't free a slot and layouts are maxed, bail out.
         if not removedExisting and lm.AreLayoutsFullyMaxed and lm:AreLayoutsFullyMaxed() then
             print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
-            RecordCDMLimit(specName or ("Spec" .. specIndex))
+            RecordCDMLimit(specLabel)
             return false
         end
 
@@ -1322,7 +1336,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             local _, postLayouts = lm:EnumerateLayouts()
             if not postLayouts or not postLayouts[importedID] then
                 print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
-                RecordCDMLimit(specName or ("Spec" .. specIndex))
+                RecordCDMLimit(specLabel)
                 return false
             end
 
@@ -1368,7 +1382,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             ns.db.profiles["BlizzardCDM"] = ns.db.profiles["BlizzardCDM"] or {}
             ns.db.profiles["BlizzardCDM"][cdmKey] = cdmFingerprint
             ns.db.installedVersion = ns.version
-            ClearCDMLimit(specName or ("Spec" .. specIndex))
+            ClearCDMLimit(specLabel)
 
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
