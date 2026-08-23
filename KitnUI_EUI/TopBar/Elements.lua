@@ -744,13 +744,22 @@ local portalFlyout, portalFlyoutBtns
 -- spell is, so IsSpellKnown answers false for a teleport the player has earned
 -- and every icon dims.
 --
--- C_Spell.GetSpellCooldown IS a secret-value risk: it is marked
--- SecretWhenCooldownsRestricted, and the SpellCooldownInfo it returns marks only
--- isEnabled, isActive and isOnGCD as NeverSecret. So this never compares or does
--- arithmetic on startTime/duration -- it branches on isActive and hands the two
--- numbers to Cooldown:SetCooldown untouched, whose own arguments are built to
--- accept secret values. The widget paints the swipe without this file ever
--- reading the real numbers.
+-- The cooldown comes as a DURATION OBJECT, and passing one is the only way
+-- tainted code may set this swipe at all.
+--
+-- C_Spell.GetSpellCooldown is marked SecretWhenCooldownsRestricted, and the
+-- SpellCooldownInfo it returns marks only isEnabled, isActive and isOnGCD as
+-- NeverSecret. Its startTime and duration are therefore secret in combat, in an
+-- encounter, in a keystone and in rated PvP. Handing those two numbers to
+-- Cooldown:SetCooldown throws: that method takes secret arguments only from
+-- UNTAINTED code, which addon code never is. Never assume otherwise about a
+-- Cooldown setter -- the STYLE setters above accept them from tainted code and
+-- the value setters do not, and only the reference says which is which.
+--
+-- C_Spell.GetSpellCooldownDuration carries no secret marking and answers with an
+-- object the widget unwraps internally, where the restriction does not apply.
+-- It returns nothing when the spell is ready, and clearIfZero clears the swipe
+-- for a zero duration, so the ready case needs no branch of its own.
 local function RefreshPortalButtons()
     if not portalFlyoutBtns then return end
     for _, btn in ipairs(portalFlyoutBtns) do
@@ -762,10 +771,10 @@ local function RefreshPortalButtons()
             btn.icon:SetDesaturated(not known)
             btn.icon:SetAlpha(known and 1 or 0.4)
         end
-        local cd = known and C_Spell and C_Spell.GetSpellCooldown
-            and C_Spell.GetSpellCooldown(spellID)
-        if type(cd) == "table" and cd.isActive then
-            btn.cooldown:SetCooldown(cd.startTime, cd.duration)
+        local duration = known and C_Spell and C_Spell.GetSpellCooldownDuration
+            and C_Spell.GetSpellCooldownDuration(spellID)
+        if duration and btn.cooldown.SetCooldownFromDurationObject then
+            btn.cooldown:SetCooldownFromDurationObject(duration, true)
         else
             btn.cooldown:Clear()
         end
