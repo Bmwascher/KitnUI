@@ -702,14 +702,31 @@ local function WelcomeLoadPage()
         -- with nothing to activate: its layouts belong to the character, not the
         -- account (see ns.ImportCDMAllSpecs). Gated on the account having used
         -- CDM at all, so a player who skipped that step is not given it here.
+        local cdmFailed, cdmSkipped = 0, false
         if ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM then
-            local _, cdmFailed = ns.ImportCDMAllSpecs()
-            refused = refused + cdmFailed
+            local _, failed, skipped = ns.ImportCDMAllSpecs()
+            cdmFailed, cdmSkipped = failed, skipped
         end
 
+        -- Counted apart from the profiles above rather than added to them: a
+        -- blocked spec is one layout of one addon, and rolling it into the
+        -- profile count reports three blocked specs as three lost profiles.
+        local trouble = {}
         if refused > 0 then
-            ShowInstallToast(format("%d profile%s could not be loaded - see chat",
-                refused, refused == 1 and "" or "s"), 1, 0.2, 0.2)
+            trouble[#trouble + 1] = format("%d profile%s", refused, refused == 1 and "" or "s")
+        end
+        if cdmFailed > 0 then
+            trouble[#trouble + 1] = format("%d CDM layout%s", cdmFailed, cdmFailed == 1 and "" or "s")
+        end
+
+        if #trouble > 0 then
+            ShowInstallToast(table.concat(trouble, " and ") .. " could not be loaded - see chat", 1, 0.2, 0.2)
+        elseif cdmSkipped then
+            -- Nothing failed, but "All profiles loaded!" would still be a lie:
+            -- the Cooldown Manager step never ran. Amber, and the chat line the
+            -- skip printed says how to turn it on.
+            ShowInstallToast("Profiles loaded, CDM layouts skipped - see chat", 1, 0.8, 0.2)
+            PlayInstallSound()
         else
             SuccessToast("All profiles", "loaded!")
             PlayInstallSound()

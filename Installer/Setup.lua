@@ -1308,7 +1308,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         -- If we didn't free a slot and layouts are maxed, bail out.
         if not removedExisting and lm.AreLayoutsFullyMaxed and lm:AreLayoutsFullyMaxed() then
             print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
-            RecordCDMLimit(specName or ("Spec " .. specIndex))
+            RecordCDMLimit(specName or ("Spec" .. specIndex))
             return false
         end
 
@@ -1322,7 +1322,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             local _, postLayouts = lm:EnumerateLayouts()
             if not postLayouts or not postLayouts[importedID] then
                 print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
-                RecordCDMLimit(specName or ("Spec " .. specIndex))
+                RecordCDMLimit(specName or ("Spec" .. specIndex))
                 return false
             end
 
@@ -1368,7 +1368,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             ns.db.profiles["BlizzardCDM"] = ns.db.profiles["BlizzardCDM"] or {}
             ns.db.profiles["BlizzardCDM"][cdmKey] = cdmFingerprint
             ns.db.installedVersion = ns.version
-            ClearCDMLimit(specName or ("Spec " .. specIndex))
+            ClearCDMLimit(specName or ("Spec" .. specIndex))
 
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
@@ -1394,15 +1394,19 @@ end
 --
 -- Blizzard's own class rule applies as ever: only the class being played can be
 -- imported, so an alt of another class gets its own layouts on its own login.
+--
+-- Three returns: imported, failed, and whether the step was skipped whole. The
+-- third is not a failure and must not be counted as one, but a caller reporting
+-- success over it would be reporting an import that never happened.
 function ns.ImportCDMAllSpecs()
     if C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("cooldownViewerEnabled") ~= "1" then
         print(ns.title .. ": Cooldown Manager is disabled, so its layouts were skipped. Enable it in Settings > Gameplay > Combat, then run " .. ns.Color("/kitn cdm") .. ".")
-        return 0, 0
+        return 0, 0, true
     end
 
     local _, _, classId = UnitClass("player")
     local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
-    if not classData or not next(classData) then return 0, 0 end
+    if not classData or not next(classData) then return 0, 0, false end
 
     local imported, failed = 0, 0
     local _, rows = ns.GetCDMSpecRows()
@@ -1416,7 +1420,7 @@ function ns.ImportCDMAllSpecs()
             end
         end
     end
-    return imported, failed
+    return imported, failed, false
 end
 
 ---------------------------------------------------------------------------------
