@@ -744,22 +744,26 @@ local portalFlyout, portalFlyoutBtns
 -- spell is, so IsSpellKnown answers false for a teleport the player has earned
 -- and every icon dims.
 --
--- The cooldown comes as a DURATION OBJECT, and passing one is the only way
--- tainted code may set this swipe at all.
+-- The cooldown comes as a DURATION OBJECT, which is the only route that works
+-- in every state.
 --
 -- C_Spell.GetSpellCooldown is marked SecretWhenCooldownsRestricted, and the
 -- SpellCooldownInfo it returns marks only isEnabled, isActive and isOnGCD as
 -- NeverSecret. Its startTime and duration are therefore secret in combat, in an
--- encounter, in a keystone and in rated PvP. Handing those two numbers to
--- Cooldown:SetCooldown throws: that method takes secret arguments only from
--- UNTAINTED code, which addon code never is. Never assume otherwise about a
--- Cooldown setter -- the STYLE setters above accept them from tainted code and
--- the value setters do not, and only the reference says which is which.
+-- encounter, in a keystone and in a PvP match. Handing those two numbers to
+-- Cooldown:SetCooldown throws there: that method takes secret arguments only
+-- from UNTAINTED code, which addon code never is.
+--
+-- Never generalise from that to a whole class of setter. Only the ones marked
+-- with the CooldownStyle aspect take secret arguments from tainted code, which
+-- is why SetDrawSwipe below is fine while SetHideCountdownNumbers and
+-- SetCountdownAbbrevThreshold, two calls in this same file, are not. The
+-- reference is the only thing that says which is which.
 --
 -- C_Spell.GetSpellCooldownDuration carries no secret marking and answers with an
--- object the widget unwraps internally, where the restriction does not apply.
--- It returns nothing when the spell is ready, and clearIfZero clears the swipe
--- for a zero duration, so the ready case needs no branch of its own.
+-- object the widget unwraps internally, where the restriction does not apply. It
+-- may return nothing, and clearIfZero clears the swipe for a zero duration, so
+-- both of the ready cases land on the same branch as a missing method.
 local function RefreshPortalButtons()
     if not portalFlyoutBtns then return end
     for _, btn in ipairs(portalFlyoutBtns) do
