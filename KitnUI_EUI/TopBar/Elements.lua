@@ -876,10 +876,11 @@ local function CreatePortalFlyout()
             -- The countdown text is the ENGINE's, and that is the whole point. A
             -- hand-drawn timer would have to subtract GetTime() from the
             -- startTime and duration this file is careful never to touch (see
-            -- RefreshPortalButtons above): both are secret whenever cooldowns are
-            -- restricted, and arithmetic on a secret throws. The widget formats
-            -- the same two numbers internally, where that restriction does not
-            -- apply, and ticks itself without an OnUpdate.
+            -- RefreshPortalButtons above): both can be secret while cooldown
+            -- restrictions apply, subject to the same per-spell override named
+            -- there, and arithmetic on a secret throws. The widget works from
+            -- the cooldown internally, where that restriction does not apply,
+            -- and ticks itself without an OnUpdate.
             --
             -- Abbreviation OFF is what produces "8h" and "45m" instead of
             -- "7:59:12": a threshold below one minute performs no abbreviation at
