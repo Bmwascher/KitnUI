@@ -829,7 +829,10 @@ boot:SetScript("OnEvent", function()
     -- The layout cap the import ran into, asked about here rather than there:
     -- the wizard's own reload follows the failure within seconds, and the
     -- layouts it needs deleted are only reachable once that reload is done.
-    -- Cleared as it is raised, so one blocked import asks once.
+    -- Cleared once it HAS been raised, so one blocked import asks once and a
+    -- refused one still asks later: StaticPopup_Show answers nil when a show
+    -- condition rejects the dialog and when every dialog frame is already
+    -- taken, and this login raises several popups of its own.
     local cdmBlocked = ns.db.cdmLimitPending and ns.db.cdmLimitPending[GetCharKey()]
     if cdmBlocked and #cdmBlocked > 0 then
         C_Timer.After(2, function()
@@ -837,14 +840,15 @@ boot:SetScript("OnEvent", function()
             local blocked = pending and pending[GetCharKey()]
             if not blocked or #blocked == 0 then return end
             local names = table.concat(blocked, ", ")
-            pending[GetCharKey()] = nil
             StaticPopupDialogs["KITNUI_CDM_FULL"] = {
                 text = ns.title .. ": Cooldown Manager layouts could not be imported for " .. names
                     .. ".\n\nBlizzard allows five layouts per character and this one is full. Delete the layouts you do not use in the Cooldown Manager, then run /kitn cdm to import the rest.",
                 button1 = "Okay",
                 timeout = 0, whileDead = true, hideOnEscape = true,
             }
-            StaticPopup_Show("KITNUI_CDM_FULL")
+            if StaticPopup_Show("KITNUI_CDM_FULL") then
+                pending[GetCharKey()] = nil
+            end
         end)
     end
 

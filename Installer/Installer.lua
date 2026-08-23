@@ -477,12 +477,18 @@ local function BlizzardCDMPage()
     end
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
-            local imported, failed = ns.ImportCDMAllSpecs()
+            local imported, failed, skipped = ns.ImportCDMAllSpecs()
             local _, freshRows = ns.GetCDMSpecRows()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
             if failed > 0 then
                 ShowInstallToast(imported .. " imported, " .. failed .. " failed (see chat)", 1, 0.8, 0.2)
+            elseif skipped then
+                -- The page hides this button when the Cooldown Manager is off,
+                -- but it reads that CVar once at render and the user can switch
+                -- it off in Blizzard's settings while the wizard is open. Zero
+                -- failures then means nothing was attempted, not that it worked.
+                ShowInstallToast("Cooldown Manager is off - nothing imported (see chat)", 1, 0.8, 0.2)
             else
                 SuccessToast("All specs", "layouts imported!")
             end
