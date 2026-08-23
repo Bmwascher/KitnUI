@@ -850,7 +850,14 @@ boot:SetScript("OnEvent", function()
             if iconClassId and GetSpecializationInfoForClassID then
                 for _, row in ipairs(iconRows) do
                     local icon = select(4, GetSpecializationInfoForClassID(iconClassId, row.specIndex))
-                    if icon and row.specName then specIcons[row.specName] = icon end
+                    if icon then
+                        if row.specName then specIcons[row.specName] = icon end
+                        -- Keyed by the numbered label as well. A record written
+                        -- in a session where the spec-name lookup was missing
+                        -- holds "Spec<n>", and only this second key lets it find
+                        -- an icon on a login where the lookup works again.
+                        specIcons["Spec" .. row.specIndex] = icon
+                    end
                 end
             end
 
