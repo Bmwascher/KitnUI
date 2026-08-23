@@ -780,6 +780,16 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
 
     -- Load: activate the existing layout on this character. The index is the
     -- preset count plus the layout's position in the saved list.
+    --
+    -- Refused in combat because switching layouts repositions the action bars,
+    -- which is not allowed from an addon's own call stack under lockdown. The
+    -- install path above needs no guard of its own: the host's importer carries
+    -- one. Skipped rather than deferred, matching the appearance step.
+    if InCombatLockdown() then
+        print(ns.title .. ": The Edit Mode layout was not switched because you are in combat. Run the loader again when you are out.")
+        return false
+    end
+
     if not (C_EditMode and C_EditMode.GetLayouts) then
         print(ns.title .. ": Edit Mode is not available right now. Open Edit Mode once, then try again.")
         return false
