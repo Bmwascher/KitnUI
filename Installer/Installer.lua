@@ -477,22 +477,18 @@ local function BlizzardCDMPage()
     end
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
-            local imported, failed = 0, 0
-            for i = 1, numSpecs do
-                local specData = classData[i]
-                if specData and strtrim(specData) ~= "" then
-                    if ns.SetupAddon("BlizzardCDM", true, i) then
-                        imported = imported + 1
-                    else
-                        failed = failed + 1
-                    end
-                end
-            end
+            local imported, failed, skipped = ns.ImportCDMAllSpecs()
             local _, freshRows = ns.GetCDMSpecRows()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
             if failed > 0 then
                 ShowInstallToast(imported .. " imported, " .. failed .. " failed (see chat)", 1, 0.8, 0.2)
+            elseif skipped then
+                -- The page hides this button when the Cooldown Manager is off,
+                -- but it reads that CVar once at render and the user can switch
+                -- it off in Blizzard's settings while the wizard is open. Zero
+                -- failures then means nothing was attempted, not that it worked.
+                ShowInstallToast("Cooldown Manager is off - nothing imported (see chat)", 1, 0.8, 0.2)
             else
                 SuccessToast("All specs", "layouts imported!")
             end
@@ -692,7 +688,7 @@ local function WelcomeLoadPage()
     local f = WF()
     f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Loader")
     ns.Wizard:SetTitleIcon(true)
-    f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nIt will not reimport anything - just apply existing profiles.")
+    f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nNothing is reimported except the Cooldown Manager layouts, which every character has to be given its own copy of.")
     f.Desc2:SetText("Click " .. ns.Green("Finish") .. " at the end to reload and apply changes.")
     ns.Wizard:SetOption(1, "Load All", function()
         -- Refusals are counted, not discarded. KitnUI's own record can say a
@@ -707,9 +703,36 @@ local function WelcomeLoadPage()
                 if ns.SetupAddon(step.key) == false then refused = refused + 1 end
             end
         end
+
+        -- CDM is handled apart from the loop above because it is the one step
+        -- with nothing to activate: its layouts belong to the character, not the
+        -- account (see ns.ImportCDMAllSpecs). Gated on the account having used
+        -- CDM at all, so a player who skipped that step is not given it here.
+        local cdmFailed, cdmSkipped = 0, false
+        if ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM then
+            local _, failed, skipped = ns.ImportCDMAllSpecs()
+            cdmFailed, cdmSkipped = failed, skipped
+        end
+
+        -- Counted apart from the profiles above rather than added to them: a
+        -- blocked spec is one layout of one addon, and rolling it into the
+        -- profile count reports three blocked specs as three lost profiles.
+        local trouble = {}
         if refused > 0 then
-            ShowInstallToast(format("%d profile%s could not be loaded - see chat",
-                refused, refused == 1 and "" or "s"), 1, 0.2, 0.2)
+            trouble[#trouble + 1] = format("%d profile%s", refused, refused == 1 and "" or "s")
+        end
+        if cdmFailed > 0 then
+            trouble[#trouble + 1] = format("%d CDM layout%s", cdmFailed, cdmFailed == 1 and "" or "s")
+        end
+
+        if #trouble > 0 then
+            ShowInstallToast(table.concat(trouble, " and ") .. " could not be loaded - see chat", 1, 0.2, 0.2)
+        elseif cdmSkipped then
+            -- Nothing failed, but "All profiles loaded!" would still be a lie:
+            -- the Cooldown Manager step never ran. Amber, and the chat line the
+            -- skip printed says how to turn it on.
+            ShowInstallToast("Profiles loaded, CDM layouts skipped - see chat", 1, 0.8, 0.2)
+            PlayInstallSound()
         else
             SuccessToast("All profiles", "loaded!")
             PlayInstallSound()
@@ -963,6 +986,9 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     -- function, and two of the modes must not write another addon's settings.
     ns.installerIsCDMMode = cdmMode or false
     ns.installerIsUpdateMode = updateKeys ~= nil
+    -- Read by ns.ApplyCharacterWork, which runs once per wizard rather than once
+    -- per session: a second wizard is a second set of choices to apply.
+    ns.characterWorkApplied = false
     -- Track Extras clicks for the Finish recap; only the plain install flow has an
     -- Extras page, so nil in load/update/cdm mode (which skip the recap).
     ns.sessionExtras = (not profileLoadMode and not updateKeys and not cdmMode) and {} or nil

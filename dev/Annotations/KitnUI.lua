@@ -21,6 +21,7 @@
 ---@field db KitnUIDB               # SavedVariables (KitnUIDB)
 ---@field Wizard KitnUIWizard       # installer wizard singleton
 ---@field installerIsLoadMode boolean
+---@field characterWorkApplied boolean
 ---@field sessionExtras table<string, boolean>|nil
 ---@field Color fun(text: string): string
 ---@field Green fun(text: string): string
@@ -69,6 +70,8 @@
 ---@field SnapshotProfiles fun()
 ---@field GetEUIModuleSet fun(): string[]
 ---@field ApplyEUIModuleSet fun()
+---@field ApplyCharacterWork fun()
+---@field ImportCDMAllSpecs fun(): number, number, boolean   # imported, failed, skipped whole
 ---@field FinishInstallation fun()
 ---@field CleanMinimapIcons fun()
 ---@field RunCleanIcons fun(): boolean
@@ -95,6 +98,7 @@ local KitnUINS
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field installedVersion string?
 ---@field perChar table<string, table>
+---@field cdmLimitPending table<string, string[]>  # [charName-realm] = spec names the CDM layout cap blocked, raised as a popup at that character's next login
 ---@field devMode boolean
 ---@field dismissedVersion string?
 ---@field euiSnap table<string, table>       # [section][profile][key] = { prev = <original> }, machine-local, never exported

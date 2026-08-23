@@ -423,6 +423,7 @@ local defaults = {
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
+    cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
     bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
@@ -790,6 +791,7 @@ local function InitDB()
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.extras = ns.db.extras or {}
     ns.db.perChar = ns.db.perChar or {}
+    ns.db.cdmLimitPending = ns.db.cdmLimitPending or {}
     -- Vestigial after the 2026-08-07 migration: switch states live in
     -- EllesmereUI's profile now, and this table is only read by
     -- MigrateSettingsForward. Delete this line and the migration together, one
@@ -821,6 +823,72 @@ boot:SetScript("OnEvent", function()
             print("")
             for _, line in ipairs(queued) do print(line) end
             print("")
+        end)
+    end
+
+    -- The layout cap the import ran into, asked about here rather than there:
+    -- the wizard's own reload follows the failure within seconds, and the
+    -- layouts it needs deleted are only reachable once that reload is done.
+    -- Cleared once it HAS been raised, so one blocked import asks once and a
+    -- refused one still asks later: StaticPopup_Show answers nil when a show
+    -- condition rejects the dialog and when every dialog frame is already
+    -- taken, and this login raises several popups of its own.
+    local cdmBlocked = ns.db.cdmLimitPending and ns.db.cdmLimitPending[GetCharKey()]
+    if cdmBlocked and #cdmBlocked > 0 then
+        C_Timer.After(2, function()
+            local pending = ns.db and ns.db.cdmLimitPending
+            local blocked = pending and pending[GetCharKey()]
+            if not blocked or #blocked == 0 then return end
+            -- Icons are resolved HERE rather than carried across the reload.
+            -- The store holds the spec's plain name, which is also the key the
+            -- record and its clear match on, and writing a texture escape into
+            -- it would make that key drift the first time the lookup answered
+            -- differently. The record is per character, so the class the icons
+            -- come from is always the class that owns the blocked specs.
+            local specIcons = {}
+            local iconClassId, iconRows = ns.GetCDMSpecRows()
+            if iconClassId and GetSpecializationInfoForClassID then
+                for _, row in ipairs(iconRows) do
+                    local icon = select(4, GetSpecializationInfoForClassID(iconClassId, row.specIndex))
+                    if icon then
+                        if row.specName then specIcons[row.specName] = icon end
+                        -- Keyed by the numbered label as well. A record written
+                        -- in a session where the spec-name lookup was missing
+                        -- holds "Spec<n>", and only this second key lets it find
+                        -- an icon on a login where the lookup works again.
+                        specIcons["Spec" .. row.specIndex] = icon
+                    end
+                end
+            end
+
+            -- Each name carries its own icon and colour so the separators stay
+            -- plain. The accent rather than the class colour: these are the
+            -- player's own specs, and a priest's white would not stand out at
+            -- all against the popup's own text.
+            local names = {}
+            for i, spec in ipairs(blocked) do
+                local icon = specIcons[spec]
+                names[i] = (icon and ("|T" .. icon .. ":14:14:0:0|t ") or "") .. ns.Color(spec)
+            end
+
+            StaticPopupDialogs["KITNUI_CDM_FULL"] = {
+                text = ns.title .. ": Cooldown Manager layouts could not be imported for "
+                    .. table.concat(names, ", ")
+                    .. ".\n\nBlizzard allows five layouts per character and this one is full. Delete the layouts you do not use in the Cooldown Manager, then run " .. ns.Color("/kitn cdm") .. " to import the rest.",
+                button1 = "Okay",
+                timeout = 0, whileDead = true, hideOnEscape = true,
+            }
+            -- Printed whether or not the popup goes up, and before the attempt:
+            -- a refused popup leaves this line as the only word the user gets
+            -- this login, and a shown one leaves something to scroll back to
+            -- after they click Okay.
+            print(ns.title .. ": " .. ns.Red("Cooldown Manager layouts not imported") .. " - "
+                .. table.concat(names, ", ") .. ". Delete layouts you do not use, then run "
+                .. ns.Color("/kitn cdm") .. ".")
+
+            if StaticPopup_Show("KITNUI_CDM_FULL") then
+                pending[GetCharKey()] = nil
+            end
         end)
     end
 

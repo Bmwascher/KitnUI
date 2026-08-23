@@ -44,7 +44,15 @@ function ns.SetupAddon(addonKey, import, ...)
         print(ns.title .. ": No setup function for " .. addonKey)
         return false
     end
-    return fn(addonKey, import, ...)
+    local result = fn(addonKey, import, ...)
+    -- An addon that has just been handed a profile can raise its own reload
+    -- prompt -- KitnEssentials does after every profile change -- and a user who
+    -- accepts it never reaches Finish. So the load flow pays what it owes this
+    -- character at the first step that works, not at the button.
+    if ns.installerIsLoadMode and result ~= false then
+        ns.ApplyCharacterWork()
+    end
+    return result
 end
 
 -- No v2 addon uses variant base-tracking: every addon ships exactly one profile
@@ -1189,6 +1197,44 @@ local function RestoreCDM(lm, silenced)
     lm:UnlockNotifications()
 end
 
+-- Blizzard allows five Cooldown Manager layouts and they are per CHARACTER, so a
+-- player whose class has four specs runs out on any character already holding
+-- layouts of its own. The chat line the caller prints scrolls away behind the
+-- rest of the import, and nothing can be deleted from inside the wizard anyway,
+-- so the blocked specs are carried across the reload and Core.lua asks for them
+-- at the next login.
+--
+-- Keyed by character, because the cap is: a layout deleted on one character
+-- frees nothing on another, so an alt must not be asked to clean up a mess it
+-- does not have.
+local function CDMLimitList()
+    if not ns.db then return nil end
+    local charKey = UnitName("player") .. "-" .. GetRealmName()
+    ns.db.cdmLimitPending = ns.db.cdmLimitPending or {}
+    ns.db.cdmLimitPending[charKey] = ns.db.cdmLimitPending[charKey] or {}
+    return ns.db.cdmLimitPending[charKey], charKey
+end
+
+local function RecordCDMLimit(specLabel)
+    local list = CDMLimitList()
+    if not list then return end
+    for _, held in ipairs(list) do
+        if held == specLabel then return end
+    end
+    list[#list + 1] = specLabel
+end
+
+-- A spec that imports on a later attempt has nothing left to remind anyone
+-- about, and the reminder outlives the session that raised it.
+local function ClearCDMLimit(specLabel)
+    local list, charKey = CDMLimitList()
+    if not list then return end
+    for i = #list, 1, -1 do
+        if list[i] == specLabel then table.remove(list, i) end
+    end
+    if #list == 0 then ns.db.cdmLimitPending[charKey] = nil end
+end
+
 setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
     if import then
         local _, _, classId = UnitClass("player")
@@ -1244,24 +1290,39 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         if GetSpecializationInfoForClassID then
             specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
         end
-        local layoutName = "KUI - " .. (specName or ("Spec" .. specIndex))
-        local removedExisting = false
+        local specLabel = specName or ("Spec" .. specIndex)
+        local layoutName = "KitnUI - " .. specLabel
+        -- The name shipped before the rename. Matched as well as the current one
+        -- so an upgrade REPLACES the old layout: left behind it would hold one
+        -- of the five slots the next spec needs, under a name the user has no
+        -- reason to connect to this addon any more.
+        local legacyName = "KUI - " .. specLabel
+
+        -- Collected first, removed after. RemoveLayout mutates the very table
+        -- being walked, and both names can be present at once.
+        local doomed = {}
         local _, layouts = lm:EnumerateLayouts()
         if layouts then
             for layoutID, layout in pairs(layouts) do
-                if layout and layout.layoutName == layoutName then
-                    local quietRemove = SilenceCDM(lm)
-                    lm:RemoveLayout(layoutID)
-                    RestoreCDM(lm, quietRemove)
-                    removedExisting = true
-                    break
+                if layout and (layout.layoutName == layoutName or layout.layoutName == legacyName) then
+                    doomed[#doomed + 1] = layoutID
                 end
             end
+        end
+
+        local removedExisting = #doomed > 0
+        if removedExisting then
+            local quietRemove = SilenceCDM(lm)
+            for _, layoutID in ipairs(doomed) do
+                lm:RemoveLayout(layoutID)
+            end
+            RestoreCDM(lm, quietRemove)
         end
 
         -- If we didn't free a slot and layouts are maxed, bail out.
         if not removedExisting and lm.AreLayoutsFullyMaxed and lm:AreLayoutsFullyMaxed() then
             print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
+            RecordCDMLimit(specLabel)
             return false
         end
 
@@ -1275,6 +1336,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             local _, postLayouts = lm:EnumerateLayouts()
             if not postLayouts or not postLayouts[importedID] then
                 print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
+                RecordCDMLimit(specLabel)
                 return false
             end
 
@@ -1320,6 +1382,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             ns.db.profiles["BlizzardCDM"] = ns.db.profiles["BlizzardCDM"] or {}
             ns.db.profiles["BlizzardCDM"][cdmKey] = cdmFingerprint
             ns.db.installedVersion = ns.version
+            ClearCDMLimit(specLabel)
 
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
@@ -1330,6 +1393,48 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         end
         return false
     end
+end
+
+-- Every spec of the current class in one call, shared by the install page's
+-- "Import All Specs" button and by load mode's "Load All".
+--
+-- Load mode imports rather than activates, and that is not the exception it
+-- looks like: Blizzard's layout manager reports every Cooldown Manager layout as
+-- character-specific, so an alt holds none of them however many times its class
+-- was imported on another character. There is nothing to activate. It also means
+-- the stored fingerprints, which are account-wide, cannot say what THIS
+-- character holds, so no spec is skipped on their word -- each one is imported
+-- and the same-named layout it finds is replaced.
+--
+-- Blizzard's own class rule applies as ever: only the class being played can be
+-- imported, so an alt of another class gets its own layouts on its own login.
+--
+-- Three returns: imported, failed, and whether the step was skipped whole. The
+-- third is not a failure and must not be counted as one, but a caller reporting
+-- success over it would be reporting an import that never happened.
+function ns.ImportCDMAllSpecs()
+    if C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("cooldownViewerEnabled") ~= "1" then
+        print(ns.title .. ": Cooldown Manager is disabled, so its layouts were skipped. Enable it in Settings > Gameplay > Combat, then run " .. ns.Color("/kitn cdm") .. ".")
+        return 0, 0, true
+    end
+
+    local _, _, classId = UnitClass("player")
+    local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
+    if not classData or not next(classData) then return 0, 0, false end
+
+    local imported, failed = 0, 0
+    local _, rows = ns.GetCDMSpecRows()
+    for _, row in ipairs(rows) do
+        local specString = classData[row.specIndex]
+        if specString and strtrim(specString) ~= "" then
+            if ns.SetupAddon("BlizzardCDM", true, row.specIndex) then
+                imported = imported + 1
+            else
+                failed = failed + 1
+            end
+        end
+    end
+    return imported, failed, false
 end
 
 ---------------------------------------------------------------------------------
@@ -1805,8 +1910,17 @@ end
 -- Finish installation
 ---------------------------------------------------------------------------------
 
-function ns.FinishInstallation()
-    ns.db.installedVersion = ns.version
+-- Everything the wizard owes THIS CHARACTER. Separate from FinishInstallation
+-- because a reload can arrive before the Finish button does (see ns.SetupAddon),
+-- and none of this survives being skipped: the character would be prompted to
+-- load again next login with its module set, minimap icons and chat untouched.
+--
+-- Once per wizard run. ns.OpenInstaller clears the flag, so a second wizard in
+-- the same session pays again.
+function ns.ApplyCharacterWork()
+    if ns.characterWorkApplied then return end
+    ns.characterWorkApplied = true
+
     ns:SetCharLoaded()
 
     -- Runs on the install AND load paths. Addon enable state is per character,
@@ -1816,28 +1930,36 @@ function ns.FinishInstallation()
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
 
-    -- INSTALL ONLY. All four flows share this one finish function, and the other
-    -- three must not write here: these keys are account-wide, so a player who
-    -- moved BetterFriendlist back to Blizzard or Legacy after installing would
-    -- have that undone merely by accepting the load prompt on an alt. The same
-    -- rule the account-wide EllesmereUI look already follows.
-    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
-        and not ns.installerIsUpdateMode then
-        ns.ApplyBetterFriendlistAppearance()
-    end
-
     -- Chat Setup, same reasoning as the module set above: the opt-in is account
     -- wide but WoW's chat layout is per character, so an alt that only runs
     -- /kitn load has none of it and needs its own pass.
     --
     -- LOAD MODE ONLY, and that restriction is load-bearing. RunChatSetup resets
-    -- the character's chat windows before rebuilding them, and this function
-    -- also ends the install and update runs -- so without the gate every
-    -- /kitn update would silently wipe the chat layout of anyone who had ever
-    -- pressed the button.
+    -- the character's chat windows before rebuilding them, and all four flows
+    -- reach here -- so without the gate every /kitn update would silently wipe
+    -- the chat layout of anyone who had ever pressed the button.
     if ns.installerIsLoadMode and ns.db.extras and ns.db.extras.chat
         and ns.RunChatSetup then
         ns.RunChatSetup()
+    end
+end
+
+function ns.FinishInstallation()
+    ns.db.installedVersion = ns.version
+
+    -- A no-op when a load step already ran it. Still required: the user can
+    -- reach Finish having loaded nothing, and the other three flows never take
+    -- the early path at all.
+    ns.ApplyCharacterWork()
+
+    -- INSTALL ONLY. All four flows share this one finish function, and the other
+    -- three must not write here: these keys are account-wide, so a player who
+    -- moved BetterFriendlist back to Blizzard or Legacy after installing would
+    -- have that undone merely by accepting the load prompt on an alt. The same
+    -- rule the account-wide host look already follows.
+    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
+        and not ns.installerIsUpdateMode then
+        ns.ApplyBetterFriendlistAppearance()
     end
 
     ReloadUI()

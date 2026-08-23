@@ -267,12 +267,16 @@ character carrying a legacy Plater install.
   preset count into a variable before using it, so an off-by-one would show here.
 - [ ] **10. The CDM import still works, every spec.** Run the CDM step for each of
   your specs, including one that already has a KitnUI layout, so the remove-then-
-  recreate path runs. Each spec's layout imports, is named `KUI - <spec>`, and the
+  recreate path runs. Each spec's layout imports, is named `KitnUI - <spec>`, and the
   current spec's becomes active. The import now checks its layout-manager methods
   before it deletes anything, so a regression shows as a refusal here.
+  - The layout name changed from `KUI - <spec>` to `KitnUI - <spec>`. A character
+    still holding the old name is the case to test: after the import that spec
+    must have ONE layout, under the new name. An old layout left beside a new one
+    is the failure, because it holds a slot out of the five.
 - [ ] **10b. Re-importing over the ACTIVE layout raises nothing.** This is the
   2026-08-18 crash, and it needs the same conditions you hit it in: the Cooldown
-  Manager on screen, holding live spell data, with `KUI - <spec>` already the
+  Manager on screen, holding live spell data, with `KitnUI - <spec>` already the
   active layout. Run the CDM step for that spec again. BugSack must stay empty.
   Before the fix this threw from inside Blizzard's own redraw
   (`CooldownViewer.lua:946` and `:344`), and it threw HALFWAY, which wiped the
@@ -281,7 +285,7 @@ character carrying a legacy Plater install.
     defect. Dropping that redraw is the fix. Finish reloads the UI and rebuilds
     the viewer from the saved layouts.
   - What must be true after Finish: the layout exists once, not twice, is named
-    `KUI - <spec>`, and is active.
+    `KitnUI - <spec>`, and is active.
 
 ## What cannot be tested by hand, and why that is recorded rather than skipped
 
@@ -300,7 +304,7 @@ these have no manual check and are not counted as untested work:
   saved by that line, so the import still succeeds and only the automatic
   activation is skipped. You would pick the layout yourself in Edit Mode.
 - The CDM import's other DEGRADED path, when `GetSpecializationInfoForClassID` is
-  missing. The layout is named `KUI - Spec<n>` instead of `KUI - <spec name>` and
+  missing. The layout is named `KitnUI - Spec<n>` instead of `KitnUI - <spec name>` and
   everything else runs unchanged.
 - The CDM import running WITHOUT Blizzard's `LockNotifications`, which is what
   check 10b exercises the working half of. If a future build drops those two
