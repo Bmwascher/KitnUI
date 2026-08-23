@@ -839,13 +839,28 @@ boot:SetScript("OnEvent", function()
             local pending = ns.db and ns.db.cdmLimitPending
             local blocked = pending and pending[GetCharKey()]
             if not blocked or #blocked == 0 then return end
-            local names = table.concat(blocked, ", ")
+            -- Each name coloured on its own so the separators stay plain. The
+            -- accent rather than the class colour: the spec names belong to the
+            -- player's own class, and a priest's white would not stand out at
+            -- all against the popup's own text.
+            local names = {}
+            for i, spec in ipairs(blocked) do names[i] = ns.Color(spec) end
+
             StaticPopupDialogs["KITNUI_CDM_FULL"] = {
-                text = ns.title .. ": Cooldown Manager layouts could not be imported for " .. names
-                    .. ".\n\nBlizzard allows five layouts per character and this one is full. Delete the layouts you do not use in the Cooldown Manager, then run /kitn cdm to import the rest.",
+                text = ns.title .. ": Cooldown Manager layouts could not be imported for "
+                    .. table.concat(names, ", ")
+                    .. ".\n\nBlizzard allows five layouts per character and this one is full. Delete the layouts you do not use in the Cooldown Manager, then run " .. ns.Color("/kitn cdm") .. " to import the rest.",
                 button1 = "Okay",
                 timeout = 0, whileDead = true, hideOnEscape = true,
             }
+            -- Printed whether or not the popup goes up, and before the attempt:
+            -- a refused popup leaves this line as the only word the user gets
+            -- this login, and a shown one leaves something to scroll back to
+            -- after they click Okay.
+            print(ns.title .. ": " .. ns.Red("Cooldown Manager layouts not imported") .. " - "
+                .. table.concat(names, ", ") .. ". Delete layouts you do not use, then run "
+                .. ns.Color("/kitn cdm") .. ".")
+
             if StaticPopup_Show("KITNUI_CDM_FULL") then
                 pending[GetCharKey()] = nil
             end
