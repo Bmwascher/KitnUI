@@ -477,17 +477,7 @@ local function BlizzardCDMPage()
     end
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
-            local imported, failed = 0, 0
-            for i = 1, numSpecs do
-                local specData = classData[i]
-                if specData and strtrim(specData) ~= "" then
-                    if ns.SetupAddon("BlizzardCDM", true, i) then
-                        imported = imported + 1
-                    else
-                        failed = failed + 1
-                    end
-                end
-            end
+            local imported, failed = ns.ImportCDMAllSpecs()
             local _, freshRows = ns.GetCDMSpecRows()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
@@ -692,7 +682,7 @@ local function WelcomeLoadPage()
     local f = WF()
     f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Loader")
     ns.Wizard:SetTitleIcon(true)
-    f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nIt will not reimport anything - just apply existing profiles.")
+    f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nNothing is reimported except the Cooldown Manager layouts, which every character has to be given its own copy of.")
     f.Desc2:SetText("Click " .. ns.Green("Finish") .. " at the end to reload and apply changes.")
     ns.Wizard:SetOption(1, "Load All", function()
         -- Refusals are counted, not discarded. KitnUI's own record can say a
@@ -707,6 +697,16 @@ local function WelcomeLoadPage()
                 if ns.SetupAddon(step.key) == false then refused = refused + 1 end
             end
         end
+
+        -- CDM is handled apart from the loop above because it is the one step
+        -- with nothing to activate: its layouts belong to the character, not the
+        -- account (see ns.ImportCDMAllSpecs). Gated on the account having used
+        -- CDM at all, so a player who skipped that step is not given it here.
+        if ns.db and ns.db.profiles and ns.db.profiles.BlizzardCDM then
+            local _, cdmFailed = ns.ImportCDMAllSpecs()
+            refused = refused + cdmFailed
+        end
+
         if refused > 0 then
             ShowInstallToast(format("%d profile%s could not be loaded - see chat",
                 refused, refused == 1 and "" or "s"), 1, 0.2, 0.2)

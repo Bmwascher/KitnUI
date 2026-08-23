@@ -423,6 +423,7 @@ local defaults = {
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
+    cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
     euiSnap = {},           -- [section][profileName][key] = { prev = <old value> }
     bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
@@ -790,6 +791,7 @@ local function InitDB()
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.extras = ns.db.extras or {}
     ns.db.perChar = ns.db.perChar or {}
+    ns.db.cdmLimitPending = ns.db.cdmLimitPending or {}
     -- Vestigial after the 2026-08-07 migration: switch states live in
     -- EllesmereUI's profile now, and this table is only read by
     -- MigrateSettingsForward. Delete this line and the migration together, one
@@ -821,6 +823,28 @@ boot:SetScript("OnEvent", function()
             print("")
             for _, line in ipairs(queued) do print(line) end
             print("")
+        end)
+    end
+
+    -- The layout cap the import ran into, asked about here rather than there:
+    -- the wizard's own reload follows the failure within seconds, and the
+    -- layouts it needs deleted are only reachable once that reload is done.
+    -- Cleared as it is raised, so one blocked import asks once.
+    local cdmBlocked = ns.db.cdmLimitPending and ns.db.cdmLimitPending[GetCharKey()]
+    if cdmBlocked and #cdmBlocked > 0 then
+        C_Timer.After(2, function()
+            local pending = ns.db and ns.db.cdmLimitPending
+            local blocked = pending and pending[GetCharKey()]
+            if not blocked or #blocked == 0 then return end
+            local names = table.concat(blocked, ", ")
+            pending[GetCharKey()] = nil
+            StaticPopupDialogs["KITNUI_CDM_FULL"] = {
+                text = ns.title .. ": Cooldown Manager layouts could not be imported for " .. names
+                    .. ".\n\nBlizzard allows five layouts per character and this one is full. Delete the layouts you do not use in the Cooldown Manager, then run /kitn cdm to import the rest.",
+                button1 = "Okay",
+                timeout = 0, whileDead = true, hideOnEscape = true,
+            }
+            StaticPopup_Show("KITNUI_CDM_FULL")
         end)
     end
 

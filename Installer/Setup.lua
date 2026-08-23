@@ -1197,6 +1197,44 @@ local function RestoreCDM(lm, silenced)
     lm:UnlockNotifications()
 end
 
+-- Blizzard allows five Cooldown Manager layouts and they are per CHARACTER, so a
+-- player whose class has four specs runs out on any character already holding
+-- layouts of its own. The chat line the caller prints scrolls away behind the
+-- rest of the import, and nothing can be deleted from inside the wizard anyway,
+-- so the blocked specs are carried across the reload and Core.lua asks for them
+-- at the next login.
+--
+-- Keyed by character, because the cap is: a layout deleted on one character
+-- frees nothing on another, so an alt must not be asked to clean up a mess it
+-- does not have.
+local function CDMLimitList()
+    if not ns.db then return nil end
+    local charKey = UnitName("player") .. "-" .. GetRealmName()
+    ns.db.cdmLimitPending = ns.db.cdmLimitPending or {}
+    ns.db.cdmLimitPending[charKey] = ns.db.cdmLimitPending[charKey] or {}
+    return ns.db.cdmLimitPending[charKey], charKey
+end
+
+local function RecordCDMLimit(specLabel)
+    local list = CDMLimitList()
+    if not list then return end
+    for _, held in ipairs(list) do
+        if held == specLabel then return end
+    end
+    list[#list + 1] = specLabel
+end
+
+-- A spec that imports on a later attempt has nothing left to remind anyone
+-- about, and the reminder outlives the session that raised it.
+local function ClearCDMLimit(specLabel)
+    local list, charKey = CDMLimitList()
+    if not list then return end
+    for i = #list, 1, -1 do
+        if list[i] == specLabel then table.remove(list, i) end
+    end
+    if #list == 0 then ns.db.cdmLimitPending[charKey] = nil end
+end
+
 setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
     if import then
         local _, _, classId = UnitClass("player")
@@ -1270,6 +1308,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         -- If we didn't free a slot and layouts are maxed, bail out.
         if not removedExisting and lm.AreLayoutsFullyMaxed and lm:AreLayoutsFullyMaxed() then
             print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
+            RecordCDMLimit(specName or ("Spec " .. specIndex))
             return false
         end
 
@@ -1283,6 +1322,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             local _, postLayouts = lm:EnumerateLayouts()
             if not postLayouts or not postLayouts[importedID] then
                 print(ns.title .. ": CDM layout limit reached. Delete a layout and try again.")
+                RecordCDMLimit(specName or ("Spec " .. specIndex))
                 return false
             end
 
@@ -1328,6 +1368,7 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             ns.db.profiles["BlizzardCDM"] = ns.db.profiles["BlizzardCDM"] or {}
             ns.db.profiles["BlizzardCDM"][cdmKey] = cdmFingerprint
             ns.db.installedVersion = ns.version
+            ClearCDMLimit(specName or ("Spec " .. specIndex))
 
             local charKey = UnitName("player") .. "-" .. GetRealmName()
             ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
@@ -1338,6 +1379,44 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
         end
         return false
     end
+end
+
+-- Every spec of the current class in one call, shared by the install page's
+-- "Import All Specs" button and by load mode's "Load All".
+--
+-- Load mode imports rather than activates, and that is not the exception it
+-- looks like: Blizzard's layout manager reports every Cooldown Manager layout as
+-- character-specific, so an alt holds none of them however many times its class
+-- was imported on another character. There is nothing to activate. It also means
+-- the stored fingerprints, which are account-wide, cannot say what THIS
+-- character holds, so no spec is skipped on their word -- each one is imported
+-- and the same-named layout it finds is replaced.
+--
+-- Blizzard's own class rule applies as ever: only the class being played can be
+-- imported, so an alt of another class gets its own layouts on its own login.
+function ns.ImportCDMAllSpecs()
+    if C_CVar and C_CVar.GetCVar and C_CVar.GetCVar("cooldownViewerEnabled") ~= "1" then
+        print(ns.title .. ": Cooldown Manager is disabled, so its layouts were skipped. Enable it in Settings > Gameplay > Combat, then run " .. ns.Color("/kitn cdm") .. ".")
+        return 0, 0
+    end
+
+    local _, _, classId = UnitClass("player")
+    local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
+    if not classData or not next(classData) then return 0, 0 end
+
+    local imported, failed = 0, 0
+    local _, rows = ns.GetCDMSpecRows()
+    for _, row in ipairs(rows) do
+        local specString = classData[row.specIndex]
+        if specString and strtrim(specString) ~= "" then
+            if ns.SetupAddon("BlizzardCDM", true, row.specIndex) then
+                imported = imported + 1
+            else
+                failed = failed + 1
+            end
+        end
+    end
+    return imported, failed
 end
 
 ---------------------------------------------------------------------------------
