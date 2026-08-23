@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.2
+
+Loading profiles on an alt now finishes in one pass, and every character gets
+its own Cooldown Manager layouts.
+
+### Installer
+- Loading profiles on an alt no longer has to be done twice. **Load All** now applies everything the character is owed the moment it works, so a reload asked for by another addon cannot lose your place. Before this the login prompt came back after the reload and the whole loader had to be run again, taking the EllesmereUI module set, the minimap icon sweep and Chat Setup with it
+- **NEW:** **Load All** also imports the Cooldown Manager layouts for the class you are on. Those layouts belong to the character rather than the account, so an alt never had them however many times its class was set up elsewhere
+- **NEW:** When Blizzard's limit of five layouts per character blocks an import, KitnUI names the specs it could not fit. It says so in chat and in a popup after the reload, with the spec icon and the reminder to delete layouts you do not use and run `/kitn cdm`
+- Cooldown Manager layouts are now named **KitnUI - <spec>** instead of **KUI - <spec>**. An existing layout under either name is replaced, so no character is left holding both and losing a slot to the old one
+- The wizard no longer reports success over a Cooldown Manager step that did nothing. Switching the Cooldown Manager off in Blizzard's settings used to leave "All profiles loaded!" on screen with nothing imported
+
 ## v2.1.1
 
 Three settings that no profile export can carry, set for you at install:
