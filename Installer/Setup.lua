@@ -844,7 +844,17 @@ setupFunctions["KitnEssentials"] = function(addonKey, import)
             return false
         end
 
-        local profileData = API:DecodeProfileString(ns.data[addonKey])
+        -- HasData above proves the payload is present and non-empty, not that it
+        -- is a STRING: one shipped payload is a table (Baganator's), so the
+        -- shape is worth stating rather than assuming at the one call that
+        -- hands it to a decoder.
+        local payload = ns.data[addonKey]
+        if type(payload) ~= "string" then
+            print(ns.title .. ": KitnEssentials data is not an import string.")
+            return false
+        end
+
+        local profileData = API:DecodeProfileString(payload)
         if not profileData or not next(profileData) then
             print(ns.title .. ": KitnEssentials decode failed.")
             return false
@@ -916,7 +926,15 @@ setupFunctions["BuffReminders"] = function(addonKey, import)
             return false
         end
 
-        local success, err = BR:Import(ns.data[addonKey], ns.profileName)
+        -- Same shape check as the KitnEssentials import above, and for the same
+        -- reason: a payload that is present is not necessarily a string.
+        local payload = ns.data[addonKey]
+        if type(payload) ~= "string" then
+            print(ns.title .. ": BuffReminders data is not an import string.")
+            return false
+        end
+
+        local success, err = BR:Import(payload, ns.profileName)
         if success then
             BR:SetProfile(ns.profileName)
             CompleteSetup(addonKey)
