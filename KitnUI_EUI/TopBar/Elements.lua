@@ -736,8 +736,9 @@ local PORTAL_BTN_SIZE, PORTAL_SPACING, PORTAL_PADDING, PORTAL_COLS = 32, 2, 4, 4
 local portalFlyout, portalFlyoutBtns
 
 -- Desaturates unknown teleports and keeps cooldown swipes current. `known` comes
--- from C_SpellBook.IsSpellKnownOrInSpellBook, which carries no secret marker,
--- rather than the deprecated IsPlayerSpell global that only exists behind a CVar.
+-- from C_SpellBook.IsSpellKnownOrInSpellBook, whose RETURN carries no secret
+-- marking, rather than the deprecated IsPlayerSpell global that only exists
+-- behind a CVar.
 --
 -- Not the narrower IsSpellKnown. Dungeon teleports are account-wide and sit in
 -- the General tab of the spellbook rather than being "known" the way a class
