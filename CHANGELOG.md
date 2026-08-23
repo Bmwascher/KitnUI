@@ -1,5 +1,10 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## Unreleased
+
+### Top Bar
+- Fixed an error when opening the dungeon portal flyout during a fight, an encounter, a keystone or a rated match. The cooldown swipe now reads the cooldown in the one way the game allows an addon to read it under those restrictions
+
 ## v2.1.2
 
 Loading profiles on an alt now finishes in one pass, and every character gets
