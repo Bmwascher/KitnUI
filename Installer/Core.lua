@@ -839,12 +839,30 @@ boot:SetScript("OnEvent", function()
             local pending = ns.db and ns.db.cdmLimitPending
             local blocked = pending and pending[GetCharKey()]
             if not blocked or #blocked == 0 then return end
-            -- Each name coloured on its own so the separators stay plain. The
-            -- accent rather than the class colour: the spec names belong to the
-            -- player's own class, and a priest's white would not stand out at
+            -- Icons are resolved HERE rather than carried across the reload.
+            -- The store holds the spec's plain name, which is also the key the
+            -- record and its clear match on, and writing a texture escape into
+            -- it would make that key drift the first time the lookup answered
+            -- differently. The record is per character, so the class the icons
+            -- come from is always the class that owns the blocked specs.
+            local specIcons = {}
+            local iconClassId, iconRows = ns.GetCDMSpecRows()
+            if iconClassId and GetSpecializationInfoForClassID then
+                for _, row in ipairs(iconRows) do
+                    local icon = select(4, GetSpecializationInfoForClassID(iconClassId, row.specIndex))
+                    if icon and row.specName then specIcons[row.specName] = icon end
+                end
+            end
+
+            -- Each name carries its own icon and colour so the separators stay
+            -- plain. The accent rather than the class colour: these are the
+            -- player's own specs, and a priest's white would not stand out at
             -- all against the popup's own text.
             local names = {}
-            for i, spec in ipairs(blocked) do names[i] = ns.Color(spec) end
+            for i, spec in ipairs(blocked) do
+                local icon = specIcons[spec]
+                names[i] = (icon and ("|T" .. icon .. ":14:14:0:0|t ") or "") .. ns.Color(spec)
+            end
 
             StaticPopupDialogs["KITNUI_CDM_FULL"] = {
                 text = ns.title .. ": Cooldown Manager layouts could not be imported for "
