@@ -963,6 +963,9 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     -- function, and two of the modes must not write another addon's settings.
     ns.installerIsCDMMode = cdmMode or false
     ns.installerIsUpdateMode = updateKeys ~= nil
+    -- Read by ns.ApplyCharacterWork, which runs once per wizard rather than once
+    -- per session: a second wizard is a second set of choices to apply.
+    ns.characterWorkApplied = false
     -- Track Extras clicks for the Finish recap; only the plain install flow has an
     -- Extras page, so nil in load/update/cdm mode (which skip the recap).
     ns.sessionExtras = (not profileLoadMode and not updateKeys and not cdmMode) and {} or nil

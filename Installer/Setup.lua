@@ -44,7 +44,15 @@ function ns.SetupAddon(addonKey, import, ...)
         print(ns.title .. ": No setup function for " .. addonKey)
         return false
     end
-    return fn(addonKey, import, ...)
+    local result = fn(addonKey, import, ...)
+    -- An addon that has just been handed a profile can raise its own reload
+    -- prompt -- KitnEssentials does after every profile change -- and a user who
+    -- accepts it never reaches Finish. So the load flow pays what it owes this
+    -- character at the first step that works, not at the button.
+    if ns.installerIsLoadMode and result ~= false then
+        ns.ApplyCharacterWork()
+    end
+    return result
 end
 
 -- No v2 addon uses variant base-tracking: every addon ships exactly one profile
@@ -1805,8 +1813,17 @@ end
 -- Finish installation
 ---------------------------------------------------------------------------------
 
-function ns.FinishInstallation()
-    ns.db.installedVersion = ns.version
+-- Everything the wizard owes THIS CHARACTER. Separate from FinishInstallation
+-- because a reload can arrive before the Finish button does (see ns.SetupAddon),
+-- and none of this survives being skipped: the character would be prompted to
+-- load again next login with its module set, minimap icons and chat untouched.
+--
+-- Once per wizard run. ns.OpenInstaller clears the flag, so a second wizard in
+-- the same session pays again.
+function ns.ApplyCharacterWork()
+    if ns.characterWorkApplied then return end
+    ns.characterWorkApplied = true
+
     ns:SetCharLoaded()
 
     -- Runs on the install AND load paths. Addon enable state is per character,
@@ -1816,28 +1833,36 @@ function ns.FinishInstallation()
     -- Hide companion minimap icons (shared with the Extras "Clean Icons" button).
     ns.CleanMinimapIcons()
 
-    -- INSTALL ONLY. All four flows share this one finish function, and the other
-    -- three must not write here: these keys are account-wide, so a player who
-    -- moved BetterFriendlist back to Blizzard or Legacy after installing would
-    -- have that undone merely by accepting the load prompt on an alt. The same
-    -- rule the account-wide EllesmereUI look already follows.
-    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
-        and not ns.installerIsUpdateMode then
-        ns.ApplyBetterFriendlistAppearance()
-    end
-
     -- Chat Setup, same reasoning as the module set above: the opt-in is account
     -- wide but WoW's chat layout is per character, so an alt that only runs
     -- /kitn load has none of it and needs its own pass.
     --
     -- LOAD MODE ONLY, and that restriction is load-bearing. RunChatSetup resets
-    -- the character's chat windows before rebuilding them, and this function
-    -- also ends the install and update runs -- so without the gate every
-    -- /kitn update would silently wipe the chat layout of anyone who had ever
-    -- pressed the button.
+    -- the character's chat windows before rebuilding them, and all four flows
+    -- reach here -- so without the gate every /kitn update would silently wipe
+    -- the chat layout of anyone who had ever pressed the button.
     if ns.installerIsLoadMode and ns.db.extras and ns.db.extras.chat
         and ns.RunChatSetup then
         ns.RunChatSetup()
+    end
+end
+
+function ns.FinishInstallation()
+    ns.db.installedVersion = ns.version
+
+    -- A no-op when a load step already ran it. Still required: the user can
+    -- reach Finish having loaded nothing, and the other three flows never take
+    -- the early path at all.
+    ns.ApplyCharacterWork()
+
+    -- INSTALL ONLY. All four flows share this one finish function, and the other
+    -- three must not write here: these keys are account-wide, so a player who
+    -- moved BetterFriendlist back to Blizzard or Legacy after installing would
+    -- have that undone merely by accepting the load prompt on an alt. The same
+    -- rule the account-wide host look already follows.
+    if not ns.installerIsLoadMode and not ns.installerIsCDMMode
+        and not ns.installerIsUpdateMode then
+        ns.ApplyBetterFriendlistAppearance()
     end
 
     ReloadUI()
