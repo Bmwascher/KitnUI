@@ -71,7 +71,7 @@
 ---@field GetEUIModuleSet fun(): string[]
 ---@field ApplyEUIModuleSet fun()
 ---@field ApplyCharacterWork fun()
----@field ImportCDMAllSpecs fun(): number, number   # imported, failed
+---@field ImportCDMAllSpecs fun(): number, number, boolean   # imported, failed, skipped whole
 ---@field FinishInstallation fun()
 ---@field CleanMinimapIcons fun()
 ---@field RunCleanIcons fun(): boolean
