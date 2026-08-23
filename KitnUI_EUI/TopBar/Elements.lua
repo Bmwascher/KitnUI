@@ -736,21 +736,38 @@ local PORTAL_BTN_SIZE, PORTAL_SPACING, PORTAL_PADDING, PORTAL_COLS = 32, 2, 4, 4
 local portalFlyout, portalFlyoutBtns
 
 -- Desaturates unknown teleports and keeps cooldown swipes current. `known` comes
--- from C_SpellBook.IsSpellKnownOrInSpellBook, which carries no secret marker,
--- rather than the deprecated IsPlayerSpell global that only exists behind a CVar.
+-- from C_SpellBook.IsSpellKnownOrInSpellBook, whose RETURN carries no secret
+-- marking, rather than the deprecated IsPlayerSpell global that only exists
+-- behind a CVar.
 --
 -- Not the narrower IsSpellKnown. Dungeon teleports are account-wide and sit in
 -- the General tab of the spellbook rather than being "known" the way a class
 -- spell is, so IsSpellKnown answers false for a teleport the player has earned
 -- and every icon dims.
 --
--- C_Spell.GetSpellCooldown IS a secret-value risk: it is marked
--- SecretWhenCooldownsRestricted, and the SpellCooldownInfo it returns marks only
--- isEnabled, isActive and isOnGCD as NeverSecret. So this never compares or does
--- arithmetic on startTime/duration -- it branches on isActive and hands the two
--- numbers to Cooldown:SetCooldown untouched, whose own arguments are built to
--- accept secret values. The widget paints the swipe without this file ever
--- reading the real numbers.
+-- The cooldown comes as a DURATION OBJECT, which is the only route that works
+-- in every state.
+--
+-- C_Spell.GetSpellCooldown is marked SecretWhenCooldownsRestricted, and the
+-- SpellCooldownInfo it returns marks only isEnabled, isActive and isOnGCD as
+-- NeverSecret. Its startTime and duration can therefore arrive secret in combat,
+-- in an encounter, in a keystone and in a PvP match, with a per-spell flag able
+-- to override that in either direction. Handing those two numbers to
+-- Cooldown:SetCooldown throws whenever they are: that method takes secret
+-- arguments only from UNTAINTED code, which addon code never is.
+--
+-- Never generalise from that to a whole class of setter. Only the ones marked
+-- with the CooldownStyle aspect take secret arguments from tainted code, which
+-- is why SetDrawSwipe below is fine while SetHideCountdownNumbers and
+-- SetCountdownAbbrevThreshold, two calls in this same file, are not. The
+-- reference is the only thing that says which is which.
+--
+-- C_Spell.GetSpellCooldownDuration carries no secret-RETURN marking and answers
+-- with an object the widget unwraps internally, where the restriction does not
+-- apply. It may return nothing, and clearIfZero clears the swipe for a zero
+-- duration, so both ready cases reach the same OUTCOME as a missing method,
+-- by different branches: nothing to set clears here, a zero duration clears
+-- inside the setter.
 local function RefreshPortalButtons()
     if not portalFlyoutBtns then return end
     for _, btn in ipairs(portalFlyoutBtns) do
@@ -762,10 +779,10 @@ local function RefreshPortalButtons()
             btn.icon:SetDesaturated(not known)
             btn.icon:SetAlpha(known and 1 or 0.4)
         end
-        local cd = known and C_Spell and C_Spell.GetSpellCooldown
-            and C_Spell.GetSpellCooldown(spellID)
-        if type(cd) == "table" and cd.isActive then
-            btn.cooldown:SetCooldown(cd.startTime, cd.duration)
+        local duration = known and C_Spell and C_Spell.GetSpellCooldownDuration
+            and C_Spell.GetSpellCooldownDuration(spellID)
+        if duration and btn.cooldown.SetCooldownFromDurationObject then
+            btn.cooldown:SetCooldownFromDurationObject(duration, true)
         else
             btn.cooldown:Clear()
         end
@@ -860,10 +877,11 @@ local function CreatePortalFlyout()
             -- The countdown text is the ENGINE's, and that is the whole point. A
             -- hand-drawn timer would have to subtract GetTime() from the
             -- startTime and duration this file is careful never to touch (see
-            -- RefreshPortalButtons above): both are secret whenever cooldowns are
-            -- restricted, and arithmetic on a secret throws. The widget formats
-            -- the same two numbers internally, where that restriction does not
-            -- apply, and ticks itself without an OnUpdate.
+            -- RefreshPortalButtons above): both can be secret while cooldown
+            -- restrictions apply, subject to the same per-spell override named
+            -- there, and arithmetic on a secret throws. The widget works from
+            -- the cooldown internally, where that restriction does not apply,
+            -- and ticks itself without an OnUpdate.
             --
             -- Abbreviation OFF is what produces "8h" and "45m" instead of
             -- "7:59:12": a threshold below one minute performs no abbreviation at
