@@ -749,10 +749,11 @@ local portalFlyout, portalFlyoutBtns
 --
 -- C_Spell.GetSpellCooldown is marked SecretWhenCooldownsRestricted, and the
 -- SpellCooldownInfo it returns marks only isEnabled, isActive and isOnGCD as
--- NeverSecret. Its startTime and duration are therefore secret in combat, in an
--- encounter, in a keystone and in a PvP match. Handing those two numbers to
--- Cooldown:SetCooldown throws there: that method takes secret arguments only
--- from UNTAINTED code, which addon code never is.
+-- NeverSecret. Its startTime and duration can therefore arrive secret in combat,
+-- in an encounter, in a keystone and in a PvP match, with a per-spell flag able
+-- to override that in either direction. Handing those two numbers to
+-- Cooldown:SetCooldown throws whenever they are: that method takes secret
+-- arguments only from UNTAINTED code, which addon code never is.
 --
 -- Never generalise from that to a whole class of setter. Only the ones marked
 -- with the CooldownStyle aspect take secret arguments from tainted code, which
@@ -760,10 +761,12 @@ local portalFlyout, portalFlyoutBtns
 -- SetCountdownAbbrevThreshold, two calls in this same file, are not. The
 -- reference is the only thing that says which is which.
 --
--- C_Spell.GetSpellCooldownDuration carries no secret marking and answers with an
--- object the widget unwraps internally, where the restriction does not apply. It
--- may return nothing, and clearIfZero clears the swipe for a zero duration, so
--- both of the ready cases land on the same branch as a missing method.
+-- C_Spell.GetSpellCooldownDuration carries no secret-RETURN marking and answers
+-- with an object the widget unwraps internally, where the restriction does not
+-- apply. It may return nothing, and clearIfZero clears the swipe for a zero
+-- duration, so both ready cases reach the same OUTCOME as a missing method,
+-- by different branches: nothing to set clears here, a zero duration clears
+-- inside the setter.
 local function RefreshPortalButtons()
     if not portalFlyoutBtns then return end
     for _, btn in ipairs(portalFlyoutBtns) do
