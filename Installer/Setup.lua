@@ -745,6 +745,65 @@ local function editModeTarget()
     return "Blizzard_EditMode", ns.profileName
 end
 
+ns.EditModeTarget = editModeTarget
+
+-- Switch to the layout editModeTarget names. True once it is active and false on
+-- every refusal, and a refusal always prints its own reason. Nothing is printed
+-- on success: the loader contract this sits behind reports its own outcome, and
+-- the other caller has a queued line of its own.
+--
+-- Refused in combat because switching layouts repositions the action bars, which
+-- is not allowed from an addon's own call stack under lockdown. The install path
+-- needs no guard of its own: the host's importer carries one. Skipped rather
+-- than deferred, matching the appearance step.
+function ns.EditModeActivateWanted()
+    if InCombatLockdown() then
+        print(ns.title .. ": The Edit Mode layout was not switched because you are in combat. Run the loader again when you are out.")
+        return false
+    end
+
+    if not (C_EditMode and C_EditMode.GetLayouts) then
+        print(ns.title .. ": Edit Mode is not available right now. Open Edit Mode once, then try again.")
+        return false
+    end
+
+    local layouts = C_EditMode.GetLayouts()
+    if not (layouts and layouts.layouts) then
+        print(ns.title .. ": Could not read your Edit Mode layouts.")
+        return false
+    end
+
+    -- The setter and the preset count as well as the getter above. The old line
+    -- reached through three things it had never checked, and a throw here would
+    -- also skip every later step of Load All, which has no pcall.
+    if not C_EditMode.SetActiveLayout then
+        print(ns.title .. ": Edit Mode cannot switch layouts right now.")
+        return false
+    end
+
+    local presetCount = Enum and Enum.EditModePresetLayoutsMeta
+        and Enum.EditModePresetLayoutsMeta.NumValues
+    if type(presetCount) ~= "number" then
+        print(ns.title .. ": Could not read Edit Mode's preset layout count.")
+        return false
+    end
+
+    -- The index is the preset count plus the layout's position in the saved list.
+    local _, wantedLayout = editModeTarget()
+    for i, v in ipairs(layouts.layouts) do
+        if v.layoutName == wantedLayout then
+            C_EditMode.SetActiveLayout(presetCount + i)
+            return true
+        end
+    end
+
+    -- Falling off the loop is the one a user actually hits: the layout was
+    -- deleted or renamed. Name it, so they know what to look for.
+    print(ns.title .. ": The Edit Mode layout \"" .. tostring(wantedLayout)
+        .. "\" was not found. Re-run the installer's Edit Mode step to recreate it.")
+    return false
+end
+
 setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
@@ -778,58 +837,10 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
         return true
     end
 
-    -- Load: activate the existing layout on this character. The index is the
-    -- preset count plus the layout's position in the saved list.
-    --
-    -- Refused in combat because switching layouts repositions the action bars,
-    -- which is not allowed from an addon's own call stack under lockdown. The
-    -- install path above needs no guard of its own: the host's importer carries
-    -- one. Skipped rather than deferred, matching the appearance step.
-    if InCombatLockdown() then
-        print(ns.title .. ": The Edit Mode layout was not switched because you are in combat. Run the loader again when you are out.")
-        return false
-    end
-
-    if not (C_EditMode and C_EditMode.GetLayouts) then
-        print(ns.title .. ": Edit Mode is not available right now. Open Edit Mode once, then try again.")
-        return false
-    end
-
-    local layouts = C_EditMode.GetLayouts()
-    if not (layouts and layouts.layouts) then
-        print(ns.title .. ": Could not read your Edit Mode layouts.")
-        return false
-    end
-
-    -- The setter and the preset count as well as the getter above. The old line
-    -- reached through three things it had never checked, and a throw here would
-    -- also skip every later step of Load All, which has no pcall.
-    if not C_EditMode.SetActiveLayout then
-        print(ns.title .. ": Edit Mode cannot switch layouts right now.")
-        return false
-    end
-
-    local presetCount = Enum and Enum.EditModePresetLayoutsMeta
-        and Enum.EditModePresetLayoutsMeta.NumValues
-    if type(presetCount) ~= "number" then
-        print(ns.title .. ": Could not read Edit Mode's preset layout count.")
-        return false
-    end
-
-    local _, wantedLayout = editModeTarget()
-    for i, v in ipairs(layouts.layouts) do
-        if v.layoutName == wantedLayout then
-            C_EditMode.SetActiveLayout(presetCount + i)
-            -- Success. Returns nothing, per the contract at the top of this file.
-            return
-        end
-    end
-
-    -- Falling off the loop is the one a user actually hits: the layout was
-    -- deleted or renamed. Name it, so they know what to look for.
-    print(ns.title .. ": The Edit Mode layout \"" .. tostring(wantedLayout)
-        .. "\" was not found. Re-run the installer's Edit Mode step to recreate it.")
-    return false
+    -- Load: activate the existing layout on this character. The refusal contract
+    -- every loader follows: false propagates, success returns nothing.
+    if not ns.EditModeActivateWanted() then return false end
+    return
 end
 
 ---------------------------------------------------------------------------------
