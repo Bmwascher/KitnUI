@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Installer
+- **NEW:** KitnUI now notices when the specialization you are playing is not using its Edit Mode layout, or its Cooldown Manager layout, and offers to switch. The game remembers those layouts **per specialization**, and the installer only ever set the one you were playing at the time, so every other spec has been quietly sitting on a Blizzard preset since the day you installed. The prompt names the spec, asks before it changes anything, and carries a **Never for this spec** button for a spec you deliberately run differently
+- The Edit Mode half applies straight away. The Cooldown Manager half needs a reload to redraw, and the prompt says so before you accept
+- Nothing is said on a character you have never set up, so an alt is left alone until you load profiles onto it. Declining the load offer does not start it either
+- Answering **No** stays quiet for that spec until your next login. Closing the prompt with Escape is not an answer, so it asks again the next time you switch to that spec
+- With Lulu Mode on, the prompt names the Lulu layout rather than the standard one, because that is the one it will switch you to
 - Loading the Edit Mode layout is now refused during a fight instead of being attempted. Switching layouts moves your action bars, which the game does not allow an addon to do mid-fight. KitnUI says so in chat and you can run the loader again when you are out
 - EllesmereUI's Data Bars module is now switched off at install. The Edit Mode profile already places Blizzard's own experience and reputation bar, so the two were stacking up as duplicates
 
