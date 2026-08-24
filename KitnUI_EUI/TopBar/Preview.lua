@@ -811,12 +811,9 @@ end
 -- many units in CONTENT space and would shrink by the fit scale; this one stays
 -- exactly DIVIDER_W physical pixels at any scale.
 --
--- Hidden entirely when the clock is not drawn: with no centre occupant there is
--- nothing between the two panels worth marking off. The two boundaries do NOT
--- collapse in that case -- with `clockW` zero they still sit `spacing` apart,
--- leaving a narrow dead band FindDragTarget still refuses as centre. Two lines a
--- hair apart around an invisible clock would describe that band accurately and
--- read as a defect, which is the real reason to hide them.
+-- With no clock the two boundaries land on the same point, so the second line is
+-- hidden and the first stands alone. It marks a real split: the drop test
+-- resolves every x to left or right, with no centre to refuse.
 local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
     if not previewWrap then return end
     if not dividerL then
@@ -825,33 +822,32 @@ local function LayoutDividers(boundaryLC, boundaryCR, rowH, scale, hasClock)
     end
     if not (dividerL and dividerR) then return end
 
-    if not hasClock then
-        dividerL:Hide()
-        dividerR:Hide()
-        return
-    end
-
-    -- Dark rather than light, so the divider reads as a groove cut into the
+    -- Dark rather than light, so a divider reads as a groove cut into the
     -- backdrop instead of a line drawn on top of it, and two pixels wide so it
     -- stays visible against the busy panel art behind the stage. Both are taste
-    -- values with no other code depending on them. Written out rather than
-    -- looped over a table literal, since Layout() runs on every settings change
-    -- and every drop.
+    -- values with no other code depending on them.
     local h = math.max(1, rowH * scale)
-    dividerL:SetColorTexture(0, 0, 0, 0.55)
-    dividerL:SetSize(DIVIDER_W, h)
-    dividerL:ClearAllPoints()
-    dividerR:SetColorTexture(0, 0, 0, 0.55)
-    dividerR:SetSize(DIVIDER_W, h)
-    dividerR:ClearAllPoints()
     -- Centred ON the boundary, not started at it: at two pixels wide an
     -- unshifted line would sit entirely to the right of the line it claims to
     -- draw, and the claim that the divider IS the drop boundary is the whole
     -- reason it is placed from FindDragTarget's own arithmetic.
     local half = DIVIDER_W / 2
+
+    dividerL:SetColorTexture(0, 0, 0, 0.55)
+    dividerL:SetSize(DIVIDER_W, h)
+    dividerL:ClearAllPoints()
     dividerL:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryLC * scale - half, 0)
-    dividerR:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryCR * scale - half, 0)
     dividerL:Show()
+
+    if not hasClock then
+        dividerR:Hide()
+        return
+    end
+
+    dividerR:SetColorTexture(0, 0, 0, 0.55)
+    dividerR:SetSize(DIVIDER_W, h)
+    dividerR:ClearAllPoints()
+    dividerR:SetPoint("TOPLEFT", previewWrap, "TOPLEFT", boundaryCR * scale - half, 0)
     dividerR:Show()
 end
 
@@ -878,6 +874,11 @@ local function Layout()
         clockW, clockH = textW + CLOCK_PAD * 2, textH + CLOCK_PAD
     end
 
+    -- What the centre costs horizontally, gaps included. With a clock that is a
+    -- gap either side of it; collapsed it is the divider's own strip, one
+    -- spacing wide with no gaps. Same rule as LayoutPanels.
+    local centreSpan = clockSlot and (spacing + clockW + spacing) or spacing
+
     local iconRowH = math.max(iconSize, clockH)
 
     -- Cached for FindDragTarget/ApplyDragFeedback, which run off the mouse
@@ -889,11 +890,16 @@ local function Layout()
 
     local leftW = LayoutLauncherPanel(order.left, "left", 0, iconSize, spacing, iconRowH)
 
+    -- Where the centre reads as being, for anything drawn under it. Not
+    -- lastClockStartX: that one seeds a boundary which adds its own half gap.
+    local centreX = clockSlot and (leftW + spacing + clockW / 2)
+                    or (leftW + spacing * 0.5)
+
     if clockSlot then
         PositionClock(clockSlot, leftW + spacing, -(iconRowH - clockH) / 2, clockW, clockH)
     end
 
-    local rightStartX = leftW + spacing + clockW + spacing
+    local rightStartX = leftW + centreSpan
     local rightW = LayoutLauncherPanel(order.right, "right",
         rightStartX, iconSize, spacing, iconRowH)
 
@@ -901,14 +907,14 @@ local function Layout()
     -- FindDragTarget's zone boundaries read these instead of a slot's own
     -- _baseX, so a zone stays resolvable even when its panel is empty.
     lastLeftW        = leftW
-    lastClockStartX  = leftW + spacing
+    lastClockStartX  = clockSlot and (leftW + spacing) or leftW
     lastClockW       = clockW
     lastRightStartX  = rightStartX
     lastRightW       = rightW
 
     local fpsH = 0
     if Visible("fps") then
-        fpsH = LayoutFps(leftW + spacing + clockW / 2, iconRowH + READOUT_GAP, sysSize)
+        fpsH = LayoutFps(centreX, iconRowH + READOUT_GAP, sysSize)
     end
 
     local unscaledH = iconRowH
@@ -917,7 +923,7 @@ local function Layout()
     -- Fit to width when it overflows, with no floor. Default contentW BEFORE any
     -- use: the division below is guarded by its own `if`, but SetSize is not,
     -- and SetSize(nil, h) is a hard Lua error rather than a no-op.
-    local laidOutWidth = leftW + spacing + clockW + spacing + rightW
+    local laidOutWidth = leftW + centreSpan + rightW
     local contentW = laidOutWidth or 0
     local scale = 1
     if contentW > 0 and contentW > availW then
