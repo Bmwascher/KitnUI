@@ -745,46 +745,18 @@ local function editModeTarget()
     return "Blizzard_EditMode", ns.profileName
 end
 
-setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
-    if import then
-        if not HasData(addonKey) then
-            print(ns.title .. ": No Edit Mode data found. Add your layout string to Data.lua.")
-            return false
-        end
+ns.EditModeTarget = editModeTarget
 
-        if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then
-            print(ns.title .. ": Your EllesmereUI is too old to import Edit Mode layouts. Please update EllesmereUI.")
-            return false
-        end
-
-        local dataKey, layoutName = editModeTarget()
-
-        if not ns.EditModeSlotFree(layoutName) then
-            print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
-            return false
-        end
-
-        -- EllesmereUI's importer. It reconciles the layout with this client's
-        -- Edit Mode schema (without which newer per-system options are absent
-        -- and never appear in Edit Mode), waits for EditModeManagerFrame's
-        -- account settings, guards combat, forces the Account layout type, and
-        -- de-dupes earlier copies of the same name.
-        if not EllesmereUI.ApplyPresetEditMode(ns.data[dataKey], layoutName) then
-            print(ns.title .. ": Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
-            return false
-        end
-
-        CompleteSetup(addonKey)
-        return true
-    end
-
-    -- Load: activate the existing layout on this character. The index is the
-    -- preset count plus the layout's position in the saved list.
-    --
-    -- Refused in combat because switching layouts repositions the action bars,
-    -- which is not allowed from an addon's own call stack under lockdown. The
-    -- install path above needs no guard of its own: the host's importer carries
-    -- one. Skipped rather than deferred, matching the appearance step.
+-- Switch to the layout editModeTarget names. True once it is active and false on
+-- every refusal, and a refusal always prints its own reason. Nothing is printed
+-- on success: the loader contract this sits behind reports its own outcome, and
+-- the other caller has a queued line of its own.
+--
+-- Refused in combat because switching layouts repositions the action bars, which
+-- is not allowed from an addon's own call stack under lockdown. The install path
+-- needs no guard of its own: the host's importer carries one. Skipped rather
+-- than deferred, matching the appearance step.
+function ns.EditModeActivateWanted()
     if InCombatLockdown() then
         print(ns.title .. ": The Edit Mode layout was not switched because you are in combat. Run the loader again when you are out.")
         return false
@@ -816,12 +788,15 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
         return false
     end
 
+    -- The index is the preset count plus the layout's position in the saved list.
     local _, wantedLayout = editModeTarget()
     for i, v in ipairs(layouts.layouts) do
         if v.layoutName == wantedLayout then
             C_EditMode.SetActiveLayout(presetCount + i)
-            -- Success. Returns nothing, per the contract at the top of this file.
-            return
+            -- The loader and the watcher's own accepted fix both arrive here, so
+            -- every successful switch records the same fact in one place.
+            ns:MarkEditModeApplied()
+            return true
         end
     end
 
@@ -830,6 +805,49 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
     print(ns.title .. ": The Edit Mode layout \"" .. tostring(wantedLayout)
         .. "\" was not found. Re-run the installer's Edit Mode step to recreate it.")
     return false
+end
+
+setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
+    if import then
+        if not HasData(addonKey) then
+            print(ns.title .. ": No Edit Mode data found. Add your layout string to Data.lua.")
+            return false
+        end
+
+        if not (_G.EllesmereUI and EllesmereUI.ApplyPresetEditMode) then
+            print(ns.title .. ": Your EllesmereUI is too old to import Edit Mode layouts. Please update EllesmereUI.")
+            return false
+        end
+
+        local dataKey, layoutName = editModeTarget()
+
+        if not ns.EditModeSlotFree(layoutName) then
+            print(ns.title .. ": Edit Mode layout limit reached (5). Delete a layout and try again.")
+            return false
+        end
+
+        -- EllesmereUI's importer. It reconciles the layout with this client's
+        -- Edit Mode schema (without which newer per-system options are absent
+        -- and never appear in Edit Mode), waits for EditModeManagerFrame's
+        -- account settings, guards combat, forces the Account layout type, and
+        -- de-dupes earlier copies of the same name.
+        if not EllesmereUI.ApplyPresetEditMode(ns.data[dataKey], layoutName) then
+            print(ns.title .. ": Edit Mode import failed. Open Edit Mode once, then try again out of combat.")
+            return false
+        end
+
+        -- The importer activates the layout as its last act, so an import is a
+        -- genuine application on this character. The flag CompleteSetup writes
+        -- is account-wide and cannot record that.
+        ns:MarkEditModeApplied()
+        CompleteSetup(addonKey)
+        return true
+    end
+
+    -- Load: activate the existing layout on this character. The refusal contract
+    -- every loader follows: false propagates, success returns nothing.
+    if not ns.EditModeActivateWanted() then return false end
+    return
 end
 
 ---------------------------------------------------------------------------------
@@ -1225,6 +1243,63 @@ local function RestoreCDM(lm, silenced)
     lm:UnlockNotifications()
 end
 
+-- Make layoutID the active Cooldown Manager layout, and answer whether it is.
+--
+-- Published as ONE call rather than as the silence and restore pair, because the
+-- pair carries an invariant a caller must not be trusted to keep: every silence
+-- needs exactly one restore and no return may sit between them.
+--
+-- Five refusals, each returning false having written nothing and saved nothing.
+-- Both write methods are checked BEFORE the lock is taken for exactly that
+-- reason: a throw between the lock and the restore is the frozen viewer.
+function ns.CDMSetActiveLayout(lm, layoutID)
+    if not lm or layoutID == nil then
+        print(ns.title .. ": Could not reach the Cooldown Manager layout manager, so the layout was not switched.")
+        return false
+    end
+
+    for _, method in ipairs({ "SetActiveLayoutByID", "SaveLayouts" }) do
+        if type(lm[method]) ~= "function" then
+            print(ns.title .. ": Your Cooldown Manager is missing " .. method
+                .. ", so the layout was not switched. Nothing was changed.")
+            return false
+        end
+    end
+
+    if InCombatLockdown() then
+        print(ns.title .. ": The Cooldown Manager layout was not switched because you are in combat.")
+        return false
+    end
+
+    -- Without the lock the redraw fires live from our own call stack, which is
+    -- the crash this bracket exists to avoid.
+    local quiet = SilenceCDM(lm)
+    if not quiet then
+        print(ns.title .. ": The Cooldown Manager cannot pause its own redraw right now, so the layout was not switched.")
+        return false
+    end
+
+    -- Saved only on a switch that happened. SaveLayouts writes whatever is pending
+    -- and then clears the pending flag either way, so calling it after a refusal
+    -- would commit edits this click was never asked to commit, on the one path
+    -- whose whole contract is that nothing changed. No return sits between the
+    -- silence and the restore, which is the invariant that matters here.
+    local switched = lm:SetActiveLayoutByID(layoutID)
+    if switched then lm:SaveLayouts() end
+    RestoreCDM(lm, quiet)
+
+    -- Blizzard refuses whenever the layout's own embedded class-and-spec tag is
+    -- not the current spec's, which a name match cannot see. Propagated rather
+    -- than discarded: a caller that assumed success would announce a switch that
+    -- never happened and ask again at every login for ever.
+    if not switched then
+        print(ns.title .. ": The Cooldown Manager refused that layout, so nothing was changed. It may have been exported from a different spec.")
+        return false
+    end
+
+    return true
+end
+
 -- Blizzard allows five Cooldown Manager layouts and they are per CHARACTER, so a
 -- player whose class has four specs runs out on any character already holding
 -- layouts of its own. The chat line the caller prints scrolls away behind the
@@ -1310,21 +1385,9 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             end
         end
 
-        -- Guarded the same way Installer.lua:407 guards the same global. It is
-        -- only used for the layout's display name, so a missing one degrades to
-        -- the numbered fallback rather than refusing; the throw it would
-        -- otherwise raise sits in the pcall-less Import All loop.
-        local specName
-        if GetSpecializationInfoForClassID then
-            specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
-        end
-        local specLabel = specName or ("Spec" .. specIndex)
-        local layoutName = "KitnUI - " .. specLabel
-        -- The name shipped before the rename. Matched as well as the current one
-        -- so an upgrade REPLACES the old layout: left behind it would hold one
-        -- of the five slots the next spec needs, under a name the user has no
-        -- reason to connect to this addon any more.
-        local legacyName = "KUI - " .. specLabel
+        -- Both names and the label from the one place that builds them, so the
+        -- layout watcher matches what this writes.
+        local layoutName, legacyName, specLabel = ns.CDMLayoutName(classId, specIndex)
 
         -- Collected first, removed after. RemoveLayout mutates the very table
         -- being walked, and both names can be present at once.

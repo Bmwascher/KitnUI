@@ -160,7 +160,7 @@ read_globals = {
     "C_EditMode", "Enum",
 
     -- Cooldown Manager
-    "CooldownViewerSettings",
+    "CooldownViewerSettings", "CooldownManagerLayout_GetName",
 
     -- Timer
     "C_Timer",

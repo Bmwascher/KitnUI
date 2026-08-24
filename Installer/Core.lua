@@ -168,6 +168,26 @@ function ns.GetCDMKey(classId, specIndex)
     return format("%d:%d", classId, specIndex)
 end
 
+-- The two names the Cooldown Manager import works with, and the label both the
+-- import and the prompt show the user. One source, because a second copy would
+-- drift the first time either name changed and the drift would be silent: a
+-- reader that simply never finds a match.
+--
+-- The legacy name is the one shipped before the rename, matched so an upgrade
+-- REPLACES the old layout rather than leaving it holding one of the five slots.
+--
+-- Both arguments must already be numbers. Every caller validates them first,
+-- through ns.GetCDMKey on the import side and through its own identity read on
+-- the watcher side.
+function ns.CDMLayoutName(classId, specIndex)
+    local specName
+    if GetSpecializationInfoForClassID then
+        specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
+    end
+    local specLabel = specName or ("Spec" .. specIndex)
+    return "KitnUI - " .. specLabel, "KUI - " .. specLabel, specLabel
+end
+
 -- Memoized because ns.IsAddonImported feeds every sidebar repaint, which would
 -- otherwise re-hash the class's whole payload each time. The cache cannot go
 -- stale: ns.data.BlizzardCDM is a load-time table literal and nothing writes to
@@ -412,6 +432,37 @@ function ns.EditModeSlotFree(layoutName)
     return used < 5
 end
 
+-- Which layout is active now, in a form that survives the list being reordered.
+--
+-- C_EditMode.GetLayouts returns SAVED layouts only, while its activeLayout field
+-- indexes the presets-first COMBINED list, so the two need reconciling.
+--
+-- A preset is recorded as its INDEX: presets come first and their count is fixed,
+-- so those indices cannot shift. A saved layout is recorded as its NAME, because
+-- ApplyPresetEditMode inserts ahead of existing layouts and shifts every index
+-- after it, so a saved index goes stale the moment Lulu Mode runs.
+function ns.ActiveEditModeLayout()
+    if not (C_EditMode and C_EditMode.GetLayouts) then return nil end
+
+    local ok, info = pcall(C_EditMode.GetLayouts)
+    if not (ok and type(info) == "table" and type(info.layouts) == "table") then return nil end
+    if type(info.activeLayout) ~= "number" then return nil end
+
+    local presets = Enum and Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues
+    if type(presets) ~= "number" then return nil end
+
+    if info.activeLayout <= presets then return info.activeLayout end
+
+    local entry = info.layouts[info.activeLayout - presets]
+    if type(entry) ~= "table" or type(entry.layoutName) ~= "string" then return nil end
+
+    -- Override layouts (Plunderstorm and its kin) need no handling. Blizzard keeps
+    -- the active override in a separate field from the saved list this reads, so
+    -- an override never reaches this line and what is recorded is the ordinary
+    -- layout underneath it -- the one worth going back to anyway.
+    return entry.layoutName
+end
+
 ---------------------------------------------------------------------------------
 -- Saved variable defaults
 ---------------------------------------------------------------------------------
@@ -421,7 +472,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
     installedVersion = nil, -- addon version at last install
-    perChar = {},           -- [charName-realm] = { loaded = true/false }
+    perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true } }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
@@ -431,8 +482,16 @@ local defaults = {
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
 
-local function GetCharKey()
-    return UnitName("player") .. "-" .. GetRealmName()
+-- The key every per-character record in KitnUIDB is stored under. Nil rather
+-- than a throw when either half cannot be read, and nil rather than a half key:
+-- a key missing its realm would read and write another character's record.
+-- Every caller treats nil as "no answer this pass" and writes nothing.
+function ns.GetCharKey()
+    local name = UnitName("player")
+    local realm = GetRealmName()
+    if type(name) ~= "string" or name == "" then return nil end
+    if type(realm) ~= "string" or realm == "" then return nil end
+    return name .. "-" .. realm
 end
 
 ---------------------------------------------------------------------------------
@@ -489,14 +548,45 @@ function ns:IsAddOnAvailable(addon)
 end
 
 function ns:IsCharLoaded()
-    local key = GetCharKey()
+    local key = ns.GetCharKey()
+    if not key then return false end
     return self.db.perChar[key] and self.db.perChar[key].loaded
 end
 
 function ns:SetCharLoaded()
-    local key = GetCharKey()
+    local key = ns.GetCharKey()
+    if not key then return end
     self.db.perChar[key] = self.db.perChar[key] or {}
     self.db.perChar[key].loaded = true
+end
+
+-- Whether KitnUI's Edit Mode layout has genuinely been applied on THIS
+-- character. The profile flag beside it is account-wide and the layout it names
+-- is account-wide too, so on an alt that has never been touched every test but
+-- this one passes.
+function ns:HasEditModeApplied()
+    local key = ns.GetCharKey()
+    if not key then return false end
+    local rec = self.db and self.db.perChar and self.db.perChar[key]
+    return (rec and rec.editModeApplied) == true
+end
+
+-- Written key by key into whatever record is already there. A fresh table would
+-- erase the per-spec opt-outs stored beside it.
+--
+-- Reports whether it wrote, because one caller has to answer differently when it
+-- did not. A writer that returns nothing forces that caller to assume success.
+function ns:MarkEditModeApplied()
+    local key = ns.GetCharKey()
+    if not key or not self.db then return false end
+    self.db.perChar = self.db.perChar or {}
+    local rec = self.db.perChar[key]
+    if not rec then
+        rec = {}
+        self.db.perChar[key] = rec
+    end
+    rec.editModeApplied = true
+    return true
 end
 
 ---------------------------------------------------------------------------------
@@ -504,7 +594,15 @@ end
 ---------------------------------------------------------------------------------
 
 local function ConfirmOverwriteInstall(fn)
-    if ns.db and ns.db.perChar[GetCharKey()] then
+    -- Refused rather than degraded. Reading a nil key as "no record" would skip
+    -- the confirmation below and overwrite the user's profiles unasked.
+    local key = ns.GetCharKey()
+    if not key then
+        print(ns.title .. ": Could not identify this character, so nothing was started. Try again in a moment.")
+        return
+    end
+
+    if ns.db and ns.db.perChar[key] then
         StaticPopupDialogs["KITNUI_OVERWRITE_CONFIRM"] = {
             text = ns.title .. ": You have already installed profiles. This will overwrite any local changes. If you just want to load profiles on a new character, use /kitn load instead.\n\nContinue?",
             button1 = "Yes",
@@ -833,11 +931,15 @@ boot:SetScript("OnEvent", function()
     -- refused one still asks later: StaticPopup_Show answers nil when a show
     -- condition rejects the dialog and when every dialog frame is already
     -- taken, and this login raises several popups of its own.
-    local cdmBlocked = ns.db.cdmLimitPending and ns.db.cdmLimitPending[GetCharKey()]
+    -- One key, read and validated once. The timer below reads the pending list
+    -- and then clears it, and a second read could answer differently between
+    -- them.
+    local charKey = ns.GetCharKey()
+    local cdmBlocked = charKey and ns.db.cdmLimitPending and ns.db.cdmLimitPending[charKey]
     if cdmBlocked and #cdmBlocked > 0 then
         C_Timer.After(2, function()
             local pending = ns.db and ns.db.cdmLimitPending
-            local blocked = pending and pending[GetCharKey()]
+            local blocked = pending and pending[charKey]
             if not blocked or #blocked == 0 then return end
             -- Icons are resolved HERE rather than carried across the reload.
             -- The store holds the spec's plain name, which is also the key the
@@ -887,7 +989,7 @@ boot:SetScript("OnEvent", function()
                 .. ns.Color("/kitn cdm") .. ".")
 
             if StaticPopup_Show("KITNUI_CDM_FULL") then
-                pending[GetCharKey()] = nil
+                pending[charKey] = nil
             end
         end)
     end

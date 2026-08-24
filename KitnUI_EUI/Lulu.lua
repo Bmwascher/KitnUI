@@ -155,37 +155,6 @@ end
 -- Edit Mode layout, read and re-activate
 ---------------------------------------------------------------------------------
 
--- Which layout is active now, in a form that survives the list being reordered.
---
--- C_EditMode.GetLayouts returns SAVED layouts only, while its activeLayout field
--- indexes the presets-first COMBINED list, so the two need reconciling.
---
--- A preset is recorded as its INDEX: presets come first and their count is fixed,
--- so those indices cannot shift. A saved layout is recorded as its NAME, because
--- ApplyPresetEditMode inserts ahead of existing layouts and shifts every index
--- after it, so a saved index goes stale the moment Lulu Mode runs.
-local function ActiveEditModeLayout()
-    if not (C_EditMode and C_EditMode.GetLayouts) then return nil end
-
-    local ok, info = pcall(C_EditMode.GetLayouts)
-    if not (ok and type(info) == "table" and type(info.layouts) == "table") then return nil end
-    if type(info.activeLayout) ~= "number" then return nil end
-
-    local presets = Enum and Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues
-    if type(presets) ~= "number" then return nil end
-
-    if info.activeLayout <= presets then return info.activeLayout end
-
-    local entry = info.layouts[info.activeLayout - presets]
-    if type(entry) ~= "table" or type(entry.layoutName) ~= "string" then return nil end
-
-    -- Override layouts (Plunderstorm and its kin) need no handling. Blizzard keeps
-    -- the active override in a separate field from the saved list this reads, so
-    -- an override never reaches this line and what is recorded is the ordinary
-    -- layout underneath it -- the one worth going back to anyway.
-    return entry.layoutName
-end
-
 -- Puts back what ActiveEditModeLayout recorded. Three outcomes, not two:
 --   "ok"          — the layout is active again.
 --   "gone"        — the record names a layout that no longer exists. Ordinary
@@ -273,7 +242,7 @@ local function ApplyEditModeLayout(on)
         -- info.activeLayout on its way out. Committed only AFTER the import
         -- succeeds: recording a layout to go back to, for a switch that never
         -- happened, is worse than recording nothing.
-        local current = ActiveEditModeLayout()
+        local current = ns.ActiveEditModeLayout()
 
         if not EllesmereUI.ApplyPresetEditMode(data, name) then
             ns.QueueMessage(ns.title .. ": " .. ns.Red("Lulu Edit Mode import failed. Open Edit Mode once, then try again out of combat."))
