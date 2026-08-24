@@ -308,9 +308,9 @@ local function EnsureCreated()
     rightPanel  = CreatePanel("Right")
 
     -- Only the centre panel gets one: it is the only panel that can lay out
-    -- nothing and stand in as a separator. Two anchor points give it its
-    -- height, so it tracks the panel without LayoutPanels ever sizing it.
-    -- Starts hidden; LayoutPanels is the only thing that shows it.
+    -- nothing and stand in as a separator. Anchored top and bottom rather than
+    -- sized, so it tracks the panel and LayoutPanels never has to. LayoutPanels
+    -- owns whether it shows.
     local divider = centrePanel:CreateTexture(nil, "OVERLAY")
     divider:SetPoint("TOP", centrePanel, "TOP", 0, -DIVIDER_INSET)
     divider:SetPoint("BOTTOM", centrePanel, "BOTTOM", 0, DIVIDER_INSET)
