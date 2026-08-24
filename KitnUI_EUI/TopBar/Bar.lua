@@ -348,6 +348,7 @@ local function ApplyPanelColors()
 
     local opacity  = Get("tbOpacity", ns.EUI_DEFAULTS.tbOpacity) / 100
     local backdrop = Get("tbBackdrop", ns.EUI_DEFAULTS.tbBackdrop) and true or false
+    local accentA  = Get("tbAccentOpacity", ns.EUI_DEFAULTS.tbAccentOpacity) / 100
     local r, g, b = AccentRGB()
 
     for _, panel in ipairs({ leftPanel, centrePanel, rightPanel }) do
@@ -355,7 +356,7 @@ local function ApplyPanelColors()
             panel._bg:SetColorTexture(0.03, 0.03, 0.04, opacity)
             if backdrop then panel._bg:Show() else panel._bg:Hide() end
         end
-        if panel._accent then panel._accent:SetColorTexture(r, g, b, 1) end
+        if panel._accent then panel._accent:SetColorTexture(r, g, b, accentA) end
     end
 end
 

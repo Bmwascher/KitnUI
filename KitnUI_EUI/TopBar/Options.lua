@@ -242,6 +242,14 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
+    _, h = W:DualRow(parent, y,
+        { type = "slider", text = "Accent Opacity", min = 0, max = 100, step = 5,
+          tooltip = "How solid the accent line along the bottom of the bar is. Set it to zero and turn Panel Backdrop off to leave the bar with no background of its own.",
+          getValue = function() return ns.TopBar.Get("tbAccentOpacity", 100) end,
+          setValue = function(v) ns.TopBar.Set("tbAccentOpacity", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+        { type = "spacer" }
+    );                                                                             y = y - h
+
     _, h = W:SectionHeader(parent, "VISIBILITY", y);                              y = y - h
 
     -- Rarely touched once set, so collapsed by default behind the host's own
