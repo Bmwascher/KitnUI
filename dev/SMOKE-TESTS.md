@@ -1191,8 +1191,10 @@ touches `Installer/Core.lua`, `Installer/Setup.lua`, `Installer/Installer.xml`,
 - [ ] **12. The crash class.** Accept it **with the Cooldown Manager visible and
   holding live spell data**. The reload happens, the layout is correct
   afterwards, and **BugSack is empty**. This is the check that covers the crash.
-- [ ] **13. A stranger is never spoken to.** On a character that never ran the
-  installer, change spec three times. Nothing is ever printed or shown.
+- [ ] **13. A stranger is never spoken to.** On an ACCOUNT that never ran the
+  installer at all, change spec three times. Nothing is ever printed or shown.
+  An alt on an installed account is check 23, and it legitimately shows the load
+  dialog.
 - [ ] **14. Reset clears the opt-out.** Run `/kitn reset` on a character with an
   opt-out, then change to that spec. The prompt appears again.
 - [ ] **15. The load-mode leak.** Open `/kitn load`, close it with Escape without
