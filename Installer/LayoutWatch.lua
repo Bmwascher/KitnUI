@@ -70,7 +70,9 @@ end
 -- Never installed is unknown, not wrong: a user who never ran the Edit Mode step
 -- has no layout of ours and no interest in one. A wanted layout that no longer
 -- exists is unknown too, because there is nothing to switch to and deleting it
--- was the user's right.
+-- was the user's right. So is a character the layout has never been applied to,
+-- and that one is tested last because a character already on the layout proves
+-- its own participation.
 local function EditModeVerdict()
     local profiles = ns.db and ns.db.profiles
     if not profiles or profiles["Blizzard_EditMode"] ~= true then return "unknown" end
@@ -97,8 +99,28 @@ local function EditModeVerdict()
 
     -- A number is a preset index and a string is a saved layout's name. Keeping
     -- the two apart is what lets a preset read as wrong without naming it.
-    if type(active) == "number" then return "wrong" end
-    return active == wanted and "ok" or "wrong"
+    local verdict
+    if type(active) == "number" then
+        verdict = "wrong"
+    else
+        verdict = active == wanted and "ok" or "wrong"
+    end
+
+    if ns.HasEditModeApplied and ns:HasEditModeApplied() then return verdict end
+
+    -- Unknown rather than wrong, so an unmarked character still reaches the
+    -- clean path that clears stale latch entries and hides a stale dialog.
+    if verdict ~= "ok" then return "unknown" end
+
+    -- Already sitting on the layout IS participation, and for a character
+    -- configured before the mark existed it is the only proof available. The
+    -- cost is stated rather than hidden: such a character stays silent until it
+    -- is next seen on a spec where the layout is active.
+    --
+    -- Unknown when the write did not happen. Answering ok would claim a mark
+    -- that is not there, and the next check would read unmarked again.
+    if not (ns.MarkEditModeApplied and ns:MarkEditModeApplied()) then return "unknown" end
+    return "ok"
 end
 
 ---------------------------------------------------------------------------------

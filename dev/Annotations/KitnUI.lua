@@ -94,6 +94,8 @@
 ---@field IsAddOnAvailable fun(self: KitnUINS, addon: string): boolean
 ---@field IsCharLoaded fun(self: KitnUINS): boolean
 ---@field SetCharLoaded fun(self: KitnUINS)
+---@field HasEditModeApplied fun(self: KitnUINS): boolean   # per CHARACTER, unlike the account-wide profile flag
+---@field MarkEditModeApplied fun(self: KitnUINS): boolean   # true only when the field was written; writes key by key and never replaces the character record
 local KitnUINS
 
 -- SavedVariables shape (KitnUIDB). Written by Core.lua/Setup.lua on import.
@@ -103,7 +105,7 @@ local KitnUINS
 ---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field installedVersion string?
----@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, layoutWatchOff = { [specIndex] = true } }
+---@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, editModeApplied = boolean, layoutWatchOff = { [specIndex] = true } }
 ---@field cdmLimitPending table<string, string[]>  # [charName-realm] = spec names the CDM layout cap blocked, raised as a popup at that character's next login
 ---@field devMode boolean
 ---@field dismissedVersion string?

@@ -472,7 +472,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
     installedVersion = nil, -- addon version at last install
-    perChar = {},           -- [charName-realm] = { loaded = true/false, layoutWatchOff = { [specIndex] = true } }
+    perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true } }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
@@ -558,6 +558,35 @@ function ns:SetCharLoaded()
     if not key then return end
     self.db.perChar[key] = self.db.perChar[key] or {}
     self.db.perChar[key].loaded = true
+end
+
+-- Whether KitnUI's Edit Mode layout has genuinely been applied on THIS
+-- character. The profile flag beside it is account-wide and the layout it names
+-- is account-wide too, so on an alt that has never been touched every test but
+-- this one passes.
+function ns:HasEditModeApplied()
+    local key = ns.GetCharKey()
+    if not key then return false end
+    local rec = self.db and self.db.perChar and self.db.perChar[key]
+    return (rec and rec.editModeApplied) == true
+end
+
+-- Written key by key into whatever record is already there. A fresh table would
+-- erase the per-spec opt-outs stored beside it.
+--
+-- Reports whether it wrote, because one caller has to answer differently when it
+-- did not. A writer that returns nothing forces that caller to assume success.
+function ns:MarkEditModeApplied()
+    local key = ns.GetCharKey()
+    if not key or not self.db then return false end
+    self.db.perChar = self.db.perChar or {}
+    local rec = self.db.perChar[key]
+    if not rec then
+        rec = {}
+        self.db.perChar[key] = rec
+    end
+    rec.editModeApplied = true
+    return true
 end
 
 ---------------------------------------------------------------------------------

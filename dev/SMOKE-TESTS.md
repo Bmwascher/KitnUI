@@ -1165,7 +1165,8 @@ touches `Installer/Core.lua`, `Installer/Setup.lua`, `Installer/Installer.xml`,
 - [ ] **3. It stops asking.** Change back to the first spec, then to the fixed
   spec again. No prompt either time.
 - [ ] **4. No means no, even after a lap.** Change to a third unset spec and
-  decline. Then change to a spec that is correctly configured, and back again.
+  decline it with the **No button**, not Escape. Then change to a spec that is
+  correctly configured, and back again.
   The prompt closes, and it does NOT come back for that spec this session.
   **That round trip is the check**: a single-slot latch would be cleared by the
   correct spec and would re-ask on return.
@@ -1239,6 +1240,43 @@ touches `Installer/Core.lua`, `Installer/Setup.lua`, `Installer/Installer.xml`,
   because both attempts are spent and freeing a slot fires no event of ours. It
   appears on the next spec change. Those two seconds are the whole check: they are
   what would expose a retry that had quietly queued another.
+- [ ] **23. An untouched alt is left alone.** On an ALT with no KitnUI setup of its
+  own, on an account where the installer HAS been run, log in and wait ten
+  seconds. Then change spec twice without answering anything. **Only the load
+  dialog appears.** No layout prompt, at login or after either spec change. This
+  is the field defect the participation mark exists to fix. **Setup exclusion:**
+  that alt must not hold a Cooldown Manager layout named exactly as ours, whether
+  created, renamed or imported there.
+- [ ] **24. Setting it up turns the watcher on.** On the same alt, accept the load
+  dialog and let the Edit Mode step run. Then change to a spec that has never been
+  set. The prompt now appears. The mark turned the watcher on for that character.
+- [ ] **25. Declining does not start the nagging.** On a second untouched alt,
+  DECLINE the load dialog, then change to an unset spec. No prompt. Same setup
+  exclusion as check 23.
+- [ ] **26. A character configured before this version.** Log in on a spec that is
+  already using KitnUI's layout, then change to an unset spec. No prompt at login,
+  prompt on the unset spec. The first login writes the mark silently. A character
+  whose first login lands on a wrong spec stays silent until it is next observed
+  on a spec where the layout IS active, which may be several logins later; that is
+  the accepted cost of never guessing.
+- [ ] **27. The declining alt really has nothing saved.** On the alt from check 25,
+  before touching anything else on it, run this macro. It must print `nil`.
+  `/run local k=UnitName("player").."-"..GetRealmName() local r=KitnUIDB and KitnUIDB.perChar and KitnUIDB.perChar[k] print(r and r.editModeApplied)`
+  Check 25 on its own cannot tell "the mark was never written" from "the mark was
+  written and something else returned unknown", so this reads the saved field
+  directly. **Run it before accepting anything on that character**, or a
+  legitimate write will mask the result.
+- [ ] **28. Escape is not an answer.** Get a prompt on an unset spec and close it
+  with the **Escape key**. Then change to another spec and back. The prompt
+  appears again. Closing a question without answering it must not count as No.
+- [ ] **29. No is still No.** On that same spec, press **No** this time. Then
+  change to another spec and back. No prompt. 28 and 29 are a pair: one proves a
+  dismissal does not latch, the other proves an answer still does.
+- [ ] **30. Being replaced is not being answered.** Get a prompt on an unset spec
+  and, WITHOUT answering it, change to a different spec that also prompts, so the
+  second prompt replaces the first in the same frame. Answer the second one with
+  **No**. Then return to the first spec. The first spec prompts again. This is
+  Blizzard's override path, not the Escape path, so check 28 does not cover it.
 
 ## What cannot be tested by hand, and why that is recorded rather than skipped
 

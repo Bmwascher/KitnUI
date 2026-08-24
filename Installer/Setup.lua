@@ -793,6 +793,9 @@ function ns.EditModeActivateWanted()
     for i, v in ipairs(layouts.layouts) do
         if v.layoutName == wantedLayout then
             C_EditMode.SetActiveLayout(presetCount + i)
+            -- The loader and the watcher's own accepted fix both arrive here, so
+            -- every successful switch records the same fact in one place.
+            ns:MarkEditModeApplied()
             return true
         end
     end
@@ -833,6 +836,10 @@ setupFunctions["Blizzard_EditMode"] = function(addonKey, import)
             return false
         end
 
+        -- The importer activates the layout as its last act, so an import is a
+        -- genuine application on this character. The flag CompleteSetup writes
+        -- is account-wide and cannot record that.
+        ns:MarkEditModeApplied()
         CompleteSetup(addonKey)
         return true
     end
