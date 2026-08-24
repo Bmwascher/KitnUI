@@ -185,6 +185,29 @@ end
 -- The prompt
 ---------------------------------------------------------------------------------
 
+-- The spec's own icon and the accent colour, the same form the installer's own
+-- popups use so the two read as one addon. The plain name on any failed lookup:
+-- a label is worth more than a decoration.
+local function DecorateSpec(classId, specIndex, specLabel)
+    local icon
+    if GetSpecializationInfoForClassID then
+        icon = select(4, GetSpecializationInfoForClassID(classId, specIndex))
+    end
+    local coloured = ns.Color and ns.Color(specLabel) or specLabel
+    if type(icon) ~= "number" and type(icon) ~= "string" then return coloured end
+    return "|T" .. icon .. ":14:14:0:0|t " .. coloured
+end
+
+-- Names the layout that is actually wanted rather than a fixed one. With Lulu
+-- Mode on the target is the Lulu layout, and a sentence that always said
+-- "KitnUI's" would name a layout the accept would not switch to.
+local function EditModePhrase()
+    local name
+    if ns.EditModeTarget then name = select(2, ns.EditModeTarget()) end
+    if type(name) ~= "string" then return "KitnUI's Edit Mode layout" end
+    return "the \"" .. name .. "\" Edit Mode layout"
+end
+
 -- Applies whichever halves the dialog named, after proving they are still the
 -- halves that are wrong. The dialog carries no timeout and the stale-dialog hide
 -- only runs when a check runs, so without this there is a window in which a
@@ -222,10 +245,10 @@ local function AcceptFix(builtSpec, builtEM, builtCDM)
     --
     -- Reached only through a "wrong" Cooldown Manager verdict, which CDMVerdict
     -- cannot return unless ns.CDMLayoutName already answered with a string.
-    local specLabel = select(3, ns.CDMLayoutName(classId, specIndex))
+    local specLabel = DecorateSpec(classId, specIndex, select(3, ns.CDMLayoutName(classId, specIndex)))
     local line
     if editModeDone then
-        line = ns.title .. ": " .. specLabel .. " is now using KitnUI's Edit Mode and Cooldown Manager layouts."
+        line = ns.title .. ": " .. specLabel .. " is now using " .. EditModePhrase() .. " and KitnUI's Cooldown Manager layout."
     else
         -- Edit Mode can be named in the prompt and still refuse, and the reload
         -- below destroys its refusal print. Naming both halves here would make
@@ -272,11 +295,11 @@ end
 local function ShowPrompt(charKey, specLabel, specIndex, em, cdm, latchKey)
     local text
     if em == "wrong" and cdm == "wrong" then
-        text = specLabel .. " is not using KitnUI's Edit Mode or Cooldown Manager layout. Switch to both now? This needs a reload."
+        text = specLabel .. " is not using " .. EditModePhrase() .. " or KitnUI's Cooldown Manager layout. Switch to both now? This needs a reload."
     elseif cdm == "wrong" then
         text = specLabel .. " is not using KitnUI's Cooldown Manager layout. Switch to it now? This needs a reload."
     else
-        text = specLabel .. " is not using KitnUI's Edit Mode layout. Switch to it now?"
+        text = specLabel .. " is not using " .. EditModePhrase() .. ". Switch to it now?"
     end
 
     -- Every button records the answer, and the show site records nothing.
@@ -374,7 +397,7 @@ RunCheck = function(fromRetry)
     local specLabel = ns.CDMLayoutName and select(3, ns.CDMLayoutName(classId, specIndex))
     if type(specLabel) ~= "string" then return end
 
-    if not ShowPrompt(charKey, specLabel, specIndex, em, cdm, latchKey) then
+    if not ShowPrompt(charKey, DecorateSpec(classId, specIndex, specLabel), specIndex, em, cdm, latchKey) then
         -- A rejected show writes nothing: no latch, no opt-out, and the prompt is
         -- still owed. One retry, and a check reached BY that retry may not queue
         -- another -- without the budget a full dialog stack schedules a retry that
