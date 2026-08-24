@@ -85,6 +85,12 @@
 ---@field GetOutdatedCDMSpecs fun(): { specIndex: number, specName: string, state: string }[]
 ---@field SummarizeCDMRows fun(rows: table?): string
 ---@field CDMNeedsOverwriteConfirm fun(snapshot: table?, classId: number?, specIndex: number?): boolean
+---@field CDMLayoutName fun(classId: number, specIndex: number): string, string, string  # layoutName, legacyName, specLabel; both arguments must already be numbers
+---@field CDMSetActiveLayout fun(lm: table, layoutID: any): boolean   # the whole silence/activate/save/restore run, true only when the layout is now active
+---@field GetCharKey fun(): string?   # nil when the name or the realm could not be read; callers write nothing on nil
+---@field ActiveEditModeLayout fun(): number|string|nil   # a preset INDEX, a saved layout NAME, or nil for a reading that could not be taken
+---@field EditModeTarget fun(): string, string   # dataKey, layoutName for the current mode; Lulu aware
+---@field EditModeActivateWanted fun(): boolean   # true once active, false on a refusal, and a refusal prints its own reason
 ---@field IsAddOnAvailable fun(self: KitnUINS, addon: string): boolean
 ---@field IsCharLoaded fun(self: KitnUINS): boolean
 ---@field SetCharLoaded fun(self: KitnUINS)
@@ -97,7 +103,7 @@ local KitnUINS
 ---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field installedVersion string?
----@field perChar table<string, table>
+---@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, layoutWatchOff = { [specIndex] = true } }
 ---@field cdmLimitPending table<string, string[]>  # [charName-realm] = spec names the CDM layout cap blocked, raised as a popup at that character's next login
 ---@field devMode boolean
 ---@field dismissedVersion string?

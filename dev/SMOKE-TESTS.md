@@ -35,6 +35,7 @@ an agent.**
 | 7. Tweaks section, and Accents folded into Appearance | `feature/tweaks-and-accents` | yes, `a1791c9..5ff1521` | plan: Sol PASS (3 rounds), Fable PASS. Diff: Sol PASS (3 rounds) and Fable PASS, both on `5ff1521` | **PASS** (Kitn, 2026-08-21) |
 | 8. The power text follows the look | `feature/power-text-look` | yes, `b898fce` | not yet | **PASS** (Kitn, 2026-08-21) |
 | 9. The clock's right click opens EUI settings | `feature/topbar-right-click-config` | yes, `1b75979..61106da` | none run | **approved by Kitn, 2026-08-22** |
+| 10. The wrong-layout prompt | `feature/spec-layout-watch` | yes | see the item | **not run** |
 
 **Both branches were rebased onto `v2.0.1` on 2026-08-14.** The SHAs above are the
 rebased ones; anything you wrote down before that date is gone. The rebase also
@@ -1116,3 +1117,146 @@ build. Do not re-run them against this branch; run the checks below instead.
   not tick them. Run them if you want the record.
 - No cross-agent diff review was run on this branch. The power text item before it
   had one; this one was merged on Kitn's word alone.
+
+---
+
+# Item 10 — The wrong-layout prompt
+
+**Branch** `feature/spec-layout-watch`. Adds `Installer/LayoutWatch.lua` and
+touches `Installer/Core.lua`, `Installer/Setup.lua`, `Installer/Installer.xml`,
+`KitnUI_EUI/Lulu.lua` and `.luacheckrc`. **Status: not yet run.**
+
+## What changed and why it needs testing
+
+- Blizzard remembers the active Edit Mode layout **per specialization**, and the
+  installer only ever sets it for the spec you were on when you ran the step. So
+  every other spec has been sitting on a Blizzard preset, silently, since the day
+  you installed.
+- A watcher now notices that and **asks**. It never switches a layout on its own.
+- It covers the **Cooldown Manager** too. That one heals itself in most cases;
+  the case it does not is a spec whose last layout was recorded as the default.
+- The Cooldown Manager half **ends in a reload**, and only when the switch
+  actually happened. The Edit Mode half applies live with no reload.
+- Six installer functions moved onto the shared namespace so the watcher could
+  call them instead of copying them. The installer's own behaviour is unchanged
+  by that move, which is what checks 15 and 17 are really testing.
+- `ns.GetCharKey` now answers nil instead of throwing when the character name or
+  realm cannot be read, which touches four places in `Installer/Core.lua`.
+
+## Read this before starting
+
+- **Every check is yours.** No agent may tick a box in this item.
+- You need a character with **at least three specs**, with KitnUI installed on
+  one of them, so there are unset specs to find.
+- Keep **BugSack** open. Several checks are only meaningful with an empty one.
+- The prompt appears about **one second** after a spec change, and about **three
+  seconds** after login. That is deliberate: reading in the same frame as the
+  event risks reading a value the client is about to change.
+- Checks 12, 15, 18, 21 and 22 cover defects the review found rather than
+  behaviour anyone would think to try. They are the ones worth the most care.
+
+## The checks
+
+- [ ] **1. It notices.** On a character with the Edit Mode step installed, change
+  to a spec that has never been set. The prompt names that spec and offers the
+  switch.
+- [ ] **2. Yes works, with no reload.** Accept it. The Edit Mode layout changes on
+  screen. No reload. BugSack empty.
+- [ ] **3. It stops asking.** Change back to the first spec, then to the fixed
+  spec again. No prompt either time.
+- [ ] **4. No means no, even after a lap.** Change to a third unset spec and
+  decline. Then change to a spec that is correctly configured, and back again.
+  The prompt closes, and it does NOT come back for that spec this session.
+  **That round trip is the check**: a single-slot latch would be cleared by the
+  correct spec and would re-ask on return.
+- [ ] **5. A relog asks again.** Relog and return to that spec. The prompt
+  appears. Declining is for the session, not for ever.
+- [ ] **6. Never means never.** On a spec you deliberately keep on a Blizzard
+  preset, choose **Never for this spec**. No prompt for that spec now, after a
+  relog, or after a spec change away and back.
+- [ ] **7. Never is per spec.** Change to a different unset spec. That spec still
+  prompts.
+- [ ] **8. Combat waits.** Enter combat and change spec in combat if your class
+  allows it, otherwise change spec and immediately pull. No prompt during combat.
+  The prompt appears once combat ends.
+- [ ] **9. Lulu Mode is respected.** With Lulu Mode on and a Lulu layout imported,
+  change to an unset spec. The prompt offers the **Lulu** layout, not the
+  standard one.
+- [ ] **10. A deleted layout is silent.** Delete KitnUI's Edit Mode layout, then
+  change to an unset spec. No prompt. Nothing printed.
+- [ ] **11. The Cooldown Manager half appears.** On a spec whose Cooldown Manager
+  layout was imported but left on the default, change to it. The prompt names the
+  Cooldown Manager and says a reload is needed.
+- [ ] **12. The crash class.** Accept it **with the Cooldown Manager visible and
+  holding live spell data**. The reload happens, the layout is correct
+  afterwards, and **BugSack is empty**. This is the check that covers the crash.
+- [ ] **13. A stranger is never spoken to.** On a character that never ran the
+  installer, change spec three times. Nothing is ever printed or shown.
+- [ ] **14. Reset clears the opt-out.** Run `/kitn reset` on a character with an
+  opt-out, then change to that spec. The prompt appears again.
+- [ ] **15. The load-mode leak.** Open `/kitn load`, close it with Escape without
+  finishing, then change to an unset spec and accept the prompt. **The layout
+  switches and NOTHING else does.** Companion minimap icons stay as they were, no
+  EllesmereUI module switches on or off, and if you have ever used Chat Setup your
+  chat windows are untouched.
+- [ ] **16. A stale dialog changes nothing.** With the prompt on screen for one
+  spec, change spec again before answering, then press Yes on the old dialog.
+  Nothing is changed for the old spec.
+- [ ] **17. Combat refuses at the accept too.** Get a prompt naming both halves,
+  then pull a mob and press Yes while in combat. **Both** halves refuse, each
+  saying why, and **no reload happens**. Edit Mode refuses too: its activation
+  carries its own combat guard.
+- [ ] **18. A fresh handle, not a stale one.** With the prompt on screen,
+  re-import that spec's Cooldown Manager layout from the installer, then switch
+  the Cooldown Manager away from it by hand so the prompt is still correct, then
+  press Yes on the waiting dialog. It switches to the re-imported layout and
+  reloads. **The middle step matters**: without it the re-import leaves the layout
+  already active, the accept re-check reads it as correct and does nothing, which
+  proves nothing.
+- [ ] **19. Two opt-outs coexist.** Opt out of two different specs on the same
+  character, then visit each. Neither prompts. Opting out of the second must not
+  have cleared the first.
+- [ ] **20. Lulu's undo outranks this.** Two separate runs, both with Lulu Mode
+  being switched off while its undo is owed and BOTH dialogs on screen. **Run A:**
+  answer the watcher first, then Lulu; you land on Lulu's recorded layout, because
+  Lulu's reload comes last. **Run B:** answer Lulu first; it reloads at once and
+  the watcher's dialog is gone, unanswered. Both are expected. Nothing is left
+  half applied and BugSack stays empty in both. **Do NOT decline Lulu's dialog
+  first**: declining releases its latch and closes it, so there is nothing left to
+  answer.
+- [ ] **21. The retry lands.** Fill every dialog slot, by stacking up enough other
+  popups that a new one cannot appear. Change to a spec that should prompt. Count
+  **two seconds** out loud with every slot still full, then free one. The prompt
+  appears. The timeline is the check: the first attempt lands around one second
+  and must find no slot, and the retry lands around three, so a slot freed at two
+  is comfortably between them. **Free it too early and you have tested the first
+  attempt instead**, which proves nothing.
+- [ ] **22. The retry is spent exactly once.** Same setup, but count **five
+  seconds** out loud before freeing a slot, which is past both attempts. Then free
+  one and count **two more seconds**. Nothing was written while the slots were
+  full: no permanent opt-out appears and the prompt was not silently consumed.
+  During those two counted seconds after freeing the slot, **no prompt appears**,
+  because both attempts are spent and freeing a slot fires no event of ours. It
+  appears on the next spec change. Those two seconds are the whole check: they are
+  what would expose a retry that had quietly queued another.
+
+## What cannot be tested by hand, and why that is recorded rather than skipped
+
+- **Whether the Cooldown Manager could redraw live without the reload.** That is a
+  separate probe, not a check, and its outcome does not gate this item. The
+  method: activate a KitnUI layout with the Cooldown Manager visible and holding
+  live spell data, WITHOUT silencing it, and watch BugSack. Clean means the reload
+  can be dropped in a follow-up.
+- **Blizzard refusing an activation because the layout's embedded tag does not
+  match the spec.** Reaching it needs a deliberately mis-tagged payload, which
+  means editing shipped data, so it is not a check to hand to a player. The guard
+  is against a data defect, not against anything the user can do. No check
+  substitutes for it: a stale id does NOT reach the same refusal, it throws, which
+  is why the accept handler takes fresh handles rather than relying on a graceful
+  false.
+
+## Result
+
+- Date:
+- Reported by Kitn:
+- Notes:
