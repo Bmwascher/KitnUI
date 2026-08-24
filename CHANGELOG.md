@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Installer
+- Loading the Edit Mode layout is now refused during a fight instead of being attempted. Switching layouts moves your action bars, which the game does not allow an addon to do mid-fight. KitnUI says so in chat and you can run the loader again when you are out
 - EllesmereUI's Data Bars module is now switched off at install. The Edit Mode profile already places Blizzard's own experience and reputation bar, so the two were stacking up as duplicates
 
 ### Top Bar
