@@ -431,8 +431,16 @@ local defaults = {
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
 }
 
-local function GetCharKey()
-    return UnitName("player") .. "-" .. GetRealmName()
+-- The key every per-character record in KitnUIDB is stored under. Nil rather
+-- than a throw when either half cannot be read, and nil rather than a half key:
+-- a key missing its realm would read and write another character's record.
+-- Every caller treats nil as "no answer this pass" and writes nothing.
+function ns.GetCharKey()
+    local name = UnitName("player")
+    local realm = GetRealmName()
+    if type(name) ~= "string" or name == "" then return nil end
+    if type(realm) ~= "string" or realm == "" then return nil end
+    return name .. "-" .. realm
 end
 
 ---------------------------------------------------------------------------------
@@ -489,12 +497,14 @@ function ns:IsAddOnAvailable(addon)
 end
 
 function ns:IsCharLoaded()
-    local key = GetCharKey()
+    local key = ns.GetCharKey()
+    if not key then return false end
     return self.db.perChar[key] and self.db.perChar[key].loaded
 end
 
 function ns:SetCharLoaded()
-    local key = GetCharKey()
+    local key = ns.GetCharKey()
+    if not key then return end
     self.db.perChar[key] = self.db.perChar[key] or {}
     self.db.perChar[key].loaded = true
 end
@@ -504,7 +514,15 @@ end
 ---------------------------------------------------------------------------------
 
 local function ConfirmOverwriteInstall(fn)
-    if ns.db and ns.db.perChar[GetCharKey()] then
+    -- Refused rather than degraded. Reading a nil key as "no record" would skip
+    -- the confirmation below and overwrite the user's profiles unasked.
+    local key = ns.GetCharKey()
+    if not key then
+        print(ns.title .. ": Could not identify this character, so nothing was started. Try again in a moment.")
+        return
+    end
+
+    if ns.db and ns.db.perChar[key] then
         StaticPopupDialogs["KITNUI_OVERWRITE_CONFIRM"] = {
             text = ns.title .. ": You have already installed profiles. This will overwrite any local changes. If you just want to load profiles on a new character, use /kitn load instead.\n\nContinue?",
             button1 = "Yes",
@@ -833,11 +851,15 @@ boot:SetScript("OnEvent", function()
     -- refused one still asks later: StaticPopup_Show answers nil when a show
     -- condition rejects the dialog and when every dialog frame is already
     -- taken, and this login raises several popups of its own.
-    local cdmBlocked = ns.db.cdmLimitPending and ns.db.cdmLimitPending[GetCharKey()]
+    -- One key, read and validated once. The timer below reads the pending list
+    -- and then clears it, and a second read could answer differently between
+    -- them.
+    local charKey = ns.GetCharKey()
+    local cdmBlocked = charKey and ns.db.cdmLimitPending and ns.db.cdmLimitPending[charKey]
     if cdmBlocked and #cdmBlocked > 0 then
         C_Timer.After(2, function()
             local pending = ns.db and ns.db.cdmLimitPending
-            local blocked = pending and pending[GetCharKey()]
+            local blocked = pending and pending[charKey]
             if not blocked or #blocked == 0 then return end
             -- Icons are resolved HERE rather than carried across the reload.
             -- The store holds the spec's plain name, which is also the key the
@@ -887,7 +909,7 @@ boot:SetScript("OnEvent", function()
                 .. ns.Color("/kitn cdm") .. ".")
 
             if StaticPopup_Show("KITNUI_CDM_FULL") then
-                pending[GetCharKey()] = nil
+                pending[charKey] = nil
             end
         end)
     end
