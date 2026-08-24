@@ -168,6 +168,26 @@ function ns.GetCDMKey(classId, specIndex)
     return format("%d:%d", classId, specIndex)
 end
 
+-- The two names the Cooldown Manager import works with, and the label both the
+-- import and the prompt show the user. One source, because a second copy would
+-- drift the first time either name changed and the drift would be silent: a
+-- reader that simply never finds a match.
+--
+-- The legacy name is the one shipped before the rename, matched so an upgrade
+-- REPLACES the old layout rather than leaving it holding one of the five slots.
+--
+-- Both arguments must already be numbers. Every caller validates them first,
+-- through ns.GetCDMKey on the import side and through its own identity read on
+-- the watcher side.
+function ns.CDMLayoutName(classId, specIndex)
+    local specName
+    if GetSpecializationInfoForClassID then
+        specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
+    end
+    local specLabel = specName or ("Spec" .. specIndex)
+    return "KitnUI - " .. specLabel, "KUI - " .. specLabel, specLabel
+end
+
 -- Memoized because ns.IsAddonImported feeds every sidebar repaint, which would
 -- otherwise re-hash the class's whole payload each time. The cache cannot go
 -- stale: ns.data.BlizzardCDM is a load-time table literal and nothing writes to
@@ -452,7 +472,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
     installedVersion = nil, -- addon version at last install
-    perChar = {},           -- [charName-realm] = { loaded = true/false }
+    perChar = {},           -- [charName-realm] = { loaded = true/false, layoutWatchOff = { [specIndex] = true } }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches

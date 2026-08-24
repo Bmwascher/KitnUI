@@ -1310,21 +1310,9 @@ setupFunctions["BlizzardCDM"] = function(_addonKey, import, specIndex)
             end
         end
 
-        -- Guarded the same way Installer.lua:407 guards the same global. It is
-        -- only used for the layout's display name, so a missing one degrades to
-        -- the numbered fallback rather than refusing; the throw it would
-        -- otherwise raise sits in the pcall-less Import All loop.
-        local specName
-        if GetSpecializationInfoForClassID then
-            specName = select(2, GetSpecializationInfoForClassID(classId, specIndex))
-        end
-        local specLabel = specName or ("Spec" .. specIndex)
-        local layoutName = "KitnUI - " .. specLabel
-        -- The name shipped before the rename. Matched as well as the current one
-        -- so an upgrade REPLACES the old layout: left behind it would hold one
-        -- of the five slots the next spec needs, under a name the user has no
-        -- reason to connect to this addon any more.
-        local legacyName = "KUI - " .. specLabel
+        -- Both names and the label from the one place that builds them, so the
+        -- layout watcher matches what this writes.
+        local layoutName, legacyName, specLabel = ns.CDMLayoutName(classId, specIndex)
 
         -- Collected first, removed after. RemoveLayout mutates the very table
         -- being walked, and both names can be present at once.
