@@ -1159,12 +1159,12 @@ ns.TopBar.Elements = {
         tooltip = function(tt) tt:AddLine("Game Menu", 1, 1, 1) end,
     },
 
-    -- Clock: the centre panel's only occupant, never switched off, so
-    -- Options.lua excludes it from the ELEMENTS list by id rather than this
-    -- element declining a toggle. Bar.lua creates its button as
-    -- "KitnUITopBar_clock" like any other element; Readouts.lua reaches that
-    -- stable global name to attach the time FontString and size it from
-    -- tbClockSize. Left click opens the calendar, right click opens
+    -- Clock: the centre panel's only occupant. Options.lua excludes it from the
+    -- ELEMENTS list by id and gives it a switch in the CLOCK section instead,
+    -- beside the settings that only apply while it is drawn. Bar.lua creates
+    -- its button as "KitnUITopBar_clock" like any other element; Readouts.lua
+    -- reaches that stable global name to attach the time FontString and size it
+    -- from tbClockSize. Left click opens the calendar, right click opens
     -- EllesmereUI's settings, middle click reloads.
     --
     -- Only two of the three refuse in combat. EllesmereUI's Toggle creates and
