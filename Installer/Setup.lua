@@ -1236,6 +1236,63 @@ local function RestoreCDM(lm, silenced)
     lm:UnlockNotifications()
 end
 
+-- Make layoutID the active Cooldown Manager layout, and answer whether it is.
+--
+-- Published as ONE call rather than as the silence and restore pair, because the
+-- pair carries an invariant a caller must not be trusted to keep: every silence
+-- needs exactly one restore and no return may sit between them.
+--
+-- Five refusals, each returning false having written nothing and saved nothing.
+-- Both write methods are checked BEFORE the lock is taken for exactly that
+-- reason: a throw between the lock and the restore is the frozen viewer.
+function ns.CDMSetActiveLayout(lm, layoutID)
+    if not lm or layoutID == nil then
+        print(ns.title .. ": Could not reach the Cooldown Manager layout manager, so the layout was not switched.")
+        return false
+    end
+
+    for _, method in ipairs({ "SetActiveLayoutByID", "SaveLayouts" }) do
+        if type(lm[method]) ~= "function" then
+            print(ns.title .. ": Your Cooldown Manager is missing " .. method
+                .. ", so the layout was not switched. Nothing was changed.")
+            return false
+        end
+    end
+
+    if InCombatLockdown() then
+        print(ns.title .. ": The Cooldown Manager layout was not switched because you are in combat.")
+        return false
+    end
+
+    -- Without the lock the redraw fires live from our own call stack, which is
+    -- the crash this bracket exists to avoid.
+    local quiet = SilenceCDM(lm)
+    if not quiet then
+        print(ns.title .. ": The Cooldown Manager cannot pause its own redraw right now, so the layout was not switched.")
+        return false
+    end
+
+    -- Saved only on a switch that happened. SaveLayouts writes whatever is pending
+    -- and then clears the pending flag either way, so calling it after a refusal
+    -- would commit edits this click was never asked to commit, on the one path
+    -- whose whole contract is that nothing changed. No return sits between the
+    -- silence and the restore, which is the invariant that matters here.
+    local switched = lm:SetActiveLayoutByID(layoutID)
+    if switched then lm:SaveLayouts() end
+    RestoreCDM(lm, quiet)
+
+    -- Blizzard refuses whenever the layout's own embedded class-and-spec tag is
+    -- not the current spec's, which a name match cannot see. Propagated rather
+    -- than discarded: a caller that assumed success would announce a switch that
+    -- never happened and ask again at every login for ever.
+    if not switched then
+        print(ns.title .. ": The Cooldown Manager refused that layout, so nothing was changed. It may have been exported from a different spec.")
+        return false
+    end
+
+    return true
+end
+
 -- Blizzard allows five Cooldown Manager layouts and they are per CHARACTER, so a
 -- player whose class has four specs runs out on any character already holding
 -- layouts of its own. The chat line the caller prints scrolls away behind the
