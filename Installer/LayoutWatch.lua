@@ -20,7 +20,9 @@ local _, ns = ... ---@type string, KitnUINS
 
 local DIALOG = "KITNUI_SPEC_LAYOUT"
 
--- [latchKey] = specIndex, and only for a dialog that actually reached the screen.
+-- [latchKey] = specIndex, written when the user ANSWERS and never when the
+-- dialog merely appears: anything that hides a dialog without a button press
+-- would otherwise be indistinguishable from pressing No.
 -- A table rather than a single value because the key carries both verdicts, so
 -- one spec can own more than one key across a session, and because a single slot
 -- would be cleared by passing through a correctly configured spec -- which is
@@ -267,7 +269,7 @@ end
 -- ns.title is not necessarily filled at load time.
 --
 -- The text names the spec and what is wrong, and never guesses why.
-local function ShowPrompt(charKey, specLabel, specIndex, em, cdm)
+local function ShowPrompt(charKey, specLabel, specIndex, em, cdm, latchKey)
     local text
     if em == "wrong" and cdm == "wrong" then
         text = specLabel .. " is not using KitnUI's Edit Mode or Cooldown Manager layout. Switch to both now? This needs a reload."
@@ -275,6 +277,11 @@ local function ShowPrompt(charKey, specLabel, specIndex, em, cdm)
         text = specLabel .. " is not using KitnUI's Cooldown Manager layout. Switch to it now? This needs a reload."
     else
         text = specLabel .. " is not using KitnUI's Edit Mode layout. Switch to it now?"
+    end
+
+    -- Every button records the answer, and the show site records nothing.
+    local function Answered()
+        held[latchKey] = specIndex
     end
 
     StaticPopupDialogs[DIALOG] = {
@@ -286,18 +293,27 @@ local function ShowPrompt(charKey, specLabel, specIndex, em, cdm)
         -- OnButton3. No other dialog in this addon has a third button, so it is
         -- stated here rather than inferred from a sibling.
         selectCallbackByIndex = true,
-        OnAccept = function() AcceptFix(specIndex, em, cdm) end,
-        -- Declining needs no write: the latch went in when the dialog reached the
-        -- screen and it already says nothing more about this spec this session.
-        -- The guard is what keeps that true. StaticPopup_Show calls this handler
-        -- with NO dialog when every dialog frame is taken, and a prompt the user
-        -- never saw must not be able to write anything at all.
-        OnCancel = function(dialog)
-            if not dialog then return end
+        OnAccept = function()
+            Answered()
+            AcceptFix(specIndex, em, cdm)
         end,
+        -- There is deliberately NO OnCancel. Its absence is what routes the No
+        -- button here and leaves Escape reaching nothing, so a dialog dismissed
+        -- without an answer stays unanswered. It also closes the rejected-show
+        -- hazard by construction: the two places Blizzard calls OnCancel with no
+        -- dialog now call nothing at all, so a prompt the user never saw cannot
+        -- write a latch or an opt-out.
+        OnButton2 = function() Answered() end,
         -- The spec the dialog NAMES, not whatever is current when it is clicked:
         -- "never for this spec" is an answer to the sentence being read.
-        OnButton3 = function() OptOut(charKey, specIndex) end,
+        --
+        -- Latched before the write, because the write's own failure path clears
+        -- this spec's entries so the user is asked again, and it can only clear
+        -- an entry that is already there.
+        OnButton3 = function()
+            Answered()
+            OptOut(charKey, specIndex)
+        end,
         timeout = 0,
         whileDead = true,
         hideOnEscape = true,
@@ -358,7 +374,7 @@ RunCheck = function(fromRetry)
     local specLabel = ns.CDMLayoutName and select(3, ns.CDMLayoutName(classId, specIndex))
     if type(specLabel) ~= "string" then return end
 
-    if not ShowPrompt(charKey, specLabel, specIndex, em, cdm) then
+    if not ShowPrompt(charKey, specLabel, specIndex, em, cdm, latchKey) then
         -- A rejected show writes nothing: no latch, no opt-out, and the prompt is
         -- still owed. One retry, and a check reached BY that retry may not queue
         -- another -- without the budget a full dialog stack schedules a retry that
@@ -371,8 +387,6 @@ RunCheck = function(fromRetry)
         if not fromRetry then QueueCheck(2, true) end
         return
     end
-
-    held[latchKey] = specIndex
 end
 
 ---------------------------------------------------------------------------------
