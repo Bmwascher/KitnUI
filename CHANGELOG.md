@@ -1,6 +1,9 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
-## Unreleased
+## v2.1.3
+
+Every spec gets the layouts it was supposed to have, the Top Bar can drop its
+clock and become a plain micro bar, and three profiles are refreshed.
 
 ### Installer
 - **NEW:** KitnUI now notices when the specialization you are playing is not using its Edit Mode layout, or its Cooldown Manager layout, and offers to switch. The game remembers those layouts **per specialization**, and the installer only ever set the one you were playing at the time, so every other spec has been quietly sitting on a Blizzard preset since the day you installed. The prompt names the spec, asks before it changes anything, and carries a **Never for this spec** button for a spec you deliberately run differently
@@ -16,6 +19,10 @@
 - Clock Size, 24-Hour Clock and Server Time grey out while the clock is off, since none of them control anything then
 - **NEW:** **Accent Opacity**, in the Appearance section, sets how solid the accent line along the bottom of the bar is. Set it to zero and turn Panel Backdrop off to leave the bar with no background of its own
 - Fixed an error when opening the dungeon portal flyout during a fight, an encounter, a keystone or a rated match. The cooldown swipe now reads the cooldown in the one way the game allows an addon to read it under those restrictions
+
+### Profiles
+- The Lulu Edit Mode layout moves the pet ability bar and a couple of the side action bars, so they stop clipping other parts of the UI
+- KitnEssentials and Northern Sky Raid Tools profiles refreshed
 
 ## v2.1.2
 
