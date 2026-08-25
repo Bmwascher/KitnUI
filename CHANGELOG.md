@@ -12,6 +12,9 @@
 - EllesmereUI's Data Bars module is now switched off at install. The Edit Mode profile already places Blizzard's own experience and reputation bar, so the two were stacking up as duplicates
 
 ### Top Bar
+- **NEW:** **Show Clock**, in the Clock section, turns the bar's clock off. The two halves of the bar then close up into one unbroken run of icons with a thin dimmed divider at the centre, and your minimap gets its own clock back, the same way switching the FPS readout off already gives you back the minimap's. Turn it off for an improved micro bar and nothing else
+- Clock Size, 24-Hour Clock and Server Time grey out while the clock is off, since none of them control anything then
+- **NEW:** **Accent Opacity**, in the Appearance section, sets how solid the accent line along the bottom of the bar is. Set it to zero and turn Panel Backdrop off to leave the bar with no background of its own
 - Fixed an error when opening the dungeon portal flyout during a fight, an encounter, a keystone or a rated match. The cooldown swipe now reads the cooldown in the one way the game allows an addon to read it under those restrictions
 
 ## v2.1.2
