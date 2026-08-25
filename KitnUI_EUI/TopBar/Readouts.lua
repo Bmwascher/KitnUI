@@ -378,7 +378,9 @@ end
 
 function RefreshMinimapSuppression()
     local barFrame = ns.TopBar.Frame and ns.TopBar.Frame()
-    local ourClock = barFrame and barFrame:IsShown() and not ns.TopBar.IsOff("clock")
+    local clockBtn = _G.KitnUITopBar_clock
+    local ourClock = barFrame and barFrame:IsShown()
+                     and clockBtn and clockBtn:IsShown() and true or false
     local ourFps   = sysFrame and sysFrame:IsShown() and true or false
     SuppressMinimapFrame("_EBS_ClockBg", ourClock and true or false)
     SuppressMinimapFrame("_EBS_FpsBg", ourFps)
@@ -440,6 +442,16 @@ function ns.TopBar.RefreshEUIMinimap()
             if sysFrame then
                 sysFrame:HookScript("OnShow", RefreshMinimapSuppression)
                 sysFrame:HookScript("OnHide", RefreshMinimapSuppression)
+            end
+            -- The clock button, for the same reason the bar frame above is
+            -- followed: LayoutSide owns whether it is drawn, and the
+            -- suppression decides from that rather than from the setting. Its
+            -- Hide can land a whole Apply after the decision that queued it,
+            -- because LayoutSide runs in the protected half.
+            local clockBtn = _G.KitnUITopBar_clock
+            if clockBtn then
+                clockBtn:HookScript("OnShow", RefreshMinimapSuppression)
+                clockBtn:HookScript("OnHide", RefreshMinimapSuppression)
             end
         end
     end

@@ -27,6 +27,19 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- Shared splits for every three-across checkbox grid on this page.
     local CB_SPLITS = { 0.333, 0.333, 0.334, rowHeight = 36 }
 
+    -- The three clock controls all grey out together, so the test lives in one
+    -- place rather than three closures that can drift.
+    local function ClockOff() return ns.TopBar.IsOff("clock") end
+
+    -- A checkbox click does not sweep the widget refresh list on its own: its
+    -- OnClick calls setValue and its own visual refresh and stops there. Only
+    -- the dropdown setters sweep. Without this the greyed-out controls would not
+    -- re-evaluate until the page was rebuilt.
+    local function RefreshWidgets()
+        local rl = EllesmereUI and EllesmereUI._widgetRefreshList
+        if rl then for i = 1, #rl do rl[i]() end end
+    end
+
     -- Bottom hairline that closes a TripleRow checkbox grid: TripleRow skips its
     -- own row divider, so a grid draws none. Nil-guarded on every EllesmereUI
     -- field it touches.
@@ -57,11 +70,13 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
 
     -- Generated from the registry rather than listed, so adding an element to
     -- Elements.lua is the only edit an element ever needs. Filters out the
-    -- clock (below) and anything whose requires() predicate currently fails,
-    -- leaving the set the checkbox grid below actually builds rows from.
+    -- clock, whose switch sits in the CLOCK section, and anything whose
+    -- requires() predicate currently fails, leaving the set the checkbox grid
+    -- below actually builds rows from.
     local rows = {}
     for _, el in ipairs(ns.TopBar.Elements) do
-        -- clock is the centre panel's only occupant and cannot be switched off.
+        -- clock has its own switch in the CLOCK section, beside the settings
+        -- that only apply while it is drawn.
         if el.id ~= "clock" and (not el.requires or el.requires()) then
             rows[#rows + 1] = el
         end
@@ -148,7 +163,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
           tooltip = "Size of the launcher icons either side of the clock.",
           getValue = function() return ns.TopBar.Get("tbIconSize", 20) end,
           setValue = function(v) ns.TopBar.Set("tbIconSize", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "slider", text = "Clock Size", min = 10, max = 36, step = 1,
+        { type = "slider", text = "Clock Size", min = 10, max = 36, step = 1, disabled = ClockOff,
           tooltip = "Size of the clock text.",
           getValue = function() return ns.TopBar.Get("tbClockSize", 24) end,
           setValue = function(v) ns.TopBar.Set("tbClockSize", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
@@ -242,6 +257,14 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
         end
     end
 
+    _, h = W:DualRow(parent, y,
+        { type = "slider", text = "Accent Opacity", min = 0, max = 100, step = 5,
+          tooltip = "How solid the accent line along the bottom of the bar is. Set it to zero and turn Panel Backdrop off to leave the bar with no background of its own.",
+          getValue = function() return ns.TopBar.Get("tbAccentOpacity", 100) end,
+          setValue = function(v) ns.TopBar.Set("tbAccentOpacity", v); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
+        { type = "spacer" }
+    );                                                                             y = y - h
+
     _, h = W:SectionHeader(parent, "VISIBILITY", y);                              y = y - h
 
     -- Rarely touched once set, so collapsed by default behind the host's own
@@ -307,15 +330,32 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     _, h = W:SectionHeader(parent, "CLOCK", y);                                    y = y - h
 
     _, h = W:TripleRow(parent, y,
-        { type = "checkbox", text = "24-Hour Clock",
+        { type = "checkbox", text = "Show Clock",
+          tooltip = "Draws the clock in the middle of the bar. Turn it off and the two halves close up around a thin divider, and your minimap gets its own clock back.",
+          getValue = function() return not ns.TopBar.IsOff("clock") end,
+          setValue = function(v)
+              -- The layout half of Apply is protected, so a click taken
+              -- mid-fight would hand the minimap its clock back and leave the
+              -- bar drawing its own until the fight ended. This panel is
+              -- reachable in combat: the bar's own clock opens it ahead of that
+              -- element's combat gate.
+              if InCombatLockdown() then
+                  UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
+                  return
+              end
+              ns.TopBar.SetOff("clock", not v)
+              ns.TopBar.Apply()
+              if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end
+              RefreshWidgets()
+          end },
+        { type = "checkbox", text = "24-Hour Clock", disabled = ClockOff,
           tooltip = "Shows 18:30 rather than 6:30 PM.",
           getValue = function() return ns.TopBar.Get("tbUse24h", true) end,
           setValue = function(v) ns.TopBar.Set("tbUse24h", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        { type = "checkbox", text = "Server Time",
+        { type = "checkbox", text = "Server Time", disabled = ClockOff,
           tooltip = "Shows the realm's time instead of your computer's. Useful when your machine is in a different time zone from your raid.",
           getValue = function() return ns.TopBar.Get("tbServerTime", false) end,
           setValue = function(v) ns.TopBar.Set("tbServerTime", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end },
-        nil,
         CB_SPLITS
     );                                                                             y = y - h
     CloseGrid(y)

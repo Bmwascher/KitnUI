@@ -99,6 +99,12 @@ local fadeGroup, fadeAnim
 local PAD = 8
 -- Button footprint around the icon texture, on top of tbIconSize.
 local BTN_PAD = 8
+-- Vertical inset at each end of the centre divider, so it stops short of the
+-- panel's own accent line rather than crossing it.
+local DIVIDER_INSET = 2
+-- How much of the accent's alpha the divider keeps. Fixed by the design and
+-- deliberately not exposed: this is a separator, not a second accent line.
+local DIVIDER_DIM = 0.35
 
 -- Icon rest tint and the hover tween. TWEEN_TIME is fixed by the design and
 -- deliberately not exposed as a setting.
@@ -301,6 +307,17 @@ local function EnsureCreated()
     centrePanel = CreatePanel("Centre")
     rightPanel  = CreatePanel("Right")
 
+    -- Only the centre panel gets one: it is the only panel that can lay out
+    -- nothing and stand in as a separator. Anchored top and bottom rather than
+    -- sized, so it tracks the panel and LayoutPanels never has to. LayoutPanels
+    -- owns whether it shows.
+    local divider = centrePanel:CreateTexture(nil, "OVERLAY")
+    divider:SetPoint("TOP", centrePanel, "TOP", 0, -DIVIDER_INSET)
+    divider:SetPoint("BOTTOM", centrePanel, "BOTTOM", 0, DIVIDER_INSET)
+    divider:SetWidth(1)
+    divider:Hide()
+    centrePanel._divider = divider
+
     for _, el in ipairs(ns.TopBar.Elements) do
         -- An element with no panel is not laid out by the bar and anchors itself.
         -- `fps` is the only one: it lives on its own UIParent frame under the clock.
@@ -348,6 +365,7 @@ local function ApplyPanelColors()
 
     local opacity  = Get("tbOpacity", ns.EUI_DEFAULTS.tbOpacity) / 100
     local backdrop = Get("tbBackdrop", ns.EUI_DEFAULTS.tbBackdrop) and true or false
+    local accentA  = Get("tbAccentOpacity", ns.EUI_DEFAULTS.tbAccentOpacity) / 100
     local r, g, b = AccentRGB()
 
     for _, panel in ipairs({ leftPanel, centrePanel, rightPanel }) do
@@ -355,7 +373,13 @@ local function ApplyPanelColors()
             panel._bg:SetColorTexture(0.03, 0.03, 0.04, opacity)
             if backdrop then panel._bg:Show() else panel._bg:Hide() end
         end
-        if panel._accent then panel._accent:SetColorTexture(r, g, b, 1) end
+        if panel._accent then panel._accent:SetColorTexture(r, g, b, accentA) end
+    end
+
+    -- Dimmed against the accent rather than given a colour of its own, so a
+    -- custom accent carries it and the opacity slider reaches it.
+    if centrePanel._divider then
+        centrePanel._divider:SetColorTexture(r, g, b, accentA * DIVIDER_DIM)
     end
 end
 
@@ -440,7 +464,8 @@ end
 -- Positions the visible buttons of one panel left-to-right from its own LEFT
 -- edge, skipping any id with no matching definition, any id switched off via
 -- tbOff, and any element whose `requires` says no (kitnessentials is absent,
--- not greyed out, when it is not loaded).
+-- not greyed out, when it is not loaded). Returns the panel's content width,
+-- which is zero when nothing was laid out.
 local function LayoutSide(panel, order, size, spacing)
     local x, tallest = 0, size
     for _, id in ipairs(order) do
@@ -463,6 +488,7 @@ local function LayoutSide(panel, order, size, spacing)
     local width = x
     if width > 0 then width = width - spacing end
     panel:SetSize(math.max(1, width), tallest)
+    return width
 end
 
 local function LayoutPanels()
@@ -472,18 +498,34 @@ local function LayoutPanels()
     local order   = ns.TopBar.Order()
 
     LayoutSide(leftPanel, order.left, size, spacing)
-    LayoutSide(centrePanel, order.centre, size, spacing)
+    local centreW = LayoutSide(centrePanel, order.centre, size, spacing)
     LayoutSide(rightPanel, order.right, size, spacing)
+
+    -- A centre that laid out nothing becomes the divider's own strip: one
+    -- spacing wide, with both side gaps closed, so the last left icon sits
+    -- exactly tbSpacing from the first right icon and the three backdrops read
+    -- as one bar. Keyed on the measured width rather than on the clock, so a
+    -- centre holding anything at all keeps its gaps.
+    --
+    -- SetWidth, not SetSize: LayoutSide has just set the height, and for an
+    -- empty panel that is already the launcher panels' own height.
+    local collapsed = centreW <= 0
+    if collapsed then centrePanel:SetWidth(spacing) end
+    if centrePanel._divider then
+        if collapsed then centrePanel._divider:Show()
+        else centrePanel._divider:Hide() end
+    end
+    local gap = collapsed and 0 or spacing
 
     -- Centre anchors to the bar's own centre, which SetPoint("TOP", UIParent,
     -- "TOP", ...) already keeps screen-centred regardless of the width of
-    -- either side. Left and right hang off it by a fixed spacing gap.
+    -- either side. Left and right hang off it by the gap resolved above.
     centrePanel:ClearAllPoints()
     centrePanel:SetPoint("TOP", bar, "TOP", 0, 0)
     leftPanel:ClearAllPoints()
-    leftPanel:SetPoint("RIGHT", centrePanel, "LEFT", -spacing, 0)
+    leftPanel:SetPoint("RIGHT", centrePanel, "LEFT", -gap, 0)
     rightPanel:ClearAllPoints()
-    rightPanel:SetPoint("LEFT", centrePanel, "RIGHT", spacing, 0)
+    rightPanel:SetPoint("LEFT", centrePanel, "RIGHT", gap, 0)
 end
 
 -- Protected: the bar parents secure buttons, so Hide() on it is protected too.

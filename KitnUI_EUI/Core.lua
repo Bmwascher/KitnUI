@@ -225,6 +225,7 @@ local DEFAULTS = {
         tbClockSize             = 24,
         tbSysSize               = 11,
         tbOpacity               = 85,
+        tbAccentOpacity         = 100,
         tbSpacing               = 14,
         tbBackdrop              = true,
         tbTooltips              = true,
