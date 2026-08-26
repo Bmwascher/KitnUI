@@ -53,12 +53,10 @@ local function Macro(id, label, icon, panel, macrotext, requires)
 end
 
 ---------------------------------------------------------------------------------
--- Home: the one launcher that is not a passthrough. Left click teleports home
--- via the "teleporthome" secure action type -- three attributes read straight
--- off the button (house-neighborhood-guid, house-guid, house-plot-id) that the
--- engine itself turns into a TeleportHome call; nothing here calls that
--- protected function directly. Right click opens the housing dashboard through
--- the same helper the game's own Housing micro button uses.
+-- Home: the one launcher that is not a passthrough. Left click uses the
+-- "teleporthome" or "returnhome" secure action type. Right click opens the
+-- housing dashboard through the same helper the game's own Housing micro button
+-- uses.
 --
 -- C_Housing.GetPlayerOwnedHouses() is ASYNC: it answers through the
 -- PLAYER_HOUSE_LIST_UPDATED event, not a return value. The first owned house is
@@ -96,12 +94,27 @@ local function SameHouse(a, b)
     return ok and same
 end
 
+local function CanReturnAfterVisitingHome()
+    if not cachedHouse then return false end
+    local housingNeighborhood = _G.C_HousingNeighborhood
+    if not (housingNeighborhood and housingNeighborhood.CanReturnAfterVisitingHouse) then
+        return false
+    end
+    return housingNeighborhood.CanReturnAfterVisitingHouse() and true or false
+end
+
 local housingWatcher = CreateFrame("Frame")
 housingWatcher:RegisterEvent("PLAYER_LOGIN")
 housingWatcher:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+housingWatcher:RegisterEvent("HOUSE_PLOT_ENTERED")
+housingWatcher:RegisterEvent("HOUSE_PLOT_EXITED")
 housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
     if event == "PLAYER_LOGIN" then
         RequestHouseList()
+        return
+    end
+    if event == "HOUSE_PLOT_ENTERED" or event == "HOUSE_PLOT_EXITED" then
+        if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
         return
     end
     local house = nil
@@ -157,7 +170,7 @@ end
 -- attribute set from firing a teleport to the wrong plot.
 local function HomeAttrs(btn)
     if cachedHouse then
-        btn:SetAttribute("type1", "teleporthome")
+        btn:SetAttribute("type1", CanReturnAfterVisitingHome() and "returnhome" or "teleporthome")
         btn:SetAttribute("house-neighborhood-guid", cachedHouse.neighborhoodGUID)
         btn:SetAttribute("house-guid", cachedHouse.houseGUID)
         btn:SetAttribute("house-plot-id", cachedHouse.plotID)
@@ -201,7 +214,9 @@ local homeElement = {
         -- not add one, and friends and guild pay theirs from inside
         -- Readouts.lua, where whether a roster follows at all is known.
         tt:AddLine(" ")
-        tt:AddLine(CLICK_L .. " Teleport Home", 1, 1, 1)
+        local leftAction = CanReturnAfterVisitingHome()
+            and "Return to Previous Location" or "Teleport Home"
+        tt:AddLine(CLICK_L .. " " .. leftAction, 1, 1, 1)
         tt:AddLine(CLICK_R .. " Housing Dashboard", 1, 1, 1)
     end,
 }
