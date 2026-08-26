@@ -103,7 +103,12 @@ check(tooltip.lines[3] and tooltip.lines[3]:find("Return to Previous Location", 
 
 currentNeighborhood = "Neighborhood-B"
 home.attrs(button)
-eq(button.attributes.type1, "teleporthome", "another neighborhood keeps the teleport action")
+eq(button.attributes.type1, "returnhome", "another owned house still exposes the available return action")
+
+tooltip.lines = {}
+home.tooltip(tooltip)
+check(tooltip.lines[3] and tooltip.lines[3]:find("Return to Previous Location", 1, true),
+    "another owned house still describes the available return action", tooltip.lines[3])
 
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")

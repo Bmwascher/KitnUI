@@ -100,15 +100,7 @@ local function CanReturnAfterVisitingHome()
     if not (housingNeighborhood and housingNeighborhood.CanReturnAfterVisitingHouse) then
         return false
     end
-    if not (C_Housing and C_Housing.GetCurrentNeighborhoodGUID) then return false end
-    if not housingNeighborhood.CanReturnAfterVisitingHouse() then return false end
-
-    local currentNeighborhood = C_Housing.GetCurrentNeighborhoodGUID()
-    if not currentNeighborhood then return false end
-    local ok, same = pcall(function()
-        return currentNeighborhood == cachedHouse.neighborhoodGUID
-    end)
-    return ok and same
+    return housingNeighborhood.CanReturnAfterVisitingHouse() and true or false
 end
 
 local housingWatcher = CreateFrame("Frame")
