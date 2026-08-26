@@ -1,4 +1,4 @@
-## Title: |cffFF008CKitn|r|cffffffffUI|r_EUI
+## Title: |cffFF008CKitn|r|cffffffffUI_EUI|r
 ## Notes: KitnUI's configuration pages inside EllesmereUI.
 ## Author: Bitebtw
 ## Version: @project-version@
