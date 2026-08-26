@@ -757,7 +757,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- composed string is not in the localisation table, so it comes back
     -- unchanged.
     local lookHeader
-    lookHeader, h = W:SectionHeader(parent, "APPEARANCE (" .. LookStateText() .. ")", y)
+    lookHeader, h = W:SectionHeader(parent, "UNIT FRAME APPEARANCE (" .. LookStateText() .. ")", y)
                                                                                    y = y - h
 
     -- EllesmereUI caches a built page and re-shows the same wrapper rather than
@@ -768,7 +768,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- EllesmereUI adds later still runs.
     if lookHeader and lookHeader._label then
         lookHeader:HookScript("OnShow", function()
-            lookHeader._label:SetText("APPEARANCE (" .. LookStateText() .. ")")
+            lookHeader._label:SetText("UNIT FRAME APPEARANCE (" .. LookStateText() .. ")")
         end)
     end
 

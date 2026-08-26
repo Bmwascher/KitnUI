@@ -295,9 +295,9 @@ end
 local function ShowPrompt(charKey, specLabel, specIndex, em, cdm, latchKey)
     local text
     if em == "wrong" and cdm == "wrong" then
-        text = specLabel .. " is not using " .. EditModePhrase() .. " or KitnUI's Cooldown Manager layout. Switch to both now? This needs a reload."
+        text = specLabel .. " is not using " .. EditModePhrase() .. " or KitnUI's Cooldown Manager configuration. Switch to both now? This needs a reload."
     elseif cdm == "wrong" then
-        text = specLabel .. " is not using KitnUI's Cooldown Manager layout. Switch to it now? This needs a reload."
+        text = specLabel .. " is not using KitnUI's Cooldown Manager configuration. Switch to it now? This needs a reload."
     else
         text = specLabel .. " is not using " .. EditModePhrase() .. ". Switch to it now?"
     end
