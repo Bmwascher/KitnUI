@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.4
+
+The Top Bar can bring you back from a housing visit, and KitnUI's labels and
+branding are clearer and more consistent.
+
+### Top Bar
+- After teleporting to housing, the Home button changes its left click to **Return to Previous Location**. It follows the return trip offered by the game even when the Housing Dashboard started the teleport or selected a different owned house
+
+### Interface
+- The General page now labels its Dark, Colored and Custom preset as **Unit Frame Appearance**, making it clear that the setting primarily controls player, target, focus, party and raid frames
+- The Edit Mode warning now describes KitnUI's Cooldown Manager **configuration** rather than calling the whole setup a layout
+- The installer and both AddOns-list entries now use the same purple cat icon as KitnEssentials, and the `_EUI` suffix is white to match the rest of the addon name
+
 ## v2.1.3
 
 Every spec gets the layouts it was supposed to have, the Top Bar can drop its

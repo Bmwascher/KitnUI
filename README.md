@@ -60,4 +60,3 @@ Built on **EllesmereUI**'s public theming builders — thanks to that project fo
 ## Related Addons
 
 - **KitnEssentials** — Standalone combat, QoL, and skinning modules
-- **KitnUI Lite** — Standalone profile installer for popular addons (no EllesmereUI required)
