@@ -37,7 +37,7 @@ ns.KITN_PINK = KITN_PINK
 local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.tga"
 local ART_CROP = { 0.065, 0.940, 0.099, 0.916 }  -- left, right, top, bottom (0..1)
 local PANEL_W, PANEL_H = 760, 560                 -- 1.357:1, matches the cropped panel
-local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI.tga"  -- KitnUI cat logo (512x512)
+local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI_Icon.tga"
 
 -- Layout: the baked art already draws the sidebar column, logo, header band and
 -- close box, so overlays are positioned INTO those regions rather than redrawn.

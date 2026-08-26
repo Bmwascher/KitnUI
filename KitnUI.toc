@@ -5,7 +5,7 @@
 ## Interface: 120005, 120007, 120100
 ## OptionalDeps: EllesmereUI, Plater, BigWigs, NorthernSkyRaidTools, KitnEssentials, BuffReminders, Baganator
 ## SavedVariables: KitnUIDB
-## IconTexture: Interface\Icons\INV_Misc_Gift_05
+## IconTexture: Interface\AddOns\KitnUI\Media\Textures\KitnUI_Icon.tga
 ## Category-enUS: |cffFF008CKitn|rUI
 ## X-Curse-Project-ID: 1493282
 ## X-Wago-ID: rNkyB8Ka
