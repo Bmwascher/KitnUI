@@ -503,6 +503,7 @@ local EUI_ALT_THEME_CHARACTERS = {
     "Rescuelol-Mal'Ganis",
     "Zenfiki-Area 52",
     "Cznp-Area 52",
+    "Bite-Area 52",
 }
 
 -- Spaces, apostrophes and case are dropped from both sides before comparing.
