@@ -525,14 +525,22 @@ for _, key in ipairs(EUI_ALT_THEME_CHARACTERS) do
     altThemeCharacters[CanonicalCharKey(key)] = true
 end
 
+--- Whether this character is on the roster. The wizard art asks the same
+--- question as the options theme but answers it in its own namespace, so it
+--- cannot be made to depend on the theme bridge, which is absent when KitnUI_EUI
+--- is disabled.
+function ns.OnAltThemeRoster()
+    local key = CanonicalCharKey(ns.GetCharKey())
+    return (key ~= nil and altThemeCharacters[key] == true)
+end
+
 --- Which options theme this character should be given by an import. Named rather
 --- than a boolean so the theme side owns its own names.
 function ns.EUIThemeForCharacter()
     local names = ns.EUIThemeNames
     if type(names) ~= "table" then return nil end
 
-    local key = CanonicalCharKey(ns.GetCharKey())
-    if key and altThemeCharacters[key] then return names.alt end
+    if ns.OnAltThemeRoster() then return names.alt end
     return names.default
 end
 

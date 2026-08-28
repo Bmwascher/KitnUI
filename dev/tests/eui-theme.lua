@@ -260,9 +260,17 @@ if type(ns.EUIThemeForCharacter) == "function" then
         { "Glizzygordo", "Area 52" },
         { "Frankcole", "Area 52" },
     }
+    local hasRoster = type(ns.OnAltThemeRoster) == "function"
+    check(hasRoster, "the installer publishes the roster test")
+    local function OnRoster()
+        if not hasRoster then return "<missing>" end
+        return ns.OnAltThemeRoster()
+    end
+
     for _, who in ipairs(allowed) do
         AsCharacter(who[1], who[2])
         eq(ns.EUIThemeForCharacter(), ALT_THEME, who[1] .. "-" .. who[2] .. " gets Theme B")
+        eq(OnRoster(), true, who[1] .. "-" .. who[2] .. " is on the roster")
     end
 
     AsCharacter("Cznfik", "Area52")
@@ -274,13 +282,55 @@ if type(ns.EUIThemeForCharacter) == "function" then
 
     AsCharacter("Stranger", "Area 52")
     eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "an unlisted name gets Theme A")
+    eq(OnRoster(), false, "an unlisted name is off the roster")
     AsCharacter("Cznfik", "Another Realm")
     eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "a listed name on another realm gets Theme A")
     AsCharacter("Cznf", "Area 52")
     eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "a partial name match gets Theme A")
     AsCharacter(nil, "Area 52")
     eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "an unreadable character name gets Theme A")
+    eq(OnRoster(), false, "an unreadable character name is off the roster")
     AsCharacter("Tester", "Realm")
+end
+
+-- The installer wizard art follows the same roster. Its texcoords crop a fixed
+-- rectangle out of the file, so a background of another shape would crop wrong.
+do
+    local function TgaHeader(path)
+        local file = io.open(path, "rb")
+        if not file then return nil end
+        local header = file:read(18)
+        file:close()
+        if not header or #header < 18 then return nil end
+        local b = { header:byte(1, 18) }
+        return {
+            imageType  = b[3],
+            width      = b[13] + b[14] * 256,
+            height     = b[15] + b[16] * 256,
+            depth      = b[17],
+            descriptor = b[18],
+        }
+    end
+
+    local shipped = TgaHeader("Media/Background/KitnUI-EUI-Background.tga")
+    local alt = TgaHeader("Media/Background/KitnUI-EUI-Background-Rasta.tga")
+    check(shipped ~= nil, "the default installer background is readable")
+    check(alt ~= nil, "the alternate installer background ships")
+    if shipped and alt then
+        eq(alt.width, shipped.width, "alternate background width matches the default")
+        eq(alt.height, shipped.height, "alternate background height matches the default")
+        eq(alt.depth, shipped.depth, "alternate background bit depth matches the default")
+        eq(alt.imageType, shipped.imageType, "alternate background is the same TGA type")
+        eq(alt.descriptor, shipped.descriptor, "alternate background shares origin and alpha bits")
+    end
+
+    local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
+    local wizardSource = wizardFile:read("*a")
+    wizardFile:close()
+    check(wizardSource:find("KitnUI-EUI-Background-Rasta.tga", 1, true) ~= nil,
+        "the wizard names the alternate background")
+    check(wizardSource:find("ns.OnAltThemeRoster", 1, true) ~= nil,
+        "the wizard picks its background from the roster")
 end
 
 if themeChunk then
