@@ -2,9 +2,13 @@
 
 ## v2.1.5
 
-KitnUI now includes its own EllesmereUI options-panel theme, with custom artwork
-and a matching pink accent. Installing the EllesmereUI profile selects it
+KitnUI now includes its own EllesmereUI options-panel themes, with custom artwork
+and a matching pink accent. Installing the EllesmereUI profile selects one
 automatically, while the normal theme dropdown remains available afterward.
+
+### Interface
+- **NEW:** Two KitnUI themes, **KitnUI** and **KitnUI Rasta**, sit directly under EllesmereUI in the Options Theme dropdown. Both carry the KitnUI pink accent and differ only in the panel artwork
+- Importing the EllesmereUI profile picks one of them for you. Loading profiles onto another character leaves the theme alone, so a theme you select yourself is kept
 
 ## v2.1.4
 
