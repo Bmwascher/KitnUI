@@ -494,6 +494,43 @@ function ns.GetCharKey()
     return name .. "-" .. realm
 end
 
+-- The characters a real profile import gives the alternate options theme to.
+-- Everyone else gets the default one. The active theme is account-wide, so this
+-- is a choice made once at import; nothing reasserts it at login and the
+-- dropdown stays free afterward.
+local EUI_ALT_THEME_CHARACTERS = {
+    "Cznfik-Area 52",
+    "Rescuelol-Mal'Ganis",
+    "Zenfiki-Area 52",
+    "Cznp-Area 52",
+}
+
+-- Spaces, apostrophes and case are dropped from both sides before comparing.
+-- The realm half arrives from GetRealmName as a display name, and a single
+-- punctuation difference between that and the list above would silently hand the
+-- character the default theme with nothing to show for it.
+local function CanonicalCharKey(key)
+    if type(key) ~= "string" then return nil end
+    local canonical = key:gsub("[%s']", "")
+    return canonical:lower()
+end
+
+local altThemeCharacters = {}
+for _, key in ipairs(EUI_ALT_THEME_CHARACTERS) do
+    altThemeCharacters[CanonicalCharKey(key)] = true
+end
+
+--- Which options theme this character should be given by an import. Named rather
+--- than a boolean so the theme side owns its own names.
+function ns.EUIThemeForCharacter()
+    local names = ns.EUIThemeNames
+    if type(names) ~= "table" then return nil end
+
+    local key = CanonicalCharKey(ns.GetCharKey())
+    if key and altThemeCharacters[key] then return names.alt end
+    return names.default
+end
+
 ---------------------------------------------------------------------------------
 -- Color helpers (also used by Setup.lua / Installer.lua via ns)
 ---------------------------------------------------------------------------------

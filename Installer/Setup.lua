@@ -168,7 +168,11 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
 
     if EllesmereUI.RefreshAllAddons then EllesmereUI.RefreshAllAddons() end
 
-    if import and ns.ApplyEUIOptionsTheme then ns.ApplyEUIOptionsTheme() end
+    -- Import only, and only the first selection: the theme is account-wide, so a
+    -- later load on an alt must not overwrite what the user has since chosen.
+    if import and ns.ApplyEUIOptionsTheme then
+        ns.ApplyEUIOptionsTheme(ns.EUIThemeForCharacter())
+    end
 
     -- Write the default look once, and only on an import, after SetProfile,
     -- because the look lives in the ACTIVE profile's module data. The load path
