@@ -1,5 +1,11 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.5
+
+KitnUI now includes its own EllesmereUI options-panel theme, with custom artwork
+and a matching pink accent. Installing the EllesmereUI profile selects it
+automatically, while the normal theme dropdown remains available afterward.
+
 ## v2.1.4
 
 The Top Bar can bring you back from a housing visit, and KitnUI's labels and
