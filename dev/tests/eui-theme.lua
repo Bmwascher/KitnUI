@@ -1,7 +1,7 @@
--- ╔══════════════════════════════════════════════════════════╗
+-- ╔══════════════════════════════════════════════════════════════╗
 -- ║  eui-theme.lua                                               ║
 -- ║  Purpose: Gate for the KitnUI EllesmereUI options theme.     ║
--- ╚═════════════════════════════════════════════════════════════╝
+-- ╚══════════════════════════════════════════════════════════════╝
 --
 -- Run from the repo root:
 --   C:\Users\Brandon\Documents\WoW-Dev\lua51\bin\lua.exe dev/tests/eui-theme.lua
@@ -88,17 +88,22 @@ if themeChunk then
     themeChunk("KitnUI_EUI", ns)
 
     local boot = frames[1]
-    check(boot and boot.events.PLAYER_LOGIN, "theme registration waits for PLAYER_LOGIN")
-    if boot then boot.scripts.OnEvent(boot) end
+    check(boot and boot.events.ADDON_LOADED, "theme registration is scheduled before PLAYER_LOGIN")
+    if boot and boot.events.ADDON_LOADED then
+        boot.scripts.OnEvent(boot, "ADDON_LOADED", "KitnUI_EUI")
+    end
 
     local preset = EUI.THEME_PRESETS.KitnUI
-    check(type(preset) == "table", "KitnUI theme preset is registered")
+    check(type(preset) == "table", "KitnUI theme preset is registered before PLAYER_LOGIN")
     if preset then
         eq(preset.r, 1, "theme preset uses the KitnUI red channel")
         eq(preset.g, 0, "theme preset uses the KitnUI green channel")
         eq(preset.b, 0.549, "theme preset uses the KitnUI blue channel")
     end
     eq(EUI.THEME_ORDER[2], "KitnUI", "KitnUI follows the default EUI theme")
+
+    check(boot and boot.events.PLAYER_LOGIN, "theme UI wiring waits for PLAYER_LOGIN")
+    if boot then boot.scripts.OnEvent(boot, "PLAYER_LOGIN") end
     check(type(onShow) == "function", "panel show synchronization is registered")
 
     if onShow then onShow() end

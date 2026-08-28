@@ -1,9 +1,9 @@
--- ╔════════════════════════════════════════════════════════════╗
--- ║  KitnUI_EUI/Theme.lua                                       ║
--- ║  Purpose: Register and render the KitnUI options theme.     ║
--- ╚═════════════════════════════════════════════════════════════╝
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  KitnUI_EUI/Theme.lua                                        ║
+-- ║  Purpose: Register and render the KitnUI options theme.      ║
+-- ╚══════════════════════════════════════════════════════════════╝
 
-local _, ns = ... ---@type string, KitnUINS
+local addonName, ns = ... ---@type string, KitnUINS
 if ns.EUI_INERT then return end
 
 local THEME_NAME = "KitnUI"
@@ -73,8 +73,16 @@ function ns.ApplyEUIOptionsTheme()
 end
 
 local boot = CreateFrame("Frame")
+boot:RegisterEvent("ADDON_LOADED")
 boot:RegisterEvent("PLAYER_LOGIN")
-boot:SetScript("OnEvent", function(self)
+boot:SetScript("OnEvent", function(self, event, loadedAddon)
+    if event == "ADDON_LOADED" then
+        if loadedAddon ~= addonName then return end
+        self:UnregisterEvent("ADDON_LOADED")
+        RegisterTheme()
+        return
+    end
+
     self:UnregisterEvent("PLAYER_LOGIN")
     if not RegisterTheme() then return end
 
