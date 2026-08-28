@@ -255,6 +255,10 @@ if type(ns.EUIThemeForCharacter) == "function" then
         { "Zenfiki", "Area 52" },
         { "Cznp", "Area 52" },
         { "Bite", "Area 52" },
+        { "Cheeklord", "Area 52" },
+        { "Cheekgripper", "Area 52" },
+        { "Glizzygordo", "Area 52" },
+        { "Frankcole", "Area 52" },
     }
     for _, who in ipairs(allowed) do
         AsCharacter(who[1], who[2])

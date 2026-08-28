@@ -504,6 +504,10 @@ local EUI_ALT_THEME_CHARACTERS = {
     "Zenfiki-Area 52",
     "Cznp-Area 52",
     "Bite-Area 52",
+    "Cheeklord-Area 52",
+    "Cheekgripper-Area 52",
+    "Glizzygordo-Area 52",
+    "Frankcole-Area 52",
 }
 
 -- Spaces, apostrophes and case are dropped from both sides before comparing.
