@@ -67,6 +67,7 @@ function ns.ApplyEUIOptionsTheme()
 
     local ok = pcall(EUI.SetActiveTheme, THEME_NAME)
     if not ok then return false end
+    if EUI.RefreshAccent then pcall(EUI.RefreshAccent) end
     SyncOverlay()
     return true
 end

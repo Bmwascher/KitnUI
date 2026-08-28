@@ -24,6 +24,7 @@ end
 local frames = {}
 local overlay
 local activeTheme = "EllesmereUI"
+local appliedAccentTheme = "EllesmereUI"
 local onShow
 
 local function NewFrame(parent)
@@ -75,6 +76,7 @@ local EUI = {
     _mainFrame = mainFrame,
     GetActiveTheme = function() return activeTheme end,
     SetActiveTheme = function(theme) activeTheme = theme end,
+    RefreshAccent = function() appliedAccentTheme = activeTheme end,
     RegisterOnShow = function(_, fn) onShow = fn end,
 }
 _G.EllesmereUI = EUI
@@ -115,6 +117,7 @@ if themeChunk then
     if ns.ApplyEUIOptionsTheme then
         eq(ns.ApplyEUIOptionsTheme(), true, "installer theme API succeeds")
         eq(activeTheme, "KitnUI", "installer theme API selects KitnUI")
+        eq(appliedAccentTheme, "KitnUI", "installer theme API refreshes the KitnUI accent")
         if overlay then eq(overlay.shown, true, "KitnUI selection shows the overlay") end
 
         EUI.SetActiveTheme("Dark")
