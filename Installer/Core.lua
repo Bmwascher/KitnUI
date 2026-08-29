@@ -480,7 +480,7 @@ local defaults = {
     bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
-    euiThemeChosen = nil,   -- true once an import has decided the account-wide options theme; absent on an account that installed before this was recorded, which spends one more import deciding
+    euiThemeChosen = nil,   -- true once an import or the login catch-up has decided the account-wide options theme; absent on an account that has not decided one yet
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather
@@ -551,9 +551,10 @@ end
 
 --- Whether this character gets the alternate look: the installer background and
 --- the amber chrome always, and the artwork on the options panel when this
---- character's import is the one that decides it for the account. True for
---- everyone the roster names, and for a share of everyone it does not. Nil rather
---- than a key means no answer can be derived, and the default look is the safe one.
+--- character is the one that decides the account's theme, whether by import or by
+--- the login catch-up. True for everyone the roster names, and for a share of
+--- everyone it does not. Nil rather than a key means no answer can be derived,
+--- and the default look is the safe one.
 ---
 --- Answered here rather than through the theme bridge, which is absent when the
 --- companion addon is disabled and the wizard still has art to pick.
@@ -597,8 +598,9 @@ function ns.CatchUpAccountTheme()
     ns.DecideAccountTheme()
 end
 
---- Which options theme this character should be given by an import. Named rather
---- than a boolean so the theme side owns its own names.
+--- Which options theme this character should be given when it is the one
+--- deciding the account's. Named rather than a boolean so the theme side owns its
+--- own names.
 function ns.EUIThemeForCharacter()
     local names = ns.EUIThemeNames
     if type(names) ~= "table" then return nil end
