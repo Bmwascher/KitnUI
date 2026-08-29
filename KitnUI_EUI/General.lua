@@ -813,12 +813,13 @@ ns.EUIPages["General"] = function(parent, yOffset)
             SetAccentEnabled(v)
             ApplyAccent(true)
             -- The claim is complete, so the ownership sentence can be recomputed.
-            -- This rebuild is ALSO what re-evaluates the veils on the two rows
-            -- below, which is why they can be built statically.
+            -- This rebuild is ALSO what re-evaluates the veils on the rows below,
+            -- which is why they can be built statically. Deliberately uncounted:
+            -- a count here goes stale the next time a row joins them.
             ns.EUIRebuildForOwnership()
         end,
         ns.EUIOwnershipTip(
-            "Colors EllesmereUI's accent for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab. The two rows below choose which color.",
+            "Colors EllesmereUI's accent for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab. The rows below choose which color.",
             "accent",
             AccentEnabled,
             -- US spelling, changed from the shipped "colour". EUIOwnershipTip
