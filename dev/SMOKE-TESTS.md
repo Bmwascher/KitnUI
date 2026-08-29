@@ -1423,14 +1423,14 @@ not. Nothing needs to be imported to see it.
   different reasons. The first did not follow the check: it used a second
   character that had rolled the SAME way where the check asks for the other
   look, so the panel staying on the alternate artwork proved nothing, because a
-  gate that reapplied would have produced the same screen. The second followed
-  the check as written, and the check was at fault: it said to run the
-  EllesmereUI import without naming a command, and the loader walks an
-  EllesmereUI step as well. The theme write sits behind the `import` guard in
-  `Installer/Setup.lua`, at this branch and at its base, so a loader run cannot
-  reach it. Only the third attempt, `/kitn install` on a character showing the
-  original artwork and pink chrome, exercised the gate. Check 4 has since been
-  given the command name; the opposite-look requirement was always there.
+  gate that reapplied would have produced the same screen. The second exposed an
+  ambiguity in the check: it said to run the EllesmereUI import without naming a
+  command, and the loader walks an EllesmereUI step as well. The theme write
+  sits behind the `import` guard in `Installer/Setup.lua`, at this branch and at
+  its base, so a loader run cannot reach it. Only the third attempt,
+  `/kitn install` on a character showing the original artwork and pink chrome,
+  produced a non-vacuous observation of the gate. Check 4 has since been given
+  the command name; the opposite-look requirement was always there.
 - Also observed: a character the roster does not name rolled into the alternate
   look in the field, so the randomizer is reaching real characters and not only
   the test corpus.
