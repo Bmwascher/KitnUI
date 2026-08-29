@@ -569,6 +569,33 @@ function ns.UsesAltTheme()
     return math.floor(KeyHash(key) / 65536) % ALT_THEME_SHARE == 0
 end
 
+--- Give the account its one options theme unless it already has one. The theme
+--- is account-wide, so this decides once and never again, and a theme picked
+--- from the dropdown afterward is never overwritten. The record is written only
+--- when the apply reports success, so a host that was not ready to take the
+--- theme does not spend the one choice the account gets.
+---
+--- Shared by the import and the login catch-up rather than written twice: two
+--- copies of "apply, and record only on success" would have to be kept in step.
+function ns.DecideAccountTheme()
+    if not ns.db or ns.db.euiThemeChosen then return false end
+    if not ns.ApplyEUIOptionsTheme then return false end
+    if not ns.ApplyEUIOptionsTheme(ns.EUIThemeForCharacter()) then return false end
+
+    ns.db.euiThemeChosen = true
+    return true
+end
+
+--- An account that installed before the themes existed carries no decision, and
+--- no import will ever hand it one, because the theme is written on import and
+--- it has already imported. One login decides for it, and the dropdown is its
+--- own from then on. An account that never installed gets nothing: KitnUI has no
+--- standing to pick a theme it was not asked to install.
+function ns.CatchUpAccountTheme()
+    if not (ns.db and ns.db.profiles and ns.db.profiles["EllesmereUI"]) then return end
+    ns.DecideAccountTheme()
+end
+
 --- Which options theme this character should be given by an import. Named rather
 --- than a boolean so the theme side owns its own names.
 function ns.EUIThemeForCharacter()
@@ -1017,6 +1044,11 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
+
+    -- Next frame, not here: the companion addon copies the theme apply across
+    -- the bridge on its own PLAYER_LOGIN, and this addon loads first, so a call
+    -- made inside this handler can find nothing to call.
+    C_Timer.After(0, ns.CatchUpAccountTheme)
 
     -- Drained before the EllesmereUI check below, so a message survives a session
     -- where the installer itself is unavailable. The delay matches the login

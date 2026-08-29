@@ -168,16 +168,9 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
 
     if EllesmereUI.RefreshAllAddons then EllesmereUI.RefreshAllAddons() end
 
-    -- The account carries one options theme, and the first import whose theme
-    -- apply succeeds decides it; every import after that leaves it alone. An alt
-    -- cannot take it, and a theme picked from the dropdown is never overwritten.
-    -- A host that was not ready to take the theme reports failure and does not
-    -- spend the one choice the account gets.
-    if import and ns.ApplyEUIOptionsTheme and ns.db and not ns.db.euiThemeChosen then
-        if ns.ApplyEUIOptionsTheme(ns.EUIThemeForCharacter()) then
-            ns.db.euiThemeChosen = true
-        end
-    end
+    -- Import only. An alt running the loader lands on the same account theme and
+    -- must not restate it; the decide-once rule itself lives on the function.
+    if import and ns.DecideAccountTheme then ns.DecideAccountTheme() end
 
     -- Write the default look once, and only on an import, after SetProfile,
     -- because the look lives in the ACTIVE profile's module data. The load path
