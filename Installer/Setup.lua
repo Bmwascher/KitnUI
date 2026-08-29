@@ -168,11 +168,11 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
 
     if EllesmereUI.RefreshAllAddons then EllesmereUI.RefreshAllAddons() end
 
-    -- The account carries one options theme, so the character that installs first
-    -- decides it and every import after that leaves it alone. An alt cannot take
-    -- it, and a theme picked from the dropdown is never overwritten. Recorded only
-    -- when the apply reports success, so a host that was not ready to take it does
-    -- not spend the one choice the account gets.
+    -- The account carries one options theme, and the first import whose theme
+    -- apply succeeds decides it; every import after that leaves it alone. An alt
+    -- cannot take it, and a theme picked from the dropdown is never overwritten.
+    -- A host that was not ready to take the theme reports failure and does not
+    -- spend the one choice the account gets.
     if import and ns.ApplyEUIOptionsTheme and ns.db and not ns.db.euiThemeChosen then
         if ns.ApplyEUIOptionsTheme(ns.EUIThemeForCharacter()) then
             ns.db.euiThemeChosen = true

@@ -307,14 +307,32 @@ if type(ns.EUIThemeForCharacter) == "function" then
         -- Sampled rather than written down: a pair of pinned names would record
         -- only what the hash happens to do today, and would have to be rewritten
         -- every time it changed.
-        local sample, given = 4000, 0
-        for i = 1, sample do
-            AsCharacter("Randomer" .. i, "Area 52")
-            if ns.UsesAltTheme() then
-                given = given + 1
-                rolledIn = rolledIn or { "Randomer" .. i, "Area 52" }
-            else
-                rolledOut = rolledOut or { "Randomer" .. i, "Area 52" }
+        --
+        -- Varied in prefix, in length and in realm. A corpus sharing one prefix
+        -- and one realm differs only in its trailing bytes, which is not where
+        -- real keys differ: the realm always follows the name, so the bytes that
+        -- tell two characters apart sit deep in the accumulator.
+        local SYLLABLES = { "ka", "ro", "thal", "mir", "zen", "dru", "vex", "ael",
+            "gor", "nyx", "sil", "bram", "tor", "fen", "lys", "quo" }
+        local REALMS = { "Area 52", "Mal'Ganis", "Stormrage", "Tichondrius",
+            "Illidan", "Sargeras", "Thrall", "Kel'Thuzad" }
+
+        local sample, given = 0, 0
+        for a = 1, #SYLLABLES do
+            for b = 1, #SYLLABLES do
+                for c = 1, #SYLLABLES do
+                    local name = SYLLABLES[a] .. SYLLABLES[b] .. SYLLABLES[c]
+                    for r = 1, #REALMS do
+                        AsCharacter(name, REALMS[r])
+                        sample = sample + 1
+                        if ns.UsesAltTheme() then
+                            given = given + 1
+                            rolledIn = rolledIn or { name, REALMS[r] }
+                        else
+                            rolledOut = rolledOut or { name, REALMS[r] }
+                        end
+                    end
+                end
             end
         end
 
@@ -615,9 +633,9 @@ if themeChunk then
     local setupChunk = assert(loadfile("Installer/Setup.lua"))
     setupChunk("KitnUI", ns)
 
-    -- The account carries one options theme, so the character that installs first
-    -- decides it and later imports leave it alone. An alt cannot take it, and a
-    -- theme picked from the dropdown is never overwritten.
+    -- The account carries one options theme, and the first import whose theme
+    -- apply succeeds decides it; later imports leave it alone. An alt cannot take
+    -- it, and a theme picked from the dropdown is never overwritten.
     ns.db.euiThemeChosen = nil
     if rolledOut then AsCharacter(rolledOut[1], rolledOut[2]) end
     eq(ns.SetupAddon("EllesmereUI", true), true, "EUI profile import succeeds")
@@ -633,8 +651,15 @@ if themeChunk then
         eq(activeTheme, DEFAULT_THEME, "an alt given the alternate look leaves the account theme alone")
     end
 
+    -- Hand-picked on a character whose own answer is the DEFAULT theme. A gate
+    -- that reapplied would put the default back, and the alternate surviving is
+    -- what disproves that; run on a character the randomizer already agrees with,
+    -- the check would pass either way.
+    if rolledOut then AsCharacter(rolledOut[1], rolledOut[2]) end
     activeTheme = ALT_THEME
+    local callsBeforeHandPick = themeCalls
     eq(ns.SetupAddon("EllesmereUI", true), true, "an import after a hand-picked theme succeeds")
+    eq(themeCalls, callsBeforeHandPick, "an import after a hand-picked theme does not reach for the theme")
     eq(activeTheme, ALT_THEME, "an import after a hand-picked theme leaves it alone")
 
     -- An account that has not chosen yet still takes the installing character's

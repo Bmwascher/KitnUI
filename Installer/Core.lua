@@ -497,8 +497,8 @@ end
 
 -- The characters a real profile import gives the alternate options theme to.
 -- Anyone else is left to ns.UsesAltTheme. The active theme is account-wide, so
--- the first import that succeeds decides it; nothing reasserts it afterward and
--- the dropdown stays free.
+-- the first import whose theme apply succeeds decides it; nothing reasserts it
+-- afterward and the dropdown stays free.
 local EUI_ALT_THEME_CHARACTERS = {
     "Cznfik-Area 52",
     "Rescuelol-Mal'Ganis",

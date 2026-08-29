@@ -1377,9 +1377,9 @@ time in four, decided from the character name and realm rather than drawn, so a
 character always gets the same answer. The look drives the options artwork, the
 installer artwork and the installer chrome, exactly as the roster does.
 
-The options theme is account-wide, so the character that installs first decides
-it and every import after that leaves it alone. A theme picked from the dropdown
-is never overwritten.
+The options theme is account-wide, and the first import whose theme apply
+succeeds decides it; every import after that leaves it alone. A theme picked from
+the dropdown is never overwritten.
 
 ## Read this before starting
 
