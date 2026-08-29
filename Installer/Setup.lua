@@ -170,7 +170,7 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
 
     -- Import only. An alt running the loader lands on the same account theme and
     -- must not restate it; the decide-once rule itself lives on the function.
-    if import and ns.DecideAccountTheme then ns.DecideAccountTheme() end
+    if import then ns.DecideAccountTheme() end
 
     -- Write the default look once, and only on an import, after SetProfile,
     -- because the look lives in the ACTIVE profile's module data. The load path
