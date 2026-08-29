@@ -80,9 +80,9 @@
 ---@field GetCDMKey fun(classId: number?, specIndex: number?): string?
 ---@field GetCDMShippedFingerprint fun(classId: number?, specIndex: number?): string?
 ---@field GetCDMSpecState fun(classId: number?, specIndex: number?): "nodata"|"current"|"stale"|"untracked"|"missing"
----@field GetCDMSpecRows fun(): number?, { specIndex: number, specName: string, state: string }[]
+---@field GetCDMSpecRows fun(): number?, { specIndex: number, specName: string, specIcon: (number|string)?, state: string }[]
 ---@field HasCDMForCurrentClass fun(): boolean
----@field GetOutdatedCDMSpecs fun(): { specIndex: number, specName: string, state: string }[]
+---@field GetOutdatedCDMSpecs fun(): { specIndex: number, specName: string, specIcon: (number|string)?, state: string }[]
 ---@field SummarizeCDMRows fun(rows: table?): string
 ---@field CDMNeedsOverwriteConfirm fun(snapshot: table?, classId: number?, specIndex: number?): boolean
 ---@field CDMLayoutName fun(classId: number, specIndex: number): string, string, string  # layoutName, legacyName, specLabel; both arguments must already be numbers

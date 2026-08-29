@@ -614,8 +614,10 @@ local function BlizzardCDMPage()
         ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 14, function()
             if cdmAllButton._onClick then cdmAllButton._onClick() end
         end)
-        SetVariant(cdmAllButton, "selectable")
     end
+    -- Outside the creation guard: the variant resolves the accent when it is set,
+    -- so a button styled once would keep the old theme's colours after a swap.
+    SetVariant(cdmAllButton, "selectable")
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
             local imported, failed, skipped = ns.ImportCDMAllSpecs()

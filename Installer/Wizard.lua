@@ -616,17 +616,25 @@ end
 function W:SetButtonVariant(btn, variant)
     if not (btn and btn._bg) then return end
     btn._variant = variant
-    btn._vc = variantColours(variant)
-    paintButton(btn, btn._vc.bg, btn._vc.brd, btn._vc.txt)
+    local c = variantColours(variant)
+    btn._vc = c
+    -- A variant set while the cursor is inside the button gets no OnEnter of its
+    -- own, so it paints the hover set directly. The theme buttons reach this every
+    -- swap: the click repaints the button being clicked.
+    if btn:IsShown() and btn:IsMouseOver() then
+        paintButton(btn, c.bgOn, c.brdOn, c.txtOn)
+    else
+        paintButton(btn, c.bg, c.brd, c.txt)
+    end
     if not btn._ownsHover then
         btn._ownsHover = true
         btn:SetScript("OnEnter", function(b)
-            local c = b._vc
-            if c then paintButton(b, c.bgOn, c.brdOn, c.txtOn) end
+            local vc = b._vc
+            if vc then paintButton(b, vc.bgOn, vc.brdOn, vc.txtOn) end
         end)
         btn:SetScript("OnLeave", function(b)
-            local c = b._vc
-            if c then paintButton(b, c.bg, c.brd, c.txt) end
+            local vc = b._vc
+            if vc then paintButton(b, vc.bg, vc.brd, vc.txt) end
         end)
     end
 end
