@@ -112,8 +112,13 @@ end
 -- the name is localized and the ID is not. 1 General, 2 Trade, 22 LocalDefense,
 -- 42 Services.
 --
--- Channels are added, never removed: the reset has already cleared the slate, so
--- a channel that reappears afterwards is one the player joined themselves.
+-- Channels are BOTH added and removed. The reset does not clear ChatFrame1 -- the
+-- same exception noted above for message groups applies to channels, and the
+-- hard-coded defaults it restores put Trade and Services back on General. Adding
+-- alone therefore leaves them on two tabs at once. What is removed is derived from
+-- what the other windows claim, never listed a second time, so moving a channel
+-- between tabs cannot leave it on both. A channel no window here claims is left
+-- alone: it is the player's own.
 local CHAT_WINDOWS = {
     {
         name = "General", dock = 1, reserved = "ChatFrame1",
@@ -188,6 +193,17 @@ local function EnsureChatWindow(entry)
     return nil
 end
 
+-- The channel ids some OTHER window in the set claims.
+local function ChannelsOwnedElsewhere(entry)
+    local owned = {}
+    for _, other in ipairs(CHAT_WINDOWS) do
+        if other ~= entry and other.channels then
+            for _, channelID in ipairs(other.channels) do owned[channelID] = true end
+        end
+    end
+    return owned
+end
+
 local function ApplyChatWindow(entry)
     local cf = EnsureChatWindow(entry)
     if not cf then return end
@@ -200,6 +216,18 @@ local function ApplyChatWindow(entry)
         cf:RemoveAllMessageGroups()
         for _, group in ipairs(entry.groups) do
             cf:AddMessageGroup(group)
+        end
+    end
+
+    -- Removal first, so a channel named on two lists at once survives as a member
+    -- of the window that asked for it.
+    if cf.RemoveChannel and cf.ContainsChannel
+        and C_ChatInfo and C_ChatInfo.GetChannelShortcutForChannelID then
+        for channelID in pairs(ChannelsOwnedElsewhere(entry)) do
+            local shortcut = C_ChatInfo.GetChannelShortcutForChannelID(channelID)
+            if shortcut and cf:ContainsChannel(shortcut) then
+                cf:RemoveChannel(shortcut)
+            end
         end
     end
 
