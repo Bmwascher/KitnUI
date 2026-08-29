@@ -126,9 +126,9 @@ local KitnUIDB
 ---@field Queue fun(self: KitnUIWizard, data: table)
 ---@field SetPage fun(self: KitnUIWizard, n: integer)
 ---@field RefreshTheme fun(self: KitnUIWizard)
+---@field SetOption fun(self: KitnUIWizard, i: integer, text: string, onClick: function, fontSize: number?)
 ---@field Show fun(self: KitnUIWizard)
 ---@field Hide fun(self: KitnUIWizard)
----@field SetOption fun(self: KitnUIWizard, i: integer, text: string, onClick: function)
 ---@field HideOptions fun(self: KitnUIWizard)
 ---@field FitOptions fun(self: KitnUIWizard, count: integer): number
 ---@field CenterOption1 fun(self: KitnUIWizard)

@@ -78,6 +78,7 @@ local SIDEBAR_W = 176                   -- baked sidebar width (art divider @ x~
 local CONTENT_X = SIDEBAR_W + 24        -- left edge of the content column
 local STEP_DONE = { 0.43, 0.75, 0.61 }  -- green check for completed steps
 local OPTION_W  = 165                   -- default action-button width (CDM shrinks to fit)
+local OPTION_FONT = 14                  -- matches the nav row, so the action never reads smaller than Next
 local STEP_MAXW = 148                   -- max step-label width before the baked divider
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
@@ -212,7 +213,7 @@ function W:Build()
     for i = 1, 4 do
         local b = CreateFrame("Button", nil, f)
         b:SetSize(OPTION_W, 34)
-        local bg, brd, lbl = EllesmereUI.MakeStyledButton(b, "", 13, BTN_COLOURS, function()
+        local bg, brd, lbl = EllesmereUI.MakeStyledButton(b, "", OPTION_FONT, BTN_COLOURS, function()
             if b._onClick then b._onClick() end
         end)
         b._bg, b._brd, b._lbl = bg, brd, lbl
@@ -557,10 +558,17 @@ function W:FitOptions(count)
     return w
 end
 
-function W:SetOption(i, text, onClick)
+-- fontSize is for a page whose buttons are too narrow for the default; the size is
+-- written on every call, so a page that asks for smaller type cannot leave the slot
+-- smaller for the next page that does not.
+function W:SetOption(i, text, onClick, fontSize)
     local b = W.frame and W.frame["Option" .. i]
     if not b then return end
-    if b._lbl then b._lbl:SetText(text) end
+    if b._lbl then
+        local path, _, flags = b._lbl:GetFont()
+        if path then b._lbl:SetFont(path, fontSize or OPTION_FONT, flags) end
+        b._lbl:SetText(text)
+    end
     b._onClick = onClick
     b:Show()
 end

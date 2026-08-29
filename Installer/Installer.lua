@@ -577,6 +577,10 @@ end
 
 local cdmAllButton
 
+-- Smaller type than the wizard default: the spec buttons narrow to fit four across
+-- and each already carries a spec icon and a status mark.
+local CDM_SPEC_FONT = 13
+
 -- Emphasis for the all-specs button, from the same reading the marks come from.
 -- Specs with nothing shipped are excluded by GetOutdatedCDMSpecs, so a class KitnUI
 -- cannot fully serve still reaches the finished state rather than asking forever.
@@ -683,11 +687,11 @@ local function BlizzardCDMPage()
                         ShowInstallToast("Import failed!", 1, 0.2, 0.2)
                     end
                 end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, i))
-            end)
+            end, CDM_SPEC_FONT)
         else
             ns.Wizard:SetOption(i, label, function()
                 print(ns.title .. ": No data for " .. (specName or "this spec") .. ".")
-            end)
+            end, CDM_SPEC_FONT)
         end
     end
 
