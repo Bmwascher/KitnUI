@@ -494,9 +494,9 @@ function ns.GetCharKey()
     return name .. "-" .. realm
 end
 
--- The characters a real profile import gives the alternate options theme to.
--- Everyone else gets the default one. The active theme is account-wide, so this
--- is a choice made once at import; nothing reasserts it at login and the
+-- The characters a real profile import always gives the alternate options theme
+-- to. Anyone else is left to ns.UsesAltTheme. The active theme is account-wide,
+-- so this is a choice made once at import; nothing reasserts it at login and the
 -- dropdown stays free afterward.
 local EUI_ALT_THEME_CHARACTERS = {
     "Cznfik-Area 52",
@@ -555,8 +555,10 @@ end
 --- Answered here rather than through the theme bridge, which is absent when the
 --- companion addon is disabled and the wizard still has art to pick.
 ---
---- The low bits of the hash follow the key's last byte too closely to decide a
---- share this small, so the value is folded before the split.
+--- The low bits are structurally weak: 33 is 1 modulo 4, so the last two bits
+--- reduce to the sum of the bytes and any two names built from the same letters
+--- would agree. The value is folded first so the split reads bits every byte of
+--- the key reached.
 function ns.UsesAltTheme()
     if ns.OnAltThemeRoster() then return true end
 

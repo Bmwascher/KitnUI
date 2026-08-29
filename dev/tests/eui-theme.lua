@@ -483,7 +483,7 @@ end
 
 -- Text drawn inside the installer window follows the same accent the chrome
 -- does. Chat lines and popup dialogs keep the brand pink: they are read outside
--- the window, where the roster's colour would look arbitrary.
+-- the window, where the window's colour would look arbitrary.
 do
     local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
     local wizardSource = wizardFile:read("*a")
