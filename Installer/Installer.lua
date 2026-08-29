@@ -68,8 +68,11 @@ local function ShowInstallToast(message, r, g, b)
     toastFrame = f
 end
 
+-- Named in the window's accent, because the toast is drawn over the window while
+-- the installer runs. The failure toasts above keep their fixed red and amber:
+-- those colours carry a meaning of their own.
 local function SuccessToast(name, action)
-    ShowInstallToast("|cffFF008C" .. name .. "|r " .. action)
+    ShowInstallToast(ns.WizardColor(name) .. " " .. action)
 end
 
 ---------------------------------------------------------------------------------

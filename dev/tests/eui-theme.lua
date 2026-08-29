@@ -463,6 +463,12 @@ do
     check(installerSource:find("ns.WizardColor", 1, true) ~= nil,
         "the wizard pages paint their highlights from the resolved accent")
 
+    -- The success toast is drawn over the window while the installer runs, so it
+    -- follows the window. The failure toasts stay red and amber: those colours
+    -- mean "failed" and "attention", not "KitnUI".
+    check(installerSource:find("cffFF008C", 1, true) == nil,
+        "nothing the installer draws is painted from a fixed pink escape")
+
     -- The alternate accent must stay invisible across the one-way bridge, or the
     -- nameplate target arrow that reads the brand pink could be handed amber.
     local euiCoreFile = assert(io.open("KitnUI_EUI/Core.lua", "rb"))
