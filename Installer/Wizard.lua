@@ -30,9 +30,10 @@ local KITN_PINK = { 1, 0, 0.549 }
 -- table has to convert.
 ns.KITN_PINK = KITN_PINK
 
--- The accent the alternate artwork is built around. Roster characters get it for
--- the installer chrome only; the export above stays the brand colour, because the
--- Nameplates page reads that one and an arrow colour is not artwork.
+-- The accent the alternate artwork is built around. Roster characters get it
+-- everywhere the installer window paints or writes. The export above stays the
+-- brand colour, because the Nameplates page reads that one and an arrow colour is
+-- not artwork.
 local RASTA_AMBER = { 0.976, 0.549, 0.122 }
 
 -- Published so the window's TEXT highlights resolve from the same two constants
