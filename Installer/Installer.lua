@@ -213,13 +213,27 @@ local function ShowLoadStatusAndVersion(addonKey)
     WF().Desc3:SetText(GetVersionLine(addonKey))
 end
 
--- One label per state from ns.GetCDMSpecState.
+-- One label per state from ns.GetCDMSpecState. Three colours only: green is done,
+-- amber is an action worth taking, red is a layout this character does not have.
 local cdmStateLabel = {
     nodata    = function() return ns.Red("no data") end,
-    missing   = function() return ns.Amber("not imported") end,
+    missing   = function() return ns.Red("not imported") end,
     untracked = function() return ns.Amber("untracked") end,
     current   = function() return ns.Green("up to date") end,
-    stale     = function() return ns.Red("update available") end,
+    stale     = function() return ns.Amber("update available") end,
+}
+
+-- The same three states as a mark, for the per-spec buttons. One set of ready-check
+-- art, so the marks are drawn to sit together, and each colour matches the word
+-- cdmStateLabel gives the same state.
+local CDM_MARK_X    = "|TInterface\\RaidFrame\\ReadyCheck-NotReady:12:12|t"
+local CDM_MARK_WAIT = "|TInterface\\RaidFrame\\ReadyCheck-Waiting:12:12|t"
+local cdmStateMark = {
+    nodata    = CDM_MARK_X,
+    missing   = CDM_MARK_X,
+    untracked = CDM_MARK_WAIT,
+    stale     = CDM_MARK_WAIT,
+    current   = "|TInterface\\RaidFrame\\ReadyCheck-Ready:12:12|t",
 }
 
 -- Rows come from ns.GetCDMSpecRows, the single owner of the specialization API
@@ -464,6 +478,30 @@ end
 -- Blizzard CDM page (per-spec option buttons + persistent "Import All Specs")
 ---------------------------------------------------------------------------------
 
+-- Spec icon names the spec, status mark answers whether it needs anything. The
+-- name comes from the row; only the icon is looked up here, and it is cosmetic,
+-- so a nil falls back to the plain label.
+local function CDMSpecLabel(classId, specIndex, row)
+    local label = row.specName
+    local specIcon
+    if classId and GetSpecializationInfoForClassID then
+        specIcon = select(4, GetSpecializationInfoForClassID(classId, specIndex))
+    end
+    if specIcon then label = "|T" .. specIcon .. ":14:14:0:0|t " .. label end
+    local mark = cdmStateMark[row.state]
+    if mark then label = label .. " " .. mark end
+    return label
+end
+
+-- Re-label the spec buttons from fresh rows. Every site that refreshes the status
+-- text calls this too, so a mark cannot outlive the words it matches.
+local function RefreshCDMSpecLabels(classId, rows)
+    for i = 1, math.min(#rows, 4) do
+        local btn = WF()["Option" .. i]
+        if btn and btn._lbl then btn._lbl:SetText(CDMSpecLabel(classId, i, rows[i])) end
+    end
+end
+
 local cdmAllButton
 local function BlizzardCDMPage()
     local f = WF()
@@ -497,8 +535,10 @@ local function BlizzardCDMPage()
     -- Persistent "Import All Specs" button, above the option row.
     if not cdmAllButton then
         cdmAllButton = CreateFrame("Button", "KitnUICDMAllButton", f)
-        cdmAllButton:SetSize(170, 30)
-        ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 13, function()
+        -- Larger than a spec button: one press does the work of all of them, so it
+        -- should not read as a fourth peer sitting above the row.
+        cdmAllButton:SetSize(260, 38)
+        ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 14, function()
             if cdmAllButton._onClick then cdmAllButton._onClick() end
         end)
         SetVariant(cdmAllButton, "selectable")
@@ -506,9 +546,10 @@ local function BlizzardCDMPage()
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
             local imported, failed, skipped = ns.ImportCDMAllSpecs()
-            local _, freshRows = ns.GetCDMSpecRows()
+            local freshClassId, freshRows = ns.GetCDMSpecRows()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
+            RefreshCDMSpecLabels(freshClassId, freshRows)
             if failed > 0 then
                 ShowInstallToast(imported .. " imported, " .. failed .. " failed (see chat)", 1, 0.8, 0.2)
             elseif skipped then
@@ -526,29 +567,21 @@ local function BlizzardCDMPage()
     end
     cdmAllButton:Show()
 
-    -- Per-spec option buttons (Option1..4). The name comes from the row; only
-    -- the icon is looked up here, and it is cosmetic, so a nil falls back to the
-    -- plain label.
+    -- Per-spec option buttons (Option1..4).
     for i = 1, math.min(numSpecs, 4) do
         local row = rows[i]
         local specName = row.specName
-        local specIcon
-        if GetSpecializationInfoForClassID then
-            specIcon = select(4, GetSpecializationInfoForClassID(classId, i))
-        end
         local specData = classData[i]
-        local label = specName
-        if specIcon then
-            label = "|T" .. specIcon .. ":14:14:0:0|t " .. specName
-        end
+        local label = CDMSpecLabel(classId, i, row)
 
         if specData and strtrim(specData) ~= "" then
             ns.Wizard:SetOption(i, label, function()
                 ConfirmImport("BlizzardCDM", "Blizzard CDM", function()
                     local success = ns.SetupAddon("BlizzardCDM", true, i)
-                    local _, freshRows = ns.GetCDMSpecRows()
+                    local freshClassId, freshRows = ns.GetCDMSpecRows()
                     WF().Desc2:SetText(BuildCDMStatusText(freshRows))
                     WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
+                    RefreshCDMSpecLabels(freshClassId, freshRows)
                     if success then
                         SuccessToast(specName, "layout imported!")
                         PlayInstallSound()
