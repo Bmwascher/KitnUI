@@ -237,12 +237,18 @@ local cdmStateMark = {
 }
 
 -- Rows come from ns.GetCDMSpecRows, the single owner of the specialization API
--- on the status surfaces.
+-- on the status surfaces. The icon leads each entry so this line and the buttons
+-- below it identify a spec the same way.
+local function CDMSpecIcon(row)
+    if not row.specIcon then return "" end
+    return "|T" .. row.specIcon .. ":14:14:0:0|t "
+end
+
 local function BuildCDMStatusText(rows)
     local parts = {}
     for _, row in ipairs(rows or {}) do
         local label = cdmStateLabel[row.state]
-        parts[#parts + 1] = row.specName .. ": " .. (label and label() or row.state)
+        parts[#parts + 1] = CDMSpecIcon(row) .. row.specName .. ": " .. (label and label() or row.state)
     end
     return table.concat(parts, " | ")
 end
@@ -478,16 +484,9 @@ end
 -- Blizzard CDM page (per-spec option buttons + persistent "Import All Specs")
 ---------------------------------------------------------------------------------
 
--- Spec icon names the spec, status mark answers whether it needs anything. The
--- name comes from the row; only the icon is looked up here, and it is cosmetic,
--- so a nil falls back to the plain label.
-local function CDMSpecLabel(classId, specIndex, row)
-    local label = row.specName
-    local specIcon
-    if classId and GetSpecializationInfoForClassID then
-        specIcon = select(4, GetSpecializationInfoForClassID(classId, specIndex))
-    end
-    if specIcon then label = "|T" .. specIcon .. ":14:14:0:0|t " .. label end
+-- Spec icon names the spec, status mark answers whether it needs anything.
+local function CDMSpecLabel(row)
+    local label = CDMSpecIcon(row) .. row.specName
     local mark = cdmStateMark[row.state]
     if mark then label = label .. " " .. mark end
     return label
@@ -495,10 +494,10 @@ end
 
 -- Re-label the spec buttons from fresh rows. Every site that refreshes the status
 -- text calls this too, so a mark cannot outlive the words it matches.
-local function RefreshCDMSpecLabels(classId, rows)
+local function RefreshCDMSpecLabels(rows)
     for i = 1, math.min(#rows, 4) do
         local btn = WF()["Option" .. i]
-        if btn and btn._lbl then btn._lbl:SetText(CDMSpecLabel(classId, i, rows[i])) end
+        if btn and btn._lbl then btn._lbl:SetText(CDMSpecLabel(rows[i])) end
     end
 end
 
@@ -537,7 +536,7 @@ local function BlizzardCDMPage()
         cdmAllButton = CreateFrame("Button", "KitnUICDMAllButton", f)
         -- Larger than a spec button: one press does the work of all of them, so it
         -- should not read as a fourth peer sitting above the row.
-        cdmAllButton:SetSize(260, 38)
+        cdmAllButton:SetSize(290, 30)
         ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 14, function()
             if cdmAllButton._onClick then cdmAllButton._onClick() end
         end)
@@ -546,10 +545,10 @@ local function BlizzardCDMPage()
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
             local imported, failed, skipped = ns.ImportCDMAllSpecs()
-            local freshClassId, freshRows = ns.GetCDMSpecRows()
+            local _, freshRows = ns.GetCDMSpecRows()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
-            RefreshCDMSpecLabels(freshClassId, freshRows)
+            RefreshCDMSpecLabels(freshRows)
             if failed > 0 then
                 ShowInstallToast(imported .. " imported, " .. failed .. " failed (see chat)", 1, 0.8, 0.2)
             elseif skipped then
@@ -572,16 +571,16 @@ local function BlizzardCDMPage()
         local row = rows[i]
         local specName = row.specName
         local specData = classData[i]
-        local label = CDMSpecLabel(classId, i, row)
+        local label = CDMSpecLabel(row)
 
         if specData and strtrim(specData) ~= "" then
             ns.Wizard:SetOption(i, label, function()
                 ConfirmImport("BlizzardCDM", "Blizzard CDM", function()
                     local success = ns.SetupAddon("BlizzardCDM", true, i)
-                    local freshClassId, freshRows = ns.GetCDMSpecRows()
+                    local _, freshRows = ns.GetCDMSpecRows()
                     WF().Desc2:SetText(BuildCDMStatusText(freshRows))
                     WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
-                    RefreshCDMSpecLabels(freshClassId, freshRows)
+                    RefreshCDMSpecLabels(freshRows)
                     if success then
                         SuccessToast(specName, "layout imported!")
                         PlayInstallSound()

@@ -260,13 +260,17 @@ function ns.GetCDMSpecRows()
     if type(numSpecs) ~= "number" then return classId, rows end
 
     for i = 1, numSpecs do
-        local specName
+        local specName, specIcon
         if GetSpecializationInfoForClassID then
-            specName = select(2, GetSpecializationInfoForClassID(classId, i))
+            -- The icon is cosmetic, so a nil leaves the surfaces showing the name
+            -- alone rather than failing.
+            local _, name, _, icon = GetSpecializationInfoForClassID(classId, i)
+            specName, specIcon = name, icon
         end
         rows[#rows + 1] = {
             specIndex = i,
             specName = specName or ("Spec " .. i),
+            specIcon = specIcon,
             state = ns.GetCDMSpecState(classId, i),
         }
     end
