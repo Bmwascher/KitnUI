@@ -562,6 +562,25 @@ function ns.Color(text)
     return string.format("|cffFF008C%s|r", text)
 end
 
+-- The same highlight for text drawn INSIDE the installer window, which follows
+-- whichever accent the chrome resolved for this character. Chat lines, toasts and
+-- popup dialogs keep ns.Color: they are read outside the window, where the
+-- roster's colour has nothing around it to agree with.
+--
+-- Reads the two constants the chrome paints from, so a colour cannot drift
+-- between a page's words and the page they sit on. Falls back to the brand rather
+-- than erroring, because this runs while a page is being built and a failure here
+-- would leave the wizard half drawn.
+function ns.WizardColor(text)
+    local c = ns.OnAltThemeRoster and ns.OnAltThemeRoster() and ns.RASTA_AMBER or ns.KITN_PINK
+    if type(c) ~= "table" or not (c[1] and c[2] and c[3]) then return ns.Color(text) end
+    return string.format("|cff%02X%02X%02X%s|r",
+        math.floor(c[1] * 255 + 0.5),
+        math.floor(c[2] * 255 + 0.5),
+        math.floor(c[3] * 255 + 0.5),
+        text)
+end
+
 -- Matches the green of the ReadyCheck-Ready checkmark texture used in the wizard,
 -- so "available" / "Imported" text reads as the same green as the checks.
 function ns.Green(text)

@@ -414,6 +414,64 @@ do
     end
 end
 
+-- Text drawn inside the installer window follows the same accent the chrome
+-- does. Chat lines and popup dialogs keep the brand pink: they are read outside
+-- the window, where the roster's colour would look arbitrary.
+do
+    local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
+    local wizardSource = wizardFile:read("*a")
+    wizardFile:close()
+
+    local pr, pg, pb = wizardSource:match("KITN_PINK = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    local ar, ag, ab = wizardSource:match("RASTA_AMBER = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    check(pr ~= nil and ar ~= nil, "both installer accents are declared where the chrome reads them")
+
+    check(type(ns.WizardColor) == "function",
+        "the installer publishes a window-text colour helper")
+
+    if type(ns.WizardColor) == "function" and pr and ar then
+        -- The helper reads what the chrome reads, so a colour cannot drift between
+        -- the window's text and the window's own paint.
+        ns.KITN_PINK = { tonumber(pr), tonumber(pg), tonumber(pb) }
+        ns.RASTA_AMBER = { tonumber(ar), tonumber(ag), tonumber(ab) }
+
+        AsCharacter("Stranger", "Area 52")
+        eq(ns.WizardColor("KitnUI"), "|cffFF008CKitnUI|r",
+            "window text is brand pink off the roster")
+
+        AsCharacter("Bite", "Area 52")
+        eq(ns.WizardColor("KitnUI"), "|cffF98C1FKitnUI|r",
+            "window text is the alternate accent on the roster")
+
+        -- A missing colour must degrade to the brand, never to a Lua error inside
+        -- a page build, which would leave the wizard half drawn.
+        local savedAmber = ns.RASTA_AMBER
+        ns.RASTA_AMBER = nil
+        eq(ns.WizardColor("KitnUI"), "|cffFF008CKitnUI|r",
+            "an unreadable accent falls back to the brand rather than failing")
+        ns.RASTA_AMBER = savedAmber
+
+        AsCharacter("Tester", "Realm")
+    end
+
+    local installerFile = assert(io.open("Installer/Installer.lua", "rb"))
+    local installerSource = installerFile:read("*a")
+    installerFile:close()
+
+    check(installerSource:find('ns.Color("KitnUI")', 1, true) == nil,
+        "no brand name drawn in the window is painted from the fixed pink")
+    check(installerSource:find("ns.WizardColor", 1, true) ~= nil,
+        "the wizard pages paint their highlights from the resolved accent")
+
+    -- The alternate accent must stay invisible across the one-way bridge, or the
+    -- nameplate target arrow that reads the brand pink could be handed amber.
+    local euiCoreFile = assert(io.open("KitnUI_EUI/Core.lua", "rb"))
+    local euiCoreSource = euiCoreFile:read("*a")
+    euiCoreFile:close()
+    check(euiCoreSource:find("RASTA_AMBER", 1, true) == nil,
+        "the alternate accent is not exported to the companion addon")
+end
+
 if themeChunk then
     local themeCalls = 0
     local lastThemeArg

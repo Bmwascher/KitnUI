@@ -35,6 +35,11 @@ ns.KITN_PINK = KITN_PINK
 -- Nameplates page reads that one and an arrow colour is not artwork.
 local RASTA_AMBER = { 0.976, 0.549, 0.122 }
 
+-- Published so the window's TEXT highlights resolve from the same two constants
+-- the window's paint does. Deliberately NOT added to the companion addon's export
+-- list: the target arrow reads the brand colour and an arrow is not artwork.
+ns.RASTA_AMBER = RASTA_AMBER
+
 -- Every painted highlight reads this rather than either constant. Resolved once
 -- when the window is built, which is always after login: the roster is keyed on
 -- the character name, which cannot be read before then. It stays the brand colour
