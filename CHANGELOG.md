@@ -12,6 +12,12 @@ automatically, while the normal theme dropdown remains available afterward.
 - Every character is matched to one of the two themes and always gets the same one. Your first install applies that character's match to the account, and every install after that leaves the theme alone, so a theme you pick yourself is kept
 - On the characters that get the Rasta artwork, the installer window matches it: the progress bar, the buttons, the side rail and its own text all use the warm amber instead of the pink. Chat messages stay KitnUI pink
 - The installer window follows the character you are on rather than the account, so an alt matched to the Rasta artwork shows it even while the account sits on the other theme
+- **NEW:** The Welcome page lets you pick either installer theme for the character you are on, overriding the one it was matched to. The whole window repaints straight away, and the choice is remembered per character
+- **NEW:** Every page that is already up to date opens with its Install button finished and quiet, and points you at **Next** instead. A profile with a newer version waiting reads **Update** rather than Install
+- **NEW:** The Cooldown Manager page marks each specialization with a tick, a warning or a cross, matching the words above it, and shows your specialization icons in both places. **Import All Specs** is wider and is the highlighted action until every layout is in
+- The EllesmereUI page now keeps **Dark** and **Colored** on their own row under an **APPEARANCE** heading that names the look you are on, so the appearance choice no longer sits beside the Install button as an equal
+- **FIXED:** Buttons lost their highlight the first time the mouse passed over them, which left the main action on every page looking like an ordinary button and hid which appearance preset was selected
+- **FIXED:** **Chat Setup** left the Trade and Services channels on the General tab as well as moving them to their own tab. General now carries only General and LocalDefense. Channels you joined yourself are untouched
 
 ## v2.1.4
 
