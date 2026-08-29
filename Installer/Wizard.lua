@@ -36,8 +36,11 @@ ns.KITN_PINK = KITN_PINK
 local RASTA_AMBER = { 0.976, 0.549, 0.122 }
 
 -- Published so the window's TEXT highlights resolve from the same two constants
--- the window's paint does. Deliberately NOT added to the companion addon's export
--- list: the target arrow reads the brand colour and an arrow is not artwork.
+-- the window's paint does. The companion addon CAN read this, like anything else
+-- in this namespace, because its own namespace reads through to here; the export
+-- list there governs the opposite direction only. The target arrow stays the
+-- brand colour because it asks for KITN_PINK by name, not because this is out of
+-- its reach.
 ns.RASTA_AMBER = RASTA_AMBER
 
 -- Every painted highlight reads this rather than either constant. Resolved once

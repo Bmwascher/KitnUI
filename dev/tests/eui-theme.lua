@@ -443,12 +443,28 @@ do
         eq(ns.WizardColor("KitnUI"), "|cffF98C1FKitnUI|r",
             "window text is the alternate accent on the roster")
 
-        -- A missing colour must degrade to the brand, never to a Lua error inside
-        -- a page build, which would leave the wizard half drawn.
+        -- An unusable colour must degrade to the brand, never to a Lua error inside
+        -- a page build, which would leave the wizard half drawn. A truthy channel
+        -- that is not a number is the case a truthiness guard lets through: it
+        -- reaches the multiply and raises.
         local savedAmber = ns.RASTA_AMBER
-        ns.RASTA_AMBER = nil
-        eq(ns.WizardColor("KitnUI"), "|cffFF008CKitnUI|r",
-            "an unreadable accent falls back to the brand rather than failing")
+        local unusable = {
+            { nil, "a missing table" },
+            { {}, "an empty table" },
+            { { "bad", 0.549, 0.122 }, "a channel that is not a number" },
+            { { 0.976, 0.549 }, "a channel that is absent" },
+            { { -1, 0.549, 0.122 }, "a channel below the range" },
+            { { 0.976, 2, 0.122 }, "a channel above the range" },
+            { "F98C1F", "an accent that is not a table" },
+        }
+        for _, case in ipairs(unusable) do
+            ns.RASTA_AMBER = case[1]
+            local ok, got = pcall(ns.WizardColor, "KitnUI")
+            check(ok, case[2] .. " does not raise", got)
+            if ok then
+                eq(got, "|cffFF008CKitnUI|r", case[2] .. " falls back to the brand")
+            end
+        end
         ns.RASTA_AMBER = savedAmber
 
         AsCharacter("Tester", "Realm")
@@ -469,13 +485,27 @@ do
     check(installerSource:find("cffFF008C", 1, true) == nil,
         "nothing the installer draws is painted from a fixed pink escape")
 
-    -- The alternate accent must stay invisible across the one-way bridge, or the
-    -- nameplate target arrow that reads the brand pink could be handed amber.
-    local euiCoreFile = assert(io.open("KitnUI_EUI/Core.lua", "rb"))
-    local euiCoreSource = euiCoreFile:read("*a")
-    euiCoreFile:close()
-    check(euiCoreSource:find("RASTA_AMBER", 1, true) == nil,
-        "the alternate accent is not exported to the companion addon")
+    -- The companion addon CAN read ns.RASTA_AMBER: its namespace reads through to
+    -- KitnUI's by metatable, and the EXPORTS list governs the opposite direction.
+    -- So the target arrow stays pink because Nameplates asks for the brand
+    -- constant by name, not because the alternate accent is out of reach. This
+    -- checks the reason that actually holds, across the companion files the suite
+    -- reads rather than the whole folder.
+    for _, companion in ipairs({ "Core.lua", "Nameplates.lua", "General.lua", "Theme.lua" }) do
+        local f = assert(io.open("KitnUI_EUI/" .. companion, "rb"))
+        local src = f:read("*a")
+        f:close()
+        -- The READ form. The name also appears in a keep-in-step comment, which is
+        -- a pointer to the constant, not a use of it.
+        check(src:find("ns.RASTA_AMBER", 1, true) == nil,
+            "KitnUI_EUI/" .. companion .. " does not reach for the alternate accent")
+    end
+
+    local npFile = assert(io.open("KitnUI_EUI/Nameplates.lua", "rb"))
+    local npSource = npFile:read("*a")
+    npFile:close()
+    check(npSource:find("ns.KITN_PINK", 1, true) ~= nil,
+        "the target arrow takes its colour from the brand constant by name")
 end
 
 if themeChunk then

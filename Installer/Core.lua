@@ -571,14 +571,21 @@ end
 -- between a page's words and the page they sit on. Falls back to the brand rather
 -- than erroring, because this runs while a page is being built and a failure here
 -- would leave the wizard half drawn.
+-- Truthiness is not enough here: a channel holding a string passes an `and` chain
+-- and then raises on the multiply, and one outside 0-1 formats to more than two
+-- hex digits, which produces an escape the game renders as literal text. Both
+-- have to be rejected before any arithmetic runs.
+local function AccentByte(v)
+    if type(v) ~= "number" or v ~= v or v < 0 or v > 1 then return nil end
+    return math.floor(v * 255 + 0.5)
+end
+
 function ns.WizardColor(text)
     local c = ns.OnAltThemeRoster and ns.OnAltThemeRoster() and ns.RASTA_AMBER or ns.KITN_PINK
-    if type(c) ~= "table" or not (c[1] and c[2] and c[3]) then return ns.Color(text) end
-    return string.format("|cff%02X%02X%02X%s|r",
-        math.floor(c[1] * 255 + 0.5),
-        math.floor(c[2] * 255 + 0.5),
-        math.floor(c[3] * 255 + 0.5),
-        text)
+    if type(c) ~= "table" then return ns.Color(text) end
+    local r, g, b = AccentByte(c[1]), AccentByte(c[2]), AccentByte(c[3])
+    if not (r and g and b) then return ns.Color(text) end
+    return string.format("|cff%02X%02X%02X%s|r", r, g, b, text)
 end
 
 -- Matches the green of the ReadyCheck-Ready checkmark texture used in the wizard,
