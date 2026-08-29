@@ -1415,6 +1415,20 @@ not. Nothing needs to be imported to see it.
 
 ## Result
 
-- Date:
-- Reported by Kitn:
-- Notes:
+- Date: 2026-08-29
+- Reported by Kitn: all 8 checks passed.
+- Notes: Check 4 took three attempts, and the first two are worth recording
+  because the check as written invited both. The first run used a second
+  character that had rolled the SAME way, so the panel staying on the alternate
+  artwork proved nothing: a gate that reapplied would have produced the same
+  screen. The second run used the loader, which has never touched the theme on
+  any branch, so it could not reach the gate either. Only the third run, an
+  install on a character showing the original artwork and pink chrome, actually
+  exercised it. The check now names the install command and the opposite look
+  for that reason.
+- Also observed: a character the roster does not name rolled into the alternate
+  look in the field, so the randomizer is reaching real characters and not only
+  the test corpus.
+- Also observed: the loader leaves the account theme alone on a character whose
+  own answer differs from it. Not one of the checks above, and true before this
+  branch as well, but it is now evidence rather than assumption.
