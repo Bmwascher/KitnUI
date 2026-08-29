@@ -240,6 +240,10 @@ _G.InCombatLockdown = function() return false end
 _G.SlashCmdList = {}
 _G.EllesmereUIDB = { profiles = { KitnUI = {} } }
 
+-- Frames the companion addon registered, so the scan for the installer login
+-- handler below excludes them by where they came from rather than by number.
+local companionFrames = #frames
+
 local installerCore, installerCoreError = loadfile("Installer/Core.lua")
 check(installerCore ~= nil, "Installer/Core.lua exists", installerCoreError)
 if installerCore then
@@ -760,17 +764,65 @@ if themeChunk then
         eq(ns.db.euiThemeChosen, nil, "a missing theme bridge decides nothing")
         ns.ApplyEUIOptionsTheme = savedApply
 
+        -- Deferred rather than run inside the login handler, and fired here the
+        -- way the game fires it. The companion addon copies the apply across the
+        -- bridge on its own PLAYER_LOGIN, and this addon loads first, so the
+        -- bridge is empty for the whole of this handler.
+        local timers = {}
+        _G.C_Timer = { After = function(delay, fn) timers[#timers + 1] = { delay = delay, fn = fn } end }
+        _G.IsAddOnLoaded = function() return false end
+        _G.StaticPopup_Show = function() return nil end
+        _G.StaticPopupDialogs = {}
+        _G.ReloadUI = function() end
+        _G.CopyTable = function(source)
+            local copy = {}
+            for key, value in pairs(source) do
+                if type(value) == "table" then copy[key] = _G.CopyTable(value) else copy[key] = value end
+            end
+            return copy
+        end
+        _G.C_AddOns.DoesAddOnExist = function() return true end
+        _G.C_AddOns.GetAddOnEnableState = function() return 2 end
+
+        local login, loginFrames = nil, 0
+        for i = companionFrames + 1, #frames do
+            if frames[i].events.PLAYER_LOGIN then
+                login = frames[i]
+                loginFrames = loginFrames + 1
+            end
+        end
+        eq(loginFrames, 1, "the installer registers exactly one login handler")
+        if login then
+            _G.KitnUIDB = { profiles = { EllesmereUI = true } }
+            activeTheme = "EllesmereUI"
+            themeCalls = 0
+            if rolledIn then AsCharacter(rolledIn[1], rolledIn[2]) end
+
+            local bridged = ns.ApplyEUIOptionsTheme
+            ns.ApplyEUIOptionsTheme = nil
+            local fired, fireError = pcall(login.scripts.OnEvent, login, "PLAYER_LOGIN")
+            check(fired, "the login handler runs", fireError)
+            eq(themeCalls, 0, "login itself reaches for no theme while the bridge is empty")
+            eq(ns.db.euiThemeChosen, nil, "login itself records no decision")
+
+            -- Where the companion addon's own login lands.
+            ns.ApplyEUIOptionsTheme = bridged
+            local drained = 0
+            for _, timer in ipairs(timers) do
+                if timer.delay == 0 then
+                    timer.fn()
+                    drained = drained + 1
+                end
+            end
+            eq(drained, 1, "login schedules the catch-up for the next frame")
+            eq(themeCalls, 1, "the deferred catch-up decides once the bridge is filled")
+            eq(activeTheme, ALT_THEME, "the deferred catch-up applies the theme")
+            eq(ns.db.euiThemeChosen, true, "the deferred catch-up records the decision")
+        end
+
         AsCharacter("Tester", "Realm")
     end
 
-    -- Deferred rather than run inside the login handler. The companion addon
-    -- copies the apply across the bridge on its own PLAYER_LOGIN, and this addon
-    -- loads first, so a call made during login can find nothing there.
-    local catchUpFile = assert(io.open("Installer/Core.lua", "rb"))
-    local catchUpText = catchUpFile:read("*a")
-    catchUpFile:close()
-    check(catchUpText:find("C_Timer.After(0, ns.CatchUpAccountTheme)", 1, true) ~= nil,
-        "the login catch-up is deferred past the bridge copy")
 end
 
 if failures > 0 then
