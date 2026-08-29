@@ -1465,11 +1465,19 @@ the check needs an account in that state. Two ways to get one:
 
 - A character on a WoW account that installed KitnUI before the themes shipped
   and has not run the installer since.
-- Or clear the record by hand on a test account and reload.
+- Or clear the record and reload:
 
-The decision is stored account-wide in `KitnUIDB` as `euiThemeChosen`. If it is
-absent and the account has an EllesmereUI profile installed, the login should
-decide.
+      /run KitnUIDB.euiThemeChosen = nil; ReloadUI()
+
+**Do NOT use `/kitn reset` for this.** It replaces the whole saved variable
+table, so it takes the installed-profile record with it, and the catch-up then
+correctly does nothing because the account reads as never having installed.
+Check 1 fails and looks exactly like the deferral being broken.
+
+The decision is stored account-wide in `KitnUIDB` as `euiThemeChosen`. The
+catch-up needs BOTH halves: that key absent, and the EllesmereUI profile record
+present. The macro above clears one and leaves the other, which is the state a
+player upgrading from a build without the themes is in.
 
 ## Checks
 
@@ -1499,9 +1507,30 @@ enough and the fix is a different trigger, not a longer delay.
 - **Whether the account was on a host theme it chose on purpose.** Nothing
   records that, and the themes have never shipped publicly, so no deliberate
   KitnUI theme choice can exist yet. Decided on that basis.
+- **The catch-up on a ROSTER character.** The run below used a character the
+  roster does not name, so the catch-up's answer and the default happened to
+  agree. A roster character would take the same code path through the same
+  shared function, and the headless gate covers that function's roster case, but
+  the combination was not seen in game. Not run deliberately: forcing it means
+  clearing the record on a live account and flipping its theme, then undoing it.
 
 ## Result
 
-- Date:
-- Reported by Kitn:
-- Notes:
+- Date: 2026-08-29
+- Reported by Kitn: checks 1 to 5 passed. Check 6 not run.
+- Notes: Check 1 is the one no test could make, and it passed: the account had
+  its record cleared with the macro above while the profile record stayed, the
+  panel had been set to the host's own theme first, and after the reload it was
+  on a KitnUI theme. That settles the one-frame deferral, which both reviewers
+  could only reason about. Check 2 confirmed the panel and the installer window
+  agreed. Check 4 also demonstrated the account and character surfaces staying
+  independent as designed: after the theme was hand-picked to the alternate, the
+  installer window on that character still showed the original artwork, because
+  the window follows the character and the panel follows the account. That was
+  flagged during design as a possible source of confusion and did not read as
+  one.
+- Check 6 was not run: it needs a WoW account that has never installed KitnUI.
+  Recorded as not run rather than passed.
+- Setup trap found during the run: `/kitn reset` does NOT produce the state this
+  item needs, and fails check 1 in a way that mimics a broken deferral. The
+  "Read this before starting" section now says so and carries the macro instead.
