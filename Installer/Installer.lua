@@ -140,16 +140,36 @@ end
 -- Status helpers
 ---------------------------------------------------------------------------------
 
+-- Three-way import state, and the single owner of the version compare: the status
+-- line and the action button's emphasis both read it.
+--   "none"     no profile was ever imported
+--   "stale"    imported, but the shipped profile is a different version
+--   "current"  imported and matching what ships
+local function GetImportState(addonKey)
+    if not (ns.db and ns.db.profiles and ns.db.profiles[addonKey]) then return "none" end
+    local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
+    local current = ns.GetAddonDataVersion(addonKey)
+    if installed and current and installed ~= current then return "stale" end
+    return "current"
+end
+
 local function GetImportStatus(addonKey)
-    if ns.db and ns.db.profiles and ns.db.profiles[addonKey] then
-        local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
-        local current = ns.GetAddonDataVersion(addonKey)
-        if installed and current and installed ~= current then
-            return ns.Amber("Update available")
-        end
-        return CHECK .. " " .. ns.Green("Imported")
+    local state = GetImportState(addonKey)
+    if state == "none" then return ns.Amber("Not Imported") end
+    if state == "stale" then return ns.Amber("Update available") end
+    return CHECK .. " " .. ns.Green("Imported")
+end
+
+-- Emphasis for an addon page's action button. An import already matching what
+-- ships needs no action, so the page opens the way it looks after a successful
+-- one: the action goes quiet and Next carries the emphasis.
+local function ApplyActionState(addonKey)
+    local btn = WF().Option1
+    if not btn then return end
+    if GetImportState(addonKey) == "current" then
+        HandoffToNext(btn, CHECK .. " Re-import")
     else
-        return ns.Amber("Not Imported")
+        SetVariant(btn, "primary")
     end
 end
 
@@ -315,14 +335,14 @@ function EllesmereUIPage()
             ShowStatusAndVersion("EllesmereUI")
             SuccessToast("EllesmereUI", "profile imported!")
             PlayInstallSound()
-            SetVariant(WF().Next, "primary")
+            HandoffToNext(WF().Option1, CHECK .. " Re-import")
             -- The import applies Dark (Setup.lua), so the buttons appear already
             -- marked. Called here rather than only at page entry so a first
             -- install does not have to leave and come back to see them.
             ShowLookOptions()
         end)
     end)
-    SetVariant(WF().Option1, "primary")
+    ApplyActionState("EllesmereUI")
     ShowLookOptions()
 end
 
@@ -349,7 +369,7 @@ local function SimpleInstallPage(addonKey, displayName)
                 HandoffToNext(WF().Option1, CHECK .. " Re-import")
             end)
         end)
-        SetVariant(WF().Option1, "primary")
+        ApplyActionState(addonKey)
     end
 end
 
@@ -406,7 +426,7 @@ local function NSRTPage()
             HandoffToNext(WF().Option1, CHECK .. " Re-import")
         end)
     end)
-    SetVariant(WF().Option1, "primary")
+    ApplyActionState("NSRT")
     ShowNicknameInput()
 end
 
@@ -433,7 +453,7 @@ local function EditModePage()
             end
         end)
     end)
-    SetVariant(WF().Option1, "primary")
+    ApplyActionState("Blizzard_EditMode")
 end
 
 ---------------------------------------------------------------------------------

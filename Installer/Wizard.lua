@@ -717,6 +717,9 @@ function W:SetPage(n)
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
     W:SetTitleIcon(false)
+    -- Next is shared across pages, so a handoff on one page would otherwise leave
+    -- it emphasised on every later page. Pages that earn the emphasis re-set it.
+    W:SetButtonVariant(W.frame.Next, "ghost")
     W.frame.Desc1:SetText("")
     W.frame.Desc2:SetText("")
     W.frame.Desc3:SetText("")
