@@ -833,49 +833,53 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- the two accent selection keys and ask the host to repaint its own frames;
     -- nothing here is protected and nothing is deferred, so there is no state to
     -- get out of step.
-    local pinkRow
-    pinkRow, h = W:Toggle(parent, "Use KitnUI Pink", y,
-        AccentUsesDefault,
-        function(v)
-            SetAccentUsesDefault(v)
-            -- Unforced: the swatch below redraws through its registered widget
-            -- refresh, and no ownership sentence changed.
-            if _G.EllesmereUI and EllesmereUI.RefreshPage then
-                pcall(EllesmereUI.RefreshPage, EllesmereUI)
-            end
-        end,
-        "On, the accent is KitnUI pink. Off, it is the color in the row below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.")
-                                                                                   y = y - h
-
-    -- The same one-click shape as the row above, writing the same two keys the
-    -- colour picker writes. It reads the stored colour rather than a switch of its
-    -- own, so picking amber by hand in the row below lights it up too.
-    local rastaRow
-    rastaRow, h = W:Toggle(parent, "Use Rasta Amber", y,
-        AccentUsesRasta,
-        function(v)
-            if v then
-                SetAccentCustom(RASTA_R, RASTA_G, RASTA_B)
-            else
-                SetAccentUsesDefault(true)
-            end
-            if _G.EllesmereUI and EllesmereUI.RefreshPage then
-                pcall(EllesmereUI.RefreshPage, EllesmereUI)
-            end
-        end,
-        "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same colour you could pick by hand in the row below, offered by name.")
-                                                                                   y = y - h
+    --
+    -- The two named colours share ONE row because they are alternatives, not
+    -- independent switches: each turns the other off. Stacked full width they
+    -- read as a list and pushed the swatch they both write further down. A dual
+    -- half registers the same widget refresh a full-width toggle does, in the
+    -- toggle branch of the host's dual-row factory, so each still redraws the
+    -- other.
+    local accentChoiceRow
+    accentChoiceRow, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Use KitnUI Pink",
+          tooltip = "On, the accent is KitnUI pink. Off, it is the color in the swatch below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.",
+          getValue = AccentUsesDefault,
+          setValue = function(v)
+              SetAccentUsesDefault(v)
+              -- Unforced: the swatch below redraws through its registered widget
+              -- refresh, and no ownership sentence changed.
+              if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                  pcall(EllesmereUI.RefreshPage, EllesmereUI)
+              end
+          end },
+        -- Reads the stored colour rather than a switch of its own, so picking
+        -- amber by hand in the swatch below lights it up too.
+        { type = "toggle", text = "Use Rasta Amber",
+          tooltip = "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same colour you could pick by hand in the swatch below, offered by name.",
+          getValue = AccentUsesRasta,
+          setValue = function(v)
+              if v then
+                  SetAccentCustom(RASTA_R, RASTA_G, RASTA_B)
+              else
+                  SetAccentUsesDefault(true)
+              end
+              if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                  pcall(EllesmereUI.RefreshPage, EllesmereUI)
+              end
+          end });                                                                  y = y - h
 
     -- Shows the colour that is ACTIVE, not the one that is stored: pink while the
-    -- row above is on, the custom colour while it is off. Showing the stored custom
-    -- colour under a pink accent would put green in the swatch and pink on screen.
+    -- pink switch is on, the custom colour while it is off. Showing the stored
+    -- custom colour under a pink accent would put green in the swatch and pink on
+    -- screen.
     local colorRow
     colorRow, h = W:ColorPicker(parent, "Accent Color", y,
         AccentColor,
         function(r, g, b)
             SetAccentCustom(r, g, b)
-            -- Unforced, like the row above, even though this ALSO switches "Use
-            -- KitnUI Pink" off. W:Toggle registers its own knob redraw as a widget
+            -- Unforced, like the switches above, even though this ALSO moves
+            -- "Use KitnUI Pink". W:Toggle registers its own knob redraw as a widget
             -- refresh (EllesmereUI_Widgets.lua:1727-1733), so the fast path moves
             -- that switch for us. Nothing structural changes here: the veils depend
             -- on the MASTER, which this cannot touch.
@@ -885,12 +889,12 @@ ns.EUIPages["General"] = function(parent, yOffset)
         end)
                                                                                    y = y - h
 
-    -- All three rows are meaningless until the master is on, so they are dimmed
+    -- The colour choice is meaningless until the master is on, so it is dimmed
     -- and made dead rather than hidden: a user who has not turned the master on
-    -- should still see that a colour choice exists.
+    -- should still see that a colour choice exists. One veil per row, and the
+    -- shared row is one row.
     if not AccentEnabled() then
-        Veil(pinkRow)
-        Veil(rastaRow)
+        Veil(accentChoiceRow)
         Veil(colorRow)
     end
 

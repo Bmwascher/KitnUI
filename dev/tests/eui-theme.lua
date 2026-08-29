@@ -376,6 +376,44 @@ do
         "the page can tell whether the stored accent is the alternate one")
 end
 
+-- The two named colour switches share one row. Built as full-width rows they
+-- read as a list rather than a pair of alternatives, and pushed the swatch that
+-- they both write down the page.
+do
+    local generalFile = assert(io.open("KitnUI_EUI/General.lua", "rb"))
+    local generalSource = generalFile:read("*a")
+    generalFile:close()
+
+    local sectionStart = generalSource:find('SectionHeader(parent, "ACCENTS"', 1, true)
+    local sectionEnd = generalSource:find('SectionHeader(parent, "TWEAKS"', 1, true)
+    check(sectionStart ~= nil and sectionEnd ~= nil and sectionEnd > sectionStart,
+        "the accent section can be isolated from the rest of the page")
+
+    if sectionStart and sectionEnd and sectionEnd > sectionStart then
+        local section = generalSource:sub(sectionStart, sectionEnd)
+
+        local dualRows = 0
+        for _ in section:gmatch("W:DualRow") do dualRows = dualRows + 1 end
+        eq(dualRows, 1, "the accent section builds exactly one dual row")
+
+        local dualAt = section:find("W:DualRow", 1, true)
+        local pinkAt = section:find("Use KitnUI Pink", 1, true)
+        local amberAt = section:find("Use Rasta Amber", 1, true)
+        check(pinkAt ~= nil and amberAt ~= nil,
+            "both named colour switches are still on the page")
+        check(dualAt ~= nil and pinkAt ~= nil and amberAt ~= nil
+            and pinkAt > dualAt and amberAt > pinkAt,
+            "both named colour switches sit in the dual row, pink on the left")
+
+        check(section:find('W:Toggle(parent, "Use ', 1, true) == nil,
+            "neither named colour switch is built as a full-width row")
+
+        local veils = 0
+        for _ in section:gmatch("Veil%(") do veils = veils + 1 end
+        eq(veils, 2, "one veil covers the shared row and one covers the swatch")
+    end
+end
+
 if themeChunk then
     local themeCalls = 0
     local lastThemeArg
