@@ -582,7 +582,9 @@ local function variantColours(variant)
     if variant == "primary" then
         return { bg  = { P[1], P[2], P[3], 0.88 }, bgOn  = { P[1], P[2], P[3], 1 },
                  brd = { P[1], P[2], P[3], 1 },    brdOn = { 1, 1, 1, 0.55 },
-                 txt = { 0.06, 0.02, 0.04, 1 },    txtOn = { 0.06, 0.02, 0.04, 1 } }
+                 -- White rather than near-black: dark text on a saturated accent
+                 -- vibrates, and every other emphasis already labels in white.
+                 txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }
     elseif variant == "selectable" then
         return { bg  = { 0, 0, 0, 0.40 },          bgOn  = { P[1], P[2], P[3], 0.16 },
                  brd = { P[1], P[2], P[3], 0.55 }, brdOn = { P[1], P[2], P[3], 0.9 },
@@ -593,7 +595,7 @@ local function variantColours(variant)
                  txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }
     elseif variant == "done" then
         return { bg  = { 1, 1, 1, 0.04 },          bgOn  = { D[1], D[2], D[3], 0.14 },
-                 brd = { D[1], D[2], D[3], 0.5 },  brdOn = { D[1], D[2], D[3], 0.9 },
+                 brd = { D[1], D[2], D[3], 0.7 },  brdOn = { D[1], D[2], D[3], 1 },
                  txt = { D[1], D[2], D[3], 1 },    txtOn = { D[1], D[2], D[3], 1 } }
     end
     return { bg  = { 1, 1, 1, 0.04 },  bgOn  = { 1, 1, 1, 0.10 },
