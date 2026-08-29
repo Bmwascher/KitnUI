@@ -1379,7 +1379,8 @@ installer artwork and the installer chrome, exactly as the roster does.
 
 The options theme is account-wide, and the first import whose theme apply
 succeeds decides it; every import after that leaves it alone. A theme picked from
-the dropdown is never overwritten.
+the dropdown is never overwritten. Item 13 adds the login that decides for an
+account which installed before the themes existed.
 
 ## Read this before starting
 
@@ -1412,8 +1413,9 @@ not. Nothing needs to be imported to see it.
   to stay in a narrow band around a quarter, one that excludes a third and a
   fifth.
 - **An account that installed before this shipped.** It has no record of a
-  decision, so it spends one more import deciding and locks after that. Visible
-  only on an account that predates the change.
+  decision. At the time this item was run, only a further import would give it
+  one; Item 13 replaced that with a login. Visible only on an account that
+  predates the change.
 
 ## Result
 
@@ -1438,3 +1440,68 @@ not. Nothing needs to be imported to see it.
   own answer differs from it. Not one of the checks above, and true at this
   branch's base too, because the theme write sits behind the `import` guard in
   `Installer/Setup.lua`. Now evidence rather than assumption.
+
+---
+
+# Item 13 — A login decides for accounts that predate the themes
+
+Branch `feature/login-theme-catchup`, on top of the merged theme randomizer.
+
+## What it covers
+
+The themes and the randomizer ship together, so every account that installed
+before them carries no theme decision, and no import will ever give it one: the
+theme is written on import and those accounts have already imported. One login
+decides for them, applying that character's own match, and records it. From then
+on nothing reasserts it and the dropdown is theirs.
+
+An account that never installed KitnUI is not touched. KitnUI has no standing to
+pick a theme it was not asked to install.
+
+## Read this before starting
+
+The whole point is the FIRST login on an account with no decision recorded, so
+the check needs an account in that state. Two ways to get one:
+
+- A character on a WoW account that installed KitnUI before the themes shipped
+  and has not run the installer since.
+- Or clear the record by hand on a test account and reload.
+
+The decision is stored account-wide in `KitnUIDB` as `euiThemeChosen`. If it is
+absent and the account has an EllesmereUI profile installed, the login should
+decide.
+
+## Checks
+
+1. On an account with no decision recorded, log in and wait a moment. The
+   EllesmereUI options panel is on a KitnUI theme rather than the host's.
+2. The theme it landed on is the same one that character's installer window
+   shows. Open the installer and compare, then close it without importing.
+3. Reload. The theme does not change and is not reapplied.
+4. Change the theme by hand in the dropdown, then reload. Your choice survives.
+5. Log in on a different character of the same account. The theme does not
+   change, whatever that character's own match is.
+6. On an account that has never installed KitnUI, log in. No KitnUI theme is
+   applied and the host's own theme is untouched.
+
+## The check that cannot be automated
+
+Check 1 is the one no test can make. The theme function is published by the
+companion addon on its own login event, and KitnUI loads first, so the catch-up
+is deliberately deferred by one frame to land after it. If that ordering is wrong
+the catch-up silently does nothing, and check 1 failing is the only signal.
+
+If check 1 fails, say so before anything else: it means the deferral is not
+enough and the fix is a different trigger, not a longer delay.
+
+## Deliberately not covered
+
+- **Whether the account was on a host theme it chose on purpose.** Nothing
+  records that, and the themes have never shipped publicly, so no deliberate
+  KitnUI theme choice can exist yet. Decided on that basis.
+
+## Result
+
+- Date:
+- Reported by Kitn:
+- Notes:
