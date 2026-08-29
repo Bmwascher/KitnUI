@@ -44,7 +44,7 @@ local RASTA_AMBER = { 0.976, 0.549, 0.122 }
 ns.RASTA_AMBER = RASTA_AMBER
 
 -- Every painted highlight reads this rather than either constant. Resolved once
--- when the window is built, which is always after login: the roster is keyed on
+-- when the window is built, which is always after login: the look is keyed on
 -- the character name, which cannot be read before then. It stays the brand colour
 -- until that happens, so anything painting early is still correct.
 local accent = KITN_PINK
@@ -54,9 +54,9 @@ local accent = KITN_PINK
 -- the frame with no stretch, and PANEL_W/PANEL_H match that aspect. Retune both
 -- together if the art changes.
 local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.tga"
--- Roster characters get this one instead. It carries the same geometry -- panel
--- rectangle, sidebar divider and header band all land on the same pixels -- so
--- the crop and the overlay positions below serve both.
+-- Characters on the alternate look get this one instead. It carries the same
+-- geometry -- panel rectangle, sidebar divider and header band all land on the
+-- same pixels -- so the crop and the overlay positions below serve both.
 local ART_PATH_ALT = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Rasta.tga"
 local ART_CROP = { 0.065, 0.940, 0.099, 0.916 }  -- left, right, top, bottom (0..1)
 local PANEL_W, PANEL_H = 760, 560                 -- 1.357:1, matches the cropped panel
@@ -104,7 +104,7 @@ local function skin(frame)
     -- margin; the frame aspect matches the cropped panel so nothing stretches.
     frame.artLayer = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
     frame.artLayer:SetAllPoints()
-    frame.artLayer:SetTexture(ns.OnAltThemeRoster() and ART_PATH_ALT or ART_PATH)
+    frame.artLayer:SetTexture(ns.UsesAltTheme() and ART_PATH_ALT or ART_PATH)
     if frame.artLayer:GetTexture() then
         frame.artLayer:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
     else
@@ -131,7 +131,7 @@ function W:Build()
     -- Resolved here rather than at file scope, where the character name is not
     -- readable yet. Everything painted below, and every helper called after this,
     -- reads the upvalue.
-    accent = ns.OnAltThemeRoster() and RASTA_AMBER or KITN_PINK
+    accent = ns.UsesAltTheme() and RASTA_AMBER or KITN_PINK
 
     local f = CreateFrame("Frame", "KitnUIWizard", UIParent)
     f:SetSize(PANEL_W, PANEL_H)
