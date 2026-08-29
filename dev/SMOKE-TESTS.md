@@ -1363,3 +1363,57 @@ it in the colour swatch.
 - Reported by Kitn: all checks passed.
 - Notes: Run in two parts. The accent behaviour was smoked first, then the
   side-by-side row, the window text and the toast were added and re-smoked.
+
+---
+
+# Item 12 — The theme randomizer, and a backdrop decided once
+
+Branch `feature/theme-randomizer`, on top of the merged alternate accent work.
+
+## What it covers
+
+Characters the roster does not name are now given the alternate look about one
+time in four, decided from the character name and realm rather than drawn, so a
+character always gets the same answer. The look drives the options artwork, the
+installer artwork and the installer chrome, exactly as the roster does.
+
+The options theme is account-wide, so the character that installs first decides
+it and every import after that leaves it alone. A theme picked from the dropdown
+is never overwritten.
+
+## Read this before starting
+
+Finding a second character that rolls the other way may take a few alts. Open
+the installer on each and look at the window: alternate artwork with amber chrome
+means that character rolled in, original artwork with pink chrome means it did
+not. Nothing needs to be imported to see it.
+
+## Checks
+
+1. Non-roster character, open the installer. Record which look it shows. Either
+   answer is correct.
+2. Reload and open it again on the same character: the same look, every time.
+3. Complete the EllesmereUI import on that character. The options panel backdrop
+   matches the look the window showed.
+4. Second non-roster character whose window shows the OTHER look. Run the
+   EllesmereUI import. The options panel backdrop does NOT change.
+5. Change the theme by hand in the dropdown, then run the import again on any
+   character. The hand-picked theme survives.
+6. Roster character: still the alternate artwork and amber chrome, every time.
+7. Target something on a rolled-in character: the nameplate arrow is still PINK.
+8. Chat lines are still pink on every character, rolled in or not.
+
+## Deliberately not covered
+
+- **The one-in-four rate.** It cannot be observed by hand. The headless gate
+  samples four thousand generated keys and fails outside a fifteen to
+  thirty-five percent band.
+- **An account that installed before this shipped.** It has no record of a
+  decision, so it spends one more import deciding and locks after that. Visible
+  only on an account that predates the change.
+
+## Result
+
+- Date:
+- Reported by Kitn:
+- Notes:

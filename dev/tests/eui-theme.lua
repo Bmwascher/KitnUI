@@ -613,21 +613,43 @@ if themeChunk then
     local setupChunk = assert(loadfile("Installer/Setup.lua"))
     setupChunk("KitnUI", ns)
 
+    -- The account carries one options theme, so the character that installs first
+    -- decides it and later imports leave it alone. An alt cannot take it, and a
+    -- theme picked from the dropdown is never overwritten.
+    ns.db.euiThemeChosen = nil
     if rolledOut then AsCharacter(rolledOut[1], rolledOut[2]) end
     eq(ns.SetupAddon("EllesmereUI", true), true, "EUI profile import succeeds")
-    eq(themeCalls, 1, "EUI profile import selects a KitnUI theme")
+    eq(themeCalls, 1, "the first import selects a KitnUI theme")
     eq(lastThemeArg, DEFAULT_THEME, "a character kept on the default look imports Theme A")
     eq(activeTheme, DEFAULT_THEME, "a character kept on the default look ends on Theme A")
+    eq(ns.db.euiThemeChosen, true, "the first import records that the account theme is decided")
 
     if rolledIn then
         AsCharacter(rolledIn[1], rolledIn[2])
-        eq(ns.SetupAddon("EllesmereUI", true), true, "EUI profile import succeeds for a character given the alternate look")
+        eq(ns.SetupAddon("EllesmereUI", true), true, "an import on an alt still succeeds")
+        eq(themeCalls, 1, "an import on an alt does not reach for the theme at all")
+        eq(activeTheme, DEFAULT_THEME, "an alt given the alternate look leaves the account theme alone")
+    end
+
+    activeTheme = ALT_THEME
+    eq(ns.SetupAddon("EllesmereUI", true), true, "an import after a hand-picked theme succeeds")
+    eq(activeTheme, ALT_THEME, "an import after a hand-picked theme leaves it alone")
+
+    -- An account that has not chosen yet still takes the installing character's
+    -- answer, whether the randomizer gave it or the roster did.
+    if rolledIn then
+        ns.db.euiThemeChosen = nil
+        activeTheme = DEFAULT_THEME
+        AsCharacter(rolledIn[1], rolledIn[2])
+        eq(ns.SetupAddon("EllesmereUI", true), true, "a first import succeeds for a character given the alternate look")
         eq(lastThemeArg, ALT_THEME, "a character given the alternate look imports Theme B")
         eq(activeTheme, ALT_THEME, "a character given the alternate look ends on Theme B")
     end
 
+    ns.db.euiThemeChosen = nil
+    activeTheme = DEFAULT_THEME
     AsCharacter("Zenfiki", "Area 52")
-    eq(ns.SetupAddon("EllesmereUI", true), true, "EUI profile import succeeds for a listed character")
+    eq(ns.SetupAddon("EllesmereUI", true), true, "a first import succeeds for a listed character")
     eq(lastThemeArg, ALT_THEME, "a listed character imports with Theme B")
     eq(activeTheme, ALT_THEME, "a listed character ends on Theme B")
 

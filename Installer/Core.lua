@@ -480,6 +480,7 @@ local defaults = {
     bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
+    euiThemeChosen = nil,   -- true once an import has decided the account-wide options theme; absent on an account that installed before this was recorded, which spends one more import deciding
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather
