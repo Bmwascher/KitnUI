@@ -550,38 +550,60 @@ function W:StyleButton(btn, text, fontSize, onClick)
     return bg, brd, lbl
 end
 
--- Retint a styled button to one of four emphases (primary / selectable / done /
--- ghost). Operates on the textures MakeStyledButton created; safe to call twice.
+-- Resting and hover colours for one emphasis, as {r, g, b, a} sets. Derived on
+-- each call rather than held in a table at file scope, because the accent is not
+-- resolved until Build.
+local function variantColours(variant)
+    local P, D = accent, STEP_DONE
+    if variant == "primary" then
+        return { bg  = { P[1], P[2], P[3], 0.88 }, bgOn  = { P[1], P[2], P[3], 1 },
+                 brd = { P[1], P[2], P[3], 1 },    brdOn = { 1, 1, 1, 0.55 },
+                 txt = { 0.06, 0.02, 0.04, 1 },    txtOn = { 0.06, 0.02, 0.04, 1 } }
+    elseif variant == "selectable" then
+        return { bg  = { 0, 0, 0, 0.40 },          bgOn  = { P[1], P[2], P[3], 0.16 },
+                 brd = { P[1], P[2], P[3], 0.55 }, brdOn = { P[1], P[2], P[3], 0.9 },
+                 txt = { 1, 1, 1, 0.95 },          txtOn = { 1, 1, 1, 1 } }
+    elseif variant == "selected" then
+        return { bg  = { P[1], P[2], P[3], 0.22 }, bgOn  = { P[1], P[2], P[3], 0.34 },
+                 brd = { P[1], P[2], P[3], 1 },    brdOn = { P[1], P[2], P[3], 1 },
+                 txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }
+    elseif variant == "done" then
+        return { bg  = { 1, 1, 1, 0.04 },          bgOn  = { D[1], D[2], D[3], 0.14 },
+                 brd = { D[1], D[2], D[3], 0.5 },  brdOn = { D[1], D[2], D[3], 0.9 },
+                 txt = { D[1], D[2], D[3], 1 },    txtOn = { D[1], D[2], D[3], 1 } }
+    end
+    return { bg  = { 1, 1, 1, 0.04 },  bgOn  = { 1, 1, 1, 0.10 },
+             brd = { 1, 1, 1, 0.14 },  brdOn = { 1, 1, 1, 0.32 },
+             txt = { 1, 1, 1, 0.82 },  txtOn = { 1, 1, 1, 1 } }
+end
+
+-- MakeStyledButton's 2nd return is a border OBJECT ({_frame, edges}), not a
+-- texture, so its tint goes through SetColor.
+local function paintButton(btn, bg, brd, txt)
+    btn._bg:SetColorTexture(bg[1], bg[2], bg[3], bg[4])
+    if btn._brd and btn._brd.SetColor then btn._brd:SetColor(brd[1], brd[2], brd[3], brd[4]) end
+    if btn._lbl then btn._lbl:SetTextColor(txt[1], txt[2], txt[3], txt[4]) end
+end
+
+-- Retint a styled button to one of five emphases (primary / selectable / selected
+-- / done / ghost). MakeStyledButton installs hover scripts that repaint from the
+-- colour array it captured, which erases the variant on the first mouse-over, so
+-- the variant owns those scripts instead. Safe to call twice.
 function W:SetButtonVariant(btn, variant)
     if not (btn and btn._bg) then return end
     btn._variant = variant
-    local P = accent
-    -- MakeStyledButton's 2nd return is a border OBJECT ({_frame, edges}), not a
-    -- texture, so only recolor it when it exposes SetColorTexture; the bg fill +
-    -- label color carry the emphasis regardless.
-    local function setBrd(r, g, b, a)
-        if btn._brd and btn._brd.SetColorTexture then btn._brd:SetColorTexture(r, g, b, a) end
-    end
-    if variant == "primary" then
-        btn._bg:SetColorTexture(P[1], P[2], P[3], 1)
-        setBrd(P[1], P[2], P[3], 1)
-        if btn._lbl then btn._lbl:SetTextColor(0.06, 0.02, 0.04, 1) end
-    elseif variant == "selectable" then
-        btn._bg:SetColorTexture(0, 0, 0, 0.40)  -- dark fill so class colors stay legible
-        setBrd(P[1], P[2], P[3], 0.55)
-        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 0.95) end
-    elseif variant == "selected" then
-        btn._bg:SetColorTexture(P[1], P[2], P[3], 0.22)  -- accent wash marks the active choice
-        setBrd(P[1], P[2], P[3], 1)                       -- full accent border
-        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 1) end
-    elseif variant == "done" then
-        btn._bg:SetColorTexture(1, 1, 1, 0.04)
-        setBrd(STEP_DONE[1], STEP_DONE[2], STEP_DONE[3], 0.5)
-        if btn._lbl then btn._lbl:SetTextColor(STEP_DONE[1], STEP_DONE[2], STEP_DONE[3], 1) end
-    else -- ghost
-        btn._bg:SetColorTexture(1, 1, 1, 0.04)
-        setBrd(1, 1, 1, 0.14)
-        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 0.82) end
+    btn._vc = variantColours(variant)
+    paintButton(btn, btn._vc.bg, btn._vc.brd, btn._vc.txt)
+    if not btn._ownsHover then
+        btn._ownsHover = true
+        btn:SetScript("OnEnter", function(b)
+            local c = b._vc
+            if c then paintButton(b, c.bgOn, c.brdOn, c.txtOn) end
+        end)
+        btn:SetScript("OnLeave", function(b)
+            local c = b._vc
+            if c then paintButton(b, c.bg, c.brd, c.txt) end
+        end)
     end
 end
 
