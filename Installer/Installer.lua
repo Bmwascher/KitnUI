@@ -660,7 +660,6 @@ local function BlizzardCDMPage()
     -- so a button styled once would keep the old theme's colours after a swap.
     ApplyCDMActionState()
 
-    -- Per-spec option buttons (Option1..4).
     for i = 1, math.min(numSpecs, 4) do
         local row = rows[i]
         local specName = row.specName
