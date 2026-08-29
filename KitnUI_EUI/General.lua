@@ -879,10 +879,10 @@ ns.EUIPages["General"] = function(parent, yOffset)
         function(r, g, b)
             SetAccentCustom(r, g, b)
             -- Unforced, like the switches above, even though this ALSO moves
-            -- "Use KitnUI Pink". W:Toggle registers its own knob redraw as a widget
-            -- refresh (EllesmereUI_Widgets.lua:1727-1733), so the fast path moves
-            -- that switch for us. Nothing structural changes here: the veils depend
-            -- on the MASTER, which this cannot touch.
+            -- "Use KitnUI Pink". That switch redraws itself through the widget
+            -- refresh its dual-row half registers, described above the row, so the
+            -- fast path moves it for us. Nothing structural changes here: the veils
+            -- depend on the MASTER, which this cannot touch.
             if _G.EllesmereUI and EllesmereUI.RefreshPage then
                 pcall(EllesmereUI.RefreshPage, EllesmereUI)
             end
