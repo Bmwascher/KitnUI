@@ -480,7 +480,7 @@ local defaults = {
     bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
-    euiThemeChosen = nil,   -- true once an import has decided the account-wide options theme; absent on an account that installed before this was recorded, which spends one more import deciding
+    euiThemeChosen = nil,   -- true once an import or the login catch-up has decided the account-wide options theme; absent until KitnUI successfully applies and records one
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather
@@ -497,8 +497,9 @@ end
 
 -- The characters a real profile import gives the alternate options theme to.
 -- Anyone else is left to ns.UsesAltTheme. The active theme is account-wide, so
--- the first import whose theme apply succeeds decides it; nothing reasserts it
--- afterward and the dropdown stays free.
+-- the first import whose theme apply succeeds decides it, or a login does for an
+-- account that installed before the themes existed; nothing reasserts it once
+-- decided and the dropdown stays free.
 local EUI_ALT_THEME_CHARACTERS = {
     "Cznfik-Area 52",
     "Rescuelol-Mal'Ganis",
@@ -550,9 +551,10 @@ end
 
 --- Whether this character gets the alternate look: the installer background and
 --- the amber chrome always, and the artwork on the options panel when this
---- character's import is the one that decides it for the account. True for
---- everyone the roster names, and for a share of everyone it does not. Nil rather
---- than a key means no answer can be derived, and the default look is the safe one.
+--- character is the one that decides the account's theme, whether by import or by
+--- the login catch-up. True for everyone the roster names, and for a share of
+--- everyone it does not. Nil rather than a key means no answer can be derived,
+--- and the default look is the safe one.
 ---
 --- Answered here rather than through the theme bridge, which is absent when the
 --- companion addon is disabled and the wizard still has art to pick.
@@ -569,8 +571,36 @@ function ns.UsesAltTheme()
     return math.floor(KeyHash(key) / 65536) % ALT_THEME_SHARE == 0
 end
 
---- Which options theme this character should be given by an import. Named rather
---- than a boolean so the theme side owns its own names.
+--- Give the account its one options theme unless it already has one. The theme
+--- is account-wide, so this decides once and never again, and a theme picked
+--- from the dropdown afterward is never overwritten. The record is written only
+--- when the apply reports success, so a host that was not ready to take the
+--- theme does not spend the one choice the account gets.
+---
+--- Shared by the import and the login catch-up rather than written twice: two
+--- copies of "apply, and record only on success" would have to be kept in step.
+function ns.DecideAccountTheme()
+    if not ns.db or ns.db.euiThemeChosen then return false end
+    if not ns.ApplyEUIOptionsTheme then return false end
+    if not ns.ApplyEUIOptionsTheme(ns.EUIThemeForCharacter()) then return false end
+
+    ns.db.euiThemeChosen = true
+    return true
+end
+
+--- An account that installed before the themes existed carries no decision, and
+--- no import will ever hand it one, because the theme is written on import and
+--- it has already imported. One login decides for it, and the dropdown is its
+--- own from then on. An account that never installed gets nothing: KitnUI has no
+--- standing to pick a theme it was not asked to install.
+function ns.CatchUpAccountTheme()
+    if not (ns.db and ns.db.profiles and ns.db.profiles["EllesmereUI"]) then return end
+    ns.DecideAccountTheme()
+end
+
+--- Which options theme this character should be given when it is the one
+--- deciding the account's. Named rather than a boolean so the theme side owns its
+--- own names.
 function ns.EUIThemeForCharacter()
     local names = ns.EUIThemeNames
     if type(names) ~= "table" then return nil end
@@ -1017,6 +1047,11 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
+
+    -- Next frame, not here: the companion addon copies the theme apply across
+    -- the bridge on its own PLAYER_LOGIN, and this addon loads first, so a call
+    -- made inside this handler can find nothing to call.
+    C_Timer.After(0, ns.CatchUpAccountTheme)
 
     -- Drained before the EllesmereUI check below, so a message survives a session
     -- where the installer itself is unavailable. The delay matches the login

@@ -701,6 +701,76 @@ if themeChunk then
     eq(ns.SetupAddon("EllesmereUI", false), true, "EUI profile load succeeds")
     eq(themeCalls, importsSoFar, "EUI profile load preserves the selected theme")
     eq(activeTheme, ALT_THEME, "EUI profile load leaves the active theme alone")
+
+    -- Accounts that installed before the themes shipped carry no decision, and
+    -- nothing would ever give them one: the theme is written on import, and they
+    -- have already imported. A login decides for them, once, and then hands the
+    -- dropdown back.
+    check(type(ns.CatchUpAccountTheme) == "function", "the installer publishes the login catch-up")
+    if type(ns.CatchUpAccountTheme) == "function" then
+        local function Reset(installed, decided)
+            ns.db.profiles = installed and { EllesmereUI = true } or {}
+            ns.db.euiThemeChosen = decided or nil
+            activeTheme = "EllesmereUI"
+            themeCalls = 0
+            lastThemeArg = nil
+        end
+
+        -- An account that installed before the themes shipped sits on a host
+        -- theme, not one of ours, which is why the catch-up cannot key on what
+        -- the account is currently wearing.
+        Reset(true, nil)
+        if rolledIn then AsCharacter(rolledIn[1], rolledIn[2]) end
+        ns.CatchUpAccountTheme()
+        eq(themeCalls, 1, "an installed account with no decision is given one at login")
+        eq(lastThemeArg, ALT_THEME, "the login catch-up gives the character its own answer")
+        eq(activeTheme, ALT_THEME, "the login catch-up applies the theme")
+        eq(ns.db.euiThemeChosen, true, "the login catch-up records the decision")
+
+        -- Once per account, never again. This is what hands control back.
+        Reset(true, true)
+        ns.CatchUpAccountTheme()
+        eq(themeCalls, 0, "an account that already decided is left alone at login")
+        eq(activeTheme, "EllesmereUI", "the login catch-up does not touch a decided account")
+
+        -- Never installed: KitnUI has no standing to pick anything.
+        Reset(false, nil)
+        ns.CatchUpAccountTheme()
+        eq(themeCalls, 0, "an account that never installed is left alone at login")
+        eq(ns.db.euiThemeChosen, nil, "an account that never installed records nothing")
+
+        -- A host that was not ready must not spend the one choice the account
+        -- gets, exactly as on the import path.
+        Reset(true, nil)
+        applyFails = true
+        ns.CatchUpAccountTheme()
+        eq(ns.db.euiThemeChosen, nil, "a failed apply at login decides nothing")
+        applyFails = false
+        ns.CatchUpAccountTheme()
+        eq(ns.db.euiThemeChosen, true, "the next login decides after a failed apply")
+
+        -- The bridge carries the apply across from the companion addon and is
+        -- absent when it is disabled. A missing name there fails silently, so the
+        -- catch-up has to notice rather than assume.
+        Reset(true, nil)
+        local savedApply = ns.ApplyEUIOptionsTheme
+        ns.ApplyEUIOptionsTheme = nil
+        local ok, err = pcall(ns.CatchUpAccountTheme)
+        check(ok, "the login catch-up survives a missing theme bridge", err)
+        eq(ns.db.euiThemeChosen, nil, "a missing theme bridge decides nothing")
+        ns.ApplyEUIOptionsTheme = savedApply
+
+        AsCharacter("Tester", "Realm")
+    end
+
+    -- Deferred rather than run inside the login handler. The companion addon
+    -- copies the apply across the bridge on its own PLAYER_LOGIN, and this addon
+    -- loads first, so a call made during login can find nothing there.
+    local catchUpFile = assert(io.open("Installer/Core.lua", "rb"))
+    local catchUpText = catchUpFile:read("*a")
+    catchUpFile:close()
+    check(catchUpText:find("C_Timer.After(0, ns.CatchUpAccountTheme)", 1, true) ~= nil,
+        "the login catch-up is deferred past the bridge copy")
 end
 
 if failures > 0 then
