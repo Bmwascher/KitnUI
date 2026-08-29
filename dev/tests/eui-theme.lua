@@ -588,9 +588,11 @@ if themeChunk then
     local themeCalls = 0
     local lastThemeArg
     local realApply = ns.ApplyEUIOptionsTheme
+    local applyFails = false
     ns.ApplyEUIOptionsTheme = function(name, ...)
         themeCalls = themeCalls + 1
         lastThemeArg = name
+        if applyFails then return false end
         return realApply(name, ...)
     end
 
@@ -652,6 +654,20 @@ if themeChunk then
     eq(ns.SetupAddon("EllesmereUI", true), true, "a first import succeeds for a listed character")
     eq(lastThemeArg, ALT_THEME, "a listed character imports with Theme B")
     eq(activeTheme, ALT_THEME, "a listed character ends on Theme B")
+
+    -- A host that could not take the theme must not spend the one choice the
+    -- account gets, or an install that ran too early would lock everyone out.
+    ns.db.euiThemeChosen = nil
+    activeTheme = DEFAULT_THEME
+    applyFails = true
+    if rolledIn then AsCharacter(rolledIn[1], rolledIn[2]) end
+    eq(ns.SetupAddon("EllesmereUI", true), true, "an import whose theme apply fails still succeeds")
+    eq(ns.db.euiThemeChosen, nil, "a failed theme apply does not decide the account theme")
+
+    applyFails = false
+    eq(ns.SetupAddon("EllesmereUI", true), true, "the import after a failed apply succeeds")
+    eq(lastThemeArg, ALT_THEME, "the import after a failed apply decides the account theme")
+    eq(ns.db.euiThemeChosen, true, "the import after a failed apply records the decision")
 
     local importsSoFar = themeCalls
     eq(ns.SetupAddon("EllesmereUI", false), true, "EUI profile load succeeds")

@@ -495,10 +495,10 @@ function ns.GetCharKey()
     return name .. "-" .. realm
 end
 
--- The characters a real profile import always gives the alternate options theme
--- to. Anyone else is left to ns.UsesAltTheme. The active theme is account-wide,
--- so this is a choice made once at import; nothing reasserts it at login and the
--- dropdown stays free afterward.
+-- The characters a real profile import gives the alternate options theme to.
+-- Anyone else is left to ns.UsesAltTheme. The active theme is account-wide, so
+-- the first import that succeeds decides it; nothing reasserts it afterward and
+-- the dropdown stays free.
 local EUI_ALT_THEME_CHARACTERS = {
     "Cznfik-Area 52",
     "Rescuelol-Mal'Ganis",
@@ -548,10 +548,11 @@ local function KeyHash(key)
     return hash
 end
 
---- Whether this character gets the alternate look: the artwork on the options
---- panel, the installer background, and the amber chrome. True for everyone the
---- roster names, and for a share of everyone it does not. Nil rather than a key
---- means no answer can be derived, and the default look is the safe one.
+--- Whether this character gets the alternate look: the installer background and
+--- the amber chrome always, and the artwork on the options panel when this
+--- character's import is the one that decides it for the account. True for
+--- everyone the roster names, and for a share of everyone it does not. Nil rather
+--- than a key means no answer can be derived, and the default look is the safe one.
 ---
 --- Answered here rather than through the theme bridge, which is absent when the
 --- companion addon is disabled and the wizard still has art to pick.
