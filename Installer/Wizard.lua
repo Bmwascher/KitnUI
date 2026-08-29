@@ -580,7 +580,7 @@ end
 local function variantColours(variant)
     local P, D = accent, STEP_DONE
     if variant == "primary" then
-        return { bg  = { P[1], P[2], P[3], 0.88 }, bgOn  = { P[1], P[2], P[3], 1 },
+        return { bg  = { P[1], P[2], P[3], 0.80 }, bgOn  = { P[1], P[2], P[3], 1 },
                  brd = { P[1], P[2], P[3], 1 },    brdOn = { 1, 1, 1, 0.55 },
                  -- White rather than near-black: dark text on a saturated accent
                  -- vibrates, and every other emphasis already labels in white.
