@@ -562,15 +562,6 @@ function ns.Color(text)
     return string.format("|cffFF008C%s|r", text)
 end
 
--- The same highlight for text drawn INSIDE the installer window, which follows
--- whichever accent the chrome resolved for this character. Chat lines, toasts and
--- popup dialogs keep ns.Color: they are read outside the window, where the
--- roster's colour has nothing around it to agree with.
---
--- Reads the two constants the chrome paints from, so a colour cannot drift
--- between a page's words and the page they sit on. Falls back to the brand rather
--- than erroring, because this runs while a page is being built and a failure here
--- would leave the wizard half drawn.
 -- Truthiness is not enough here: a channel holding a string passes an `and` chain
 -- and then raises on the multiply, and one outside 0-1 formats to more than two
 -- hex digits, which produces an escape the game renders as literal text. Both
@@ -580,6 +571,17 @@ local function AccentByte(v)
     return math.floor(v * 255 + 0.5)
 end
 
+-- The same highlight for text drawn INSIDE the installer window, and for the
+-- success toast, which is drawn over it while the installer runs. Everything read
+-- somewhere else keeps ns.Color: chat lines, printed status, and the host's
+-- confirm popups, where the roster's colour has nothing around it to agree with.
+-- The failure and warning toasts keep their own fixed red and amber, which carry
+-- a meaning the accent would erase.
+--
+-- Reads the two constants the chrome paints from, so a colour cannot drift
+-- between a page's words and the page they sit on. Falls back to the brand rather
+-- than erroring, because this runs while a page is being built and a failure here
+-- would leave the wizard half drawn.
 function ns.WizardColor(text)
     local c = ns.OnAltThemeRoster and ns.OnAltThemeRoster() and ns.RASTA_AMBER or ns.KITN_PINK
     if type(c) ~= "table" then return ns.Color(text) end

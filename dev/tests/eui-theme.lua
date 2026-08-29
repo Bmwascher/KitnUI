@@ -455,6 +455,7 @@ do
             { { 0.976, 0.549 }, "a channel that is absent" },
             { { -1, 0.549, 0.122 }, "a channel below the range" },
             { { 0.976, 2, 0.122 }, "a channel above the range" },
+            { { 0/0, 0.549, 0.122 }, "a channel that is not a number at all" },
             { "F98C1F", "an accent that is not a table" },
         }
         for _, case in ipairs(unusable) do
