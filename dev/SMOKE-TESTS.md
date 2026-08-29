@@ -1363,3 +1363,78 @@ it in the colour swatch.
 - Reported by Kitn: all checks passed.
 - Notes: Run in two parts. The accent behaviour was smoked first, then the
   side-by-side row, the window text and the toast were added and re-smoked.
+
+---
+
+# Item 12 — The theme randomizer, and a backdrop decided once
+
+Branch `feature/theme-randomizer`, on top of the merged alternate accent work.
+
+## What it covers
+
+Characters the roster does not name are now given the alternate look about one
+time in four, decided from the character name and realm rather than drawn, so a
+character always gets the same answer. The look drives the options artwork, the
+installer artwork and the installer chrome, exactly as the roster does.
+
+The options theme is account-wide, and the first import whose theme apply
+succeeds decides it; every import after that leaves it alone. A theme picked from
+the dropdown is never overwritten.
+
+## Read this before starting
+
+Finding a second character that rolls the other way may take a few alts. Open
+the installer on each and look at the window: alternate artwork with amber chrome
+means that character rolled in, original artwork with pink chrome means it did
+not. Nothing needs to be imported to see it.
+
+## Checks
+
+1. Non-roster character, open the installer. Record which look it shows. Either
+   answer is correct.
+2. Reload and open it again on the same character: the same look, every time.
+3. Complete the EllesmereUI import on that character. The options panel backdrop
+   matches the look the window showed.
+4. Second non-roster character whose window shows the OTHER look. Run
+   `/kitn install` and let the EllesmereUI step import. The options panel
+   backdrop does NOT change. The command is named because the loader walks an
+   EllesmereUI step too, and the loader cannot reach what this check tests.
+5. Change the theme by hand in the dropdown, then run the import again on any
+   character. The hand-picked theme survives.
+6. Roster character: still the alternate artwork and amber chrome, every time.
+7. Target something on a rolled-in character: the nameplate arrow is still PINK.
+8. Chat lines are still pink on every character, rolled in or not.
+
+## Deliberately not covered
+
+- **The one-in-four rate.** It cannot be observed by hand. The headless gate
+  samples generated keys across varied names and realms and requires the share
+  to stay in a narrow band around a quarter, one that excludes a third and a
+  fifth.
+- **An account that installed before this shipped.** It has no record of a
+  decision, so it spends one more import deciding and locks after that. Visible
+  only on an account that predates the change.
+
+## Result
+
+- Date: 2026-08-29
+- Reported by Kitn: all 8 checks passed.
+- Notes: Check 4 took three attempts, and the two that failed did so for
+  different reasons. The first did not follow the check: it used a second
+  character that had rolled the SAME way where the check asks for the other
+  look, so the panel staying on the alternate artwork proved nothing, because a
+  gate that reapplied would have produced the same screen. The second exposed an
+  ambiguity in the check: it said to run the EllesmereUI import without naming a
+  command, and the loader walks an EllesmereUI step as well. The theme write
+  sits behind the `import` guard in `Installer/Setup.lua`, at this branch and at
+  its base, so a loader run cannot reach it. Only the third attempt,
+  `/kitn install` on a character showing the original artwork and pink chrome,
+  produced a non-vacuous observation of the gate. Check 4 has since been given
+  the command name; the opposite-look requirement was always there.
+- Also observed: a character the roster does not name rolled into the alternate
+  look in the field, so the randomizer is reaching real characters and not only
+  the test corpus.
+- Also observed: the loader leaves the account theme alone on a character whose
+  own answer differs from it. Not one of the checks above, and true at this
+  branch's base too, because the theme write sits behind the `import` guard in
+  `Installer/Setup.lua`. Now evidence rather than assumption.

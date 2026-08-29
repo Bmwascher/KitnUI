@@ -480,6 +480,7 @@ local defaults = {
     bflSnap = {},           -- what BetterFriendlist's appearance keys held before KitnUI took them (see ApplyBetterFriendlistAppearance)
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
+    euiThemeChosen = nil,   -- true once an import has decided the account-wide options theme; absent on an account that installed before this was recorded, which spends one more import deciding
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather
@@ -495,9 +496,9 @@ function ns.GetCharKey()
 end
 
 -- The characters a real profile import gives the alternate options theme to.
--- Everyone else gets the default one. The active theme is account-wide, so this
--- is a choice made once at import; nothing reasserts it at login and the
--- dropdown stays free afterward.
+-- Anyone else is left to ns.UsesAltTheme. The active theme is account-wide, so
+-- the first import whose theme apply succeeds decides it; nothing reasserts it
+-- afterward and the dropdown stays free.
 local EUI_ALT_THEME_CHARACTERS = {
     "Cznfik-Area 52",
     "Rescuelol-Mal'Ganis",
@@ -525,13 +526,47 @@ for _, key in ipairs(EUI_ALT_THEME_CHARACTERS) do
     altThemeCharacters[CanonicalCharKey(key)] = true
 end
 
---- Whether this character is on the roster. The wizard art asks the same
---- question as the options theme but answers it in its own namespace, so it
---- cannot be made to depend on the theme bridge, which is absent when KitnUI_EUI
---- is disabled.
+--- Whether this character is named on the roster. Only the by-name half of the
+--- look question; ns.UsesAltTheme is the whole of it.
 function ns.OnAltThemeRoster()
     local key = CanonicalCharKey(ns.GetCharKey())
     return (key ~= nil and altThemeCharacters[key] == true)
+end
+
+-- One character in this many, among those the roster does not name, is given the
+-- alternate look as well.
+local ALT_THEME_SHARE = 4
+
+-- Derived from the character key, never drawn: an import must be able to run
+-- twice and reach the same theme. Multiply-and-add over the bytes, kept inside
+-- the range a double holds exactly.
+local function KeyHash(key)
+    local hash = 5381
+    for i = 1, #key do
+        hash = (hash * 33 + key:byte(i)) % 4294967296
+    end
+    return hash
+end
+
+--- Whether this character gets the alternate look: the installer background and
+--- the amber chrome always, and the artwork on the options panel when this
+--- character's import is the one that decides it for the account. True for
+--- everyone the roster names, and for a share of everyone it does not. Nil rather
+--- than a key means no answer can be derived, and the default look is the safe one.
+---
+--- Answered here rather than through the theme bridge, which is absent when the
+--- companion addon is disabled and the wizard still has art to pick.
+---
+--- The low bits are structurally weak: 33 is 1 modulo 4, so the last two bits
+--- reduce to the sum of the bytes and any two names built from the same letters
+--- would agree. The value is folded first so the split reads bits every byte of
+--- the key reached.
+function ns.UsesAltTheme()
+    if ns.OnAltThemeRoster() then return true end
+
+    local key = CanonicalCharKey(ns.GetCharKey())
+    if key == nil then return false end
+    return math.floor(KeyHash(key) / 65536) % ALT_THEME_SHARE == 0
 end
 
 --- Which options theme this character should be given by an import. Named rather
@@ -540,7 +575,7 @@ function ns.EUIThemeForCharacter()
     local names = ns.EUIThemeNames
     if type(names) ~= "table" then return nil end
 
-    if ns.OnAltThemeRoster() then return names.alt end
+    if ns.UsesAltTheme() then return names.alt end
     return names.default
 end
 
@@ -574,7 +609,7 @@ end
 -- The same highlight for text drawn INSIDE the installer window, and for the
 -- success toast, which is drawn over it while the installer runs. Everything read
 -- somewhere else keeps ns.Color: chat lines, printed status, and the host's
--- confirm popups, where the roster's colour has nothing around it to agree with.
+-- confirm popups, where the window's colour has nothing around it to agree with.
 -- The failure and warning toasts keep their own fixed red and amber, which carry
 -- a meaning the accent would erase.
 --
@@ -583,7 +618,7 @@ end
 -- than erroring, because this runs while a page is being built and a failure here
 -- would leave the wizard half drawn.
 function ns.WizardColor(text)
-    local c = ns.OnAltThemeRoster and ns.OnAltThemeRoster() and ns.RASTA_AMBER or ns.KITN_PINK
+    local c = ns.UsesAltTheme and ns.UsesAltTheme() and ns.RASTA_AMBER or ns.KITN_PINK
     if type(c) ~= "table" then return ns.Color(text) end
     local r, g, b = AccentByte(c[1]), AccentByte(c[2]), AccentByte(c[3])
     if not (r and g and b) then return ns.Color(text) end

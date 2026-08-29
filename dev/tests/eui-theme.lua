@@ -247,6 +247,11 @@ if installerCore then
     check(loaded, "Installer/Core.lua loads in the test harness", runError)
 end
 
+-- Two unlisted characters found by asking, one given the alternate look and one
+-- not. Later blocks reuse them so that no check has to name a character whose
+-- answer it cannot derive.
+local rolledIn, rolledOut
+
 check(type(ns.EUIThemeForCharacter) == "function", "the installer publishes a per-character theme choice")
 if type(ns.EUIThemeForCharacter) == "function" then
     -- Exact recognition, compared without spaces, apostrophes or case, because
@@ -282,21 +287,102 @@ if type(ns.EUIThemeForCharacter) == "function" then
     AsCharacter("Rescuelol", "MalGanis")
     eq(ns.EUIThemeForCharacter(), ALT_THEME, "a realm apostrophe does not decide the theme")
 
+    -- Recognition is exact, so a near miss is off the roster. Which theme an
+    -- unlisted character is then given is a separate question.
     AsCharacter("Stranger", "Area 52")
-    eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "an unlisted name gets Theme A")
     eq(OnRoster(), false, "an unlisted name is off the roster")
     AsCharacter("Cznfik", "Another Realm")
-    eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "a listed name on another realm gets Theme A")
+    eq(OnRoster(), false, "a listed name on another realm is off the roster")
     AsCharacter("Cznf", "Area 52")
-    eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "a partial name match gets Theme A")
+    eq(OnRoster(), false, "a partial name match is off the roster")
     AsCharacter(nil, "Area 52")
     eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "an unreadable character name gets Theme A")
     eq(OnRoster(), false, "an unreadable character name is off the roster")
+
+    -- Characters the roster does not name are given the alternate look some of
+    -- the time. The pick is derived from the character key rather than drawn, so
+    -- a reinstall lands on the same theme and the installer stays idempotent.
+    check(type(ns.UsesAltTheme) == "function", "the installer publishes the alternate-look test")
+    if type(ns.UsesAltTheme) == "function" then
+        -- Sampled rather than written down: a pair of pinned names would record
+        -- only what the hash happens to do today, and would have to be rewritten
+        -- every time it changed.
+        --
+        -- Varied in prefix, in length and in realm. A corpus sharing one prefix
+        -- and one realm differs only in its trailing bytes, which is not where
+        -- real keys differ: the realm always follows the name, so the bytes that
+        -- tell two characters apart sit deep in the accumulator.
+        local SYLLABLES = { "ka", "ro", "thal", "mir", "zen", "dru", "vex", "ael",
+            "gor", "nyx", "sil", "bram", "tor", "fen", "lys", "quo" }
+        local REALMS = { "Area 52", "Mal'Ganis", "Stormrage", "Tichondrius",
+            "Illidan", "Sargeras", "Thrall", "Kel'Thuzad" }
+
+        local sample, given = 0, 0
+        for a = 1, #SYLLABLES do
+            for b = 1, #SYLLABLES do
+                for c = 1, #SYLLABLES do
+                    local name = SYLLABLES[a] .. SYLLABLES[b] .. SYLLABLES[c]
+                    for r = 1, #REALMS do
+                        AsCharacter(name, REALMS[r])
+                        sample = sample + 1
+                        if ns.UsesAltTheme() then
+                            given = given + 1
+                            rolledIn = rolledIn or { name, REALMS[r] }
+                        else
+                            rolledOut = rolledOut or { name, REALMS[r] }
+                        end
+                    end
+                end
+            end
+        end
+
+        check(rolledIn ~= nil, "some unlisted characters are given the alternate look")
+        check(rolledOut ~= nil, "some unlisted characters keep the default look")
+
+        -- A quarter, in a band narrow enough to exclude a third and a fifth.
+        -- The corpus and its result are deterministic, so no allowance for
+        -- run-to-run noise is needed and widening the band for that reason would
+        -- be wrong. What this bounds is the share the selector produces over
+        -- this corpus, which is not the same as proving which residue it picks.
+        local share = given / sample
+        check(share > 0.22 and share < 0.28,
+            "roughly one unlisted character in four is given the alternate look",
+            string.format("%.3f", share))
+
+        if rolledIn then
+            AsCharacter(rolledIn[1], rolledIn[2])
+            eq(ns.UsesAltTheme(), true, "a key given the alternate look answers the same way twice")
+            eq(OnRoster(), false, "a character given the alternate look is still off the roster")
+            eq(ns.EUIThemeForCharacter(), ALT_THEME, "a character given the alternate look imports Theme B")
+
+            -- Canonicalized on the roster's terms, so the punctuation the realm
+            -- string carries cannot decide which look a character is given.
+            AsCharacter(rolledIn[1]:lower(), rolledIn[2]:gsub("%s", ""))
+            eq(ns.UsesAltTheme(), true, "case and spacing do not decide the look")
+        end
+
+        if rolledOut then
+            AsCharacter(rolledOut[1], rolledOut[2])
+            eq(ns.UsesAltTheme(), false, "a key kept on the default answers the same way twice")
+            eq(ns.EUIThemeForCharacter(), DEFAULT_THEME, "a character kept on the default imports Theme A")
+        end
+
+        -- Whatever a listed key hashes to, the roster decides it.
+        for _, who in ipairs(allowed) do
+            AsCharacter(who[1], who[2])
+            eq(ns.UsesAltTheme(), true, who[1] .. "-" .. who[2] .. " is given the alternate look by name")
+        end
+
+        AsCharacter(nil, "Area 52")
+        eq(ns.UsesAltTheme(), false, "an unreadable character name is never given the alternate look")
+    end
+
     AsCharacter("Tester", "Realm")
 end
 
--- The installer wizard art follows the same roster. Its texcoords crop a fixed
--- rectangle out of the file, so a background of another shape would crop wrong.
+-- The installer wizard art follows the same alternate-look test. Its texcoords
+-- crop a fixed rectangle out of the file, so a background of another shape would
+-- crop wrong.
 do
     local function TgaHeader(path)
         local file = io.open(path, "rb")
@@ -331,17 +417,19 @@ do
     wizardFile:close()
     check(wizardSource:find("KitnUI-EUI-Background-Rasta.tga", 1, true) ~= nil,
         "the wizard names the alternate background")
-    check(wizardSource:find("ns.OnAltThemeRoster", 1, true) ~= nil,
-        "the wizard picks its background from the roster")
+    check(wizardSource:find("ns.UsesAltTheme", 1, true) ~= nil,
+        "the wizard picks its background from the alternate-look test")
+    check(wizardSource:find("ns.OnAltThemeRoster", 1, true) == nil,
+        "the wizard no longer asks the roster directly")
 
-    -- The wizard chrome follows the roster, but the exported brand colour must
-    -- not: the Nameplates page defaults its target arrow to it.
+    -- The wizard chrome follows the alternate look, but the exported brand colour
+    -- must not: the Nameplates page defaults its target arrow to it.
     check(wizardSource:find("local KITN_PINK = { 1, 0, 0.549 }", 1, true) ~= nil,
         "the brand accent value is unchanged")
     check(wizardSource:find("ns.KITN_PINK = KITN_PINK", 1, true) ~= nil,
         "the brand accent is still exported unchanged")
-    check(wizardSource:find("accent = ns.OnAltThemeRoster()", 1, true) ~= nil,
-        "the wizard resolves its accent from the roster")
+    check(wizardSource:find("accent = ns.UsesAltTheme()", 1, true) ~= nil,
+        "the wizard resolves its accent from the alternate-look test")
     check(wizardSource:find("KITN_PINK%[") == nil,
         "no wizard chrome paints from the brand constant directly")
     check(wizardSource:find("local P = KITN_PINK", 1, true) == nil,
@@ -416,7 +504,7 @@ end
 
 -- Text drawn inside the installer window follows the same accent the chrome
 -- does. Chat lines and popup dialogs keep the brand pink: they are read outside
--- the window, where the roster's colour would look arbitrary.
+-- the window, where the window's colour would look arbitrary.
 do
     local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
     local wizardSource = wizardFile:read("*a")
@@ -435,9 +523,17 @@ do
         ns.KITN_PINK = { tonumber(pr), tonumber(pg), tonumber(pb) }
         ns.RASTA_AMBER = { tonumber(ar), tonumber(ag), tonumber(ab) }
 
-        AsCharacter("Stranger", "Area 52")
-        eq(ns.WizardColor("KitnUI"), "|cffFF008CKitnUI|r",
-            "window text is brand pink off the roster")
+        if rolledOut then
+            AsCharacter(rolledOut[1], rolledOut[2])
+            eq(ns.WizardColor("KitnUI"), "|cffFF008CKitnUI|r",
+                "window text is brand pink on a character kept on the default look")
+        end
+
+        if rolledIn then
+            AsCharacter(rolledIn[1], rolledIn[2])
+            eq(ns.WizardColor("KitnUI"), "|cffF98C1FKitnUI|r",
+                "window text is the alternate accent on a character given the alternate look")
+        end
 
         AsCharacter("Bite", "Area 52")
         eq(ns.WizardColor("KitnUI"), "|cffF98C1FKitnUI|r",
@@ -513,9 +609,11 @@ if themeChunk then
     local themeCalls = 0
     local lastThemeArg
     local realApply = ns.ApplyEUIOptionsTheme
+    local applyFails = false
     ns.ApplyEUIOptionsTheme = function(name, ...)
         themeCalls = themeCalls + 1
         lastThemeArg = name
+        if applyFails then return false end
         return realApply(name, ...)
     end
 
@@ -538,18 +636,70 @@ if themeChunk then
     local setupChunk = assert(loadfile("Installer/Setup.lua"))
     setupChunk("KitnUI", ns)
 
+    -- The account carries one options theme, and the first import whose theme
+    -- apply succeeds decides it; later imports leave it alone. An alt cannot take
+    -- it, and a theme picked from the dropdown is never overwritten.
+    ns.db.euiThemeChosen = nil
+    if rolledOut then AsCharacter(rolledOut[1], rolledOut[2]) end
     eq(ns.SetupAddon("EllesmereUI", true), true, "EUI profile import succeeds")
-    eq(themeCalls, 1, "EUI profile import selects a KitnUI theme")
-    eq(lastThemeArg, DEFAULT_THEME, "an unlisted character imports with Theme A")
-    eq(activeTheme, DEFAULT_THEME, "an unlisted character ends on Theme A")
+    eq(themeCalls, 1, "the first import selects a KitnUI theme")
+    eq(lastThemeArg, DEFAULT_THEME, "a character kept on the default look imports Theme A")
+    eq(activeTheme, DEFAULT_THEME, "a character kept on the default look ends on Theme A")
+    eq(ns.db.euiThemeChosen, true, "the first import records that the account theme is decided")
 
+    if rolledIn then
+        AsCharacter(rolledIn[1], rolledIn[2])
+        eq(ns.SetupAddon("EllesmereUI", true), true, "an import on an alt still succeeds")
+        eq(themeCalls, 1, "an import on an alt does not reach for the theme at all")
+        eq(activeTheme, DEFAULT_THEME, "an alt given the alternate look leaves the account theme alone")
+    end
+
+    -- Hand-picked on a character whose own answer is the DEFAULT theme. A gate
+    -- that reapplied would put the default back, and the alternate surviving is
+    -- what disproves that; run on a character the randomizer already agrees with,
+    -- the check would pass either way.
+    if rolledOut then AsCharacter(rolledOut[1], rolledOut[2]) end
+    activeTheme = ALT_THEME
+    local callsBeforeHandPick = themeCalls
+    eq(ns.SetupAddon("EllesmereUI", true), true, "an import after a hand-picked theme succeeds")
+    eq(themeCalls, callsBeforeHandPick, "an import after a hand-picked theme does not reach for the theme")
+    eq(activeTheme, ALT_THEME, "an import after a hand-picked theme leaves it alone")
+
+    -- An account that has not chosen yet still takes the installing character's
+    -- answer, whether the randomizer gave it or the roster did.
+    if rolledIn then
+        ns.db.euiThemeChosen = nil
+        activeTheme = DEFAULT_THEME
+        AsCharacter(rolledIn[1], rolledIn[2])
+        eq(ns.SetupAddon("EllesmereUI", true), true, "a first import succeeds for a character given the alternate look")
+        eq(lastThemeArg, ALT_THEME, "a character given the alternate look imports Theme B")
+        eq(activeTheme, ALT_THEME, "a character given the alternate look ends on Theme B")
+    end
+
+    ns.db.euiThemeChosen = nil
+    activeTheme = DEFAULT_THEME
     AsCharacter("Zenfiki", "Area 52")
-    eq(ns.SetupAddon("EllesmereUI", true), true, "EUI profile import succeeds for a listed character")
+    eq(ns.SetupAddon("EllesmereUI", true), true, "a first import succeeds for a listed character")
     eq(lastThemeArg, ALT_THEME, "a listed character imports with Theme B")
     eq(activeTheme, ALT_THEME, "a listed character ends on Theme B")
 
+    -- A host that could not take the theme must not spend the one choice the
+    -- account gets, or an install that ran too early would lock everyone out.
+    ns.db.euiThemeChosen = nil
+    activeTheme = DEFAULT_THEME
+    applyFails = true
+    if rolledIn then AsCharacter(rolledIn[1], rolledIn[2]) end
+    eq(ns.SetupAddon("EllesmereUI", true), true, "an import whose theme apply fails still succeeds")
+    eq(ns.db.euiThemeChosen, nil, "a failed theme apply does not decide the account theme")
+
+    applyFails = false
+    eq(ns.SetupAddon("EllesmereUI", true), true, "the import after a failed apply succeeds")
+    eq(lastThemeArg, ALT_THEME, "the import after a failed apply decides the account theme")
+    eq(ns.db.euiThemeChosen, true, "the import after a failed apply records the decision")
+
+    local importsSoFar = themeCalls
     eq(ns.SetupAddon("EllesmereUI", false), true, "EUI profile load succeeds")
-    eq(themeCalls, 2, "EUI profile load preserves the selected theme")
+    eq(themeCalls, importsSoFar, "EUI profile load preserves the selected theme")
     eq(activeTheme, ALT_THEME, "EUI profile load leaves the active theme alone")
 end
 
