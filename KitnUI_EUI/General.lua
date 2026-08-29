@@ -804,9 +804,9 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- so dropping the spacer is what joins the two blocks visually.
     _, h = W:SectionHeader(parent, "ACCENTS", y);                                  y = y - h
 
-    -- The MASTER, and the only one of the three that claims anything. Unchanged
-    -- from the switch this replaces except for its label and its tooltip: same
-    -- setter, same ApplyAccent(true), same rebuild.
+    -- The MASTER, and the only control in this section that claims anything.
+    -- Unchanged from the switch this replaces except for its label and its
+    -- tooltip: same setter, same ApplyAccent(true), same rebuild.
     _, h = W:Toggle(parent, "KitnUI Accent Coloring", y,
         AccentEnabled,
         function(v)
@@ -828,10 +828,11 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "EllesmereUI's accent color and the settings it is scoped to"));
                                                                                    y = y - h
 
-    -- Neither of the next two claims anything, so neither needs a combat guard,
-    -- unlike the look and the resource bar. Each writes one KitnUI setting and asks
-    -- the host to repaint its own frames; nothing here is protected and nothing is
-    -- deferred, so there is no state to get out of step.
+    -- None of the colour-choice controls below claims anything, so none needs a
+    -- combat guard, unlike the look and the resource bar. Between them they write
+    -- the two accent selection keys and ask the host to repaint its own frames;
+    -- nothing here is protected and nothing is deferred, so there is no state to
+    -- get out of step.
     local pinkRow
     pinkRow, h = W:Toggle(parent, "Use KitnUI Pink", y,
         AccentUsesDefault,
