@@ -160,15 +160,19 @@ local function GetImportStatus(addonKey)
     return CHECK .. " " .. ns.Green("Imported")
 end
 
--- Emphasis for an addon page's action button. An import already matching what
--- ships needs no action, so the page opens the way it looks after a successful
--- one: the action goes quiet and Next carries the emphasis.
-local function ApplyActionState(addonKey)
+-- Label and emphasis for an addon page's action button. An import already
+-- matching what ships needs no action, so the page opens the way it looks after a
+-- successful one: the action goes quiet and Next carries the emphasis. An older
+-- import is relabelled so the button agrees with the status line above it;
+-- updateText covers pages whose action reads as more than the bare verb.
+local function ApplyActionState(addonKey, updateText)
     local btn = WF().Option1
     if not btn then return end
-    if GetImportState(addonKey) == "current" then
+    local state = GetImportState(addonKey)
+    if state == "current" then
         HandoffToNext(btn, CHECK .. " Re-import")
     else
+        if state == "stale" and btn._lbl then btn._lbl:SetText(updateText or "Update") end
         SetVariant(btn, "primary")
     end
 end
@@ -342,7 +346,7 @@ function EllesmereUIPage()
             ShowLookOptions()
         end)
     end)
-    ApplyActionState("EllesmereUI")
+    ApplyActionState("EllesmereUI", "Update Profile")
     ShowLookOptions()
 end
 
