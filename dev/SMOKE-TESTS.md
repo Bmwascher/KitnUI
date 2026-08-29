@@ -1395,8 +1395,10 @@ not. Nothing needs to be imported to see it.
 2. Reload and open it again on the same character: the same look, every time.
 3. Complete the EllesmereUI import on that character. The options panel backdrop
    matches the look the window showed.
-4. Second non-roster character whose window shows the OTHER look. Run the
-   EllesmereUI import. The options panel backdrop does NOT change.
+4. Second non-roster character whose window shows the OTHER look. Run
+   `/kitn install` and let the EllesmereUI step import. The options panel
+   backdrop does NOT change. The command is named because the loader walks an
+   EllesmereUI step too, and the loader cannot reach what this check tests.
 5. Change the theme by hand in the dropdown, then run the import again on any
    character. The hand-picked theme survives.
 6. Roster character: still the alternate artwork and amber chrome, every time.
@@ -1417,18 +1419,22 @@ not. Nothing needs to be imported to see it.
 
 - Date: 2026-08-29
 - Reported by Kitn: all 8 checks passed.
-- Notes: Check 4 took three attempts, and the first two are worth recording
-  because the check as written invited both. The first run used a second
-  character that had rolled the SAME way, so the panel staying on the alternate
-  artwork proved nothing: a gate that reapplied would have produced the same
-  screen. The second run used the loader, which has never touched the theme on
-  any branch, so it could not reach the gate either. Only the third run, an
-  install on a character showing the original artwork and pink chrome, actually
-  exercised it. The check now names the install command and the opposite look
-  for that reason.
+- Notes: Check 4 took three attempts, and the two that failed did so for
+  different reasons. The first did not follow the check: it used a second
+  character that had rolled the SAME way where the check asks for the other
+  look, so the panel staying on the alternate artwork proved nothing, because a
+  gate that reapplied would have produced the same screen. The second followed
+  the check as written, and the check was at fault: it said to run the
+  EllesmereUI import without naming a command, and the loader walks an
+  EllesmereUI step as well. The theme write sits behind the `import` guard in
+  `Installer/Setup.lua`, at this branch and at its base, so a loader run cannot
+  reach it. Only the third attempt, `/kitn install` on a character showing the
+  original artwork and pink chrome, exercised the gate. Check 4 has since been
+  given the command name; the opposite-look requirement was always there.
 - Also observed: a character the roster does not name rolled into the alternate
   look in the field, so the randomizer is reaching real characters and not only
   the test corpus.
 - Also observed: the loader leaves the account theme alone on a character whose
-  own answer differs from it. Not one of the checks above, and true before this
-  branch as well, but it is now evidence rather than assumption.
+  own answer differs from it. Not one of the checks above, and true at this
+  branch's base too, because the theme write sits behind the `import` guard in
+  `Installer/Setup.lua`. Now evidence rather than assumption.
