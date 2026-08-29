@@ -49,6 +49,16 @@ ns.RASTA_AMBER = RASTA_AMBER
 -- until that happens, so anything painting early is still correct.
 local accent = KITN_PINK
 
+-- Every accent paint registers here and runs at once. A theme swap has to repaint
+-- what was already drawn, and a list of painters is the only thing that cannot
+-- fall behind a site added later: a site that never registers is a site that never
+-- follows the accent, which is visible immediately rather than only on a swap.
+local accentPainters = {}
+local function onAccent(paint)
+    accentPainters[#accentPainters + 1] = paint
+    paint(accent)
+end
+
 -- Baked installer background art: a ~1.36:1 panel inside a black margin,
 -- shipped as an uncompressed TGA. ART_CROP drops the margin so the panel fills
 -- the frame with no stretch, and PANEL_W/PANEL_H match that aspect. Retune both
@@ -68,6 +78,7 @@ local SIDEBAR_W = 176                   -- baked sidebar width (art divider @ x~
 local CONTENT_X = SIDEBAR_W + 24        -- left edge of the content column
 local STEP_DONE = { 0.43, 0.75, 0.61 }  -- green check for completed steps
 local OPTION_W  = 165                   -- default action-button width (CDM shrinks to fit)
+local OPTION_FONT = 14                  -- matches the nav row, so the action never reads smaller than Next
 local STEP_MAXW = 148                   -- max step-label width before the baked divider
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
@@ -77,6 +88,18 @@ local BTN_COLOURS = {
     1, 1, 1, 0.3,               1, 1, 1, 0.45,
     1, 1, 1, 0.55,              1, 1, 1, 0.70,
 }
+
+-- Point the background at the theme in force. Called again on a theme swap, so a
+-- texture that failed once is retried rather than left hidden.
+local function paintArt(tex)
+    tex:SetTexture(ns.UsesAltTheme() and ART_PATH_ALT or ART_PATH)
+    if tex:GetTexture() then
+        tex:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
+        tex:Show()
+    else
+        tex:Hide()  -- art failed to load; fall back to the drawn fill/gradient
+    end
+end
 
 local function euiReady()
     return _G.EllesmereUI and EllesmereUI.MakeBorder and EllesmereUI.MakeStyledButton
@@ -104,12 +127,7 @@ local function skin(frame)
     -- margin; the frame aspect matches the cropped panel so nothing stretches.
     frame.artLayer = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
     frame.artLayer:SetAllPoints()
-    frame.artLayer:SetTexture(ns.UsesAltTheme() and ART_PATH_ALT or ART_PATH)
-    if frame.artLayer:GetTexture() then
-        frame.artLayer:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
-    else
-        frame.artLayer:Hide()  -- art failed to load; fall back to the drawn fill/gradient
-    end
+    paintArt(frame.artLayer)
     -- border
     if EllesmereUI.MakeBorder then
         EllesmereUI.MakeBorder(frame, BORDER_COL[1], BORDER_COL[2], BORDER_COL[3], BORDER_COL[4], EllesmereUI.PanelPP)
@@ -195,7 +213,7 @@ function W:Build()
     for i = 1, 4 do
         local b = CreateFrame("Button", nil, f)
         b:SetSize(OPTION_W, 34)
-        local bg, brd, lbl = EllesmereUI.MakeStyledButton(b, "", 13, BTN_COLOURS, function()
+        local bg, brd, lbl = EllesmereUI.MakeStyledButton(b, "", OPTION_FONT, BTN_COLOURS, function()
             if b._onClick then b._onClick() end
         end)
         b._bg, b._brd, b._lbl = bg, brd, lbl
@@ -230,7 +248,7 @@ function W:Build()
     f.versionText:SetText("Version " .. ver)
     -- faint divider above the version, across the sidebar footer
     local vdiv = f:CreateTexture(nil, "ARTWORK")
-    vdiv:SetColorTexture(accent[1], accent[2], accent[3], 0.16)
+    onAccent(function(c) vdiv:SetColorTexture(c[1], c[2], c[3], 0.16) end)
     vdiv:SetHeight(1)
     vdiv:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, 34)
     vdiv:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", SIDEBAR_W - 20, 34)
@@ -257,7 +275,7 @@ function W:Build()
     close:SetPoint("CENTER", f, "TOPRIGHT", -14, -14)  -- over the baked X box
     close:SetFrameLevel(f:GetFrameLevel() + 10)
     local hover = close:CreateTexture(nil, "ARTWORK")
-    hover:SetColorTexture(accent[1], accent[2], accent[3], 0.22)
+    onAccent(function(c) hover:SetColorTexture(c[1], c[2], c[3], 0.22) end)
     hover:SetAllPoints()
     hover:Hide()
     close:SetScript("OnEnter", function() hover:Show() end)
@@ -274,7 +292,7 @@ function W:Build()
     trackBg:SetColorTexture(1, 1, 1, 0.10)
     trackBg:SetAllPoints()
     f.progFill = progTrack:CreateTexture(nil, "ARTWORK")
-    f.progFill:SetColorTexture(accent[1], accent[2], accent[3], 1)
+    onAccent(function(c) f.progFill:SetColorTexture(c[1], c[2], c[3], 1) end)
     f.progFill:SetPoint("TOPLEFT", 0, 0)
     f.progFill:SetPoint("BOTTOMLEFT", 0, 0)
     f.progFill:SetWidth(1)
@@ -335,6 +353,12 @@ function W:SetOptionHint(text)
     h:Show()
 end
 
+-- For a page that replaces the hint with a caption of its own after an action,
+-- where no page change runs to clear it.
+function W:HideOptionHint()
+    if W.frame then W.frame.optionHint:Hide() end
+end
+
 ---------------------------------------------------------------------------------
 -- Single-line text input, for a page that collects one value (the NSRT
 -- nickname). Built once and reused, like the CDM page's persistent button: a
@@ -354,6 +378,7 @@ function W:ShowInput(opts)
         -- one thing on any page asking the user to TYPE, and a field styled like
         -- a status line reads as another status line.
         f.inputCaption = EllesmereUI.MakeFont(f, 11, "", accent[1], accent[2], accent[3], 0.9)
+        onAccent(function(c) f.inputCaption:SetTextColor(c[1], c[2], c[3], 0.9) end)
         f.inputCaption:SetJustifyH("LEFT")
 
         local eb = CreateFrame("EditBox", nil, f)
@@ -368,7 +393,7 @@ function W:ShowInput(opts)
         -- The same 3px accent edge the sidebar uses to mark the row you are on.
         -- It is what makes the field read as "this one, now" at a glance.
         local edge = eb:CreateTexture(nil, "ARTWORK")
-        edge:SetColorTexture(accent[1], accent[2], accent[3], 1)
+        onAccent(function(c) edge:SetColorTexture(c[1], c[2], c[3], 1) end)
         edge:SetWidth(3)
         edge:SetPoint("TOPLEFT")
         edge:SetPoint("BOTTOMLEFT")
@@ -533,10 +558,17 @@ function W:FitOptions(count)
     return w
 end
 
-function W:SetOption(i, text, onClick)
+-- fontSize is for a page whose buttons are too narrow for the default; the size is
+-- written on every call, so a page that asks for smaller type cannot leave the slot
+-- smaller for the next page that does not.
+function W:SetOption(i, text, onClick, fontSize)
     local b = W.frame and W.frame["Option" .. i]
     if not b then return end
-    if b._lbl then b._lbl:SetText(text) end
+    if b._lbl then
+        local path, _, flags = b._lbl:GetFont()
+        if path then b._lbl:SetFont(path, fontSize or OPTION_FONT, flags) end
+        b._lbl:SetText(text)
+    end
     b._onClick = onClick
     b:Show()
 end
@@ -550,38 +582,70 @@ function W:StyleButton(btn, text, fontSize, onClick)
     return bg, brd, lbl
 end
 
--- Retint a styled button to one of four emphases (primary / selectable / done /
--- ghost). Operates on the textures MakeStyledButton created; safe to call twice.
+-- Resting and hover colours for one emphasis, as {r, g, b, a} sets. Derived on
+-- each call rather than held in a table at file scope, because the accent is not
+-- resolved until Build.
+local function variantColours(variant)
+    local P, D = accent, STEP_DONE
+    if variant == "primary" then
+        return { bg  = { P[1], P[2], P[3], 0.80 }, bgOn  = { P[1], P[2], P[3], 1 },
+                 brd = { P[1], P[2], P[3], 1 },    brdOn = { 1, 1, 1, 0.55 },
+                 -- White rather than near-black: dark text on a saturated accent
+                 -- vibrates, and every other emphasis already labels in white.
+                 txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }
+    elseif variant == "selectable" then
+        return { bg  = { 0, 0, 0, 0.40 },          bgOn  = { P[1], P[2], P[3], 0.16 },
+                 brd = { P[1], P[2], P[3], 0.55 }, brdOn = { P[1], P[2], P[3], 0.9 },
+                 txt = { 1, 1, 1, 0.95 },          txtOn = { 1, 1, 1, 1 } }
+    elseif variant == "selected" then
+        return { bg  = { P[1], P[2], P[3], 0.22 }, bgOn  = { P[1], P[2], P[3], 0.34 },
+                 brd = { P[1], P[2], P[3], 1 },    brdOn = { P[1], P[2], P[3], 1 },
+                 txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }
+    elseif variant == "done" then
+        return { bg  = { 1, 1, 1, 0.04 },          bgOn  = { D[1], D[2], D[3], 0.14 },
+                 brd = { D[1], D[2], D[3], 0.7 },  brdOn = { D[1], D[2], D[3], 1 },
+                 txt = { D[1], D[2], D[3], 1 },    txtOn = { D[1], D[2], D[3], 1 } }
+    end
+    return { bg  = { 1, 1, 1, 0.04 },  bgOn  = { 1, 1, 1, 0.10 },
+             brd = { 1, 1, 1, 0.14 },  brdOn = { 1, 1, 1, 0.32 },
+             txt = { 1, 1, 1, 0.82 },  txtOn = { 1, 1, 1, 1 } }
+end
+
+-- MakeStyledButton's 2nd return is a border OBJECT ({_frame, edges}), not a
+-- texture, so its tint goes through SetColor.
+local function paintButton(btn, bg, brd, txt)
+    btn._bg:SetColorTexture(bg[1], bg[2], bg[3], bg[4])
+    if btn._brd and btn._brd.SetColor then btn._brd:SetColor(brd[1], brd[2], brd[3], brd[4]) end
+    if btn._lbl then btn._lbl:SetTextColor(txt[1], txt[2], txt[3], txt[4]) end
+end
+
+-- Retint a styled button to one of five emphases (primary / selectable / selected
+-- / done / ghost). MakeStyledButton installs hover scripts that repaint from the
+-- colour array it captured, which erases the variant on the first mouse-over, so
+-- the variant owns those scripts instead. Safe to call twice.
 function W:SetButtonVariant(btn, variant)
     if not (btn and btn._bg) then return end
     btn._variant = variant
-    local P = accent
-    -- MakeStyledButton's 2nd return is a border OBJECT ({_frame, edges}), not a
-    -- texture, so only recolor it when it exposes SetColorTexture; the bg fill +
-    -- label color carry the emphasis regardless.
-    local function setBrd(r, g, b, a)
-        if btn._brd and btn._brd.SetColorTexture then btn._brd:SetColorTexture(r, g, b, a) end
+    local c = variantColours(variant)
+    btn._vc = c
+    -- A variant set while the cursor is inside the button gets no OnEnter of its
+    -- own, so it paints the hover set directly. The theme buttons reach this every
+    -- swap: the click repaints the button being clicked.
+    if btn:IsShown() and btn:IsMouseOver() then
+        paintButton(btn, c.bgOn, c.brdOn, c.txtOn)
+    else
+        paintButton(btn, c.bg, c.brd, c.txt)
     end
-    if variant == "primary" then
-        btn._bg:SetColorTexture(P[1], P[2], P[3], 1)
-        setBrd(P[1], P[2], P[3], 1)
-        if btn._lbl then btn._lbl:SetTextColor(0.06, 0.02, 0.04, 1) end
-    elseif variant == "selectable" then
-        btn._bg:SetColorTexture(0, 0, 0, 0.40)  -- dark fill so class colors stay legible
-        setBrd(P[1], P[2], P[3], 0.55)
-        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 0.95) end
-    elseif variant == "selected" then
-        btn._bg:SetColorTexture(P[1], P[2], P[3], 0.22)  -- accent wash marks the active choice
-        setBrd(P[1], P[2], P[3], 1)                       -- full accent border
-        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 1) end
-    elseif variant == "done" then
-        btn._bg:SetColorTexture(1, 1, 1, 0.04)
-        setBrd(STEP_DONE[1], STEP_DONE[2], STEP_DONE[3], 0.5)
-        if btn._lbl then btn._lbl:SetTextColor(STEP_DONE[1], STEP_DONE[2], STEP_DONE[3], 1) end
-    else -- ghost
-        btn._bg:SetColorTexture(1, 1, 1, 0.04)
-        setBrd(1, 1, 1, 0.14)
-        if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 0.82) end
+    if not btn._ownsHover then
+        btn._ownsHover = true
+        btn:SetScript("OnEnter", function(b)
+            local vc = b._vc
+            if vc then paintButton(b, vc.bgOn, vc.brdOn, vc.txtOn) end
+        end)
+        btn:SetScript("OnLeave", function(b)
+            local vc = b._vc
+            if vc then paintButton(b, vc.bg, vc.brd, vc.txt) end
+        end)
     end
 end
 
@@ -603,7 +667,7 @@ local function updateRail()
             row:SetHeight(27)
             -- accent row wash marks the current step (background, under everything)
             row.activeBg = row:CreateTexture(nil, "BACKGROUND")
-            row.activeBg:SetColorTexture(accent[1], accent[2], accent[3], 0.10)
+            onAccent(function(c) row.activeBg:SetColorTexture(c[1], c[2], c[3], 0.10) end)
             row.activeBg:SetAllPoints()
             row.activeBg:Hide()
             -- faint white wash on hover (only when not the current step)
@@ -613,7 +677,7 @@ local function updateRail()
             row.hover:Hide()
             -- accent left bar marks the current step
             row.bar = row:CreateTexture(nil, "ARTWORK")
-            row.bar:SetColorTexture(accent[1], accent[2], accent[3], 1)
+            onAccent(function(c) row.bar:SetColorTexture(c[1], c[2], c[3], 1) end)
             row.bar:SetWidth(3)
             row.bar:SetPoint("TOPLEFT", 0, -2)
             row.bar:SetPoint("BOTTOMLEFT", 0, 2)
@@ -695,6 +759,9 @@ function W:SetPage(n)
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
     W:SetTitleIcon(false)
+    -- Next is shared across pages, so a handoff on one page would otherwise leave
+    -- it emphasised on every later page. Pages that earn the emphasis re-set it.
+    W:SetButtonVariant(W.frame.Next, "ghost")
     W.frame.Desc1:SetText("")
     W.frame.Desc2:SetText("")
     W.frame.Desc3:SetText("")
@@ -708,6 +775,17 @@ function W:SetPage(n)
     if tw > 0 then W.frame.progFill:SetWidth(math.max(1, tw * frac)) end
     W.frame.progLabel:SetText(("Step %d of %d"):format(n, total))
     W.pages[n]()
+end
+
+-- Repaint the window in whichever theme is now in force. The page is rendered
+-- again at the end because a button's colours are resolved when its variant is
+-- set, and the page functions are the only thing that sets them.
+function W:RefreshTheme()
+    if not W.frame then return end
+    accent = ns.UsesAltTheme() and RASTA_AMBER or KITN_PINK
+    paintArt(W.frame.artLayer)
+    for _, paint in ipairs(accentPainters) do paint(accent) end
+    W:SetPage(W.page or 1)
 end
 
 function W:Show()

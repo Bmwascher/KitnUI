@@ -140,16 +140,40 @@ end
 -- Status helpers
 ---------------------------------------------------------------------------------
 
+-- Three-way import state, and the single owner of the version compare: the status
+-- line and the action button's emphasis both read it.
+--   "none"     no profile was ever imported
+--   "stale"    imported, but the shipped profile is a different version
+--   "current"  imported and matching what ships
+local function GetImportState(addonKey)
+    if not (ns.db and ns.db.profiles and ns.db.profiles[addonKey]) then return "none" end
+    local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
+    local current = ns.GetAddonDataVersion(addonKey)
+    if installed and current and installed ~= current then return "stale" end
+    return "current"
+end
+
 local function GetImportStatus(addonKey)
-    if ns.db and ns.db.profiles and ns.db.profiles[addonKey] then
-        local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
-        local current = ns.GetAddonDataVersion(addonKey)
-        if installed and current and installed ~= current then
-            return ns.Amber("Update available")
-        end
-        return CHECK .. " " .. ns.Green("Imported")
+    local state = GetImportState(addonKey)
+    if state == "none" then return ns.Amber("Not Imported") end
+    if state == "stale" then return ns.Amber("Update available") end
+    return CHECK .. " " .. ns.Green("Imported")
+end
+
+-- Label and emphasis for an addon page's action button. An import already
+-- matching what ships needs no action, so the page opens the way it looks after a
+-- successful one: the action goes quiet and Next carries the emphasis. An older
+-- import is relabelled so the button agrees with the status line above it;
+-- updateText covers pages whose action reads as more than the bare verb.
+local function ApplyActionState(addonKey, updateText)
+    local btn = WF().Option1
+    if not btn then return end
+    local state = GetImportState(addonKey)
+    if state == "current" then
+        HandoffToNext(btn, CHECK .. " Re-import")
     else
-        return ns.Amber("Not Imported")
+        if state == "stale" and btn._lbl then btn._lbl:SetText(updateText or "Update") end
+        SetVariant(btn, "primary")
     end
 end
 
@@ -189,22 +213,42 @@ local function ShowLoadStatusAndVersion(addonKey)
     WF().Desc3:SetText(GetVersionLine(addonKey))
 end
 
--- One label per state from ns.GetCDMSpecState.
+-- One label per state from ns.GetCDMSpecState. Three colours only: green is done,
+-- amber is an action worth taking, red is a layout this character does not have.
 local cdmStateLabel = {
     nodata    = function() return ns.Red("no data") end,
-    missing   = function() return ns.Amber("not imported") end,
+    missing   = function() return ns.Red("not imported") end,
     untracked = function() return ns.Amber("untracked") end,
     current   = function() return ns.Green("up to date") end,
-    stale     = function() return ns.Red("update available") end,
+    stale     = function() return ns.Amber("update available") end,
+}
+
+-- The same three states as a mark, for the per-spec buttons. One set of ready-check
+-- art, so the marks are drawn to sit together, and each colour matches the word
+-- cdmStateLabel gives the same state.
+local CDM_MARK_X    = "|TInterface\\RaidFrame\\ReadyCheck-NotReady:12:12|t"
+local CDM_MARK_WAIT = "|TInterface\\RaidFrame\\ReadyCheck-Waiting:12:12|t"
+local cdmStateMark = {
+    nodata    = CDM_MARK_X,
+    missing   = CDM_MARK_X,
+    untracked = CDM_MARK_WAIT,
+    stale     = CDM_MARK_WAIT,
+    current   = "|TInterface\\RaidFrame\\ReadyCheck-Ready:12:12|t",
 }
 
 -- Rows come from ns.GetCDMSpecRows, the single owner of the specialization API
--- on the status surfaces.
+-- on the status surfaces. The icon leads each entry so this line and the buttons
+-- below it identify a spec the same way.
+local function CDMSpecIcon(row)
+    if not row.specIcon then return "" end
+    return "|T" .. row.specIcon .. ":14:14:0:0|t "
+end
+
 local function BuildCDMStatusText(rows)
     local parts = {}
     for _, row in ipairs(rows or {}) do
         local label = cdmStateLabel[row.state]
-        parts[#parts + 1] = row.specName .. ": " .. (label and label() or row.state)
+        parts[#parts + 1] = CDMSpecIcon(row) .. row.specName .. ": " .. (label and label() or row.state)
     end
     return table.concat(parts, " | ")
 end
@@ -242,6 +286,30 @@ end
 -- Install-mode pages
 ---------------------------------------------------------------------------------
 
+-- The window's two looks, offered here because the Welcome page has no action of
+-- its own to compete with. The keys are what ns.SetInstallerTheme speaks; the
+-- labels are the names the options panel gives the same two designs.
+local WIZARD_THEMES = {
+    { key = "default", label = "KitnUI" },
+    { key = "alt",     label = "KitnUI Rasta" },
+}
+
+local function ShowThemeOptions()
+    local alt = ns.UsesAltTheme and ns.UsesAltTheme()
+    local current = alt and "alt" or "default"
+    for i, theme in ipairs(WIZARD_THEMES) do
+        ns.Wizard:SetOption(i, theme.label, function()
+            -- Repainting is the writer's job: a click that could not be stored
+            -- must not leave the window showing a theme nothing remembers.
+            if not ns.SetInstallerTheme(theme.key) then
+                ShowInstallToast("Could not identify this character - theme not saved", 1, 0.8, 0.2)
+            end
+        end)
+        SetVariant(WF()["Option" .. i], current == theme.key and "selected" or "selectable")
+    end
+    ns.Wizard:SetOptionHint("INSTALLER THEME (" .. ns.WizardColor(current == "alt" and "RASTA" or "KITN") .. ")")
+end
+
 local function WelcomePage()
     local f = WF()
     f.SubTitle:SetText("Welcome to " .. ns.WizardColor("KitnUI"))
@@ -251,6 +319,7 @@ local function WelcomePage()
     f.Desc2:SetText("\n" .. ns.Red("WARNING") .. ": importing overwrites each addon's current settings. "
         .. "Only the addons you click are changed \226\128\148 exit now to keep everything as it is.")
     f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
+    ShowThemeOptions()
 end
 
 -- The two EllesmereUI appearance presets, offered on this page once the profile
@@ -267,21 +336,66 @@ local EUI_LOOKS = {
 -- only thing that moves the highlight onto the look just applied.
 local EllesmereUIPage
 
--- Option1 is the import; the looks take Option2 and Option3. Three buttons at
--- the default 165 width with two 10px gaps is 515 in a 520-wide content column,
--- so they fit the row without FitOptions.
+-- A standing choice, not one of the page's actions, so the looks get their own
+-- captioned row above the action row instead of sitting beside Install as equals.
+-- Built once and reused like the CDM page's button; ResetExtras hides them.
+local lookRow, lookCaption
+
+local function BuildLookRow(parent)
+    if lookRow then return end
+    lookRow = {}
+    for i, look in ipairs(EUI_LOOKS) do
+        local b = CreateFrame("Button", nil, parent)
+        b:SetSize(150, 30)  -- under the action row's 165x34: a choice, not the action
+        ns.Wizard:StyleButton(b, look.label, 13, function()
+            if b._onClick then b._onClick() end
+        end)
+        if i == 1 then
+            b:SetPoint("BOTTOMLEFT", parent.Option1, "TOPLEFT", 0, 44)
+        else
+            b:SetPoint("LEFT", lookRow[i - 1], "RIGHT", 10, 0)
+        end
+        lookRow[i] = b
+    end
+    if EllesmereUI and EllesmereUI.MakeFont then
+        lookCaption = EllesmereUI.MakeFont(parent, 11, "", 1, 1, 1, 0.5)
+        lookCaption:SetJustifyH("LEFT")
+        lookCaption:SetPoint("BOTTOMLEFT", lookRow[1], "TOPLEFT", 0, 10)
+    end
+end
+
+local function HideLookRow()
+    if not lookRow then return end
+    for _, b in ipairs(lookRow) do b:Hide() end
+    if lookCaption then lookCaption:Hide() end
+end
+
+-- Names the look that is live right now, the way the config page's own section
+-- header does. The caption is the only thing that reports Custom, which marks no
+-- button.
+local function LookCaptionText(current)
+    local name = "CUSTOM"
+    for _, look in ipairs(EUI_LOOKS) do
+        if look.key == current then name = look.label:upper() end
+    end
+    return "APPEARANCE (" .. ns.WizardColor(name) .. ")"
+end
+
 local function ShowLookOptions()
     if not (ns.ApplyLook and ns.IsAddonImported("EllesmereUI")) then
         -- No profile yet: say where the looks live rather than offering them.
+        HideLookRow()
         ns.Wizard:SetOptionHint("Dark and Colored are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
         return
     end
+    ns.Wizard:HideOptionHint()
+    BuildLookRow(WF())
     -- nil is Custom: the user has hand-edited a colour, so neither look is live
     -- and neither button is marked.
     local current = ns.CurrentLook and ns.CurrentLook() or nil
     for i, look in ipairs(EUI_LOOKS) do
-        local slot = i + 1
-        ns.Wizard:SetOption(slot, look.label, function()
+        local b = lookRow[i]
+        b._onClick = function()
             -- ns.ApplyLook is the RAW apply. The combat refusal lives in the
             -- config page's own wrapper, not in it, so without this guard a
             -- mid-fight click stores a look the screen never finishes painting.
@@ -291,10 +405,14 @@ local function ShowLookOptions()
             end
             ns.ApplyLook(look.key)
             EllesmereUIPage()
-        end)
-        SetVariant(WF()["Option" .. slot], current == look.key and "selected" or "selectable")
+        end
+        SetVariant(b, current == look.key and "selected" or "selectable")
+        b:Show()
     end
-    ns.Wizard:SetOptionHint("Pick a look now, or change it any time in KitnUI's EllesmereUI tab.")
+    if lookCaption then
+        lookCaption:SetText(LookCaptionText(current))
+        lookCaption:Show()
+    end
 end
 
 function EllesmereUIPage()
@@ -315,14 +433,14 @@ function EllesmereUIPage()
             ShowStatusAndVersion("EllesmereUI")
             SuccessToast("EllesmereUI", "profile imported!")
             PlayInstallSound()
-            SetVariant(WF().Next, "primary")
+            HandoffToNext(WF().Option1, CHECK .. " Re-import")
             -- The import applies Dark (Setup.lua), so the buttons appear already
             -- marked. Called here rather than only at page entry so a first
             -- install does not have to leave and come back to see them.
             ShowLookOptions()
         end)
     end)
-    SetVariant(WF().Option1, "primary")
+    ApplyActionState("EllesmereUI", "Update Profile")
     ShowLookOptions()
 end
 
@@ -349,7 +467,7 @@ local function SimpleInstallPage(addonKey, displayName)
                 HandoffToNext(WF().Option1, CHECK .. " Re-import")
             end)
         end)
-        SetVariant(WF().Option1, "primary")
+        ApplyActionState(addonKey)
     end
 end
 
@@ -406,7 +524,7 @@ local function NSRTPage()
             HandoffToNext(WF().Option1, CHECK .. " Re-import")
         end)
     end)
-    SetVariant(WF().Option1, "primary")
+    ApplyActionState("NSRT")
     ShowNicknameInput()
 end
 
@@ -433,14 +551,49 @@ local function EditModePage()
             end
         end)
     end)
-    SetVariant(WF().Option1, "primary")
+    ApplyActionState("Blizzard_EditMode")
 end
 
 ---------------------------------------------------------------------------------
 -- Blizzard CDM page (per-spec option buttons + persistent "Import All Specs")
 ---------------------------------------------------------------------------------
 
+-- Spec icon names the spec, status mark answers whether it needs anything.
+local function CDMSpecLabel(row)
+    local label = CDMSpecIcon(row) .. row.specName
+    local mark = cdmStateMark[row.state]
+    if mark then label = label .. " " .. mark end
+    return label
+end
+
+-- Re-label the spec buttons from fresh rows. Every site that refreshes the status
+-- text calls this too, so a mark cannot outlive the words it matches.
+local function RefreshCDMSpecLabels(rows)
+    for i = 1, math.min(#rows, 4) do
+        local btn = WF()["Option" .. i]
+        if btn and btn._lbl then btn._lbl:SetText(CDMSpecLabel(rows[i])) end
+    end
+end
+
 local cdmAllButton
+
+-- Smaller type than the wizard default: the spec buttons narrow to fit four across
+-- and each already carries a spec icon and a status mark.
+local CDM_SPEC_FONT = 13
+
+-- Emphasis for the all-specs button, from the same reading the marks come from.
+-- Specs with nothing shipped are excluded by GetOutdatedCDMSpecs, so a class KitnUI
+-- cannot fully serve still reaches the finished state rather than asking forever.
+local function ApplyCDMActionState()
+    if not cdmAllButton then return end
+    if #ns.GetOutdatedCDMSpecs() > 0 then
+        if cdmAllButton._lbl then cdmAllButton._lbl:SetText("Import All Specs") end
+        SetVariant(cdmAllButton, "primary")
+    else
+        HandoffToNext(cdmAllButton, CHECK .. " Re-import All")
+    end
+end
+
 local function BlizzardCDMPage()
     local f = WF()
     f.SubTitle:SetText("Blizzard Cooldown Manager")
@@ -473,11 +626,12 @@ local function BlizzardCDMPage()
     -- Persistent "Import All Specs" button, above the option row.
     if not cdmAllButton then
         cdmAllButton = CreateFrame("Button", "KitnUICDMAllButton", f)
-        cdmAllButton:SetSize(170, 30)
-        ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 13, function()
+        -- Larger than a spec button: one press does the work of all of them, so it
+        -- should not read as a fourth peer sitting above the row.
+        cdmAllButton:SetSize(290, 30)
+        ns.Wizard:StyleButton(cdmAllButton, "Import All Specs", 14, function()
             if cdmAllButton._onClick then cdmAllButton._onClick() end
         end)
-        SetVariant(cdmAllButton, "selectable")
     end
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
@@ -485,6 +639,7 @@ local function BlizzardCDMPage()
             local _, freshRows = ns.GetCDMSpecRows()
             WF().Desc2:SetText(BuildCDMStatusText(freshRows))
             WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
+            RefreshCDMSpecLabels(freshRows)
             if failed > 0 then
                 ShowInstallToast(imported .. " imported, " .. failed .. " failed (see chat)", 1, 0.8, 0.2)
             elseif skipped then
@@ -497,26 +652,19 @@ local function BlizzardCDMPage()
                 SuccessToast("All specs", "layouts imported!")
             end
             PlayInstallSound()
-            SetVariant(WF().Next, "primary")
+            ApplyCDMActionState()
         end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, nil))
     end
     cdmAllButton:Show()
+    -- Outside the creation guard: the variant resolves the accent when it is set,
+    -- so a button styled once would keep the old theme's colours after a swap.
+    ApplyCDMActionState()
 
-    -- Per-spec option buttons (Option1..4). The name comes from the row; only
-    -- the icon is looked up here, and it is cosmetic, so a nil falls back to the
-    -- plain label.
     for i = 1, math.min(numSpecs, 4) do
         local row = rows[i]
         local specName = row.specName
-        local specIcon
-        if GetSpecializationInfoForClassID then
-            specIcon = select(4, GetSpecializationInfoForClassID(classId, i))
-        end
         local specData = classData[i]
-        local label = specName
-        if specIcon then
-            label = "|T" .. specIcon .. ":14:14:0:0|t " .. specName
-        end
+        local label = CDMSpecLabel(row)
 
         if specData and strtrim(specData) ~= "" then
             ns.Wizard:SetOption(i, label, function()
@@ -525,10 +673,11 @@ local function BlizzardCDMPage()
                     local _, freshRows = ns.GetCDMSpecRows()
                     WF().Desc2:SetText(BuildCDMStatusText(freshRows))
                     WF().Desc3:SetText(ns.SummarizeCDMRows(freshRows) .. " |cff9d9d9d(this class)|r")
+                    RefreshCDMSpecLabels(freshRows)
                     if success then
                         SuccessToast(specName, "layout imported!")
                         PlayInstallSound()
-                        SetVariant(WF().Next, "primary")
+                        ApplyCDMActionState()
                     else
                         -- The cause is NOT named here. The setup function fails
                         -- on several paths and prints the real reason to chat on
@@ -537,11 +686,11 @@ local function BlizzardCDMPage()
                         ShowInstallToast("Import failed!", 1, 0.2, 0.2)
                     end
                 end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, i))
-            end)
+            end, CDM_SPEC_FONT)
         else
             ns.Wizard:SetOption(i, label, function()
                 print(ns.title .. ": No data for " .. (specName or "this spec") .. ".")
-            end)
+            end, CDM_SPEC_FONT)
         end
     end
 
@@ -1000,9 +1149,10 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
 end
 
 -- Hide the persistent per-page extras whenever the page changes: the CDM
--- "Import All" button and the NSRT nickname field. Both are built once and
--- reused, so nothing hides them on the way out but this.
+-- "Import All" button, the appearance look row, and the NSRT nickname field.
+-- All are built once and reused, so nothing hides them on the way out but this.
 ns.Wizard.ResetExtras = function()
     if cdmAllButton then cdmAllButton:Hide() end
+    HideLookRow()
     if ns.Wizard.HideInput then ns.Wizard:HideInput() end
 end

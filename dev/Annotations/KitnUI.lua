@@ -80,9 +80,9 @@
 ---@field GetCDMKey fun(classId: number?, specIndex: number?): string?
 ---@field GetCDMShippedFingerprint fun(classId: number?, specIndex: number?): string?
 ---@field GetCDMSpecState fun(classId: number?, specIndex: number?): "nodata"|"current"|"stale"|"untracked"|"missing"
----@field GetCDMSpecRows fun(): number?, { specIndex: number, specName: string, state: string }[]
+---@field GetCDMSpecRows fun(): number?, { specIndex: number, specName: string, specIcon: (number|string)?, state: string }[]
 ---@field HasCDMForCurrentClass fun(): boolean
----@field GetOutdatedCDMSpecs fun(): { specIndex: number, specName: string, state: string }[]
+---@field GetOutdatedCDMSpecs fun(): { specIndex: number, specName: string, specIcon: (number|string)?, state: string }[]
 ---@field SummarizeCDMRows fun(rows: table?): string
 ---@field CDMNeedsOverwriteConfirm fun(snapshot: table?, classId: number?, specIndex: number?): boolean
 ---@field CDMLayoutName fun(classId: number, specIndex: number): string, string, string  # layoutName, legacyName, specLabel; both arguments must already be numbers
@@ -125,9 +125,10 @@ local KitnUIDB
 ---@field Build fun(self: KitnUIWizard): table?
 ---@field Queue fun(self: KitnUIWizard, data: table)
 ---@field SetPage fun(self: KitnUIWizard, n: integer)
+---@field RefreshTheme fun(self: KitnUIWizard)
+---@field SetOption fun(self: KitnUIWizard, i: integer, text: string, onClick: function, fontSize: number?)
 ---@field Show fun(self: KitnUIWizard)
 ---@field Hide fun(self: KitnUIWizard)
----@field SetOption fun(self: KitnUIWizard, i: integer, text: string, onClick: function)
 ---@field HideOptions fun(self: KitnUIWizard)
 ---@field FitOptions fun(self: KitnUIWizard, count: integer): number
 ---@field CenterOption1 fun(self: KitnUIWizard)
@@ -137,6 +138,7 @@ local KitnUIDB
 ---@field HideStatusHeader fun(self: KitnUIWizard)
 ---@field SetTitleIcon fun(self: KitnUIWizard, show: boolean?)
 ---@field SetOptionHint fun(self: KitnUIWizard, text: string)
+---@field HideOptionHint fun(self: KitnUIWizard)
 local KitnUIWizard
 
 -- Top Bar module (KitnUI_EUI/TopBar/: Bar.lua, Readouts.lua, Elements.lua).

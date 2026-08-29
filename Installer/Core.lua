@@ -260,13 +260,17 @@ function ns.GetCDMSpecRows()
     if type(numSpecs) ~= "number" then return classId, rows end
 
     for i = 1, numSpecs do
-        local specName
+        local specName, specIcon
         if GetSpecializationInfoForClassID then
-            specName = select(2, GetSpecializationInfoForClassID(classId, i))
+            -- The icon is cosmetic, so a nil leaves the surfaces showing the name
+            -- alone rather than failing.
+            local _, name, _, icon = GetSpecializationInfoForClassID(classId, i)
+            specName, specIcon = name, icon
         end
         rows[#rows + 1] = {
             specIndex = i,
             specName = specName or ("Spec " .. i),
+            specIcon = specIcon,
             state = ns.GetCDMSpecState(classId, i),
         }
     end
@@ -472,7 +476,7 @@ local defaults = {
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
     installedVersion = nil, -- addon version at last install
-    perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true } }
+    perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true }, installerTheme = "default"/"alt" }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
@@ -564,11 +568,38 @@ end
 --- would agree. The value is folded first so the split reads bits every byte of
 --- the key reached.
 function ns.UsesAltTheme()
+    local chosen = ns.InstallerThemeChoice()
+    if chosen then return chosen == "alt" end
     if ns.OnAltThemeRoster() then return true end
 
     local key = CanonicalCharKey(ns.GetCharKey())
     if key == nil then return false end
     return math.floor(KeyHash(key) / 65536) % ALT_THEME_SHARE == 0
+end
+
+--- The theme this character was told to use, or nil when it has never been told
+--- and the derived answer stands. Per character, like the derived answer it
+--- overrides: an account-wide switch would trade the whole point of deriving it.
+function ns.InstallerThemeChoice()
+    local key = ns.GetCharKey()
+    local rec = key and ns.db and ns.db.perChar and ns.db.perChar[key]
+    local chosen = rec and rec.installerTheme
+    if chosen == "default" or chosen == "alt" then return chosen end
+    return nil
+end
+
+--- Pin this character to one theme and repaint an open window. Returns false when
+--- the character cannot be identified, so a caller does not report a choice that
+--- was never stored.
+function ns.SetInstallerTheme(choice)
+    if choice ~= "default" and choice ~= "alt" then return false end
+    local key = ns.GetCharKey()
+    if not key or not ns.db then return false end
+    ns.db.perChar = ns.db.perChar or {}
+    ns.db.perChar[key] = ns.db.perChar[key] or {}
+    ns.db.perChar[key].installerTheme = choice
+    if ns.Wizard and ns.Wizard.RefreshTheme then ns.Wizard:RefreshTheme() end
+    return true
 end
 
 --- Give the account its one options theme unless it already has one. The theme
@@ -1096,18 +1127,16 @@ boot:SetScript("OnEvent", function()
             -- differently. The record is per character, so the class the icons
             -- come from is always the class that owns the blocked specs.
             local specIcons = {}
-            local iconClassId, iconRows = ns.GetCDMSpecRows()
-            if iconClassId and GetSpecializationInfoForClassID then
-                for _, row in ipairs(iconRows) do
-                    local icon = select(4, GetSpecializationInfoForClassID(iconClassId, row.specIndex))
-                    if icon then
-                        if row.specName then specIcons[row.specName] = icon end
-                        -- Keyed by the numbered label as well. A record written
-                        -- in a session where the spec-name lookup was missing
-                        -- holds "Spec<n>", and only this second key lets it find
-                        -- an icon on a login where the lookup works again.
-                        specIcons["Spec" .. row.specIndex] = icon
-                    end
+            local _, iconRows = ns.GetCDMSpecRows()
+            for _, row in ipairs(iconRows) do
+                local icon = row.specIcon
+                if icon then
+                    if row.specName then specIcons[row.specName] = icon end
+                    -- Keyed by the numbered label as well. A record written
+                    -- in a session where the spec-name lookup was missing
+                    -- holds "Spec<n>", and only this second key lets it find
+                    -- an icon on a login where the lookup works again.
+                    specIcons["Spec" .. row.specIndex] = icon
                 end
             end
 
