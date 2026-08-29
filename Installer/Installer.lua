@@ -311,21 +311,66 @@ local EUI_LOOKS = {
 -- only thing that moves the highlight onto the look just applied.
 local EllesmereUIPage
 
--- Option1 is the import; the looks take Option2 and Option3. Three buttons at
--- the default 165 width with two 10px gaps is 515 in a 520-wide content column,
--- so they fit the row without FitOptions.
+-- A standing choice, not one of the page's actions, so the looks get their own
+-- captioned row above the action row instead of sitting beside Install as equals.
+-- Built once and reused like the CDM page's button; ResetExtras hides them.
+local lookRow, lookCaption
+
+local function BuildLookRow(parent)
+    if lookRow then return end
+    lookRow = {}
+    for i, look in ipairs(EUI_LOOKS) do
+        local b = CreateFrame("Button", nil, parent)
+        b:SetSize(150, 30)  -- under the action row's 165x34: a choice, not the action
+        ns.Wizard:StyleButton(b, look.label, 13, function()
+            if b._onClick then b._onClick() end
+        end)
+        if i == 1 then
+            b:SetPoint("BOTTOMLEFT", parent.Option1, "TOPLEFT", 0, 44)
+        else
+            b:SetPoint("LEFT", lookRow[i - 1], "RIGHT", 10, 0)
+        end
+        lookRow[i] = b
+    end
+    if EllesmereUI and EllesmereUI.MakeFont then
+        lookCaption = EllesmereUI.MakeFont(parent, 11, "", 1, 1, 1, 0.5)
+        lookCaption:SetJustifyH("LEFT")
+        lookCaption:SetPoint("BOTTOMLEFT", lookRow[1], "TOPLEFT", 0, 10)
+    end
+end
+
+local function HideLookRow()
+    if not lookRow then return end
+    for _, b in ipairs(lookRow) do b:Hide() end
+    if lookCaption then lookCaption:Hide() end
+end
+
+-- Names the look that is live right now, the way the config page's own section
+-- header does. The caption is the only thing that reports Custom, which marks no
+-- button.
+local function LookCaptionText(current)
+    local name = "CUSTOM"
+    for _, look in ipairs(EUI_LOOKS) do
+        if look.key == current then name = look.label:upper() end
+    end
+    return "APPEARANCE (" .. ns.WizardColor(name) .. ")"
+end
+
 local function ShowLookOptions()
     if not (ns.ApplyLook and ns.IsAddonImported("EllesmereUI")) then
         -- No profile yet: say where the looks live rather than offering them.
+        HideLookRow()
         ns.Wizard:SetOptionHint("Dark and Colored are a preset in KitnUI's EllesmereUI tab, not separate profiles.")
         return
     end
+    ns.Wizard:HideOptionHint()
+    BuildLookRow(WF())
     -- nil is Custom: the user has hand-edited a colour, so neither look is live
     -- and neither button is marked.
     local current = ns.CurrentLook and ns.CurrentLook() or nil
     for i, look in ipairs(EUI_LOOKS) do
-        local slot = i + 1
-        ns.Wizard:SetOption(slot, look.label, function()
+        local b = lookRow[i]
+        b._onClick = function()
             -- ns.ApplyLook is the RAW apply. The combat refusal lives in the
             -- config page's own wrapper, not in it, so without this guard a
             -- mid-fight click stores a look the screen never finishes painting.
@@ -335,10 +380,14 @@ local function ShowLookOptions()
             end
             ns.ApplyLook(look.key)
             EllesmereUIPage()
-        end)
-        SetVariant(WF()["Option" .. slot], current == look.key and "selected" or "selectable")
+        end
+        SetVariant(b, current == look.key and "selected" or "selectable")
+        b:Show()
     end
-    ns.Wizard:SetOptionHint("Pick a look now, or change it any time in KitnUI's EllesmereUI tab.")
+    if lookCaption then
+        lookCaption:SetText(LookCaptionText(current))
+        lookCaption:Show()
+    end
 end
 
 function EllesmereUIPage()
@@ -1056,9 +1105,10 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
 end
 
 -- Hide the persistent per-page extras whenever the page changes: the CDM
--- "Import All" button and the NSRT nickname field. Both are built once and
--- reused, so nothing hides them on the way out but this.
+-- "Import All" button, the appearance look row, and the NSRT nickname field.
+-- All are built once and reused, so nothing hides them on the way out but this.
 ns.Wizard.ResetExtras = function()
     if cdmAllButton then cdmAllButton:Hide() end
+    HideLookRow()
     if ns.Wizard.HideInput then ns.Wizard:HideInput() end
 end

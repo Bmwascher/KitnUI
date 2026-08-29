@@ -137,6 +137,7 @@ local KitnUIDB
 ---@field HideStatusHeader fun(self: KitnUIWizard)
 ---@field SetTitleIcon fun(self: KitnUIWizard, show: boolean?)
 ---@field SetOptionHint fun(self: KitnUIWizard, text: string)
+---@field HideOptionHint fun(self: KitnUIWizard)
 local KitnUIWizard
 
 -- Top Bar module (KitnUI_EUI/TopBar/: Bar.lua, Readouts.lua, Elements.lua).

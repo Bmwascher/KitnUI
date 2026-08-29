@@ -335,6 +335,12 @@ function W:SetOptionHint(text)
     h:Show()
 end
 
+-- For a page that replaces the hint with a caption of its own after an action,
+-- where no page change runs to clear it.
+function W:HideOptionHint()
+    if W.frame then W.frame.optionHint:Hide() end
+end
+
 ---------------------------------------------------------------------------------
 -- Single-line text input, for a page that collects one value (the NSRT
 -- nickname). Built once and reused, like the CDM page's persistent button: a
