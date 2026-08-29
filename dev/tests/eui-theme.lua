@@ -339,10 +339,13 @@ if type(ns.EUIThemeForCharacter) == "function" then
         check(rolledIn ~= nil, "some unlisted characters are given the alternate look")
         check(rolledOut ~= nil, "some unlisted characters keep the default look")
 
-        -- A quarter, loosely. Wide enough not to be a second copy of the hash,
-        -- narrow enough that a hash spreading its answers badly cannot pass.
+        -- A quarter, in a band that admits no neighbouring divisor: a third and
+        -- a fifth both fall outside it, so a hash that stopped selecting one
+        -- residue in four could not pass by landing near the right answer. The
+        -- corpus is fixed, so the measured share is a constant rather than a
+        -- sample, and the band only has to hold that constant.
         local share = given / sample
-        check(share > 0.15 and share < 0.35,
+        check(share > 0.22 and share < 0.28,
             "roughly one unlisted character in four is given the alternate look",
             string.format("%.3f", share))
 
