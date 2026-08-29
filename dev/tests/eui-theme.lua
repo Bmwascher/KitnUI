@@ -339,11 +339,11 @@ if type(ns.EUIThemeForCharacter) == "function" then
         check(rolledIn ~= nil, "some unlisted characters are given the alternate look")
         check(rolledOut ~= nil, "some unlisted characters keep the default look")
 
-        -- A quarter, in a band that admits no neighbouring divisor: a third and
-        -- a fifth both fall outside it, so a hash that stopped selecting one
-        -- residue in four could not pass by landing near the right answer. The
-        -- corpus is fixed, so the measured share is a constant rather than a
-        -- sample, and the band only has to hold that constant.
+        -- A quarter, in a band narrow enough to exclude a third and a fifth.
+        -- The corpus and its result are deterministic, so no allowance for
+        -- run-to-run noise is needed and widening the band for that reason would
+        -- be wrong. What this bounds is the share the selector produces over
+        -- this corpus, which is not the same as proving which residue it picks.
         local share = given / sample
         check(share > 0.22 and share < 0.28,
             "roughly one unlisted character in four is given the alternate look",

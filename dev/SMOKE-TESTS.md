@@ -1406,8 +1406,9 @@ not. Nothing needs to be imported to see it.
 ## Deliberately not covered
 
 - **The one-in-four rate.** It cannot be observed by hand. The headless gate
-  samples generated keys across varied names and realms, and fails on a share
-  that sits nearer a third or a fifth than a quarter.
+  samples generated keys across varied names and realms and requires the share
+  to stay in a narrow band around a quarter, one that excludes a third and a
+  fifth.
 - **An account that installed before this shipped.** It has no record of a
   decision, so it spends one more import deciding and locks after that. Visible
   only on an account that predates the change.
