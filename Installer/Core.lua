@@ -562,6 +562,34 @@ function ns.Color(text)
     return string.format("|cffFF008C%s|r", text)
 end
 
+-- Truthiness is not enough here: a channel holding a string passes an `and` chain
+-- and then raises on the multiply, and one outside 0-1 formats to more than two
+-- hex digits, which produces an escape the game renders as literal text. Both
+-- have to be rejected before any arithmetic runs.
+local function AccentByte(v)
+    if type(v) ~= "number" or v ~= v or v < 0 or v > 1 then return nil end
+    return math.floor(v * 255 + 0.5)
+end
+
+-- The same highlight for text drawn INSIDE the installer window, and for the
+-- success toast, which is drawn over it while the installer runs. Everything read
+-- somewhere else keeps ns.Color: chat lines, printed status, and the host's
+-- confirm popups, where the roster's colour has nothing around it to agree with.
+-- The failure and warning toasts keep their own fixed red and amber, which carry
+-- a meaning the accent would erase.
+--
+-- Reads the two constants the chrome paints from, so a colour cannot drift
+-- between a page's words and the page they sit on. Falls back to the brand rather
+-- than erroring, because this runs while a page is being built and a failure here
+-- would leave the wizard half drawn.
+function ns.WizardColor(text)
+    local c = ns.OnAltThemeRoster and ns.OnAltThemeRoster() and ns.RASTA_AMBER or ns.KITN_PINK
+    if type(c) ~= "table" then return ns.Color(text) end
+    local r, g, b = AccentByte(c[1]), AccentByte(c[2]), AccentByte(c[3])
+    if not (r and g and b) then return ns.Color(text) end
+    return string.format("|cff%02X%02X%02X%s|r", r, g, b, text)
+end
+
 -- Matches the green of the ReadyCheck-Ready checkmark texture used in the wizard,
 -- so "available" / "Imported" text reads as the same green as the checks.
 function ns.Green(text)

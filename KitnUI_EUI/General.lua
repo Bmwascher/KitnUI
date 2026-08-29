@@ -380,6 +380,12 @@ local ACCENT_KEYS = {
 -- one is POSITIONAL and the other two are KEYED.
 local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 0.549
 
+-- The accent the alternate installer artwork is built around, offered by name so
+-- reaching it is one click rather than a hunt in the colour picker. Keep it in
+-- step with RASTA_AMBER in Installer/Wizard.lua -- that one is POSITIONAL and
+-- this one is three scalars; the theme gate compares them.
+local RASTA_R, RASTA_G, RASTA_B = 0.976, 0.549, 0.122
+
 -- Tested against false rather than read for truthiness, because the registered
 -- default is TRUE and an absent key must therefore mean pink. The settings
 -- fallback path merges no defaults, so absent is reachable.
@@ -612,6 +618,22 @@ local function IsKitnPink(r, g, b)
        and Byte(b) == Byte(ACCENT_B)
 end
 
+local function IsRastaAmber(r, g, b)
+    return Byte(r) == Byte(RASTA_R)
+       and Byte(g) == Byte(RASTA_G)
+       and Byte(b) == Byte(RASTA_B)
+end
+
+-- Whether the stored colour IS the named amber, rather than a separate stored
+-- switch. One boolean already decides pink against custom, so a second switch
+-- would be a second source of truth for the same question.
+local function AccentUsesRasta()
+    if AccentUsesDefault() then return false end
+    local c = ns.EUISettings().accentCustom
+    if type(c) ~= "table" then return false end
+    return IsRastaAmber(c.r, c.g, c.b)
+end
+
 -- Said by both setters whenever a colour change stored fine but could not reach
 -- the screen. Every forcing control in this addon says when it refused; a colour
 -- row that quietly does nothing is the same defect wearing a different hat.
@@ -782,21 +804,22 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- so dropping the spacer is what joins the two blocks visually.
     _, h = W:SectionHeader(parent, "ACCENTS", y);                                  y = y - h
 
-    -- The MASTER, and the only one of the three that claims anything. Unchanged
-    -- from the switch this replaces except for its label and its tooltip: same
-    -- setter, same ApplyAccent(true), same rebuild.
+    -- The MASTER, and the only control in this section that claims anything.
+    -- Unchanged from the switch this replaces except for its label and its
+    -- tooltip: same setter, same ApplyAccent(true), same rebuild.
     _, h = W:Toggle(parent, "KitnUI Accent Coloring", y,
         AccentEnabled,
         function(v)
             SetAccentEnabled(v)
             ApplyAccent(true)
             -- The claim is complete, so the ownership sentence can be recomputed.
-            -- This rebuild is ALSO what re-evaluates the veils on the two rows
-            -- below, which is why they can be built statically.
+            -- This rebuild is ALSO what re-evaluates the veils on the rows below,
+            -- which is why they can be built statically. Deliberately uncounted:
+            -- a count here goes stale the next time a row joins them.
             ns.EUIRebuildForOwnership()
         end,
         ns.EUIOwnershipTip(
-            "Colors EllesmereUI's accent for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab. The two rows below choose which color.",
+            "Colors EllesmereUI's accent for this profile, puts it on the quest tracker header, and stops it tinting the tracker's divider lines, the Mythic+ timer, the damage meter and the Friends tab. The rows below choose which color.",
             "accent",
             AccentEnabled,
             -- US spelling, changed from the shipped "colour". EUIOwnershipTip
@@ -805,48 +828,73 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "EllesmereUI's accent color and the settings it is scoped to"));
                                                                                    y = y - h
 
-    -- Neither of the next two claims anything, so neither needs a combat guard,
-    -- unlike the look and the resource bar. Each writes one KitnUI setting and asks
-    -- the host to repaint its own frames; nothing here is protected and nothing is
-    -- deferred, so there is no state to get out of step.
-    local pinkRow
-    pinkRow, h = W:Toggle(parent, "Use KitnUI Pink", y,
-        AccentUsesDefault,
-        function(v)
-            SetAccentUsesDefault(v)
-            -- Unforced: the swatch below redraws through its registered widget
-            -- refresh, and no ownership sentence changed.
-            if _G.EllesmereUI and EllesmereUI.RefreshPage then
-                pcall(EllesmereUI.RefreshPage, EllesmereUI)
-            end
-        end,
-        "On, the accent is KitnUI pink. Off, it is the color in the row below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.")
-                                                                                   y = y - h
+    -- None of the colour-choice controls below claims anything, so none needs a
+    -- combat guard, unlike the look and the resource bar. Between them they write
+    -- the two accent selection keys and ask the host to repaint its own frames;
+    -- nothing here is protected and nothing is deferred, so there is no state to
+    -- get out of step.
+    --
+    -- The two named colours share ONE row because they are alternatives, not
+    -- independent switches: each turns the other off. Stacked full width they
+    -- read as a list and pushed the swatch they both write further down. A dual
+    -- half registers the same widget refresh a full-width toggle does, in the
+    -- toggle branch of the host's dual-row factory, so each still redraws the
+    -- other.
+    local accentChoiceRow
+    accentChoiceRow, h = W:DualRow(parent, y,
+        { type = "toggle", text = "Use KitnUI Pink",
+          tooltip = "On, the accent is KitnUI pink. Off, it is the color in the swatch below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.",
+          getValue = AccentUsesDefault,
+          setValue = function(v)
+              SetAccentUsesDefault(v)
+              -- Unforced: the swatch below redraws through its registered widget
+              -- refresh, and no ownership sentence changed.
+              if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                  pcall(EllesmereUI.RefreshPage, EllesmereUI)
+              end
+          end },
+        -- Reads the stored colour rather than a switch of its own, so picking
+        -- amber by hand in the swatch below lights it up too.
+        { type = "toggle", text = "Use Rasta Amber",
+          tooltip = "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same colour you could pick by hand in the swatch below, offered by name.",
+          getValue = AccentUsesRasta,
+          setValue = function(v)
+              if v then
+                  SetAccentCustom(RASTA_R, RASTA_G, RASTA_B)
+              else
+                  SetAccentUsesDefault(true)
+              end
+              if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                  pcall(EllesmereUI.RefreshPage, EllesmereUI)
+              end
+          end });                                                                  y = y - h
 
     -- Shows the colour that is ACTIVE, not the one that is stored: pink while the
-    -- row above is on, the custom colour while it is off. Showing the stored custom
-    -- colour under a pink accent would put green in the swatch and pink on screen.
+    -- pink switch is on, the custom colour while it is off. Showing the stored
+    -- custom colour under a pink accent would put green in the swatch and pink on
+    -- screen.
     local colorRow
     colorRow, h = W:ColorPicker(parent, "Accent Color", y,
         AccentColor,
         function(r, g, b)
             SetAccentCustom(r, g, b)
-            -- Unforced, like the row above, even though this ALSO switches "Use
-            -- KitnUI Pink" off. W:Toggle registers its own knob redraw as a widget
-            -- refresh (EllesmereUI_Widgets.lua:1727-1733), so the fast path moves
-            -- that switch for us. Nothing structural changes here: the veils depend
-            -- on the MASTER, which this cannot touch.
+            -- Unforced, like the switches above, even though this ALSO moves
+            -- "Use KitnUI Pink". That switch redraws itself through the widget
+            -- refresh its dual-row half registers, described above the row, so the
+            -- fast path moves it for us. Nothing structural changes here: the veils
+            -- depend on the MASTER, which this cannot touch.
             if _G.EllesmereUI and EllesmereUI.RefreshPage then
                 pcall(EllesmereUI.RefreshPage, EllesmereUI)
             end
         end)
                                                                                    y = y - h
 
-    -- Both rows are meaningless until the master is on, so they are dimmed and
-    -- made dead rather than hidden: a user who has not turned the master on should
-    -- still see that a colour choice exists.
+    -- The colour choice is meaningless until the master is on, so it is dimmed
+    -- and made dead rather than hidden: a user who has not turned the master on
+    -- should still see that a colour choice exists. One veil per row, and the
+    -- shared row is one row.
     if not AccentEnabled() then
-        Veil(pinkRow)
+        Veil(accentChoiceRow)
         Veil(colorRow)
     end
 

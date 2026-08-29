@@ -21,8 +21,10 @@ local function eq(actual, expected, label)
     check(actual == expected, label, "got " .. tostring(actual) .. ", wanted " .. tostring(expected))
 end
 
--- Dropdown order, artwork and shipped file for every KitnUI theme.
+-- Dropdown order, artwork and shipped file for every KitnUI theme. Both carry the
+-- brand accent: a theme chooses artwork and nothing else.
 local MEDIA = "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\"
+local BRAND_ACCENT = { r = 1, g = 0, b = 0.549 }
 local THEMES = {
     { name = "KitnUI",       file = "KitnUI-EUI-Options.png" },
     { name = "KitnUI Rasta", file = "KitnUI-EUI-Options-Rasta.png" },
@@ -112,9 +114,9 @@ if themeChunk then
         local preset = EUI.THEME_PRESETS[theme.name]
         check(type(preset) == "table", theme.name .. " preset is registered before PLAYER_LOGIN")
         if preset then
-            eq(preset.r, 1, theme.name .. " preset uses the KitnUI red channel")
-            eq(preset.g, 0, theme.name .. " preset uses the KitnUI green channel")
-            eq(preset.b, 0.549, theme.name .. " preset uses the KitnUI blue channel")
+            eq(preset.r, BRAND_ACCENT.r, theme.name .. " preset uses the brand red channel")
+            eq(preset.g, BRAND_ACCENT.g, theme.name .. " preset uses the brand green channel")
+            eq(preset.b, BRAND_ACCENT.b, theme.name .. " preset uses the brand blue channel")
         end
         eq(EUI.THEME_ORDER[i + 1], theme.name, theme.name .. " follows the default EUI theme in order")
     end
@@ -331,6 +333,180 @@ do
         "the wizard names the alternate background")
     check(wizardSource:find("ns.OnAltThemeRoster", 1, true) ~= nil,
         "the wizard picks its background from the roster")
+
+    -- The wizard chrome follows the roster, but the exported brand colour must
+    -- not: the Nameplates page defaults its target arrow to it.
+    check(wizardSource:find("local KITN_PINK = { 1, 0, 0.549 }", 1, true) ~= nil,
+        "the brand accent value is unchanged")
+    check(wizardSource:find("ns.KITN_PINK = KITN_PINK", 1, true) ~= nil,
+        "the brand accent is still exported unchanged")
+    check(wizardSource:find("accent = ns.OnAltThemeRoster()", 1, true) ~= nil,
+        "the wizard resolves its accent from the roster")
+    check(wizardSource:find("KITN_PINK%[") == nil,
+        "no wizard chrome paints from the brand constant directly")
+    check(wizardSource:find("local P = KITN_PINK", 1, true) == nil,
+        "the button variant helper paints from the resolved accent")
+end
+
+-- The installer chrome and the named accent choice must be the same amber. Two
+-- copies of a colour drift, which is why the brand pink already carries a
+-- keep-in-step warning in three files.
+do
+    local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
+    local wizardSource = wizardFile:read("*a")
+    wizardFile:close()
+
+    local generalFile = assert(io.open("KitnUI_EUI/General.lua", "rb"))
+    local generalSource = generalFile:read("*a")
+    generalFile:close()
+
+    local wr, wg, wb = wizardSource:match("RASTA_AMBER = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    local gr, gg, gb = generalSource:match("RASTA_R, RASTA_G, RASTA_B = ([%d%.]+), ([%d%.]+), ([%d%.]+)")
+    check(wr ~= nil, "the wizard declares the alternate accent")
+    check(gr ~= nil, "the KitnUI page declares the alternate accent")
+    if wr and gr then
+        eq(gr, wr, "the named accent red channel matches the installer chrome")
+        eq(gg, wg, "the named accent green channel matches the installer chrome")
+        eq(gb, wb, "the named accent blue channel matches the installer chrome")
+    end
+
+    check(generalSource:find("Use Rasta Amber", 1, true) ~= nil,
+        "the KitnUI page offers the alternate accent by name")
+    check(generalSource:find("IsRastaAmber", 1, true) ~= nil,
+        "the page can tell whether the stored accent is the alternate one")
+end
+
+-- The two named colour switches share one row. Built as full-width rows they
+-- read as a list rather than a pair of alternatives, and pushed the swatch that
+-- they both write down the page.
+do
+    local generalFile = assert(io.open("KitnUI_EUI/General.lua", "rb"))
+    local generalSource = generalFile:read("*a")
+    generalFile:close()
+
+    local sectionStart = generalSource:find('SectionHeader(parent, "ACCENTS"', 1, true)
+    local sectionEnd = generalSource:find('SectionHeader(parent, "TWEAKS"', 1, true)
+    check(sectionStart ~= nil and sectionEnd ~= nil and sectionEnd > sectionStart,
+        "the accent section can be isolated from the rest of the page")
+
+    if sectionStart and sectionEnd and sectionEnd > sectionStart then
+        local section = generalSource:sub(sectionStart, sectionEnd)
+
+        local dualRows = 0
+        for _ in section:gmatch("W:DualRow") do dualRows = dualRows + 1 end
+        eq(dualRows, 1, "the accent section builds exactly one dual row")
+
+        local dualAt = section:find("W:DualRow", 1, true)
+        local pinkAt = section:find("Use KitnUI Pink", 1, true)
+        local amberAt = section:find("Use Rasta Amber", 1, true)
+        check(pinkAt ~= nil and amberAt ~= nil,
+            "both named colour switches are still on the page")
+        check(dualAt ~= nil and pinkAt ~= nil and amberAt ~= nil
+            and pinkAt > dualAt and amberAt > pinkAt,
+            "both named colour switches sit in the dual row, pink on the left")
+
+        check(section:find('W:Toggle(parent, "Use ', 1, true) == nil,
+            "neither named colour switch is built as a full-width row")
+
+        local veils = 0
+        for _ in section:gmatch("Veil%(") do veils = veils + 1 end
+        eq(veils, 2, "one veil covers the shared row and one covers the swatch")
+    end
+end
+
+-- Text drawn inside the installer window follows the same accent the chrome
+-- does. Chat lines and popup dialogs keep the brand pink: they are read outside
+-- the window, where the roster's colour would look arbitrary.
+do
+    local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
+    local wizardSource = wizardFile:read("*a")
+    wizardFile:close()
+
+    local pr, pg, pb = wizardSource:match("KITN_PINK = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    local ar, ag, ab = wizardSource:match("RASTA_AMBER = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    check(pr ~= nil and ar ~= nil, "both installer accents are declared where the chrome reads them")
+
+    check(type(ns.WizardColor) == "function",
+        "the installer publishes a window-text colour helper")
+
+    if type(ns.WizardColor) == "function" and pr and ar then
+        -- The helper reads what the chrome reads, so a colour cannot drift between
+        -- the window's text and the window's own paint.
+        ns.KITN_PINK = { tonumber(pr), tonumber(pg), tonumber(pb) }
+        ns.RASTA_AMBER = { tonumber(ar), tonumber(ag), tonumber(ab) }
+
+        AsCharacter("Stranger", "Area 52")
+        eq(ns.WizardColor("KitnUI"), "|cffFF008CKitnUI|r",
+            "window text is brand pink off the roster")
+
+        AsCharacter("Bite", "Area 52")
+        eq(ns.WizardColor("KitnUI"), "|cffF98C1FKitnUI|r",
+            "window text is the alternate accent on the roster")
+
+        -- An unusable colour must degrade to the brand, never to a Lua error inside
+        -- a page build, which would leave the wizard half drawn. A truthy channel
+        -- that is not a number is the case a truthiness guard lets through: it
+        -- reaches the multiply and raises.
+        local savedAmber = ns.RASTA_AMBER
+        local unusable = {
+            { nil, "a missing table" },
+            { {}, "an empty table" },
+            { { "bad", 0.549, 0.122 }, "a channel that is not a number" },
+            { { 0.976, 0.549 }, "a channel that is absent" },
+            { { -1, 0.549, 0.122 }, "a channel below the range" },
+            { { 0.976, 2, 0.122 }, "a channel above the range" },
+            { { 0/0, 0.549, 0.122 }, "a channel that is NaN" },
+            { "F98C1F", "an accent that is not a table" },
+        }
+        for _, case in ipairs(unusable) do
+            ns.RASTA_AMBER = case[1]
+            local ok, got = pcall(ns.WizardColor, "KitnUI")
+            check(ok, case[2] .. " does not raise", got)
+            if ok then
+                eq(got, "|cffFF008CKitnUI|r", case[2] .. " falls back to the brand")
+            end
+        end
+        ns.RASTA_AMBER = savedAmber
+
+        AsCharacter("Tester", "Realm")
+    end
+
+    local installerFile = assert(io.open("Installer/Installer.lua", "rb"))
+    local installerSource = installerFile:read("*a")
+    installerFile:close()
+
+    check(installerSource:find('ns.Color("KitnUI")', 1, true) == nil,
+        "no brand name drawn in the window is painted from the fixed pink")
+    check(installerSource:find("ns.WizardColor", 1, true) ~= nil,
+        "the wizard pages paint their highlights from the resolved accent")
+
+    -- The success toast is drawn over the window while the installer runs, so it
+    -- follows the window. The failure toasts stay red and amber: those colours
+    -- mean "failed" and "attention", not "KitnUI".
+    check(installerSource:find("cffFF008C", 1, true) == nil,
+        "nothing the installer draws is painted from a fixed pink escape")
+
+    -- The companion addon CAN read ns.RASTA_AMBER: its namespace reads through to
+    -- KitnUI's by metatable, and the EXPORTS list governs the opposite direction.
+    -- So the target arrow stays pink because Nameplates asks for the brand
+    -- constant by name, not because the alternate accent is out of reach. This
+    -- checks the reason that actually holds, across the companion files the suite
+    -- reads rather than the whole folder.
+    for _, companion in ipairs({ "Core.lua", "Nameplates.lua", "General.lua", "Theme.lua" }) do
+        local f = assert(io.open("KitnUI_EUI/" .. companion, "rb"))
+        local src = f:read("*a")
+        f:close()
+        -- The READ form. The name also appears in a keep-in-step comment, which is
+        -- a pointer to the constant, not a use of it.
+        check(src:find("ns.RASTA_AMBER", 1, true) == nil,
+            "KitnUI_EUI/" .. companion .. " does not reach for the alternate accent")
+    end
+
+    local npFile = assert(io.open("KitnUI_EUI/Nameplates.lua", "rb"))
+    local npSource = npFile:read("*a")
+    npFile:close()
+    check(npSource:find("ns.KITN_PINK", 1, true) ~= nil,
+        "the target arrow takes its colour from the brand constant by name")
 end
 
 if themeChunk then

@@ -68,8 +68,12 @@ local function ShowInstallToast(message, r, g, b)
     toastFrame = f
 end
 
+-- Named in the window's accent, because the toast is drawn over the window while
+-- the installer runs. The failure and warning toasts call ShowInstallToast with
+-- their own fixed red or amber instead: those colours carry a meaning the accent
+-- would erase.
 local function SuccessToast(name, action)
-    ShowInstallToast("|cffFF008C" .. name .. "|r " .. action)
+    ShowInstallToast(ns.WizardColor(name) .. " " .. action)
 end
 
 ---------------------------------------------------------------------------------
@@ -240,7 +244,7 @@ end
 
 local function WelcomePage()
     local f = WF()
-    f.SubTitle:SetText("Welcome to " .. ns.Color("KitnUI"))
+    f.SubTitle:SetText("Welcome to " .. ns.WizardColor("KitnUI"))
     ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("A complete, curated interface \226\128\148 unit frames, action bars, nameplates, "
         .. "boss timers, and cooldowns, all tuned to work together out of the box.")
@@ -686,9 +690,9 @@ end
 
 local function WelcomeLoadPage()
     local f = WF()
-    f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Loader")
+    f.SubTitle:SetText(ns.WizardColor("KitnUI") .. " Profile Loader")
     ns.Wizard:SetTitleIcon(true)
-    f.Desc1:SetText("This loads the " .. ns.Color("KitnUI") .. " profiles onto this character.\nNothing is reimported except the Cooldown Manager layouts, which every character has to be given its own copy of.")
+    f.Desc1:SetText("This loads the " .. ns.WizardColor("KitnUI") .. " profiles onto this character.\nNothing is reimported except the Cooldown Manager layouts, which every character has to be given its own copy of.")
     f.Desc2:SetText("Click " .. ns.Green("Finish") .. " at the end to reload and apply changes.")
     ns.Wizard:SetOption(1, "Load All", function()
         -- Refusals are counted, not discarded. KitnUI's own record can say a
@@ -771,7 +775,7 @@ end
 local function NSRTLoadPage()
     local f = WF()
     f.SubTitle:SetText("Northern Sky Raid Tools")
-    f.Desc1:SetText("Activate the " .. ns.Color("Northern Sky Raid Tools") .. " profile on this character.")
+    f.Desc1:SetText("Activate the " .. ns.WizardColor("Northern Sky Raid Tools") .. " profile on this character.")
     ShowLoadStatusAndVersion("NSRT")
     ns.Wizard:SetOption(1, "Load", function()
         if ns.SetupAddon("NSRT") == false then
@@ -789,7 +793,7 @@ local function SimpleLoadPage(addonKey, displayName)
     return function()
         local f = WF()
         f.SubTitle:SetText(displayName)
-        f.Desc1:SetText("Activate the " .. ns.Color(displayName) .. " profile on this character.")
+        f.Desc1:SetText("Activate the " .. ns.WizardColor(displayName) .. " profile on this character.")
         ShowLoadStatusAndVersion(addonKey)
         ns.Wizard:SetOption(1, "Load", function()
             -- `== false` for the same reason the install page uses it: a loader
@@ -808,7 +812,7 @@ end
 local function EditModeLoadPage()
     local f = WF()
     f.SubTitle:SetText("Blizzard Edit Mode")
-    f.Desc1:SetText("Load the " .. ns.Color("KitnUI") .. " Edit Mode layout on this character.")
+    f.Desc1:SetText("Load the " .. ns.WizardColor("KitnUI") .. " Edit Mode layout on this character.")
     ShowLoadStatusAndVersion("Blizzard_EditMode")
     ns.Wizard:SetOption(1, "Load", function()
         -- `== false`, same as every other load page. This one used to discard the
@@ -828,7 +832,7 @@ local function FinishLoadPage()
     f.SubTitle:SetText("Profile Loading Complete")
     ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("You're all set! Click " .. ns.Green("Finish") .. " to reload your UI and apply all changes.")
-    f.Desc2:SetText("You can load profiles again with " .. ns.Color("/kitn load"))
+    f.Desc2:SetText("You can load profiles again with " .. ns.WizardColor("/kitn load"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
     ns.Wizard:CenterOption1()
 end
@@ -839,7 +843,7 @@ end
 
 local function WelcomeUpdatePage()
     local f = WF()
-    f.SubTitle:SetText(ns.Color("KitnUI") .. " Profile Update")
+    f.SubTitle:SetText(ns.WizardColor("KitnUI") .. " Profile Update")
     ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("New or updated addon profiles are available.\n\n" ..
         ns.Red("WARNING") .. ": Each step overwrites your current settings for that addon.")
@@ -851,7 +855,7 @@ local function FinishUpdatePage()
     f.SubTitle:SetText("Update Complete")
     ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("All updated profiles have been reimported! Click " .. ns.Green("Finish") .. " to reload.")
-    f.Desc2:SetText("You can check for updates anytime with " .. ns.Color("/kitn update"))
+    f.Desc2:SetText("You can check for updates anytime with " .. ns.WizardColor("/kitn update"))
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
     ns.Wizard:CenterOption1()
 end
@@ -866,7 +870,7 @@ local function WelcomeCDMPage()
     ns.Wizard:SetTitleIcon(true)
     f.Desc1:SetText("Import Blizzard Cooldown Manager layouts for your current class.\n\n" ..
         "Blizzard only allows importing layouts for the class you are currently logged into.")
-    f.Desc2:SetText("To import another class later, run " .. ns.Color("/kitn cdm") .. " on that character.")
+    f.Desc2:SetText("To import another class later, run " .. ns.WizardColor("/kitn cdm") .. " on that character.")
 end
 
 ---------------------------------------------------------------------------------
@@ -881,7 +885,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
         tinsert(pages, WelcomeCDMPage); tinsert(stepTitles, "Introduction"); tinsert(stepKeys, false)
         tinsert(pages, BlizzardCDMPage); tinsert(stepTitles, "Blizzard CDM"); tinsert(stepKeys, "BlizzardCDM")
         tinsert(pages, FinishPage); tinsert(stepTitles, "Finish"); tinsert(stepKeys, false)
-        return { Name = ns.Color("KitnUI") .. " Blizzard CDM", Pages = pages, StepTitles = stepTitles, StepKeys = stepKeys }
+        return { Name = ns.WizardColor("KitnUI") .. " Blizzard CDM", Pages = pages, StepTitles = stepTitles, StepKeys = stepKeys }
     end
 
     -- Welcome (always first)
@@ -949,9 +953,9 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     tinsert(stepTitles, "Finish"); tinsert(stepKeys, false)
 
     return {
-        Name = profileLoadMode and (ns.Color("KitnUI") .. " Profile Loader")
-            or updateKeys and (ns.Color("KitnUI") .. " Profile Update")
-            or (ns.Color("KitnUI") .. " Installation"),
+        Name = profileLoadMode and (ns.WizardColor("KitnUI") .. " Profile Loader")
+            or updateKeys and (ns.WizardColor("KitnUI") .. " Profile Update")
+            or (ns.WizardColor("KitnUI") .. " Installation"),
         Pages = pages,
         StepTitles = stepTitles,
         StepKeys = stepKeys,

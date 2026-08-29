@@ -1314,3 +1314,52 @@ check or judged a result.
   the accent colour like the installer's own popups, and the Edit Mode sentence
   names the layout it will actually switch to, which was wrong every time Lulu
   Mode was on.
+
+---
+
+# Item 11 — Two options themes, and an alternate accent for the roster
+
+Branch `feature/rasta-accent`, on top of the merged theme and roster work.
+Head at the run: `9e0d823`.
+
+## What it covers
+
+KitnUI ships two EllesmereUI options themes that differ in ARTWORK ONLY, both
+registering the brand pink. A named list of characters additionally gets the
+alternate artwork in the installer window, and that window's accent, its text
+and its success toast follow the alternate colour. The accent is also offered by
+name on the KitnUI options page, to anyone, as a one-click equivalent of picking
+it in the colour swatch.
+
+## Checks
+
+1. Roster character, installer opens with the alternate artwork.
+2. Its chrome is amber: version divider, progress fill, side rail, buttons.
+3. Close-button hover is amber.
+4. Target something: the nameplate arrow is still PINK. The arrow reads the
+   brand constant by name and must not follow the roster.
+5. Non-roster character: original artwork, pink chrome.
+6. Options page, master accent switch on: the two named colours share one row,
+   pink on the left, and the swatch sits below them.
+7. Master off: both halves and the swatch dim and go dead, none disappear.
+8. Amber on: the accent turns amber and the pink switch turns itself off.
+9. Amber off: back to pink, and the pink switch turns itself on.
+10. Pick the amber by hand in the swatch: the named switch lights on its own.
+11. Walk two or three installer pages on a roster character: no pink text is
+    left in the window.
+12. Import something: the toast names the addon in amber.
+
+## Deliberately not covered
+
+- **Chat output stays pink on every character.** It is read in the chat frame
+  next to other addons' lines, where the pink is what identifies a KitnUI line
+  and the alternate colour would have nothing around it to agree with.
+- **The "KitnUI" wordmark at the top left of the window.** It is baked into the
+  background artwork rather than drawn, so each theme's file carries its own.
+
+## Result
+
+- Date: 2026-08-28
+- Reported by Kitn: all checks passed.
+- Notes: Run in two parts. The accent behaviour was smoked first, then the
+  side-by-side row, the window text and the toast were added and re-smoked.

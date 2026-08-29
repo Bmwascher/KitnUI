@@ -9,8 +9,10 @@ if ns.EUI_INERT then return end
 local ACCENT = { r = 1, g = 0, b = 0.549 }
 local MEDIA = "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\"
 
--- Dropdown order. Both entries carry the same KitnUI accent; only the artwork
--- differs.
+-- Dropdown order. Both entries carry the brand accent: the theme chooses the
+-- artwork and nothing else. Tying an accent to a theme would make picking a
+-- picture silently recolour the panel and the Top Bar, which follows the host
+-- accent by default. The accent is chosen on the KitnUI page instead.
 local THEMES = {
     { name = "KitnUI",       texture = MEDIA .. "KitnUI-EUI-Options.png" },
     { name = "KitnUI Rasta", texture = MEDIA .. "KitnUI-EUI-Options-Rasta.png" },
