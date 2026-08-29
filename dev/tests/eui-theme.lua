@@ -240,6 +240,10 @@ _G.InCombatLockdown = function() return false end
 _G.SlashCmdList = {}
 _G.EllesmereUIDB = { profiles = { KitnUI = {} } }
 
+-- Frames the companion addon registered, so the scan for the installer login
+-- handler below excludes them by where they came from rather than by number.
+local companionFrames = #frames
+
 local installerCore, installerCoreError = loadfile("Installer/Core.lua")
 check(installerCore ~= nil, "Installer/Core.lua exists", installerCoreError)
 if installerCore then
@@ -781,7 +785,7 @@ if themeChunk then
         _G.C_AddOns.GetAddOnEnableState = function() return 2 end
 
         local login, loginFrames = nil, 0
-        for i = 2, #frames do
+        for i = companionFrames + 1, #frames do
             if frames[i].events.PLAYER_LOGIN then
                 login = frames[i]
                 loginFrames = loginFrames + 1
