@@ -6,6 +6,11 @@ KitnUI now includes its own EllesmereUI options-panel themes, with custom artwor
 and a matching pink accent. Installing the EllesmereUI profile selects one
 automatically, while the normal theme dropdown remains available afterward.
 
+The installer itself has had a pass of its own. Buttons keep their highlight,
+pages that are already up to date say so and send you to the next step, the
+Cooldown Manager page marks every specialization at a glance, and Chat Setup no
+longer leaves Trade and Services sitting on the General tab.
+
 ### Interface
 - **NEW:** Two KitnUI themes, **KitnUI** and **KitnUI Rasta**, sit directly under EllesmereUI in the Options Theme dropdown. They differ in artwork only and both keep the KitnUI pink accent, so changing the picture never changes your colours
 - **NEW:** **Use Rasta Amber**, in the Accents section of the KitnUI page, sets the accent to the warm amber the Rasta artwork is built around. It is the same colour the swatch below it could already reach, offered by name so it is one click
