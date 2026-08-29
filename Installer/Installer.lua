@@ -576,6 +576,20 @@ local function RefreshCDMSpecLabels(rows)
 end
 
 local cdmAllButton
+
+-- Emphasis for the all-specs button, from the same reading the marks come from.
+-- Specs with nothing shipped are excluded by GetOutdatedCDMSpecs, so a class KitnUI
+-- cannot fully serve still reaches the finished state rather than asking forever.
+local function ApplyCDMActionState()
+    if not cdmAllButton then return end
+    if #ns.GetOutdatedCDMSpecs() > 0 then
+        if cdmAllButton._lbl then cdmAllButton._lbl:SetText("Import All Specs") end
+        SetVariant(cdmAllButton, "primary")
+    else
+        HandoffToNext(cdmAllButton, CHECK .. " Re-import All")
+    end
+end
+
 local function BlizzardCDMPage()
     local f = WF()
     f.SubTitle:SetText("Blizzard Cooldown Manager")
@@ -615,9 +629,6 @@ local function BlizzardCDMPage()
             if cdmAllButton._onClick then cdmAllButton._onClick() end
         end)
     end
-    -- Outside the creation guard: the variant resolves the accent when it is set,
-    -- so a button styled once would keep the old theme's colours after a swap.
-    SetVariant(cdmAllButton, "selectable")
     cdmAllButton._onClick = function()
         ConfirmImport("BlizzardCDM", "Blizzard CDM (All Specs)", function()
             local imported, failed, skipped = ns.ImportCDMAllSpecs()
@@ -637,10 +648,13 @@ local function BlizzardCDMPage()
                 SuccessToast("All specs", "layouts imported!")
             end
             PlayInstallSound()
-            SetVariant(WF().Next, "primary")
+            ApplyCDMActionState()
         end, ns.CDMNeedsOverwriteConfirm(preCDM, classId, nil))
     end
     cdmAllButton:Show()
+    -- Outside the creation guard: the variant resolves the accent when it is set,
+    -- so a button styled once would keep the old theme's colours after a swap.
+    ApplyCDMActionState()
 
     -- Per-spec option buttons (Option1..4).
     for i = 1, math.min(numSpecs, 4) do
@@ -660,7 +674,7 @@ local function BlizzardCDMPage()
                     if success then
                         SuccessToast(specName, "layout imported!")
                         PlayInstallSound()
-                        SetVariant(WF().Next, "primary")
+                        ApplyCDMActionState()
                     else
                         -- The cause is NOT named here. The setup function fails
                         -- on several paths and prints the real reason to chat on
