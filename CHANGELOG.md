@@ -9,8 +9,9 @@ automatically, while the normal theme dropdown remains available afterward.
 ### Interface
 - **NEW:** Two KitnUI themes, **KitnUI** and **KitnUI Rasta**, sit directly under EllesmereUI in the Options Theme dropdown. They differ in artwork only and both keep the KitnUI pink accent, so changing the picture never changes your colours
 - **NEW:** **Use Rasta Amber**, in the Accents section of the KitnUI page, sets the accent to the warm amber the Rasta artwork is built around. It is the same colour the swatch below it could already reach, offered by name so it is one click
-- Importing the EllesmereUI profile picks one of them for you. Loading profiles onto another character leaves the theme alone, so a theme you select yourself is kept
+- Every character is matched to one of the two themes and always gets the same one. Your first install applies that character's match to the account, and every install after that leaves the theme alone, so a theme you pick yourself is kept
 - On the characters that get the Rasta artwork, the installer window matches it: the progress bar, the buttons, the side rail and its own text all use the warm amber instead of the pink. Chat messages stay KitnUI pink
+- The installer window follows the character you are on rather than the account, so an alt matched to the Rasta artwork shows it even while the account sits on the other theme
 
 ## v2.1.4
 
