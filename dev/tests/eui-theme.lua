@@ -21,8 +21,10 @@ local function eq(actual, expected, label)
     check(actual == expected, label, "got " .. tostring(actual) .. ", wanted " .. tostring(expected))
 end
 
--- Dropdown order, artwork and shipped file for every KitnUI theme.
+-- Dropdown order, artwork and shipped file for every KitnUI theme. Both carry the
+-- brand accent: a theme chooses artwork and nothing else.
 local MEDIA = "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\"
+local BRAND_ACCENT = { r = 1, g = 0, b = 0.549 }
 local THEMES = {
     { name = "KitnUI",       file = "KitnUI-EUI-Options.png" },
     { name = "KitnUI Rasta", file = "KitnUI-EUI-Options-Rasta.png" },
@@ -112,9 +114,9 @@ if themeChunk then
         local preset = EUI.THEME_PRESETS[theme.name]
         check(type(preset) == "table", theme.name .. " preset is registered before PLAYER_LOGIN")
         if preset then
-            eq(preset.r, 1, theme.name .. " preset uses the KitnUI red channel")
-            eq(preset.g, 0, theme.name .. " preset uses the KitnUI green channel")
-            eq(preset.b, 0.549, theme.name .. " preset uses the KitnUI blue channel")
+            eq(preset.r, BRAND_ACCENT.r, theme.name .. " preset uses the brand red channel")
+            eq(preset.g, BRAND_ACCENT.g, theme.name .. " preset uses the brand green channel")
+            eq(preset.b, BRAND_ACCENT.b, theme.name .. " preset uses the brand blue channel")
         end
         eq(EUI.THEME_ORDER[i + 1], theme.name, theme.name .. " follows the default EUI theme in order")
     end
@@ -331,6 +333,47 @@ do
         "the wizard names the alternate background")
     check(wizardSource:find("ns.OnAltThemeRoster", 1, true) ~= nil,
         "the wizard picks its background from the roster")
+
+    -- The wizard chrome follows the roster, but the exported brand colour must
+    -- not: the Nameplates page defaults its target arrow to it.
+    check(wizardSource:find("local KITN_PINK = { 1, 0, 0.549 }", 1, true) ~= nil,
+        "the brand accent value is unchanged")
+    check(wizardSource:find("ns.KITN_PINK = KITN_PINK", 1, true) ~= nil,
+        "the brand accent is still exported unchanged")
+    check(wizardSource:find("accent = ns.OnAltThemeRoster()", 1, true) ~= nil,
+        "the wizard resolves its accent from the roster")
+    check(wizardSource:find("KITN_PINK%[") == nil,
+        "no wizard chrome paints from the brand constant directly")
+    check(wizardSource:find("local P = KITN_PINK", 1, true) == nil,
+        "the button variant helper paints from the resolved accent")
+end
+
+-- The installer chrome and the named accent choice must be the same amber. Two
+-- copies of a colour drift, which is why the brand pink already carries a
+-- keep-in-step warning in three files.
+do
+    local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
+    local wizardSource = wizardFile:read("*a")
+    wizardFile:close()
+
+    local generalFile = assert(io.open("KitnUI_EUI/General.lua", "rb"))
+    local generalSource = generalFile:read("*a")
+    generalFile:close()
+
+    local wr, wg, wb = wizardSource:match("RASTA_AMBER = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    local gr, gg, gb = generalSource:match("RASTA_R, RASTA_G, RASTA_B = ([%d%.]+), ([%d%.]+), ([%d%.]+)")
+    check(wr ~= nil, "the wizard declares the alternate accent")
+    check(gr ~= nil, "the KitnUI page declares the alternate accent")
+    if wr and gr then
+        eq(gr, wr, "the named accent red channel matches the installer chrome")
+        eq(gg, wg, "the named accent green channel matches the installer chrome")
+        eq(gb, wb, "the named accent blue channel matches the installer chrome")
+    end
+
+    check(generalSource:find("Use Rasta Amber", 1, true) ~= nil,
+        "the KitnUI page offers the alternate accent by name")
+    check(generalSource:find("IsRastaAmber", 1, true) ~= nil,
+        "the page can tell whether the stored accent is the alternate one")
 end
 
 if themeChunk then

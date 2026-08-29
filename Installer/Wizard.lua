@@ -30,7 +30,18 @@ local KITN_PINK = { 1, 0, 0.549 }
 -- table has to convert.
 ns.KITN_PINK = KITN_PINK
 
--- Baked installer background art: a ~1.36:1 pink panel inside a black margin,
+-- The accent the alternate artwork is built around. Roster characters get it for
+-- the installer chrome only; the export above stays the brand colour, because the
+-- Nameplates page reads that one and an arrow colour is not artwork.
+local RASTA_AMBER = { 0.976, 0.549, 0.122 }
+
+-- Every painted highlight reads this rather than either constant. Resolved once
+-- when the window is built, which is always after login: the roster is keyed on
+-- the character name, which cannot be read before then. It stays the brand colour
+-- until that happens, so anything painting early is still correct.
+local accent = KITN_PINK
+
+-- Baked installer background art: a ~1.36:1 panel inside a black margin,
 -- shipped as an uncompressed TGA. ART_CROP drops the margin so the panel fills
 -- the frame with no stretch, and PANEL_W/PANEL_H match that aspect. Retune both
 -- together if the art changes.
@@ -80,7 +91,7 @@ local function skin(frame)
     else
         grad:Hide()
     end
-    -- KitnUI installer background art (baked pink panel + cat), BACKGROUND 0 so it
+    -- KitnUI installer background art (baked panel + cat), BACKGROUND 0 so it
     -- sits over the fallback fill/gradient. Texcoords crop the source's outer black
     -- margin; the frame aspect matches the cropped panel so nothing stretches.
     frame.artLayer = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
@@ -108,6 +119,11 @@ function W:Build()
         print((ns.title or "KitnUI") .. ": EllesmereUI UI is not ready.")
         return nil
     end
+
+    -- Resolved here rather than at file scope, where the character name is not
+    -- readable yet. Everything painted below, and every helper called after this,
+    -- reads the upvalue.
+    accent = ns.OnAltThemeRoster() and RASTA_AMBER or KITN_PINK
 
     local f = CreateFrame("Frame", "KitnUIWizard", UIParent)
     f:SetSize(PANEL_W, PANEL_H)
@@ -162,7 +178,7 @@ function W:Build()
     f.detailRule:SetColorTexture(1, 1, 1, 0.12)
     f.detailRule:SetHeight(1)
     f.detailRule:Hide()
-    f.detailHeader = EllesmereUI.MakeFont(f, 11, "", 1, 1, 1, 0.5)  -- muted caption (pink read too hot here)
+    f.detailHeader = EllesmereUI.MakeFont(f, 11, "", 1, 1, 1, 0.5)  -- muted caption (the accent read too hot here)
     f.detailHeader:SetJustifyH("LEFT")
     f.detailHeader:Hide()
 
@@ -206,7 +222,7 @@ function W:Build()
     f.versionText:SetText("Version " .. ver)
     -- faint divider above the version, across the sidebar footer
     local vdiv = f:CreateTexture(nil, "ARTWORK")
-    vdiv:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.16)
+    vdiv:SetColorTexture(accent[1], accent[2], accent[3], 0.16)
     vdiv:SetHeight(1)
     vdiv:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, 34)
     vdiv:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", SIDEBAR_W - 20, 34)
@@ -227,13 +243,13 @@ function W:Build()
     W:SetButtonVariant(f.Back, "ghost")
 
     -- Close: invisible hitbox over the baked X box (the art draws the glyph, which
-    -- avoids the Expressway font's missing "x" glyph); a faint pink wash on hover.
+    -- avoids the Expressway font's missing "x" glyph); a faint accent wash on hover.
     local close = CreateFrame("Button", nil, f)
     close:SetSize(26, 24)
     close:SetPoint("CENTER", f, "TOPRIGHT", -14, -14)  -- over the baked X box
     close:SetFrameLevel(f:GetFrameLevel() + 10)
     local hover = close:CreateTexture(nil, "ARTWORK")
-    hover:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.22)
+    hover:SetColorTexture(accent[1], accent[2], accent[3], 0.22)
     hover:SetAllPoints()
     hover:Hide()
     close:SetScript("OnEnter", function() hover:Show() end)
@@ -241,7 +257,7 @@ function W:Build()
     close:SetScript("OnClick", function() W:Hide() end)
     f.CloseButton = close
 
-    -- Progress bar (track + pink fill) in the content column, above the nav row.
+    -- Progress bar (track + accent fill) in the content column, above the nav row.
     local progTrack = CreateFrame("Frame", nil, f)
     progTrack:SetHeight(6)
     progTrack:SetPoint("BOTTOMLEFT", CONTENT_X, 50)   -- just above the baked divider
@@ -250,7 +266,7 @@ function W:Build()
     trackBg:SetColorTexture(1, 1, 1, 0.10)
     trackBg:SetAllPoints()
     f.progFill = progTrack:CreateTexture(nil, "ARTWORK")
-    f.progFill:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 1)
+    f.progFill:SetColorTexture(accent[1], accent[2], accent[3], 1)
     f.progFill:SetPoint("TOPLEFT", 0, 0)
     f.progFill:SetPoint("BOTTOMLEFT", 0, 0)
     f.progFill:SetWidth(1)
@@ -326,32 +342,32 @@ function W:ShowInput(opts)
     opts = opts or {}
 
     if not f.inputBox then
-        -- Pink caption, not the muted grey the status header uses. This is the
+        -- Accent caption, not the muted grey the status header uses. This is the
         -- one thing on any page asking the user to TYPE, and a field styled like
         -- a status line reads as another status line.
-        f.inputCaption = EllesmereUI.MakeFont(f, 11, "", KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.9)
+        f.inputCaption = EllesmereUI.MakeFont(f, 11, "", accent[1], accent[2], accent[3], 0.9)
         f.inputCaption:SetJustifyH("LEFT")
 
         local eb = CreateFrame("EditBox", nil, f)
         eb:SetSize(200, 28)
         eb:SetAutoFocus(false)
         eb:SetFont(ns.FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-        eb:SetTextInsets(12, 8, 0, 0)  -- clears the pink edge bar below
+        eb:SetTextInsets(12, 8, 0, 0)  -- clears the accent edge bar below
         eb:SetTextColor(1, 1, 1, 0.95)
         local bg = eb:CreateTexture(nil, "BACKGROUND")
         bg:SetColorTexture(0, 0, 0, 0.40)  -- the "selectable" button fill, so the kit matches
         bg:SetAllPoints()
-        -- The same 3px pink edge the sidebar uses to mark the row you are on.
+        -- The same 3px accent edge the sidebar uses to mark the row you are on.
         -- It is what makes the field read as "this one, now" at a glance.
         local edge = eb:CreateTexture(nil, "ARTWORK")
-        edge:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 1)
+        edge:SetColorTexture(accent[1], accent[2], accent[3], 1)
         edge:SetWidth(3)
         edge:SetPoint("TOPLEFT")
         edge:SetPoint("BOTTOMLEFT")
         -- Kept so focus can brighten it. MakeBorder returns an object with a
         -- SetColor METHOD, not a texture -- SetColorTexture on it is a nil call.
         if EllesmereUI.MakeBorder then
-            eb._border = EllesmereUI.MakeBorder(eb, KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.5, EllesmereUI.PanelPP)
+            eb._border = EllesmereUI.MakeBorder(eb, accent[1], accent[2], accent[3], 0.5, EllesmereUI.PanelPP)
         end
 
         -- Shown only while the box is empty and unfocused. An empty box with a
@@ -429,7 +445,7 @@ function W:RefreshInputChrome(eb)
     eb.placeholder:SetShown(empty and not focused and eb._placeholder ~= "")
     if eb._border and eb._border.SetColor then
         local a = focused and 1 or 0.5
-        eb._border:SetColor(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], a)
+        eb._border:SetColor(accent[1], accent[2], accent[3], a)
     end
 end
 
@@ -531,7 +547,7 @@ end
 function W:SetButtonVariant(btn, variant)
     if not (btn and btn._bg) then return end
     btn._variant = variant
-    local P = KITN_PINK
+    local P = accent
     -- MakeStyledButton's 2nd return is a border OBJECT ({_frame, edges}), not a
     -- texture, so only recolor it when it exposes SetColorTexture; the bg fill +
     -- label color carry the emphasis regardless.
@@ -547,8 +563,8 @@ function W:SetButtonVariant(btn, variant)
         setBrd(P[1], P[2], P[3], 0.55)
         if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 0.95) end
     elseif variant == "selected" then
-        btn._bg:SetColorTexture(P[1], P[2], P[3], 0.22)  -- pink wash marks the active choice
-        setBrd(P[1], P[2], P[3], 1)                       -- full pink border
+        btn._bg:SetColorTexture(P[1], P[2], P[3], 0.22)  -- accent wash marks the active choice
+        setBrd(P[1], P[2], P[3], 1)                       -- full accent border
         if btn._lbl then btn._lbl:SetTextColor(1, 1, 1, 1) end
     elseif variant == "done" then
         btn._bg:SetColorTexture(1, 1, 1, 0.04)
@@ -577,9 +593,9 @@ local function updateRail()
             row:SetPoint("TOPLEFT", 0, -(i - 1) * 29)
             row:SetPoint("TOPRIGHT", 0, -(i - 1) * 29)
             row:SetHeight(27)
-            -- pink row wash marks the current step (background, under everything)
+            -- accent row wash marks the current step (background, under everything)
             row.activeBg = row:CreateTexture(nil, "BACKGROUND")
-            row.activeBg:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 0.10)
+            row.activeBg:SetColorTexture(accent[1], accent[2], accent[3], 0.10)
             row.activeBg:SetAllPoints()
             row.activeBg:Hide()
             -- faint white wash on hover (only when not the current step)
@@ -587,9 +603,9 @@ local function updateRail()
             row.hover:SetColorTexture(1, 1, 1, 0.06)
             row.hover:SetAllPoints()
             row.hover:Hide()
-            -- pink left bar marks the current step
+            -- accent left bar marks the current step
             row.bar = row:CreateTexture(nil, "ARTWORK")
-            row.bar:SetColorTexture(KITN_PINK[1], KITN_PINK[2], KITN_PINK[3], 1)
+            row.bar:SetColorTexture(accent[1], accent[2], accent[3], 1)
             row.bar:SetWidth(3)
             row.bar:SetPoint("TOPLEFT", 0, -2)
             row.bar:SetPoint("BOTTOMLEFT", 0, 2)
@@ -636,7 +652,7 @@ local function updateRail()
             row.chk:SetShown(isDone)
             if isCurrent then
                 row.hover:Hide()  -- current row never shows the hover wash
-                row.label:SetTextColor(1, 1, 1, 1)      -- bright white; the pink bar marks "current"
+                row.label:SetTextColor(1, 1, 1, 1)      -- bright white; the accent bar marks "current"
             elseif isDone then
                 row.label:SetTextColor(1, 1, 1, 0.75)
             else

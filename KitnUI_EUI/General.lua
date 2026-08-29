@@ -380,6 +380,12 @@ local ACCENT_KEYS = {
 -- one is POSITIONAL and the other two are KEYED.
 local ACCENT_R, ACCENT_G, ACCENT_B = 1, 0, 0.549
 
+-- The accent the alternate installer artwork is built around, offered by name so
+-- reaching it is one click rather than a hunt in the colour picker. Keep it in
+-- step with RASTA_AMBER in Installer/Wizard.lua -- that one is POSITIONAL and
+-- this one is three scalars; the theme gate compares them.
+local RASTA_R, RASTA_G, RASTA_B = 0.976, 0.549, 0.122
+
 -- Tested against false rather than read for truthiness, because the registered
 -- default is TRUE and an absent key must therefore mean pink. The settings
 -- fallback path merges no defaults, so absent is reachable.
@@ -612,6 +618,22 @@ local function IsKitnPink(r, g, b)
        and Byte(b) == Byte(ACCENT_B)
 end
 
+local function IsRastaAmber(r, g, b)
+    return Byte(r) == Byte(RASTA_R)
+       and Byte(g) == Byte(RASTA_G)
+       and Byte(b) == Byte(RASTA_B)
+end
+
+-- Whether the stored colour IS the named amber, rather than a separate stored
+-- switch. One boolean already decides pink against custom, so a second switch
+-- would be a second source of truth for the same question.
+local function AccentUsesRasta()
+    if AccentUsesDefault() then return false end
+    local c = ns.EUISettings().accentCustom
+    if type(c) ~= "table" then return false end
+    return IsRastaAmber(c.r, c.g, c.b)
+end
+
 -- Said by both setters whenever a colour change stored fine but could not reach
 -- the screen. Every forcing control in this addon says when it refused; a colour
 -- row that quietly does nothing is the same defect wearing a different hat.
@@ -823,6 +845,25 @@ ns.EUIPages["General"] = function(parent, yOffset)
         "On, the accent is KitnUI pink. Off, it is the color in the row below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.")
                                                                                    y = y - h
 
+    -- The same one-click shape as the row above, writing the same two keys the
+    -- colour picker writes. It reads the stored colour rather than a switch of its
+    -- own, so picking amber by hand in the row below lights it up too.
+    local rastaRow
+    rastaRow, h = W:Toggle(parent, "Use Rasta Amber", y,
+        AccentUsesRasta,
+        function(v)
+            if v then
+                SetAccentCustom(RASTA_R, RASTA_G, RASTA_B)
+            else
+                SetAccentUsesDefault(true)
+            end
+            if _G.EllesmereUI and EllesmereUI.RefreshPage then
+                pcall(EllesmereUI.RefreshPage, EllesmereUI)
+            end
+        end,
+        "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same colour you could pick by hand in the row below, offered by name.")
+                                                                                   y = y - h
+
     -- Shows the colour that is ACTIVE, not the one that is stored: pink while the
     -- row above is on, the custom colour while it is off. Showing the stored custom
     -- colour under a pink accent would put green in the swatch and pink on screen.
@@ -842,11 +883,12 @@ ns.EUIPages["General"] = function(parent, yOffset)
         end)
                                                                                    y = y - h
 
-    -- Both rows are meaningless until the master is on, so they are dimmed and
-    -- made dead rather than hidden: a user who has not turned the master on should
-    -- still see that a colour choice exists.
+    -- All three rows are meaningless until the master is on, so they are dimmed
+    -- and made dead rather than hidden: a user who has not turned the master on
+    -- should still see that a colour choice exists.
     if not AccentEnabled() then
         Veil(pinkRow)
+        Veil(rastaRow)
         Veil(colorRow)
     end
 
