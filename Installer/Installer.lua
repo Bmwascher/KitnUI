@@ -286,6 +286,30 @@ end
 -- Install-mode pages
 ---------------------------------------------------------------------------------
 
+-- The window's two looks, offered here because the Welcome page has no action of
+-- its own to compete with. The keys are what ns.SetInstallerTheme speaks; the
+-- labels are the names the options panel gives the same two designs.
+local WIZARD_THEMES = {
+    { key = "default", label = "KitnUI" },
+    { key = "alt",     label = "KitnUI Rasta" },
+}
+
+local function ShowThemeOptions()
+    local alt = ns.UsesAltTheme and ns.UsesAltTheme()
+    local current = alt and "alt" or "default"
+    for i, theme in ipairs(WIZARD_THEMES) do
+        ns.Wizard:SetOption(i, theme.label, function()
+            -- Repainting is the writer's job: a click that could not be stored
+            -- must not leave the window showing a theme nothing remembers.
+            if not ns.SetInstallerTheme(theme.key) then
+                ShowInstallToast("Could not identify this character - theme not saved", 1, 0.8, 0.2)
+            end
+        end)
+        SetVariant(WF()["Option" .. i], current == theme.key and "selected" or "selectable")
+    end
+    ns.Wizard:SetOptionHint("INSTALLER THEME (" .. ns.WizardColor(current == "alt" and "RASTA" or "KITN") .. ")")
+end
+
 local function WelcomePage()
     local f = WF()
     f.SubTitle:SetText("Welcome to " .. ns.WizardColor("KitnUI"))
@@ -295,6 +319,7 @@ local function WelcomePage()
     f.Desc2:SetText("\n" .. ns.Red("WARNING") .. ": importing overwrites each addon's current settings. "
         .. "Only the addons you click are changed \226\128\148 exit now to keep everything as it is.")
     f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
+    ShowThemeOptions()
 end
 
 -- The two EllesmereUI appearance presets, offered on this page once the profile

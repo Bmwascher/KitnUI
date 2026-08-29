@@ -49,6 +49,16 @@ ns.RASTA_AMBER = RASTA_AMBER
 -- until that happens, so anything painting early is still correct.
 local accent = KITN_PINK
 
+-- Every accent paint registers here and runs at once. A theme swap has to repaint
+-- what was already drawn, and a list of painters is the only thing that cannot
+-- fall behind a site added later: a site that never registers is a site that never
+-- follows the accent, which is visible immediately rather than only on a swap.
+local accentPainters = {}
+local function onAccent(paint)
+    accentPainters[#accentPainters + 1] = paint
+    paint(accent)
+end
+
 -- Baked installer background art: a ~1.36:1 panel inside a black margin,
 -- shipped as an uncompressed TGA. ART_CROP drops the margin so the panel fills
 -- the frame with no stretch, and PANEL_W/PANEL_H match that aspect. Retune both
@@ -78,6 +88,18 @@ local BTN_COLOURS = {
     1, 1, 1, 0.55,              1, 1, 1, 0.70,
 }
 
+-- Point the background at the theme in force. Called again on a theme swap, so a
+-- texture that failed once is retried rather than left hidden.
+local function paintArt(tex)
+    tex:SetTexture(ns.UsesAltTheme() and ART_PATH_ALT or ART_PATH)
+    if tex:GetTexture() then
+        tex:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
+        tex:Show()
+    else
+        tex:Hide()  -- art failed to load; fall back to the drawn fill/gradient
+    end
+end
+
 local function euiReady()
     return _G.EllesmereUI and EllesmereUI.MakeBorder and EllesmereUI.MakeStyledButton
         and EllesmereUI.SolidTex and EllesmereUI.MakeFont
@@ -104,12 +126,7 @@ local function skin(frame)
     -- margin; the frame aspect matches the cropped panel so nothing stretches.
     frame.artLayer = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
     frame.artLayer:SetAllPoints()
-    frame.artLayer:SetTexture(ns.UsesAltTheme() and ART_PATH_ALT or ART_PATH)
-    if frame.artLayer:GetTexture() then
-        frame.artLayer:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
-    else
-        frame.artLayer:Hide()  -- art failed to load; fall back to the drawn fill/gradient
-    end
+    paintArt(frame.artLayer)
     -- border
     if EllesmereUI.MakeBorder then
         EllesmereUI.MakeBorder(frame, BORDER_COL[1], BORDER_COL[2], BORDER_COL[3], BORDER_COL[4], EllesmereUI.PanelPP)
@@ -230,7 +247,7 @@ function W:Build()
     f.versionText:SetText("Version " .. ver)
     -- faint divider above the version, across the sidebar footer
     local vdiv = f:CreateTexture(nil, "ARTWORK")
-    vdiv:SetColorTexture(accent[1], accent[2], accent[3], 0.16)
+    onAccent(function(c) vdiv:SetColorTexture(c[1], c[2], c[3], 0.16) end)
     vdiv:SetHeight(1)
     vdiv:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, 34)
     vdiv:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", SIDEBAR_W - 20, 34)
@@ -257,7 +274,7 @@ function W:Build()
     close:SetPoint("CENTER", f, "TOPRIGHT", -14, -14)  -- over the baked X box
     close:SetFrameLevel(f:GetFrameLevel() + 10)
     local hover = close:CreateTexture(nil, "ARTWORK")
-    hover:SetColorTexture(accent[1], accent[2], accent[3], 0.22)
+    onAccent(function(c) hover:SetColorTexture(c[1], c[2], c[3], 0.22) end)
     hover:SetAllPoints()
     hover:Hide()
     close:SetScript("OnEnter", function() hover:Show() end)
@@ -274,7 +291,7 @@ function W:Build()
     trackBg:SetColorTexture(1, 1, 1, 0.10)
     trackBg:SetAllPoints()
     f.progFill = progTrack:CreateTexture(nil, "ARTWORK")
-    f.progFill:SetColorTexture(accent[1], accent[2], accent[3], 1)
+    onAccent(function(c) f.progFill:SetColorTexture(c[1], c[2], c[3], 1) end)
     f.progFill:SetPoint("TOPLEFT", 0, 0)
     f.progFill:SetPoint("BOTTOMLEFT", 0, 0)
     f.progFill:SetWidth(1)
@@ -360,6 +377,7 @@ function W:ShowInput(opts)
         -- one thing on any page asking the user to TYPE, and a field styled like
         -- a status line reads as another status line.
         f.inputCaption = EllesmereUI.MakeFont(f, 11, "", accent[1], accent[2], accent[3], 0.9)
+        onAccent(function(c) f.inputCaption:SetTextColor(c[1], c[2], c[3], 0.9) end)
         f.inputCaption:SetJustifyH("LEFT")
 
         local eb = CreateFrame("EditBox", nil, f)
@@ -374,7 +392,7 @@ function W:ShowInput(opts)
         -- The same 3px accent edge the sidebar uses to mark the row you are on.
         -- It is what makes the field read as "this one, now" at a glance.
         local edge = eb:CreateTexture(nil, "ARTWORK")
-        edge:SetColorTexture(accent[1], accent[2], accent[3], 1)
+        onAccent(function(c) edge:SetColorTexture(c[1], c[2], c[3], 1) end)
         edge:SetWidth(3)
         edge:SetPoint("TOPLEFT")
         edge:SetPoint("BOTTOMLEFT")
@@ -631,7 +649,7 @@ local function updateRail()
             row:SetHeight(27)
             -- accent row wash marks the current step (background, under everything)
             row.activeBg = row:CreateTexture(nil, "BACKGROUND")
-            row.activeBg:SetColorTexture(accent[1], accent[2], accent[3], 0.10)
+            onAccent(function(c) row.activeBg:SetColorTexture(c[1], c[2], c[3], 0.10) end)
             row.activeBg:SetAllPoints()
             row.activeBg:Hide()
             -- faint white wash on hover (only when not the current step)
@@ -641,7 +659,7 @@ local function updateRail()
             row.hover:Hide()
             -- accent left bar marks the current step
             row.bar = row:CreateTexture(nil, "ARTWORK")
-            row.bar:SetColorTexture(accent[1], accent[2], accent[3], 1)
+            onAccent(function(c) row.bar:SetColorTexture(c[1], c[2], c[3], 1) end)
             row.bar:SetWidth(3)
             row.bar:SetPoint("TOPLEFT", 0, -2)
             row.bar:SetPoint("BOTTOMLEFT", 0, 2)
@@ -739,6 +757,17 @@ function W:SetPage(n)
     if tw > 0 then W.frame.progFill:SetWidth(math.max(1, tw * frac)) end
     W.frame.progLabel:SetText(("Step %d of %d"):format(n, total))
     W.pages[n]()
+end
+
+-- Repaint the window in whichever theme is now in force. The page is rendered
+-- again at the end because a button's colours are resolved when its variant is
+-- set, and the page functions are the only thing that sets them.
+function W:RefreshTheme()
+    if not W.frame then return end
+    accent = ns.UsesAltTheme() and RASTA_AMBER or KITN_PINK
+    paintArt(W.frame.artLayer)
+    for _, paint in ipairs(accentPainters) do paint(accent) end
+    W:SetPage(W.page or 1)
 end
 
 function W:Show()
