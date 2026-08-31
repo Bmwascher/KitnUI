@@ -36,3 +36,9 @@ KitnUI_EUI/Media/TopBar/Base/
 KitnUI_EUI/Media/TopBar/Halo/
 KitnUI_EUI/Media/TopBar/Soft/
 KitnUI_EUI/Media/TopBar/Stencil/
+
+
+# Guard word list for the commit-msg/pre-commit/pre-push hooks: the repo is
+# public, and publishing the list leaks the provenance the guards keep out of
+# history.
+dev/githooks/upstream-names.local.sh

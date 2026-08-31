@@ -720,15 +720,12 @@ end)
 -- ns.EUIRebuildForOwnership (Core.lua:479-496), so the accent rows are rebuilt
 -- every time the thing they depend on changes.
 --
--- Adapted from NaowhUI, which does this on its own unfinished row
--- (References/NaowhUI-20260721.01/NaowhUI_EUI/NaowhUI_Core.lua:381-410, read
--- 2026-08-21), recoloured to KitnUI pink and generalised to the unlabelled case.
+-- The veil marks an unfinished row, in KitnUI pink, and covers the
+-- unlabelled case as well.
 --
--- PanelPP rather than PP, matching NaowhUI: both carry CreateBorder (EllesmereUI
--- itself aliases one onto the other at EllesmereUI/EllesmereUI.lua:2956, in the
--- MAIN addon and not in EllesmereUIOptions), but the settings panel runs at its
--- own scale and PanelPP is the one that snaps to it. Guarded anyway: losing the
--- border must cost a border, not the page.
+-- PanelPP rather than PP: both carry CreateBorder, but the settings panel
+-- runs at its own scale and PanelPP is the one that snaps to it. Guarded
+-- anyway: losing the border must cost a border, not the page.
 local function Veil(row, text)
     if not row then return end
 
