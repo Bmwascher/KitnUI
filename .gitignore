@@ -44,3 +44,8 @@ KitnUI_EUI/Media/TopBar/Stencil/
 # shipped zip, so tracking this would grow the repo without ever reaching a
 # player. dev/Annotations/ and dev/README.md stay tracked, as the note above says.
 dev/tools/
+
+# Guard word list for the commit-msg/pre-commit/pre-push hooks: the repo is
+# public, and publishing the list leaks the provenance the guards keep out of
+# history.
+dev/githooks/upstream-names.local.sh
