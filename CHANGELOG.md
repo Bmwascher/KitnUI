@@ -1,5 +1,10 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.6
+
+### Interface
+- KitnUI downloads about 2 MB smaller and takes up roughly 7 MB less on disk. The installer and options-panel artwork now ships in a more efficient format, and two old texture files that nothing used have been dropped from the download. The artwork itself is unchanged, pixel for pixel
+
 ## v2.1.5
 
 KitnUI now includes its own EllesmereUI options-panel themes, with custom artwork
