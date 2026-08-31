@@ -59,15 +59,14 @@ local function onAccent(paint)
     paint(accent)
 end
 
--- Baked installer background art: a ~1.36:1 panel inside a black margin,
--- shipped as an uncompressed TGA. ART_CROP drops the margin so the panel fills
--- the frame with no stretch, and PANEL_W/PANEL_H match that aspect. Retune both
--- together if the art changes.
-local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.tga"
+-- Baked installer background art: a ~1.36:1 panel inside a black margin.
+-- ART_CROP drops the margin so the panel fills the frame with no stretch, and
+-- PANEL_W/PANEL_H match that aspect. Retune both together if the art changes.
+local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.png"
 -- Characters on the alternate look get this one instead. It carries the same
 -- geometry -- panel rectangle, sidebar divider and header band all land on the
 -- same pixels -- so the crop and the overlay positions below serve both.
-local ART_PATH_ALT = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Rasta.tga"
+local ART_PATH_ALT = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Rasta.png"
 local ART_CROP = { 0.065, 0.940, 0.099, 0.916 }  -- left, right, top, bottom (0..1)
 local PANEL_W, PANEL_H = 760, 560                 -- 1.357:1, matches the cropped panel
 local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI_Icon.tga"

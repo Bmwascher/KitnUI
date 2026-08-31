@@ -388,38 +388,41 @@ end
 -- crop a fixed rectangle out of the file, so a background of another shape would
 -- crop wrong.
 do
-    local function TgaHeader(path)
+    -- IHDR is always the first chunk, so width, height, bit depth and colour type
+    -- sit at fixed offsets after the 8-byte signature and the 8-byte chunk header.
+    local function PngHeader(path)
         local file = io.open(path, "rb")
         if not file then return nil end
-        local header = file:read(18)
+        local header = file:read(26)
         file:close()
-        if not header or #header < 18 then return nil end
-        local b = { header:byte(1, 18) }
+        if not header or #header < 26 then return nil end
+        if header:sub(1, 8) ~= "\137PNG\r\n\26\n" or header:sub(13, 16) ~= "IHDR" then
+            return nil
+        end
+        local b = { header:byte(1, 26) }
         return {
-            imageType  = b[3],
-            width      = b[13] + b[14] * 256,
-            height     = b[15] + b[16] * 256,
-            depth      = b[17],
-            descriptor = b[18],
+            width      = b[17] * 16777216 + b[18] * 65536 + b[19] * 256 + b[20],
+            height     = b[21] * 16777216 + b[22] * 65536 + b[23] * 256 + b[24],
+            depth      = b[25],
+            colourType = b[26],
         }
     end
 
-    local shipped = TgaHeader("Media/Background/KitnUI-EUI-Background.tga")
-    local alt = TgaHeader("Media/Background/KitnUI-EUI-Background-Rasta.tga")
+    local shipped = PngHeader("Media/Background/KitnUI-EUI-Background.png")
+    local alt = PngHeader("Media/Background/KitnUI-EUI-Background-Rasta.png")
     check(shipped ~= nil, "the default installer background is readable")
     check(alt ~= nil, "the alternate installer background ships")
     if shipped and alt then
         eq(alt.width, shipped.width, "alternate background width matches the default")
         eq(alt.height, shipped.height, "alternate background height matches the default")
         eq(alt.depth, shipped.depth, "alternate background bit depth matches the default")
-        eq(alt.imageType, shipped.imageType, "alternate background is the same TGA type")
-        eq(alt.descriptor, shipped.descriptor, "alternate background shares origin and alpha bits")
+        eq(alt.colourType, shipped.colourType, "alternate background is the same PNG colour type")
     end
 
     local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
     local wizardSource = wizardFile:read("*a")
     wizardFile:close()
-    check(wizardSource:find("KitnUI-EUI-Background-Rasta.tga", 1, true) ~= nil,
+    check(wizardSource:find("KitnUI-EUI-Background-Rasta.png", 1, true) ~= nil,
         "the wizard names the alternate background")
     check(wizardSource:find("ns.UsesAltTheme", 1, true) ~= nil,
         "the wizard picks its background from the alternate-look test")

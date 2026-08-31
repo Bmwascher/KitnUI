@@ -25,3 +25,8 @@ ignore:
   - Legacy  # dormant v1 ElvUI installer
   - CHANGELOG.md
   - README.md
+  # Art no shipped file names. KitnUI.tga is reached only from Legacy/Installer.lua,
+  # which never loads; KitnUI_Text.tga has no reference anywhere. Kept in the repo
+  # rather than deleted, stripped here so they leave the download.
+  - Media/Textures/KitnUI.tga
+  - Media/Textures/KitnUI_Text.tga
