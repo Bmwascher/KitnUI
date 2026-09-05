@@ -127,33 +127,34 @@ local function CapturedMaps(fkey)
     return nil
 end
 
--- bgA is written at full opacity deliberately: Resource Bars paints its own
--- dark background that way and ignores the palette's alpha.
+-- The background is deliberately not part of this. Dark Mode's background swatch
+-- is a mid grey at full opacity, so writing it over a cast bar backdrop the user
+-- already set to their panel colour replaces a deliberate choice with a lighter
+-- one. Only the fill, the part that grows while casting, is darkened.
 local function DarkValues()
     local EUI = _G.EllesmereUI
-    if not (EUI and EUI.GetDarkModeFill and EUI.GetDarkModeBg) then return nil end
-    local okFill, fr, fg, fb = pcall(EUI.GetDarkModeFill)
-    local okBg, br, bg, bb = pcall(EUI.GetDarkModeBg)
-    if not (okFill and okBg) then return nil end
-    if not (fr and fg and fb and br and bg and bb) then return nil end
+    if not (EUI and EUI.GetDarkModeFill) then return nil end
+    local ok, fr, fg, fb = pcall(EUI.GetDarkModeFill)
+    if not ok then return nil end
+    if not (fr and fg and fb) then return nil end
     return {
         classColored    = false,
         fillR           = fr,
         fillG           = fg,
         fillB           = fb,
-        bgR             = br,
-        bgG             = bg,
-        bgB             = bb,
-        bgA             = 1,
         gradientEnabled = false,
     }
 end
 
 local DARK_CAST_BAR_KEYS = {
     "classColored", "fillR", "fillG", "fillB",
-    "bgR", "bgG", "bgB", "bgA",
     "gradientEnabled", "texture",
 }
+
+-- Released, never claimed. An earlier version darkened the background too, and a
+-- profile still holding those four has to get them back; dropping the names
+-- instead would strand them at the grey forever.
+local RETIRED_DARK_KEYS = { "bgR", "bgG", "bgB", "bgA" }
 
 local DARK_SECTION = "darkcastbar"
 
@@ -271,6 +272,10 @@ local function ApplyDarkCastBar(on, claiming)
         end
     else
         for _, key in ipairs(DARK_CAST_BAR_KEYS) do
+            ApplyDarkStore(key, nil, false, false)
+            if cast then ReleaseKey(cast, key) end
+        end
+        for _, key in ipairs(RETIRED_DARK_KEYS) do
             ApplyDarkStore(key, nil, false, false)
             if cast then ReleaseKey(cast, key) end
         end
