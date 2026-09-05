@@ -492,13 +492,17 @@ end
 --
 -- Mirrors EllesmereUI's own owner lookup: the first group in creation order
 -- that both stores a position for this element and lists the current spec.
-local function SwapWantedFor(specID)
-    specID = tonumber(specID)
-    if not specID or specID == 0 then return false end
+local function SwapWanted()
     local entries = OverrideEntriesFor(CAST_KEY)
     if not entries then return false end
     local EUI = _G.EllesmereUI
     if not EUI or not EUI.GetActiveProfileData then return false end
+    local specID = EUI._specID
+    if (not specID or specID == 0) and EUI._RefreshSpecID then
+        pcall(EUI._RefreshSpecID)
+        specID = EUI._specID
+    end
+    if not specID or specID == 0 then return false end
     local ok, prof = pcall(EUI.GetActiveProfileData)
     if not ok or type(prof) ~= "table" then return false end
     local groups = prof.specOverrideGroups
@@ -511,22 +515,6 @@ local function SwapWantedFor(specID)
         end
     end
     return false
-end
-
-local function CurrentSpecID()
-    local EUI = _G.EllesmereUI
-    if not EUI then return nil end
-    local specID = EUI._specID
-    if (not specID or specID == 0) and EUI._RefreshSpecID then
-        pcall(EUI._RefreshSpecID)
-        specID = EUI._specID
-    end
-    if not specID or specID == 0 then return nil end
-    return specID
-end
-
-local function SwapWanted()
-    return SwapWantedFor(CurrentSpecID())
 end
 
 local function ApplyOverrideAnchors(on, swap, claiming)
@@ -547,127 +535,6 @@ local function ApplyOverrideAnchors(on, swap, claiming)
     end
 end
 
-local CDM_FOLDER = "EllesmereUICooldownManager"
-local OFFSET_KEY = "addOffsetY"
-local OFFSET_PATH = CDM_FOLDER .. FS .. "cdmBars" .. PS .. "bars" .. PS
-
-local function OffsetFKey(index)
-    return OFFSET_PATH .. index .. PS .. OFFSET_KEY
-end
-
-local function CDMBars()
-    local EUI = _G.EllesmereUI
-    if not (EUI and EUI.GetActiveProfileData) then return nil end
-    local ok, prof = pcall(EUI.GetActiveProfileData)
-    if not ok or type(prof) ~= "table" then return nil end
-    local addons = prof.addons
-    local cdm = (type(addons) == "table") and addons[CDM_FOLDER] or nil
-    local store = (type(cdm) == "table") and cdm.cdmBars or nil
-    local bars = (type(store) == "table") and store.bars or nil
-    return (type(bars) == "table") and bars or nil
-end
-
--- Only the bars standing on the stack this switch rearranges. Walking the links
--- leaves unrelated offsets alone: a bar whose chain never reaches the cast bar
--- or the power bar is not affected by the swap and keeps what it has. The cap
--- bounds a chain that loops rather than trusting it to end.
-local function ChainReachesSwap(anchors, barKey)
-    local key = "CDM_" .. barKey
-    for _ = 1, 12 do
-        local entry = anchors[key]
-        local target = entry and entry.target
-        if not target then return false end
-        if target == CAST_KEY or target == POWER_KEY then return true end
-        key = target
-    end
-    return false
-end
-
--- The captured half, and the reason this cannot be a live-only write: an
--- Additional Bar Offset is a setting a spec override group captures, and
--- EllesmereUI banks the live value back into the capturing spec's map at every
--- transition. A live-only zero is therefore harvested into the user's own store
--- as if they had set it, permanently.
---
--- Each capturing spec's map is held in its own right and only where that spec
--- swaps. The SHARED DEFAULT is never touched, so every spec that does not
--- capture the key reads its own untouched value. A swapping spec that captured
--- nothing keeps the live write alone, which is correct until the next harvest.
-local function ApplyOffsetOverrides(index, on, claiming, reaches)
-    local fkey = OffsetFKey(index)
-    local maps = CapturedMaps(fkey)
-    if not maps then return end
-    for i = 1, #maps do
-        local slot = maps[i]
-        if slot.key ~= "default" then
-            local snapKey = "cdmOverride" .. FS .. index .. FS .. tostring(slot.key)
-            local record = ns.EUIPeekSnap(BITE_SECTION, snapKey)
-            local held = (record and record.prev ~= nil) and true or false
-            if on then
-                local claimNow = (not held) and reaches
-                    and (tonumber(slot.map[fkey]) or 0) ~= 0
-                if claimNow then
-                    record = ns.EUISnap(BITE_SECTION, snapKey)
-                    held = record and true or false
-                end
-                if held then
-                    ns.EUIOverride(slot.map, record, fkey, 0, claiming or claimNow)
-                    if not SwapWantedFor(slot.key) then
-                        RevertLive(slot.map, record, fkey)
-                    end
-                end
-            elseif held then
-                ns.EUIRestore(slot.map, record, fkey)
-            end
-        end
-    end
-end
-
--- An Additional Bar Offset lifts a bar clear of whatever sits below it, so the
--- buff containers carry one sized for the stack as it was. The swap changes that
--- stack and the offset then reads as a gap. Held down for as long as the swap is
--- applied, handed back on every spec that does not swap and on switch-off.
--- Returns whether a live value actually moved, which is what decides if the
--- cooldown manager has to be told to repaint.
-local function ApplyBuffOffsets(anchors, on, swap, claiming)
-    local bars = CDMBars()
-    if not bars then return false end
-    local changed = false
-    for i = 1, #bars do
-        local bd = bars[i]
-        if type(bd) == "table" and bd.key then
-            local reaches = ChainReachesSwap(anchors, bd.key)
-            local snapKey = "cdmOffsetY:" .. bd.key
-            local record = ns.EUIPeekSnap(BITE_SECTION, snapKey)
-            local held = (record and record.prev ~= nil) and true or false
-            local before = bd[OFFSET_KEY]
-            if on then
-                -- Claimed on a re-apply as well as a click, which the anchor
-                -- halves must never do. It is safe HERE and only here: zero is
-                -- the only value this switch ever writes, so a non-zero live
-                -- offset is provably the user's own and never something this
-                -- switch left behind. Without it a switch that was already on
-                -- would never pick these up.
-                local claimNow = (not held) and reaches
-                    and (tonumber(bd[OFFSET_KEY]) or 0) ~= 0
-                if claimNow then
-                    record = ns.EUISnap(BITE_SECTION, snapKey)
-                    held = record and true or false
-                end
-                if held then
-                    ns.EUIOverride(bd, record, OFFSET_KEY, 0, claiming or claimNow)
-                    if not swap then RevertLive(bd, record, OFFSET_KEY) end
-                end
-            elseif held then
-                ns.EUIRestore(bd, record, OFFSET_KEY)
-            end
-            ApplyOffsetOverrides(i, on, claiming, reaches)
-            if bd[OFFSET_KEY] ~= before then changed = true end
-        end
-    end
-    return changed
-end
-
 local function ApplyAnchors(on, claiming)
     if not ns.BaselineLive() then return false end
     local anchors = AnchorDB()
@@ -677,7 +544,6 @@ local function ApplyAnchors(on, claiming)
     local swap = on and SwapWanted()
 
     ApplyOverrideAnchors(on, swap, claiming)
-    local offsetsMoved = ApplyBuffOffsets(anchors, on, swap, claiming)
 
     if on then
         local castRecord = claiming and ns.EUISnap(BITE_SECTION, CAST_KEY)
@@ -716,9 +582,6 @@ local function ApplyAnchors(on, claiming)
         -- it through its normal owner before the links re-assert.
         if EUI._ReapplyOverrideAnchors then pcall(EUI._ReapplyOverrideAnchors) end
         if EUI.ReapplyAllUnlockAnchors then pcall(EUI.ReapplyAllUnlockAnchors) end
-        -- Only when a value actually moved: this is a full cooldown manager
-        -- rebuild, and every spec change runs through here.
-        if offsetsMoved and _G._ECME_Apply then pcall(_G._ECME_Apply) end
     end
     return true
 end
