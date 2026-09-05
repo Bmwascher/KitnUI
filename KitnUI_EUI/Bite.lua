@@ -147,25 +147,60 @@ local function CollectMaps(store, prefix, fkey, found, index)
     end
 end
 
+-- A slot's membership is not fixed for the life of a hold. Changing a group's
+-- specs creates a map that was not there at the claim, and the user can author a
+-- value in it: that map is not this addon's to write or to hand back, and giving
+-- it the recorded original would destroy what they wrote.
+--
+-- So only the maps still carrying what was forced -- or already back at the
+-- original -- are treated as ours. Records claimed before this test existed carry
+-- no forced value and take every map, which is what they did before.
+local function OursInSlot(record, fkey, map)
+    if record.forced == nil then return true end
+    local current = map[fkey]
+    return current == record.forced or current == record.prev
+end
+
 -- The whole slot goes back before the record is cleared. ns.EUIRestore clears
 -- the recorded original on its way out, so restoring map by map would give the
 -- first map its value and leave every other one forced.
 local function RestoreSlot(slot, record, fkey)
     if record.prev == nil then return end
-    local maps = slot.maps
-    for i = 1, #maps - 1 do
+
+    local mine = {}
+    for i = 1, #slot.maps do
+        local map = slot.maps[i]
+        if OursInSlot(record, fkey, map) then mine[#mine + 1] = map end
+    end
+
+    -- Nothing left that this addon put there. The record still has to go, or the
+    -- switch reads as holding something forever.
+    if #mine == 0 then
+        record.prev = nil
+        record.forced = nil
+        return
+    end
+
+    for i = 1, #mine - 1 do
         if record.prev == ns.EUI_ABSENT then
-            maps[i][fkey] = nil
+            mine[i][fkey] = nil
         else
-            maps[i][fkey] = record.prev
+            mine[i][fkey] = record.prev
         end
     end
-    ns.EUIRestore(maps[#maps], record, fkey)
+    ns.EUIRestore(mine[#mine], record, fkey)
+    record.forced = nil
 end
 
+-- The claim takes the whole slot: every map in it is a claim-time member. A
+-- re-apply takes only what is still ours, so a map that joined since keeps
+-- whatever the user put in it.
 local function HoldSlot(slot, record, fkey, value, claiming)
     for i = 1, #slot.maps do
-        ns.EUIOverride(slot.maps[i], record, fkey, value, claiming)
+        local map = slot.maps[i]
+        if claiming or OursInSlot(record, fkey, map) then
+            ns.EUIOverride(map, record, fkey, value, claiming)
+        end
     end
 end
 
@@ -311,6 +346,7 @@ local function ApplyDarkStore(section, path, key, value, on, claiming)
             or ns.EUIPeekSnap(section, DarkStoreKey(key, slot.key))
         if record then
             if on then
+                if claiming then record.forced = value end
                 HoldSlot(slot, record, fkey, value, claiming)
             else
                 RestoreSlot(slot, record, fkey)
@@ -556,6 +592,7 @@ local function ApplySpellText(on, claiming)
                 and ns.EUISnap(BITE_SECTION, key) or ns.EUIPeekSnap(BITE_SECTION, key)
             if record then
                 if on then
+                    if claiming then record.forced = false end
                     HoldSlot(slot, record, SPELL_TEXT_FKEY, false, claiming)
                 else
                     RestoreSlot(slot, record, SPELL_TEXT_FKEY)
