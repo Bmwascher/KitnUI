@@ -534,94 +534,6 @@ local function ApplyOverrideAnchors(on, swap, claiming)
     end
 end
 
-local CDM_FOLDER = "EllesmereUICooldownManager"
-
-local function CDMBars()
-    local EUI = _G.EllesmereUI
-    if not (EUI and EUI.GetActiveProfileData) then return nil end
-    local ok, prof = pcall(EUI.GetActiveProfileData)
-    if not ok or type(prof) ~= "table" then return nil end
-    local addons = prof.addons
-    local cdm = (type(addons) == "table") and addons[CDM_FOLDER] or nil
-    local store = (type(cdm) == "table") and cdm.cdmBars or nil
-    local bars = (type(store) == "table") and store.bars or nil
-    return (type(bars) == "table") and bars or nil
-end
-
--- Only the bars standing on the stack this switch rearranges. Walking the links
--- leaves the rest alone: a bar whose chain never reaches the cast bar or the
--- power bar is not affected by the swap and keeps what it has. The cap bounds a
--- chain that loops rather than trusting it to end.
-local function ChainReachesSwap(anchors, barKey)
-    local key = "CDM_" .. barKey
-    for _ = 1, 12 do
-        local entry = anchors[key]
-        local target = entry and entry.target
-        if not target then return false end
-        if target == CAST_KEY or target == POWER_KEY then return true end
-        key = target
-    end
-    return false
-end
-
--- The link with the bar's Additional Bar Offset subtracted out. The cooldown
--- manager adds that offset on top of whatever positioned the bar, so taking the
--- same amount off the link lands the bar where it would sit with no offset at
--- all, and the setting itself is never written.
-local function Shifted(previous, shift)
-    local entry = CopyAnchorEntry(previous)
-    if not entry then return nil end
-    entry.offsetY = (tonumber(entry.offsetY) or 0) - shift
-    return entry
-end
-
--- An Additional Bar Offset lifts the buff containers clear of the stack as it
--- was; the swap changes that stack and the offset then reads as a gap.
---
--- The offset is NOT written. It is a setting a spec override group captures, and
--- the host banks live values into spec maps and into the shared default at
--- transition boundaries, including slots this switch never recorded and so could
--- never give back. Writing it live cost a live profile four real settings once.
--- The anchor link produces the same result, is already owned and released here,
--- and the value harvest does not touch it.
-local function ApplyBuffShift(anchors, on, swap, claiming)
-    local bars = CDMBars()
-    if not bars then return end
-    for i = 1, #bars do
-        local bd = bars[i]
-        if type(bd) == "table" and bd.key then
-            local key = "CDM_" .. bd.key
-            local record = ns.EUIPeekSnap(BITE_SECTION, key)
-            local held = (record and record.prev ~= nil) and true or false
-            if on then
-                local shift = tonumber(bd.addOffsetY) or 0
-                -- Claimed at the click only. Unlike a value this switch can only
-                -- ever write as zero, a shifted link is not distinguishable from
-                -- a link the user set, so a re-apply may never record one.
-                if not held and claiming and shift ~= 0
-                   and type(anchors[key]) == "table"
-                   and ChainReachesSwap(anchors, bd.key) then
-                    record = ns.EUISnap(BITE_SECTION, key)
-                    held = record and true or false
-                end
-                if held then
-                    local forced = Shifted(Original(record, anchors[key]), shift)
-                    if forced then
-                        ns.EUIOverride(anchors, record, key, forced, claiming)
-                    end
-                    if not swap then
-                        RevertLive(anchors, record, key)
-                        MirrorToBaselineLayer(anchors, key)
-                    end
-                end
-            elseif held then
-                ns.EUIRestore(anchors, record, key)
-                MirrorToBaselineLayer(anchors, key)
-            end
-        end
-    end
-end
-
 local function ApplyAnchors(on, claiming)
     if not ns.BaselineLive() then return false end
     local anchors = AnchorDB()
@@ -672,8 +584,6 @@ local function ApplyAnchors(on, claiming)
             MirrorToBaselineLayer(anchors, POWER_KEY)
         end
     end
-
-    ApplyBuffShift(anchors, on, swap, claiming)
 
     local EUI = _G.EllesmereUI
     if EUI and not InCombatLockdown() then
