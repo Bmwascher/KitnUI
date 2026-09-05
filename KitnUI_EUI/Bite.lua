@@ -772,18 +772,29 @@ ns.EUIRegisterReapply(function()
     end, false, true)
 end)
 
+-- The ownership sentence on the General page is a string fixed when the row is
+-- built, and it reads BOTH the module's dark switch and whether this control is
+-- holding. Either can move without that page's own click path running, so both
+-- are tracked here. The first observation only seeds them: nothing has been
+-- built yet that could be stale.
+local gapTipSeen, gapTipDark, gapTipHeld = false, nil, false
+
 ns.EUIRegisterReapply(function()
     RunOutOfCombat(function()
         -- Only an explicit false releases. An unreadable switch is not an off
         -- switch, and releasing on one would hand the seam back to black.
         local dark = ResourceBarsDark()
-        local held = ns.EUIHolds(GAP_SECTION)
         if dark == true then
             ns.ApplyResourceGap(true, false)
-        elseif dark == false and held then
+        elseif dark == false and ns.EUIHolds(GAP_SECTION) then
             ns.ApplyResourceGap(false, false)
         end
-        if ns.EUIHolds(GAP_SECTION) ~= held then
+
+        local held = ns.EUIHolds(GAP_SECTION)
+        if not gapTipSeen then
+            gapTipSeen, gapTipDark, gapTipHeld = true, dark, held
+        elseif dark ~= gapTipDark or held ~= gapTipHeld then
+            gapTipDark, gapTipHeld = dark, held
             ns.EUIRebuildForOwnership("General")
         end
     end, false, true)
