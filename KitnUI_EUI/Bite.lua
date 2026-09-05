@@ -25,6 +25,30 @@ end
 
 ns.BaselineLive = BaselineLive
 
+-- The toggle has already animated to the new position and never re-reads its
+-- getter, so a refused click keeps showing a state that did not happen without
+-- a rebuild.
+local function Refuse(message)
+    print(ns.title .. ": " .. message)
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.RefreshPage then pcall(EUI.RefreshPage, EUI, true) end
+end
+
+-- An override editing session watches every value write, and reads a forced
+-- value that matches the group's default as the user reverting it, which
+-- deletes the captured override outright. Nothing recorded here could put that
+-- back, so both switches stand down until the session ends.
+local function EditSessionActive()
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.SpecOverrides_EditSessionActive) then return false end
+    local ok, active = pcall(EUI.SpecOverrides_EditSessionActive)
+    return (ok and active) and true or false
+end
+
+local EDIT_SESSION_REFUSAL =
+    "Cannot change this while an override editing session is open, because the "
+    .. "session would take the change as your own edit. Close it and try again."
+
 local combatWatcher
 local combatPending = {}
 
@@ -259,6 +283,10 @@ end
 -- what makes a user's decision to switch it off survive a login: nothing
 -- re-acquires it.
 function ns.SetDarkCastBar(on)
+    if EditSessionActive() then
+        Refuse(EDIT_SESSION_REFUSAL)
+        return
+    end
     if not RunOutOfCombat(function()
         -- Re-read inside the closure. A profile switch re-points db.profile in
         -- place, so a table captured before a fight writes the old profile.
@@ -395,13 +423,11 @@ end
 
 ns.BiteHoldsAnchors = BiteHoldsAnchors
 
-local function Refuse(message)
-    print(ns.title .. ": " .. message)
-    local EUI = _G.EllesmereUI
-    if EUI and EUI.RefreshPage then pcall(EUI.RefreshPage, EUI, true) end
-end
-
 local function CommitBite(on)
+    if EditSessionActive() then
+        Refuse(EDIT_SESSION_REFUSAL)
+        return
+    end
     if on and not ns.BaselineLive() then
         Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
         return
@@ -468,6 +494,10 @@ ns.EUIRegisterReapply(function()
         elseif ns.EUIHolds("bite") then
             ApplyAnchors(false, false)
             ApplySpellText(false, false)
+            -- Released here too, so the next activation samples Dark Cast Bar
+            -- afresh instead of reading a marker from the previous one.
+            local record = ns.EUIPeekSnap(BITE_SECTION, "darkWasOn")
+            if record then record.darkWasOn = nil end
         end
     end, false, true)
 end)
