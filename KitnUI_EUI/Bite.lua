@@ -230,11 +230,10 @@ local function TextureNeedsClaim(cast)
     return false
 end
 
--- Both branches call the store half explicitly. The ON branch computes the
--- palette values only when claiming; afterwards HoldKey re-reads what it
--- recorded. texture is conditional, but once claimed it is re-asserted like
--- any other owned key, because HoldKey reads the record rather than
--- re-testing the live value.
+-- The ON branch computes the palette values only when claiming; afterwards
+-- HoldKey re-reads what it recorded. texture is conditional at claim time, but
+-- once claimed it is re-asserted like any other owned key, because HoldKey
+-- reads the record rather than re-testing the live value.
 local function ApplyDarkCastBar(on, claiming)
     local profile = CastProfile(on)
     -- Nothing is forced into a module that is not loaded. The OFF path
