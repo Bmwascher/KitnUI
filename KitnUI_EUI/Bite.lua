@@ -196,12 +196,25 @@ end
 -- re-apply takes only what is still ours, so a map that joined since keeps
 -- whatever the user put in it.
 local function HoldSlot(slot, record, fkey, value, claiming)
+    if not claiming and record.prev == nil then return end
+
+    local wrote = false
     for i = 1, #slot.maps do
         local map = slot.maps[i]
         if claiming or OursInSlot(record, fkey, map) then
             ns.EUIOverride(map, record, fkey, value, claiming)
+            wrote = true
         end
     end
+
+    -- The marker follows what was actually written, and only after the whole
+    -- slot: moved inside the loop it would change what the maps after it count
+    -- as ours. It has to follow, because the palette is read afresh on every
+    -- claim and a slot that was out of the store during one of them would
+    -- otherwise be testing against a colour no map holds any more, and the
+    -- release would disown its own work. A record with no marker is one claimed
+    -- before this test existed and must keep none.
+    if wrote and record.forced ~= nil then record.forced = value end
 end
 
 -- Both override stores, because the conditional one banks live values at its own
@@ -849,7 +862,9 @@ local function CommitBite(on)
     -- a side effect, and a refusal discovered at that point would leave the
     -- anchors swapped and the spell text held with the switch half on.
     if on and RefuseIfDivergent({ SPELL_TEXT_FKEY }) then return end
-    if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
+    if on and not ns.DarkCastBarEnabled() and RefuseIfDivergent(DARK_CAST_FKEYS) then
+        return
+    end
     if on and not ns.BaselineLive() then
         Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
         return
