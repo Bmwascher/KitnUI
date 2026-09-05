@@ -845,7 +845,11 @@ local function CommitBite(on)
         Refuse(EDIT_SESSION_REFUSAL)
         return
     end
+    -- Both key sets, before the anchors move. Bite Mode turns Dark Cast Bar on as
+    -- a side effect, and a refusal discovered at that point would leave the
+    -- anchors swapped and the spell text held with the switch half on.
     if on and RefuseIfDivergent({ SPELL_TEXT_FKEY }) then return end
+    if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
     if on and not ns.BaselineLive() then
         Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
         return
