@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/Bite.lua                                         ║
--- ║  Purpose: Bite Mode and Dark Cast Bar, two switches that     ║
--- ║           hold EllesmereUI cast bar settings and anchors     ║
--- ║           down and hand them back on switch-off.             ║
+-- ║  Purpose: Bite Mode, Dark Cast Bar and the resource bar      ║
+-- ║           seam colour, which hold EllesmereUI settings       ║
+-- ║           and anchors down and hand them back on             ║
+-- ║           switch-off.                                        ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -105,8 +106,8 @@ local function ProfileRoot()
 end
 
 -- Indices shift when an entry is removed, so a store is scanned rather than
--- remembered by position, and records key off the fkey and the map key. One
--- entry per store owns a given fkey, so the first match ends that store's scan.
+-- remembered by position, and records key off the fkey and the map key. The
+-- first capturing entry ends the scan, which assumes a store never has two.
 local function CollectMaps(store, prefix, fkey, found)
     if type(store) ~= "table" then return found end
     for i = 1, #store do
@@ -321,7 +322,7 @@ function ns.SetDarkCastBar(on)
         ApplyDarkCastBar(on, true)
         ns.EUIRebuildForOwnership("General")
     end, true, false) then
-        print(ns.title .. ": Dark Cast Bar is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it.")
+        print(ns.title .. ": Dark Cast Bar is queued until you leave combat. Switching, importing or deleting a profile, changing spec, or changing EllesmereUI's Dark Mode, before then cancels it.")
     end
 end
 
@@ -743,7 +744,7 @@ end
 
 function ns.SetBiteMode(on)
     if not RunOutOfCombat(function() CommitBite(on) end, true, false) then
-        Refuse("Bite Mode is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it.")
+        Refuse("Bite Mode is queued until you leave combat. Switching, importing or deleting a profile, changing spec, or changing EllesmereUI's Dark Mode, before then cancels it.")
     end
 end
 
