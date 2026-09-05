@@ -384,7 +384,7 @@ end
 
 -- ns.EUIPeekSnap never seeds a record, so this is side-effect free.
 local function BiteHoldsAnchors()
-    local record = ns.EUIPeekSnap(BITE_SECTION, "ERB_CastBar")
+    local record = ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
     return (record and record.prev ~= nil) and true or false
 end
 
