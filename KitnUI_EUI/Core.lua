@@ -624,6 +624,12 @@ local function OnProfileDeleted(name)
     ns.EUIQueueReapply()
 end
 
+local function ResetRefusedByLayer()
+    if not (ns.BaselineLive and ns.BiteHoldsAnchors) then return false end
+    if ns.BaselineLive() then return false end
+    return ns.BiteHoldsAnchors()
+end
+
 -- The switch states live in EllesmereUIDB, one block per profile; the snapshots
 -- recording what those switches overrode live in KitnUIDB, which the caller nils
 -- straight after this returns. So the reset turns every switch off FIRST and
@@ -654,6 +660,13 @@ end
 function ns.EUIResetAll()
     if InCombatLockdown() then
         print(ns.title .. ": Cannot reset during combat. Try again after this fight.")
+        return false
+    end
+
+    -- Bite Mode's anchor restore is suppressed off the baseline, so a reset
+    -- here would take the records with it and strand the layout.
+    if ResetRefusedByLayer() then
+        print(ns.title .. ": Cannot reset while a spec override layout is active, because Bite Mode's layout could not be put back. Switch to your normal layout and try again.")
         return false
     end
 
