@@ -553,6 +553,27 @@ function ns.EUIQueueReapply()
     end)
 end
 
+local hideWatcher
+
+-- For triggers that a user can reach mid-fight. A re-apply SUPERSEDES any click
+-- that is waiting out the fight, and closing the options window is what a player
+-- does immediately after clicking one, so queueing it now would cancel the click
+-- with nothing said. Held until the fight ends, where the click has already run.
+function ns.EUIQueueReapplyOutOfCombat()
+    if not InCombatLockdown() then
+        ns.EUIQueueReapply()
+        return
+    end
+    if not hideWatcher then
+        hideWatcher = CreateFrame("Frame")
+        hideWatcher:SetScript("OnEvent", function(self)
+            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            ns.EUIQueueReapply()
+        end)
+    end
+    hideWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
 -- The SNAPSHOT is keyed by profile name and lives in KitnUIDB, so a rename
 -- orphans it and whatever KitnUI forced into that profile becomes unrestorable.
 -- The switch states need no help: they live inside the profile table itself, and
@@ -1031,6 +1052,19 @@ boot:SetScript("OnEvent", function(self)
     if EUI.OnSpecSwitchComplete then hooksecurefunc(EUI, "OnSpecSwitchComplete", ns.EUIQueueReapply) end
     if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     ns.EUIQueueReapply) end
     if EUI.SetDarkModeAll       then hooksecurefunc(EUI, "SetDarkModeAll",       ns.EUIQueueReapply) end
+
+    -- Not a hook: a callback list the panel fires as it closes. It is the only
+    -- notice of EllesmereUI's own per-module dark switches, which write their
+    -- flag and repaint their own page without calling anything hookable. Those
+    -- switches live inside the panel, so closing it always follows one.
+    --
+    -- The list fires from the frame's own OnHide, BEFORE EllesmereUI's hooked
+    -- hide work banks its values. It is the debounce inside EUIQueueReapply that
+    -- puts the re-apply after that, so the two must not be separated.
+    if EUI.RegisterOnHide then
+        pcall(EUI.RegisterOnHide, EUI, ns.EUIQueueReapplyOutOfCombat)
+    end
+
     if EUI.OnProfileRenamed     then hooksecurefunc(EUI, "OnProfileRenamed",     OnProfileRenamed)   end
     if EUI.OnProfileDeleted     then hooksecurefunc(EUI, "OnProfileDeleted",     OnProfileDeleted)   end
 
