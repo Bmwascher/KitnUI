@@ -118,9 +118,8 @@ end
 -- an entry's group id is REASSIGNED to a surviving holder when a group is
 -- deleted, so two entries can end up carrying the same id, and a store index
 -- moves when an entry is removed. So the maps that share a map key share one
--- record instead. They hold the same original to begin with -- the host derives
--- every one of them from the same live value, at migration and at every harvest
--- since -- so one recorded original is the right one to give all of them back.
+-- record instead. That rests on those maps holding the same original, which
+-- SlotsDisagree below is what keeps true.
 local function AddSlot(found, index, key, map)
     local slot = index[key]
     if not slot then
