@@ -188,6 +188,46 @@ local function CapturedMaps(fkey)
     return found
 end
 
+-- One record per slot rests on the maps in it holding the same original, which
+-- is how they start and how every ordinary harvest keeps them: the host derives
+-- all of them from the same live value. The group-membership editor is the one
+-- path that breaks it. Adding a spec to a group seeds that spec's map from the
+-- group's own entry, and it SKIPS entries whose group already conflicts with the
+-- new membership, so one map key can end up holding two different values.
+--
+-- A claim over a disagreeing slot cannot be given back: one recorded original
+-- would be handed to both maps and the other one destroyed. So the claim is
+-- refused, before anything at all is written. The OFF path never refuses -- it
+-- returns what was taken, which is the claim-time value, and a slot that
+-- disagrees now was equal then.
+local function SlotsDisagree(fkeys)
+    for i = 1, #fkeys do
+        local fkey = fkeys[i]
+        local slots = CapturedMaps(fkey)
+        if slots then
+            for j = 1, #slots do
+                local maps = slots[j].maps
+                local first = maps[1][fkey]
+                for k = 2, #maps do
+                    if maps[k][fkey] ~= first then return true end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local DIVERGENT_REFUSAL =
+    "Cannot take this over, because your spec overrides hold two different saved "
+    .. "values for the same setting and turning this off again could only give "
+    .. "one of them back. Make those overrides agree and try again."
+
+local function RefuseIfDivergent(fkeys)
+    if not SlotsDisagree(fkeys) then return false end
+    Refuse(DIVERGENT_REFUSAL)
+    return true
+end
+
 -- The fill follows EllesmereUI's own Dark Mode colour, so the cast bar matches
 -- whatever the rest of the dark frames are using. The background does not, and
 -- is a fixed panel grey instead: Dark Mode's own background swatch
@@ -221,6 +261,11 @@ local DARK_CAST_BAR_KEYS = {
 }
 
 local DARK_SECTION = "darkcastbar"
+
+local DARK_CAST_FKEYS = {}
+for i = 1, #DARK_CAST_BAR_KEYS do
+    DARK_CAST_FKEYS[i] = ERB_FOLDER .. FS .. "castBar" .. PS .. DARK_CAST_BAR_KEYS[i]
+end
 
 -- claiming is true only on a user click. A re-apply must never create a
 -- record, because only at the click can this addon honestly say what the
@@ -354,14 +399,17 @@ function ns.SetDarkCastBar(on)
         Refuse(EDIT_SESSION_REFUSAL)
         return
     end
+    if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
     if not RunOutOfCombat(function()
         -- Tested again here, not only before queueing: a session can be opened
         -- during the fight this click is waiting out, and the queued write
-        -- would land inside it.
+        -- would land inside it. The same goes for a membership change made
+        -- mid-fight.
         if EditSessionActive() then
             Refuse(EDIT_SESSION_REFUSAL)
             return
         end
+        if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
         -- Re-read inside the closure. A profile switch re-points db.profile in
         -- place, so a table captured before a fight writes the old profile.
         local settings = ns.EUISettings and ns.EUISettings() or nil
@@ -424,6 +472,19 @@ function ns.EUIRefuseIfEditSession()
     return true
 end
 
+local GAP_FKEYS = {}
+for i = 1, #GAP_KEYS do
+    GAP_FKEYS[i] = ERB_FOLDER .. FS .. GAP_PATH .. PS .. GAP_KEYS[i]
+end
+
+-- Every reason this claim must be refused, gathered for the switch on the
+-- General page: it has to answer before EllesmereUI's own dark switch is
+-- written, and that write cannot be taken back.
+function ns.EUIRefuseResourceGapClaim()
+    if ns.EUIRefuseIfEditSession() then return true end
+    return RefuseIfDivergent(GAP_FKEYS)
+end
+
 -- The module's own dark switch for this bar, read from the shared provider list
 -- rather than tracked here, so the two can never disagree. nil means unreadable,
 -- which is not the same as off and must never release a hold.
@@ -448,6 +509,7 @@ function ns.ApplyResourceGap(on, claiming)
         if claiming then Refuse(EDIT_SESSION_REFUSAL) end
         return
     end
+    if on and claiming and RefuseIfDivergent(GAP_FKEYS) then return end
     local profile = CastProfile(on)
     if on and not profile then return end
     local bar = profile and profile.secondary or nil
@@ -747,6 +809,7 @@ local function CommitBite(on)
         Refuse(EDIT_SESSION_REFUSAL)
         return
     end
+    if on and RefuseIfDivergent({ SPELL_TEXT_FKEY }) then return end
     if on and not ns.BaselineLive() then
         Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
         return

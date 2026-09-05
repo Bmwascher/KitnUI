@@ -334,7 +334,8 @@ end
 -- InCombatLockdown, so a mid-fight flip stores the new value and paints the old
 -- one. The refresh puts the switch back where the refusal left the data.
 local function SetResourceBarDark(on)
-    if ns.EUIRefuseIfEditSession and ns.EUIRefuseIfEditSession() then return end
+    if on and ns.EUIRefuseResourceGapClaim and ns.EUIRefuseResourceGapClaim() then return end
+    if not on and ns.EUIRefuseIfEditSession and ns.EUIRefuseIfEditSession() then return end
 
     if InCombatLockdown() then
         print(ns.title .. ": Appearance cannot be changed in combat.")
