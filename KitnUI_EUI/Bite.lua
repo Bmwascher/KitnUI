@@ -557,11 +557,18 @@ local function ApplyAnchors(on, claiming)
             Forced(Original(castRecord, anchors[CAST_KEY]), "CDM_cooldowns", "TOP", true), claiming)
         ns.EUIOverride(anchors, powerRecord, POWER_KEY,
             Forced(Original(powerRecord, anchors[POWER_KEY]), CAST_KEY, "TOP", false), claiming)
+        -- Gated on the record, like the release below. Mirroring without one
+        -- would write the stored baseline from a value this switch does not own,
+        -- and an absent live entry would delete the layer's entry outright.
         if not swap then
-            RevertLive(anchors, castRecord, CAST_KEY)
-            RevertLive(anchors, powerRecord, POWER_KEY)
-            MirrorToBaselineLayer(anchors, CAST_KEY)
-            MirrorToBaselineLayer(anchors, POWER_KEY)
+            if castRecord and castRecord.prev ~= nil then
+                RevertLive(anchors, castRecord, CAST_KEY)
+                MirrorToBaselineLayer(anchors, CAST_KEY)
+            end
+            if powerRecord and powerRecord.prev ~= nil then
+                RevertLive(anchors, powerRecord, POWER_KEY)
+                MirrorToBaselineLayer(anchors, POWER_KEY)
+            end
         end
     else
         local castRecord = ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
