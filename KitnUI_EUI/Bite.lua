@@ -96,35 +96,50 @@ local function RefreshResourceBars()
     pcall(addon.ApplyAll, addon)
 end
 
-local function OverrideStore()
+local function ProfileRoot()
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.GetActiveProfileData) then return nil end
     local ok, prof = pcall(EUI.GetActiveProfileData)
     if not ok or type(prof) ~= "table" then return nil end
-    if type(prof.specOverrides) ~= "table" then return nil end
-    return prof.specOverrides
+    return prof
 end
 
--- Indices shift when an entry is removed, so the store is scanned rather than
--- remembered by position, and records key off the fkey and the map key.
-local function CapturedMaps(fkey)
-    local store = OverrideStore()
-    if not store then return nil end
+-- Indices shift when an entry is removed, so a store is scanned rather than
+-- remembered by position, and records key off the fkey and the map key. One
+-- entry per store owns a given fkey, so the first match ends that store's scan.
+local function CollectMaps(store, prefix, fkey, found)
+    if type(store) ~= "table" then return found end
     for i = 1, #store do
         local entry = store[i]
         local values = (type(entry) == "table") and entry.values or nil
         local defaults = (type(values) == "table") and values.default or nil
         if type(defaults) == "table" and defaults[fkey] ~= nil then
-            local found = { { map = defaults, key = "default" } }
+            found = found or {}
+            found[#found + 1] = { map = defaults, key = prefix .. "default" }
             for mapKey, map in pairs(values) do
                 if mapKey ~= "default" and type(map) == "table" and map[fkey] ~= nil then
-                    found[#found + 1] = { map = map, key = mapKey }
+                    found[#found + 1] = { map = map, key = prefix .. mapKey }
                 end
             end
             return found
         end
     end
-    return nil
+    return found
+end
+
+-- Both override stores, because the conditional one banks live values at its own
+-- transitions exactly as the spec store does and can hold a key the spec store
+-- has not captured. A forced value left uncovered there is adopted as the user's
+-- own with nothing left to give back. Only the conditional map keys carry a
+-- prefix, so the two stores cannot share a record and the spec-side record names
+-- are the ones already in the field.
+local COND_PREFIX = "cond" .. FS
+
+local function CapturedMaps(fkey)
+    local prof = ProfileRoot()
+    if not prof then return nil end
+    local found = CollectMaps(prof.specOverrides, "", fkey, nil)
+    return CollectMaps(prof.condOverrides, COND_PREFIX, fkey, found)
 end
 
 -- The fill follows EllesmereUI's own Dark Mode colour, so the cast bar matches
@@ -346,6 +361,20 @@ local GAP_VALUES = {
     gapA = 1,
 }
 
+-- Shared with the switches on the General page and with the reset, which have
+-- to refuse before they change anything at all: a write inside an override
+-- editing session is taken by EllesmereUI as the user's own edit and cannot be
+-- handed back.
+function ns.EUIEditSessionActive()
+    return EditSessionActive()
+end
+
+function ns.EUIRefuseIfEditSession()
+    if not EditSessionActive() then return false end
+    Refuse(EDIT_SESSION_REFUSAL)
+    return true
+end
+
 -- The module's own dark switch for this bar, read from the shared provider list
 -- rather than tracked here, so the two can never disagree. nil means unreadable,
 -- which is not the same as off and must never release a hold.
@@ -366,8 +395,8 @@ local function ResourceBarsDark()
 end
 
 function ns.ApplyResourceGap(on, claiming)
-    if claiming and EditSessionActive() then
-        Refuse(EDIT_SESSION_REFUSAL)
+    if EditSessionActive() then
+        if claiming then Refuse(EDIT_SESSION_REFUSAL) end
         return
     end
     local profile = CastProfile(on)
@@ -748,10 +777,14 @@ ns.EUIRegisterReapply(function()
         -- Only an explicit false releases. An unreadable switch is not an off
         -- switch, and releasing on one would hand the seam back to black.
         local dark = ResourceBarsDark()
+        local held = ns.EUIHolds(GAP_SECTION)
         if dark == true then
             ns.ApplyResourceGap(true, false)
-        elseif dark == false and ns.EUIHolds(GAP_SECTION) then
+        elseif dark == false and held then
             ns.ApplyResourceGap(false, false)
+        end
+        if ns.EUIHolds(GAP_SECTION) ~= held then
+            ns.EUIRebuildForOwnership("General")
         end
     end, false, true)
 end)
