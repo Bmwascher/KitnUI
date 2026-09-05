@@ -426,6 +426,20 @@ local function MirrorToBaselineLayer(anchors, key)
     layer.anchors[key] = CopyAnchorEntry(anchors[key])
 end
 
+-- Put the recorded value back WITHOUT releasing the record. The switch is still
+-- on and still owns the key; this spec simply does not want the forced state.
+-- ns.EUIRestore would clear the record, and the next spec that does want the
+-- forced state would then have nothing left to compute it from.
+local function RevertLive(tbl, record, key)
+    if not (tbl and record and key) then return end
+    if record.prev == nil then return end
+    if record.prev == ns.EUI_ABSENT then
+        tbl[key] = nil
+    else
+        tbl[key] = record.prev
+    end
+end
+
 -- A spec override group can store its own position for an element in
 -- `unlockOverrideAnchors[element][gid]`, and while that group is active
 -- EllesmereUI positions the element from that entry and ignores the shared link
@@ -451,7 +465,54 @@ local function OverrideSnapKey(key)
     return "override:" .. key
 end
 
-local function ApplyOverrideAnchors(on, claiming)
+-- The record first, the live store only when nothing is held: while the switch
+-- holds this element down the live store reads empty, and the test below still
+-- has to know what was there.
+local function OverrideEntriesFor(key)
+    local record = ns.EUIPeekSnap(BITE_SECTION, OverrideSnapKey(key))
+    if record and record.prev ~= nil then
+        if record.prev == ns.EUI_ABSENT then return nil end
+        return (type(record.prev) == "table") and record.prev or nil
+    end
+    local store = OverrideAnchorStore()
+    local entries = store and store[key]
+    return (type(entries) == "table") and entries or nil
+end
+
+-- Which specs get the bar swap. Not a shipped spec list: the specs that want it
+-- are the ones an override group already repositions the cast bar for, which is
+-- the only thing they share (the set spans casters and two melee specs) and
+-- which follows the user's own groups when they edit them. Every other spec
+-- keeps its cast bar where it is and takes the appearance half only.
+--
+-- Mirrors EllesmereUI's own owner lookup: the first group in creation order
+-- that both stores a position for this element and lists the current spec.
+local function SwapWanted()
+    local entries = OverrideEntriesFor(CAST_KEY)
+    if not entries then return false end
+    local EUI = _G.EllesmereUI
+    if not EUI or not EUI.GetActiveProfileData then return false end
+    local specID = EUI._specID
+    if (not specID or specID == 0) and EUI._RefreshSpecID then
+        pcall(EUI._RefreshSpecID)
+        specID = EUI._specID
+    end
+    if not specID or specID == 0 then return false end
+    local ok, prof = pcall(EUI.GetActiveProfileData)
+    if not ok or type(prof) ~= "table" then return false end
+    local groups = prof.specOverrideGroups
+    if type(groups) ~= "table" then return false end
+    for _, group in ipairs(groups) do
+        if type(group) == "table" and entries[group.id] then
+            for _, sid in ipairs(group.specs or {}) do
+                if sid == specID then return true end
+            end
+        end
+    end
+    return false
+end
+
+local function ApplyOverrideAnchors(on, swap, claiming)
     local store = OverrideAnchorStore()
     if not store then return end
     for i = 1, #REPOSITIONED_KEYS do
@@ -461,6 +522,7 @@ local function ApplyOverrideAnchors(on, claiming)
             local record = claiming and ns.EUISnap(BITE_SECTION, snapKey)
                 or ns.EUIPeekSnap(BITE_SECTION, snapKey)
             ns.EUIOverride(store, record, key, nil, claiming)
+            if not swap then RevertLive(store, record, key) end
         else
             local record = ns.EUIPeekSnap(BITE_SECTION, snapKey)
             if record then ns.EUIRestore(store, record, key) end
@@ -473,17 +535,29 @@ local function ApplyAnchors(on, claiming)
     local anchors = AnchorDB()
     if not anchors then return false end
 
-    ApplyOverrideAnchors(on, claiming)
+    -- Answered before the hold, which empties the store the test reads.
+    local swap = on and SwapWanted()
+
+    ApplyOverrideAnchors(on, swap, claiming)
 
     if on then
         local castRecord = claiming and ns.EUISnap(BITE_SECTION, CAST_KEY)
             or ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
         local powerRecord = claiming and ns.EUISnap(BITE_SECTION, POWER_KEY)
             or ns.EUIPeekSnap(BITE_SECTION, POWER_KEY)
+        -- Recorded on every spec, forced only on the ones that want the swap:
+        -- the record is what a later spec computes its forced value from, so it
+        -- is claimed at the click whether or not this spec uses it.
         ns.EUIOverride(anchors, castRecord, CAST_KEY,
             Forced(Original(castRecord, anchors[CAST_KEY]), "CDM_cooldowns", "TOP", true), claiming)
         ns.EUIOverride(anchors, powerRecord, POWER_KEY,
             Forced(Original(powerRecord, anchors[POWER_KEY]), CAST_KEY, "TOP", false), claiming)
+        if not swap then
+            RevertLive(anchors, castRecord, CAST_KEY)
+            RevertLive(anchors, powerRecord, POWER_KEY)
+            MirrorToBaselineLayer(anchors, CAST_KEY)
+            MirrorToBaselineLayer(anchors, POWER_KEY)
+        end
     else
         local castRecord = ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
         local powerRecord = ns.EUIPeekSnap(BITE_SECTION, POWER_KEY)
