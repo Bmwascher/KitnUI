@@ -288,6 +288,13 @@ function ns.SetDarkCastBar(on)
         return
     end
     if not RunOutOfCombat(function()
+        -- Tested again here, not only before queueing: a session can be opened
+        -- during the fight this click is waiting out, and the queued write
+        -- would land inside it.
+        if EditSessionActive() then
+            Refuse(EDIT_SESSION_REFUSAL)
+            return
+        end
         -- Re-read inside the closure. A profile switch re-points db.profile in
         -- place, so a table captured before a fight writes the old profile.
         local settings = ns.EUISettings and ns.EUISettings() or nil
