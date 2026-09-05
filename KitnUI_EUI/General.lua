@@ -334,15 +334,19 @@ end
 -- InCombatLockdown, so a mid-fight flip stores the new value and paints the old
 -- one. The refresh puts the switch back where the refusal left the data.
 local function SetResourceBarDark(on)
+    if on and ns.EUIRefuseResourceGapClaim and ns.EUIRefuseResourceGapClaim() then return end
+    if not on and ns.EUIRefuseIfEditSession and ns.EUIRefuseIfEditSession() then return end
+
     if InCombatLockdown() then
         print(ns.title .. ": Appearance cannot be changed in combat.")
     elseif _G.EllesmereUI and EllesmereUI.SetDarkModeAll then
         pcall(EllesmereUI.SetDarkModeAll, on, IsResourceBars)
+        -- Inside the same branch as the module's own switch: the combat refusal
+        -- above leaves the data untouched, and the seam colour has to follow it.
+        if ns.ApplyResourceGap then ns.ApplyResourceGap(on, true) end
     end
 
-    if _G.EllesmereUI and EllesmereUI.RefreshPage then
-        pcall(EllesmereUI.RefreshPage, EllesmereUI)
-    end
+    ns.EUIRebuildForOwnership("General")
 end
 
 ---------------------------------------------------------------------------------
@@ -905,7 +909,11 @@ ns.EUIPages["General"] = function(parent, yOffset)
     _, h = W:Toggle(parent, "Dark Class Resource Bar", y,
         function() return DarkModeState(IsResourceBars) == true end,
         function(v) SetResourceBarDark(v) end,
-        "Darkens the class resource bar on its own, without changing the unit frames or raid frames.");
+        ns.EUIOwnershipTip(
+            "Darkens the class resource bar on its own, without changing the unit frames or raid frames.",
+            "darkresourcegap",
+            function() return DarkModeState(IsResourceBars) == true end,
+            "the colour of the gaps between its segments"));
                                                                                    y = y - h
 
     _, h = W:Toggle(parent, "Dark Cast Bar", y,

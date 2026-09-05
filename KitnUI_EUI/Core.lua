@@ -670,6 +670,14 @@ function ns.EUIResetAll()
         return false
     end
 
+    -- Nothing can be handed back from inside an editing session: a restore
+    -- written there is banked as the user's own edit, and the pages that refuse
+    -- to write are left holding forced values once KitnUIDB goes.
+    if ns.EUIEditSessionActive and ns.EUIEditSessionActive() then
+        print(ns.title .. ": Cannot reset while an override editing session is open, because the session would take the reset as your own edits. Close it and try again.")
+        return false
+    end
+
     -- Refused, not degraded. On an EllesmereUI too old for Lite.NewDB the store
     -- is the session-only fallback, which starts empty and knows none of the real
     -- switch states: Lulu could be recorded ON in EllesmereUIDB while the fallback
@@ -692,6 +700,13 @@ function ns.EUIResetAll()
     if ns.TopBar and ns.TopBar.Teardown then pcall(ns.TopBar.Teardown) end
 
     if ns.LuluTearDown then pcall(ns.LuluTearDown) end
+
+    -- The seam colour's switch is EllesmereUI's own dark theme, not a key in the
+    -- store cleared below, so the re-applies further down would read it still on
+    -- and force the colour again with the snapshots already gone. Released here
+    -- while they exist; that clears the records and leaves the re-apply inert.
+    -- The session refusal above is what lets this write land.
+    if ns.ApplyResourceGap then pcall(ns.ApplyResourceGap, false, false) end
 
     -- The ACTIVE profile is cleared through the db object so the live
     -- db.profile reference stays valid: ResetProfile wipes in place and
@@ -1015,6 +1030,7 @@ boot:SetScript("OnEvent", function(self)
     if EUI.SwitchProfile        then hooksecurefunc(EUI, "SwitchProfile",        ns.EUIQueueReapply) end
     if EUI.OnSpecSwitchComplete then hooksecurefunc(EUI, "OnSpecSwitchComplete", ns.EUIQueueReapply) end
     if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     ns.EUIQueueReapply) end
+    if EUI.SetDarkModeAll       then hooksecurefunc(EUI, "SetDarkModeAll",       ns.EUIQueueReapply) end
     if EUI.OnProfileRenamed     then hooksecurefunc(EUI, "OnProfileRenamed",     OnProfileRenamed)   end
     if EUI.OnProfileDeleted     then hooksecurefunc(EUI, "OnProfileDeleted",     OnProfileDeleted)   end
 

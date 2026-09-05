@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/Bite.lua                                         ║
--- ║  Purpose: Bite Mode and Dark Cast Bar, two switches that     ║
--- ║           hold EllesmereUI cast bar settings and anchors     ║
--- ║           down and hand them back on switch-off.             ║
+-- ║  Purpose: Bite Mode, Dark Cast Bar and the resource bar      ║
+-- ║           seam colour, which hold EllesmereUI settings       ║
+-- ║           and anchors down and hand them back on             ║
+-- ║           switch-off.                                        ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -89,42 +90,189 @@ local function CastProfile(forWriting)
     return ns.EUIStoredProfile and ns.EUIStoredProfile(ERB_FOLDER) or nil
 end
 
-local function RefreshCastBar()
+local function RefreshResourceBars()
     local addon = ns.EUIAddon and ns.EUIAddon(ERB_FOLDER) or nil
     if not (addon and addon.ApplyAll) then return end
     if InCombatLockdown() then return end
     pcall(addon.ApplyAll, addon)
 end
 
-local function OverrideStore()
+local function ProfileRoot()
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.GetActiveProfileData) then return nil end
     local ok, prof = pcall(EUI.GetActiveProfileData)
     if not ok or type(prof) ~= "table" then return nil end
-    if type(prof.specOverrides) ~= "table" then return nil end
-    return prof.specOverrides
+    return prof
 end
 
--- Indices shift when an entry is removed, so the store is scanned rather than
+-- Indices shift when an entry is removed, so a store is scanned rather than
 -- remembered by position, and records key off the fkey and the map key.
-local function CapturedMaps(fkey)
-    local store = OverrideStore()
-    if not store then return nil end
+--
+-- EVERY capturing entry is collected, not the first. The resource bar migration
+-- builds one entry per differing spec and copies the same default and every spec
+-- map into each of them, so one fkey can live in several entries at once; the
+-- host harvests and applies all of them, and a slot this scan skips is one the
+-- release cannot hand back.
+--
+-- The entries are deliberately NOT told apart. Nothing durable identifies one:
+-- an entry's group id is REASSIGNED to a surviving holder when a group is
+-- deleted, so two entries can end up carrying the same id, and a store index
+-- moves when an entry is removed. So the maps that share a map key share one
+-- record instead. That rests on those maps holding the same original, which
+-- SlotsDisagree below is what keeps true.
+local function AddSlot(found, index, key, map)
+    local slot = index[key]
+    if not slot then
+        slot = { key = key, maps = {} }
+        index[key] = slot
+        found[#found + 1] = slot
+    end
+    slot.maps[#slot.maps + 1] = map
+end
+
+local function CollectMaps(store, prefix, fkey, found, index)
+    if type(store) ~= "table" then return end
     for i = 1, #store do
         local entry = store[i]
         local values = (type(entry) == "table") and entry.values or nil
         local defaults = (type(values) == "table") and values.default or nil
         if type(defaults) == "table" and defaults[fkey] ~= nil then
-            local found = { { map = defaults, key = "default" } }
+            AddSlot(found, index, prefix .. "default", defaults)
             for mapKey, map in pairs(values) do
                 if mapKey ~= "default" and type(map) == "table" and map[fkey] ~= nil then
-                    found[#found + 1] = { map = map, key = mapKey }
+                    AddSlot(found, index, prefix .. mapKey, map)
                 end
             end
-            return found
         end
     end
-    return nil
+end
+
+-- A slot's membership is not fixed for the life of a hold. Changing a group's
+-- specs creates a map that was not there at the claim, and the user can author a
+-- value in it: that map is not this addon's to write or to hand back, and giving
+-- it the recorded original would destroy what they wrote.
+--
+-- So only the maps still carrying what was forced -- or already back at the
+-- original -- are treated as ours. Records claimed before this test existed carry
+-- no forced value and take every map, which is what they did before.
+local function OursInSlot(record, fkey, map)
+    if record.forced == nil then return true end
+    local current = map[fkey]
+    return current == record.forced or current == record.prev
+end
+
+-- The whole slot goes back before the record is cleared. ns.EUIRestore clears
+-- the recorded original on its way out, so restoring map by map would give the
+-- first map its value and leave every other one forced.
+local function RestoreSlot(slot, record, fkey)
+    if record.prev == nil then return end
+
+    local mine = {}
+    for i = 1, #slot.maps do
+        local map = slot.maps[i]
+        if OursInSlot(record, fkey, map) then mine[#mine + 1] = map end
+    end
+
+    -- Nothing left that this addon put there. The record still has to go, or the
+    -- switch reads as holding something forever.
+    if #mine == 0 then
+        record.prev = nil
+        record.forced = nil
+        return
+    end
+
+    for i = 1, #mine - 1 do
+        if record.prev == ns.EUI_ABSENT then
+            mine[i][fkey] = nil
+        else
+            mine[i][fkey] = record.prev
+        end
+    end
+    ns.EUIRestore(mine[#mine], record, fkey)
+    record.forced = nil
+end
+
+-- The claim takes the whole slot: every map in it is a claim-time member. A
+-- re-apply takes only what is still ours, so a map that joined since keeps
+-- whatever the user put in it.
+local function HoldSlot(slot, record, fkey, value, claiming)
+    if not claiming and record.prev == nil then return end
+
+    local wrote = false
+    for i = 1, #slot.maps do
+        local map = slot.maps[i]
+        if claiming or OursInSlot(record, fkey, map) then
+            ns.EUIOverride(map, record, fkey, value, claiming)
+            wrote = true
+        end
+    end
+
+    -- The marker follows what was actually written, and only after the whole
+    -- slot: moved inside the loop it would change what the maps after it count
+    -- as ours. It has to follow, because the palette is read afresh on every
+    -- claim and a slot that was out of the store during one of them would
+    -- otherwise be testing against a colour no map holds any more, and the
+    -- release would disown its own work. A record with no marker is one claimed
+    -- before this test existed and must keep none.
+    if wrote and record.forced ~= nil then record.forced = value end
+end
+
+-- Both override stores, because the conditional one banks live values at its own
+-- transitions exactly as the spec store does and can hold a key the spec store
+-- has not captured. A forced value left uncovered there is adopted as the user's
+-- own with nothing left to give back. Only the conditional map keys carry a
+-- prefix, so the two stores cannot share a record and the spec-side record names
+-- are the ones already in the field.
+local COND_PREFIX = "cond" .. FS
+
+local function CapturedMaps(fkey)
+    local prof = ProfileRoot()
+    if not prof then return nil end
+    local found, index = {}, {}
+    CollectMaps(prof.specOverrides, "", fkey, found, index)
+    CollectMaps(prof.condOverrides, COND_PREFIX, fkey, found, index)
+    if #found == 0 then return nil end
+    return found
+end
+
+-- One record per slot rests on the maps in it holding the same original, which
+-- is how they start and how every ordinary harvest keeps them: the host derives
+-- all of them from the same live value. The group-membership editor is the one
+-- path that breaks it. Adding a spec to a group seeds that spec's map from the
+-- group's own entry, and it SKIPS entries whose group already conflicts with the
+-- new membership, so one map key can end up holding two different values.
+--
+-- A claim over a disagreeing slot cannot be given back: one recorded original
+-- would be handed to both maps and the other one destroyed. So the claim is
+-- refused, before anything at all is written. The OFF path never refuses -- it
+-- returns what was taken, which is the claim-time value, and a slot that
+-- disagrees now was equal then.
+local function SlotsDisagree(fkeys)
+    for i = 1, #fkeys do
+        local fkey = fkeys[i]
+        local slots = CapturedMaps(fkey)
+        if slots then
+            for j = 1, #slots do
+                local maps = slots[j].maps
+                local first = maps[1][fkey]
+                for k = 2, #maps do
+                    if maps[k][fkey] ~= first then return true end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local DIVERGENT_REFUSAL =
+    "Cannot take this over, because your spec overrides hold two different saved "
+    .. "values for the same setting and turning this off again could only give "
+    .. "one of them back. Make those overrides agree and try again."
+
+local function RefuseIfDivergent(fkeys)
+    if not SlotsDisagree(fkeys) then return false end
+    Refuse(DIVERGENT_REFUSAL)
+    return true
 end
 
 -- The fill follows EllesmereUI's own Dark Mode colour, so the cast bar matches
@@ -161,6 +309,11 @@ local DARK_CAST_BAR_KEYS = {
 
 local DARK_SECTION = "darkcastbar"
 
+local DARK_CAST_FKEYS = {}
+for i = 1, #DARK_CAST_BAR_KEYS do
+    DARK_CAST_FKEYS[i] = ERB_FOLDER .. FS .. "castBar" .. PS .. DARK_CAST_BAR_KEYS[i]
+end
+
 -- claiming is true only on a user click. A re-apply must never create a
 -- record, because only at the click can this addon honestly say what the
 -- value was before it touched anything.
@@ -170,21 +323,21 @@ local DARK_SECTION = "darkcastbar"
 -- read live, and the spec freezes these colours at the click. record.prev
 -- belongs to ns.EUIOverride; record.forced is this file's own field and is
 -- inert to EUIHolds, which tests prev only.
-local function HoldKey(cast, key, value, claiming)
-    local record = claiming and ns.EUISnap(DARK_SECTION, key) or ns.EUIPeekSnap(DARK_SECTION, key)
+local function HoldKey(tbl, section, key, value, claiming)
+    local record = claiming and ns.EUISnap(section, key) or ns.EUIPeekSnap(section, key)
     if not record then return end
     if claiming then
         record.forced = value
     elseif record.prev == nil then
         return
     end
-    ns.EUIOverride(cast, record, key, record.forced, claiming)
+    ns.EUIOverride(tbl, record, key, record.forced, claiming)
 end
 
-local function ReleaseKey(cast, key)
-    local record = ns.EUIPeekSnap(DARK_SECTION, key)
+local function ReleaseKey(tbl, section, key)
+    local record = ns.EUIPeekSnap(section, key)
     if not record then return end
-    ns.EUIRestore(cast, record, key)
+    ns.EUIRestore(tbl, record, key)
     record.forced = nil
 end
 
@@ -195,20 +348,21 @@ end
 -- Every key this control owns gets the same store treatment spell text gets,
 -- so a captured colour key cannot be banked out of a spec and returned after
 -- switch-off.
-local function ApplyDarkStore(key, value, on, claiming)
-    local fkey = ERB_FOLDER .. FS .. "castBar" .. PS .. key
+local function ApplyDarkStore(section, path, key, value, on, claiming)
+    local fkey = ERB_FOLDER .. FS .. path .. PS .. key
     local maps = CapturedMaps(fkey)
     if not maps then return end
     for i = 1, #maps do
         local slot = maps[i]
         local record = (on and claiming)
-            and ns.EUISnap(DARK_SECTION, DarkStoreKey(key, slot.key))
-            or ns.EUIPeekSnap(DARK_SECTION, DarkStoreKey(key, slot.key))
+            and ns.EUISnap(section, DarkStoreKey(key, slot.key))
+            or ns.EUIPeekSnap(section, DarkStoreKey(key, slot.key))
         if record then
             if on then
-                ns.EUIOverride(slot.map, record, fkey, value, claiming)
+                if claiming then record.forced = value end
+                HoldSlot(slot, record, fkey, value, claiming)
             else
-                ns.EUIRestore(slot.map, record, fkey)
+                RestoreSlot(slot, record, fkey)
             end
         end
     end
@@ -229,7 +383,10 @@ local function TextureNeedsClaim(cast)
     local maps = CapturedMaps(TEXTURE_FKEY)
     if not maps then return false end
     for i = 1, #maps do
-        if maps[i].map[TEXTURE_FKEY] == "blizzard" then return true end
+        local slot = maps[i]
+        for j = 1, #slot.maps do
+            if slot.maps[j][TEXTURE_FKEY] == "blizzard" then return true end
+        end
     end
     return false
 end
@@ -269,17 +426,17 @@ local function ApplyDarkCastBar(on, claiming)
                 claim = (value ~= nil)
             end
             if claim then
-                HoldKey(cast, key, value, claiming)
-                ApplyDarkStore(key, value, true, claiming)
+                HoldKey(cast, DARK_SECTION, key, value, claiming)
+                ApplyDarkStore(DARK_SECTION, "castBar", key, value, true, claiming)
             end
         end
     else
         for _, key in ipairs(DARK_CAST_BAR_KEYS) do
-            ApplyDarkStore(key, nil, false, false)
-            if cast then ReleaseKey(cast, key) end
+            ApplyDarkStore(DARK_SECTION, "castBar", key, nil, false, false)
+            if cast then ReleaseKey(cast, DARK_SECTION, key) end
         end
     end
-    RefreshCastBar()
+    RefreshResourceBars()
 end
 
 -- The re-apply asserts only while this control's own state is on. That is
@@ -290,14 +447,17 @@ function ns.SetDarkCastBar(on)
         Refuse(EDIT_SESSION_REFUSAL)
         return
     end
+    if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
     if not RunOutOfCombat(function()
         -- Tested again here, not only before queueing: a session can be opened
         -- during the fight this click is waiting out, and the queued write
-        -- would land inside it.
+        -- would land inside it. The same goes for a membership change made
+        -- mid-fight.
         if EditSessionActive() then
             Refuse(EDIT_SESSION_REFUSAL)
             return
         end
+        if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
         -- Re-read inside the closure. A profile switch re-points db.profile in
         -- place, so a table captured before a fight writes the old profile.
         local settings = ns.EUISettings and ns.EUISettings() or nil
@@ -306,7 +466,7 @@ function ns.SetDarkCastBar(on)
         ApplyDarkCastBar(on, true)
         ns.EUIRebuildForOwnership("General")
     end, true, false) then
-        print(ns.title .. ": Dark Cast Bar is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it.")
+        print(ns.title .. ": Dark Cast Bar is queued until you leave combat. Switching, importing or deleting a profile, changing spec, or changing EllesmereUI's Dark Mode, before then cancels it.")
     end
 end
 
@@ -327,6 +487,95 @@ end)
 
 local BITE_SECTION = "bite"
 local SPELL_TEXT_FKEY = ERB_FOLDER .. FS .. "castBar" .. PS .. "showSpellText"
+
+local GAP_SECTION = "darkresourcegap"
+local GAP_PATH = "secondary"
+local GAP_KEYS = { "gapColorEnabled", "gapR", "gapG", "gapB", "gapA" }
+
+-- With the bar's own gap colour switched off there is no seam to colour: at full
+-- fill opacity the gap layer is not drawn at all and the black showing through is
+-- the bar's backdrop, and below it the module paints the gaps black itself while
+-- its dark theme is on. Either way the colour keys are unreachable until that
+-- switch is on, so this control owns the switch as well as the colour.
+local GAP_LEVEL = 0xcc / 255
+local GAP_VALUES = {
+    gapColorEnabled = true,
+    gapR = GAP_LEVEL,
+    gapG = GAP_LEVEL,
+    gapB = GAP_LEVEL,
+    gapA = 1,
+}
+
+-- Shared with the switches on the General page and with the reset, which have
+-- to refuse before they change anything at all: a write inside an override
+-- editing session is taken by EllesmereUI as the user's own edit and cannot be
+-- handed back.
+function ns.EUIEditSessionActive()
+    return EditSessionActive()
+end
+
+function ns.EUIRefuseIfEditSession()
+    if not EditSessionActive() then return false end
+    Refuse(EDIT_SESSION_REFUSAL)
+    return true
+end
+
+local GAP_FKEYS = {}
+for i = 1, #GAP_KEYS do
+    GAP_FKEYS[i] = ERB_FOLDER .. FS .. GAP_PATH .. PS .. GAP_KEYS[i]
+end
+
+-- Every reason this claim must be refused, gathered for the switch on the
+-- General page: it has to answer before EllesmereUI's own dark switch is
+-- written, and that write cannot be taken back.
+function ns.EUIRefuseResourceGapClaim()
+    if ns.EUIRefuseIfEditSession() then return true end
+    return RefuseIfDivergent(GAP_FKEYS)
+end
+
+-- The module's own dark switch for this bar, read from the shared provider list
+-- rather than tracked here, so the two can never disagree. nil means unreadable,
+-- which is not the same as off and must never release a hold.
+local function ResourceBarsDark()
+    local EUI = _G.EllesmereUI
+    local toggles = EUI and EUI._darkModeToggles
+    if type(toggles) ~= "table" then return nil end
+    for i = 1, #toggles do
+        local provider = toggles[i]
+        if type(provider) == "table" and provider.id == "resourceBars"
+           and type(provider.isOn) == "function" then
+            local ok, on = pcall(provider.isOn)
+            if not ok then return nil end
+            return on and true or false
+        end
+    end
+    return nil
+end
+
+function ns.ApplyResourceGap(on, claiming)
+    if EditSessionActive() then
+        if claiming then Refuse(EDIT_SESSION_REFUSAL) end
+        return
+    end
+    if on and claiming and RefuseIfDivergent(GAP_FKEYS) then return end
+    local profile = CastProfile(on)
+    if on and not profile then return end
+    local bar = profile and profile.secondary or nil
+    if type(bar) ~= "table" then bar = nil end
+    if on and not bar then return end
+
+    for _, key in ipairs(GAP_KEYS) do
+        if on then
+            HoldKey(bar, GAP_SECTION, key, GAP_VALUES[key], claiming)
+            ApplyDarkStore(GAP_SECTION, GAP_PATH, key, GAP_VALUES[key], true, claiming)
+        else
+            ApplyDarkStore(GAP_SECTION, GAP_PATH, key, nil, false, false)
+            if bar then ReleaseKey(bar, GAP_SECTION, key) end
+        end
+    end
+
+    RefreshResourceBars()
+end
 
 -- spellTextSide is never touched here: EllesmereUI's own dropdown writes both
 -- keys, and this control owns the visibility half only, so a user's chosen
@@ -356,15 +605,16 @@ local function ApplySpellText(on, claiming)
                 and ns.EUISnap(BITE_SECTION, key) or ns.EUIPeekSnap(BITE_SECTION, key)
             if record then
                 if on then
-                    ns.EUIOverride(slot.map, record, SPELL_TEXT_FKEY, false, claiming)
+                    if claiming then record.forced = false end
+                    HoldSlot(slot, record, SPELL_TEXT_FKEY, false, claiming)
                 else
-                    ns.EUIRestore(slot.map, record, SPELL_TEXT_FKEY)
+                    RestoreSlot(slot, record, SPELL_TEXT_FKEY)
                 end
             end
         end
     end
 
-    RefreshCastBar()
+    RefreshResourceBars()
 end
 
 local CAST_KEY, POWER_KEY = "ERB_CastBar", "ERB_Power"
@@ -608,6 +858,13 @@ local function CommitBite(on)
         Refuse(EDIT_SESSION_REFUSAL)
         return
     end
+    -- Both key sets, before the anchors move. Bite Mode turns Dark Cast Bar on as
+    -- a side effect, and a refusal discovered at that point would leave the
+    -- anchors swapped and the spell text held with the switch half on.
+    if on and RefuseIfDivergent({ SPELL_TEXT_FKEY }) then return end
+    if on and not ns.DarkCastBarEnabled() and RefuseIfDivergent(DARK_CAST_FKEYS) then
+        return
+    end
     if on and not ns.BaselineLive() then
         Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
         return
@@ -653,7 +910,7 @@ end
 
 function ns.SetBiteMode(on)
     if not RunOutOfCombat(function() CommitBite(on) end, true, false) then
-        Refuse("Bite Mode is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it.")
+        Refuse("Bite Mode is queued until you leave combat. Switching, importing or deleting a profile, changing spec, or changing EllesmereUI's Dark Mode, before then cancels it.")
     end
 end
 
@@ -678,6 +935,34 @@ ns.EUIRegisterReapply(function()
             -- afresh instead of reading a marker from the previous one.
             local record = ns.EUIPeekSnap(BITE_SECTION, "darkWasOn")
             if record then record.darkWasOn = nil end
+        end
+    end, false, true)
+end)
+
+-- The ownership sentence on the General page is a string fixed when the row is
+-- built, and it reads BOTH the module's dark switch and whether this control is
+-- holding. Either can move without that page's own click path running, so both
+-- are tracked here. The FIRST observation rebuilds as well: nothing orders the
+-- login re-apply ahead of the page being built, so a page built first with a
+-- since-changed input would otherwise keep its sentence until an input moved
+-- again.
+local gapTipSeen, gapTipDark, gapTipHeld = false, nil, false
+
+ns.EUIRegisterReapply(function()
+    RunOutOfCombat(function()
+        -- Only an explicit false releases. An unreadable switch is not an off
+        -- switch, and releasing on one would hand the seam back to black.
+        local dark = ResourceBarsDark()
+        if dark == true then
+            ns.ApplyResourceGap(true, false)
+        elseif dark == false and ns.EUIHolds(GAP_SECTION) then
+            ns.ApplyResourceGap(false, false)
+        end
+
+        local held = ns.EUIHolds(GAP_SECTION)
+        if not gapTipSeen or dark ~= gapTipDark or held ~= gapTipHeld then
+            gapTipSeen, gapTipDark, gapTipHeld = true, dark, held
+            ns.EUIRebuildForOwnership("General")
         end
     end, false, true)
 end)
