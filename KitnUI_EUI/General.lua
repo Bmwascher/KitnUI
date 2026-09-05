@@ -343,9 +343,7 @@ local function SetResourceBarDark(on)
         if ns.ApplyResourceGap then ns.ApplyResourceGap(on, true) end
     end
 
-    if _G.EllesmereUI and EllesmereUI.RefreshPage then
-        pcall(EllesmereUI.RefreshPage, EllesmereUI)
-    end
+    ns.EUIRebuildForOwnership("General")
 end
 
 ---------------------------------------------------------------------------------

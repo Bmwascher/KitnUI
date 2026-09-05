@@ -1015,6 +1015,7 @@ boot:SetScript("OnEvent", function(self)
     if EUI.SwitchProfile        then hooksecurefunc(EUI, "SwitchProfile",        ns.EUIQueueReapply) end
     if EUI.OnSpecSwitchComplete then hooksecurefunc(EUI, "OnSpecSwitchComplete", ns.EUIQueueReapply) end
     if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     ns.EUIQueueReapply) end
+    if EUI.SetDarkModeAll       then hooksecurefunc(EUI, "SetDarkModeAll",       ns.EUIQueueReapply) end
     if EUI.OnProfileRenamed     then hooksecurefunc(EUI, "OnProfileRenamed",     OnProfileRenamed)   end
     if EUI.OnProfileDeleted     then hooksecurefunc(EUI, "OnProfileDeleted",     OnProfileDeleted)   end
 

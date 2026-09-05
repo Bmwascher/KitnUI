@@ -328,17 +328,15 @@ end)
 local BITE_SECTION = "bite"
 local SPELL_TEXT_FKEY = ERB_FOLDER .. FS .. "castBar" .. PS .. "showSpellText"
 
--- spellTextSide is never touched here: EllesmereUI's own dropdown writes both
--- keys, and this control owns the visibility half only, so a user's chosen
--- side survives the round trip.
 local GAP_SECTION = "darkresourcegap"
 local GAP_PATH = "secondary"
 local GAP_KEYS = { "gapColorEnabled", "gapR", "gapG", "gapB", "gapA" }
 
--- The class resource bar draws the gaps between its pips BLACK whenever the
--- module's dark theme is on and the bar's own gap colour is switched off, which
--- is a black seam on a black bar. Switching that colour on is the only way to
--- reach the seam at all, so this control owns the switch as well as the colour.
+-- With the bar's own gap colour switched off there is no seam to colour: at full
+-- fill opacity the gap layer is not drawn at all and the black showing through is
+-- the bar's backdrop, and below it the module paints the gaps black itself while
+-- its dark theme is on. Either way the colour keys are unreachable until that
+-- switch is on, so this control owns the switch as well as the colour.
 local GAP_LEVEL = 0x4f / 255
 local GAP_VALUES = {
     gapColorEnabled = true,
@@ -368,6 +366,10 @@ local function ResourceBarsDark()
 end
 
 function ns.ApplyResourceGap(on, claiming)
+    if claiming and EditSessionActive() then
+        Refuse(EDIT_SESSION_REFUSAL)
+        return
+    end
     local profile = CastProfile(on)
     if on and not profile then return end
     local bar = profile and profile.secondary or nil
@@ -387,6 +389,9 @@ function ns.ApplyResourceGap(on, claiming)
     RefreshResourceBars()
 end
 
+-- spellTextSide is never touched here: EllesmereUI's own dropdown writes both
+-- keys, and this control owns the visibility half only, so a user's chosen
+-- side survives the round trip.
 local function ApplySpellText(on, claiming)
     local profile = CastProfile(on)
     if on and not profile then return end
