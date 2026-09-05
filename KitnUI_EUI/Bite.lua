@@ -4,7 +4,7 @@
 -- ║           Core.lua's DEFAULTS.profile.                       ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
-local _, ns = ...
+local _, ns = ... ---@type string, KitnUINS
 
 if ns.EUI_INERT then return end
 
