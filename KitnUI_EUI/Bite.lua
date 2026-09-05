@@ -324,6 +324,72 @@ local function ApplySpellText(on, claiming)
     RefreshCastBar()
 end
 
+local CAST_KEY, POWER_KEY = "ERB_CastBar", "ERB_Power"
+
+local function AnchorDB()
+    local db = _G.EllesmereUIDB
+    if type(db) ~= "table" then return nil end
+    if type(db.unlockAnchors) ~= "table" then return nil end
+    return db.unlockAnchors
+end
+
+local function Forced(previous, target, side, flipSign)
+    local offsetY = tonumber(previous and previous.offsetY) or 0
+    if flipSign then offsetY = -offsetY end
+    return {
+        target  = target,
+        side    = side,
+        offsetX = tonumber(previous and previous.offsetX) or 0,
+        offsetY = offsetY,
+    }
+end
+
+-- The entry as it was before this switch touched it. No record yet means the
+-- live entry is still the user's own, which is the claiming call. A recorded
+-- absence means there was no entry, so the forced one starts from zero offsets.
+-- Reading the LIVE entry on a re-apply would negate an already-negated offset.
+local function Original(record, live)
+    if record == nil or record.prev == nil then return live end
+    if record.prev == ns.EUI_ABSENT then return nil end
+    return record.prev
+end
+
+local function ApplyAnchors(on, claiming)
+    if not ns.BaselineLive() then return false end
+    local anchors = AnchorDB()
+    if not anchors then return false end
+
+    if on then
+        local castRecord = claiming and ns.EUISnap(BITE_SECTION, CAST_KEY)
+            or ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
+        local powerRecord = claiming and ns.EUISnap(BITE_SECTION, POWER_KEY)
+            or ns.EUIPeekSnap(BITE_SECTION, POWER_KEY)
+        ns.EUIOverride(anchors, castRecord, CAST_KEY,
+            Forced(Original(castRecord, anchors[CAST_KEY]), "CDM_cooldowns", "TOP", true), claiming)
+        ns.EUIOverride(anchors, powerRecord, POWER_KEY,
+            Forced(Original(powerRecord, anchors[POWER_KEY]), CAST_KEY, "TOP", false), claiming)
+    else
+        local castRecord = ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
+        local powerRecord = ns.EUIPeekSnap(BITE_SECTION, POWER_KEY)
+        if castRecord then ns.EUIRestore(anchors, castRecord, CAST_KEY) end
+        if powerRecord then ns.EUIRestore(anchors, powerRecord, POWER_KEY) end
+    end
+
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.ReapplyAllUnlockAnchors and not InCombatLockdown() then
+        pcall(EUI.ReapplyAllUnlockAnchors)
+    end
+    return true
+end
+
+-- ns.EUIPeekSnap never seeds a record, so this is side-effect free.
+local function BiteHoldsAnchors()
+    local record = ns.EUIPeekSnap(BITE_SECTION, "ERB_CastBar")
+    return (record and record.prev ~= nil) and true or false
+end
+
+ns.BiteHoldsAnchors = BiteHoldsAnchors
+
 local function Settings()
     return ns.EUISettings and ns.EUISettings() or nil
 end
