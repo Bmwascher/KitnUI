@@ -390,6 +390,83 @@ end
 
 ns.BiteHoldsAnchors = BiteHoldsAnchors
 
+local function Refuse(message)
+    print(ns.title .. ": " .. message)
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.RefreshPage then pcall(EUI.RefreshPage, EUI, true) end
+end
+
+local function CommitBite(on)
+    if on and not ns.BaselineLive() then
+        Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
+        return
+    end
+
+    local settings = ns.EUISettings and ns.EUISettings() or nil
+    if not settings then return end
+
+    if on then
+        -- The anchor half runs FIRST and its answer decides the rest. It
+        -- returns false when EllesmereUI's layout store is unreadable, and a
+        -- state written before that answer would leave the row reading on
+        -- while owning and applying nothing.
+        if not ApplyAnchors(true, true) then
+            Refuse("Bite Mode could not read EllesmereUI's saved layout. Reload and try again.")
+            return
+        end
+        local record = ns.EUISnap(BITE_SECTION, "darkWasOn")
+        -- Written once per activation. Two clicks can queue in one fight, and
+        -- the second would otherwise record the state the FIRST one produced,
+        -- which is Dark Cast Bar already on.
+        if record and record.darkWasOn == nil then
+            record.darkWasOn = ns.DarkCastBarEnabled()
+        end
+    else
+        ApplyAnchors(false, true)
+    end
+
+    settings.bite = on and true or false
+    ApplySpellText(on, true)
+
+    if on then
+        if not ns.DarkCastBarEnabled() then ns.SetDarkCastBar(true) end
+    else
+        local record = ns.EUIPeekSnap(BITE_SECTION, "darkWasOn")
+        local wasOn = record and record.darkWasOn
+        if wasOn == false and ns.DarkCastBarEnabled() then ns.SetDarkCastBar(false) end
+        if record then record.darkWasOn = nil end
+    end
+
+    ns.EUIRebuildForOwnership("General")
+end
+
+function ns.SetBiteMode(on)
+    if not RunOutOfCombat(function() CommitBite(on) end, true, false) then
+        Refuse("Bite Mode is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it.")
+    end
+end
+
+-- The anchor half is gated inside ApplyAnchors; the spell text half is not,
+-- because a captured setting is re-asserted on every spec change regardless
+-- of layer and must be re-held.
+--
+-- The elseif branch restores BOTH halves, not just the anchors. A reset turns
+-- the switch off and then runs the re-applies so each page hands its
+-- originals back while the snapshots still exist; restoring only the anchors
+-- would leave the spell text forced with nothing left that remembers the
+-- original.
+ns.EUIRegisterReapply(function()
+    RunOutOfCombat(function()
+        if ns.BiteEnabled() then
+            ApplyAnchors(true, false)
+            ApplySpellText(true, false)
+        elseif ns.EUIHolds("bite") then
+            ApplyAnchors(false, false)
+            ApplySpellText(false, false)
+        end
+    end, false, true)
+end)
+
 local function Settings()
     return ns.EUISettings and ns.EUISettings() or nil
 end
