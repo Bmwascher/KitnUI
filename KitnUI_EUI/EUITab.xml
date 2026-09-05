@@ -5,6 +5,7 @@
     <Script file="Core.lua" />
     <Script file="Theme.lua" />
     <Script file="Lulu.lua" />
+    <Script file="Bite.lua" />
     <Script file="General.lua" />
     <Script file="Gameplay.lua" />
     <Script file="Nameplates.lua" />

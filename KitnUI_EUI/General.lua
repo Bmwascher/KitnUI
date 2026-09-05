@@ -715,7 +715,7 @@ end)
 -- yet"; without it the veil is a plain dim and means "not applicable right now".
 --
 -- A veil is STATIC: it is built or not built at page build time and never
--- re-evaluated. That is safe for both callers. Bite Mode never changes, and the
+-- re-evaluated. That is safe here: the accent rows are the only caller, and the
 -- master accent switch forces a full page rebuild through
 -- ns.EUIRebuildForOwnership (Core.lua:479-496), so the accent rows are rebuilt
 -- every time the thing they depend on changes.
@@ -908,6 +908,18 @@ ns.EUIPages["General"] = function(parent, yOffset)
         "Darkens the class resource bar on its own, without changing the unit frames or raid frames.");
                                                                                    y = y - h
 
+    _, h = W:Toggle(parent, "Dark Cast Bar", y,
+        ns.DarkCastBarEnabled,
+        ns.SetDarkCastBar,
+        ns.EUIOwnershipTip(
+            "Darkens the cast bar on its own, without changing the class resource bar, the unit frames or raid frames.",
+            "darkcastbar",
+            ns.DarkCastBarEnabled,
+            "the cast bar's dark colors"));
+                                                                                   y = y - h
+
+    _, h = W:Spacer(parent, y, 20);                                                y = y - h
+
     _, h = W:Toggle(parent, "Lulu Mode", y,
         function()
             if not ns.LuluEnabled then return false end
@@ -926,16 +938,15 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "your minimap shape and where its clock, zone, FPS, mail, difficulty and button row sit"));
                                                                                    y = y - h
 
-    -- Built as a real row and then covered, rather than left out until the feature
-    -- exists, so the row is visible and its shape is already settled. It carries NO
-    -- saved setting: a stored key nothing reads still has to be defaulted, migrated
-    -- and reset forever. The key arrives with the feature.
-    local biteRow
-    biteRow, h = W:Toggle(parent, "Bite Mode", y,
-        function() return false end,
-        function() end,
-        "Bitebtw's own look: a set of EllesmereUI settings held down, plus a dedicated Edit Mode layout, behind one switch. The same shape as Lulu Mode. Not built yet.")
-    Veil(biteRow, "Coming Soon");                                                  y = y - h
+    _, h = W:Toggle(parent, "Bite Mode", y,
+        ns.BiteEnabled,
+        ns.SetBiteMode,
+        ns.EUIOwnershipTip(
+            "Swaps the cast bar and power bar on specs that use an emphasized cast bar, darkens the cast bar, and hides its spell name. Other specs keep their layout and take the cast bar changes only. Asks nothing and needs no reload. Unavailable while a spec override layout is active.",
+            "bite",
+            ns.BiteEnabled,
+            "where your cast bar and power bar sit, and the cast bar's spell text and dark colors"));
+                                                                                   y = y - h
 
     return math.abs(y)
 end
