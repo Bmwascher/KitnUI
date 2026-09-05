@@ -334,10 +334,14 @@ local function HoldKey(tbl, section, key, value, claiming)
     ns.EUIOverride(tbl, record, key, record.forced, claiming)
 end
 
--- The same ownership test the store half uses, for the same reason: a value
--- the user set themselves during the hold is not this addon's to hand back, and
--- writing the recorded original over it would destroy what they chose. The
--- record still goes, or the switch would read as holding something it does not.
+-- While the switch is on this addon owns the key and the re-apply re-asserts it,
+-- which is what the ownership sentence on the page promises. This test is for the
+-- other window: EllesmereUI's own per-module dark switches turn the bar light
+-- again without releasing anything, and until the next trigger the user is
+-- looking at a settings row that invites them to set a colour of their own.
+-- Handing the recorded original back over that would destroy what they chose, so
+-- only a value still carrying what was forced is taken back. The record goes
+-- either way, or the switch would read as holding something it does not.
 local function ReleaseKey(tbl, section, key)
     local record = ns.EUIPeekSnap(section, key)
     if not record then return end
