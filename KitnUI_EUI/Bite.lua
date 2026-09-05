@@ -530,81 +530,6 @@ local function ApplyOverrideAnchors(on, swap, claiming)
     end
 end
 
-local CDM_FOLDER = "EllesmereUICooldownManager"
-local OFFSET_KEY = "addOffsetY"
-
-local function CDMBars()
-    local EUI = _G.EllesmereUI
-    if not (EUI and EUI.GetActiveProfileData) then return nil end
-    local ok, prof = pcall(EUI.GetActiveProfileData)
-    if not ok or type(prof) ~= "table" then return nil end
-    local addons = prof.addons
-    local cdm = (type(addons) == "table") and addons[CDM_FOLDER] or nil
-    local store = (type(cdm) == "table") and cdm.cdmBars or nil
-    local bars = (type(store) == "table") and store.bars or nil
-    return (type(bars) == "table") and bars or nil
-end
-
--- Only the bars standing on the stack this switch rearranges. Walking the links
--- leaves unrelated offsets alone: a bar whose chain never reaches the cast bar
--- or the power bar is not affected by the swap and keeps what it has. The cap
--- bounds a chain that loops rather than trusting it to end.
-local function ChainReachesSwap(anchors, barKey)
-    local key = "CDM_" .. barKey
-    for _ = 1, 12 do
-        local entry = anchors[key]
-        local target = entry and entry.target
-        if not target then return false end
-        if target == CAST_KEY or target == POWER_KEY then return true end
-        key = target
-    end
-    return false
-end
-
--- An Additional Bar Offset lifts a bar clear of whatever sits below it, so the
--- buff containers carry one sized for the stack as it was. The swap changes that
--- stack, and the offset then reads as a gap. Held down for as long as the swap
--- is applied, handed back on every spec that does not swap and on switch-off.
--- Returns whether any value actually moved, which is what decides if the
--- cooldown manager has to be told to repaint.
-local function ApplyBuffOffsets(anchors, on, swap, claiming)
-    local bars = CDMBars()
-    if not bars then return false end
-    local changed = false
-    for i = 1, #bars do
-        local bd = bars[i]
-        if type(bd) == "table" and bd.key then
-            local snapKey = "cdmOffsetY:" .. bd.key
-            local record = ns.EUIPeekSnap(BITE_SECTION, snapKey)
-            local held = (record and record.prev ~= nil) and true or false
-            local before = bd[OFFSET_KEY]
-            if on then
-                -- Claimed on a re-apply as well as a click, which the anchor
-                -- halves must never do. It is safe HERE and only here: zero is
-                -- the only value this switch ever writes, so a non-zero live
-                -- offset is provably the user's own and never something this
-                -- switch left behind. Without it a switch that was already on
-                -- would never pick these up.
-                local claimNow = (not held)
-                    and (tonumber(bd[OFFSET_KEY]) or 0) ~= 0
-                    and ChainReachesSwap(anchors, bd.key)
-                if claimNow then
-                    record = ns.EUISnap(BITE_SECTION, snapKey)
-                    held = record and true or false
-                end
-                if held then
-                    ns.EUIOverride(bd, record, OFFSET_KEY, 0, claiming or claimNow)
-                    if not swap then RevertLive(bd, record, OFFSET_KEY) end
-                end
-            elseif held then
-                ns.EUIRestore(bd, record, OFFSET_KEY)
-            end
-            if bd[OFFSET_KEY] ~= before then changed = true end
-        end
-    end
-    return changed
-end
-
 local function ApplyAnchors(on, claiming)
     if not ns.BaselineLive() then return false end
     local anchors = AnchorDB()
@@ -614,7 +539,6 @@ local function ApplyAnchors(on, claiming)
     local swap = on and SwapWanted()
 
     ApplyOverrideAnchors(on, swap, claiming)
-    local offsetsMoved = ApplyBuffOffsets(anchors, on, swap, claiming)
 
     if on then
         local castRecord = claiming and ns.EUISnap(BITE_SECTION, CAST_KEY)
@@ -653,9 +577,6 @@ local function ApplyAnchors(on, claiming)
         -- it through its normal owner before the links re-assert.
         if EUI._ReapplyOverrideAnchors then pcall(EUI._ReapplyOverrideAnchors) end
         if EUI.ReapplyAllUnlockAnchors then pcall(EUI.ReapplyAllUnlockAnchors) end
-        -- Only when an offset actually moved: this is a full cooldown manager
-        -- rebuild, and every spec change runs through here.
-        if offsetsMoved and _G._ECME_Apply then pcall(_G._ECME_Apply) end
     end
     return true
 end
