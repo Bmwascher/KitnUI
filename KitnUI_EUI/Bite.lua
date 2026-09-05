@@ -112,34 +112,62 @@ end
 -- builds one entry per differing spec and copies the same default and every spec
 -- map into each of them, so one fkey can live in several entries at once; the
 -- host harvests and applies all of them, and a slot this scan skips is one the
--- release cannot hand back. The first entry keeps the bare map key so records
--- already saved in the field keep their names, and later ones take the entry's
--- group id, which those migrated entries always carry and never share.
-local function CollectMaps(store, prefix, fkey, found)
-    if type(store) ~= "table" then return found end
-    local seen = 0
+-- release cannot hand back.
+--
+-- The entries are deliberately NOT told apart. Nothing durable identifies one:
+-- an entry's group id is REASSIGNED to a surviving holder when a group is
+-- deleted, so two entries can end up carrying the same id, and a store index
+-- moves when an entry is removed. So the maps that share a map key share one
+-- record instead. They hold the same original to begin with -- the host derives
+-- every one of them from the same live value, at migration and at every harvest
+-- since -- so one recorded original is the right one to give all of them back.
+local function AddSlot(found, index, key, map)
+    local slot = index[key]
+    if not slot then
+        slot = { key = key, maps = {} }
+        index[key] = slot
+        found[#found + 1] = slot
+    end
+    slot.maps[#slot.maps + 1] = map
+end
+
+local function CollectMaps(store, prefix, fkey, found, index)
+    if type(store) ~= "table" then return end
     for i = 1, #store do
         local entry = store[i]
         local values = (type(entry) == "table") and entry.values or nil
         local defaults = (type(values) == "table") and values.default or nil
         if type(defaults) == "table" and defaults[fkey] ~= nil then
-            seen = seen + 1
-            local tag = prefix
-            if seen > 1 then
-                local id = entry.group
-                if type(id) ~= "string" and type(id) ~= "number" then id = seen end
-                tag = prefix .. "e" .. tostring(id) .. FS
-            end
-            found = found or {}
-            found[#found + 1] = { map = defaults, key = tag .. "default" }
+            AddSlot(found, index, prefix .. "default", defaults)
             for mapKey, map in pairs(values) do
                 if mapKey ~= "default" and type(map) == "table" and map[fkey] ~= nil then
-                    found[#found + 1] = { map = map, key = tag .. mapKey }
+                    AddSlot(found, index, prefix .. mapKey, map)
                 end
             end
         end
     end
-    return found
+end
+
+-- The whole slot goes back before the record is cleared. ns.EUIRestore clears
+-- the recorded original on its way out, so restoring map by map would give the
+-- first map its value and leave every other one forced.
+local function RestoreSlot(slot, record, fkey)
+    if record.prev == nil then return end
+    local maps = slot.maps
+    for i = 1, #maps - 1 do
+        if record.prev == ns.EUI_ABSENT then
+            maps[i][fkey] = nil
+        else
+            maps[i][fkey] = record.prev
+        end
+    end
+    ns.EUIRestore(maps[#maps], record, fkey)
+end
+
+local function HoldSlot(slot, record, fkey, value, claiming)
+    for i = 1, #slot.maps do
+        ns.EUIOverride(slot.maps[i], record, fkey, value, claiming)
+    end
 end
 
 -- Both override stores, because the conditional one banks live values at its own
@@ -153,8 +181,11 @@ local COND_PREFIX = "cond" .. FS
 local function CapturedMaps(fkey)
     local prof = ProfileRoot()
     if not prof then return nil end
-    local found = CollectMaps(prof.specOverrides, "", fkey, nil)
-    return CollectMaps(prof.condOverrides, COND_PREFIX, fkey, found)
+    local found, index = {}, {}
+    CollectMaps(prof.specOverrides, "", fkey, found, index)
+    CollectMaps(prof.condOverrides, COND_PREFIX, fkey, found, index)
+    if #found == 0 then return nil end
+    return found
 end
 
 -- The fill follows EllesmereUI's own Dark Mode colour, so the cast bar matches
@@ -236,9 +267,9 @@ local function ApplyDarkStore(section, path, key, value, on, claiming)
             or ns.EUIPeekSnap(section, DarkStoreKey(key, slot.key))
         if record then
             if on then
-                ns.EUIOverride(slot.map, record, fkey, value, claiming)
+                HoldSlot(slot, record, fkey, value, claiming)
             else
-                ns.EUIRestore(slot.map, record, fkey)
+                RestoreSlot(slot, record, fkey)
             end
         end
     end
@@ -259,7 +290,10 @@ local function TextureNeedsClaim(cast)
     local maps = CapturedMaps(TEXTURE_FKEY)
     if not maps then return false end
     for i = 1, #maps do
-        if maps[i].map[TEXTURE_FKEY] == "blizzard" then return true end
+        local slot = maps[i]
+        for j = 1, #slot.maps do
+            if slot.maps[j][TEXTURE_FKEY] == "blizzard" then return true end
+        end
     end
     return false
 end
@@ -461,9 +495,9 @@ local function ApplySpellText(on, claiming)
                 and ns.EUISnap(BITE_SECTION, key) or ns.EUIPeekSnap(BITE_SECTION, key)
             if record then
                 if on then
-                    ns.EUIOverride(slot.map, record, SPELL_TEXT_FKEY, false, claiming)
+                    HoldSlot(slot, record, SPELL_TEXT_FKEY, false, claiming)
                 else
-                    ns.EUIRestore(slot.map, record, SPELL_TEXT_FKEY)
+                    RestoreSlot(slot, record, SPELL_TEXT_FKEY)
                 end
             end
         end
