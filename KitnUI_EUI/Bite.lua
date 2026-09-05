@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/Bite.lua                                         ║
--- ║  Purpose: Bite Mode switches, registered as scalars in       ║
--- ║           Core.lua's DEFAULTS.profile.                       ║
+-- ║  Purpose: Bite Mode and Dark Cast Bar, two switches that     ║
+-- ║           hold EllesmereUI cast bar settings and anchors     ║
+-- ║           down and hand them back on switch-off.             ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -212,9 +213,13 @@ end
 -- re-testing the live value.
 local function ApplyDarkCastBar(on, claiming)
     local profile = CastProfile(on)
-    if not profile then return end
-    local cast = profile.castBar
-    if type(cast) ~= "table" then return end
+    -- Nothing is forced into a module that is not loaded. The OFF path
+    -- continues without a live table, because the captured store still holds
+    -- values that have to be handed back.
+    if on and not profile then return end
+    local cast = profile and profile.castBar or nil
+    if type(cast) ~= "table" then cast = nil end
+    if on and not cast then return end
 
     if on then
         local values = claiming and DarkValues() or nil
@@ -244,7 +249,7 @@ local function ApplyDarkCastBar(on, claiming)
     else
         for _, key in ipairs(DARK_CAST_BAR_KEYS) do
             ApplyDarkStore(key, nil, false, false)
-            ReleaseKey(cast, key)
+            if cast then ReleaseKey(cast, key) end
         end
     end
     RefreshCastBar()
