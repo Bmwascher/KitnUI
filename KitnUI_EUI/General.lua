@@ -338,6 +338,9 @@ local function SetResourceBarDark(on)
         print(ns.title .. ": Appearance cannot be changed in combat.")
     elseif _G.EllesmereUI and EllesmereUI.SetDarkModeAll then
         pcall(EllesmereUI.SetDarkModeAll, on, IsResourceBars)
+        -- Inside the same branch as the module's own switch: the combat refusal
+        -- above leaves the data untouched, and the seam colour has to follow it.
+        if ns.ApplyResourceGap then ns.ApplyResourceGap(on, true) end
     end
 
     if _G.EllesmereUI and EllesmereUI.RefreshPage then
@@ -905,7 +908,11 @@ ns.EUIPages["General"] = function(parent, yOffset)
     _, h = W:Toggle(parent, "Dark Class Resource Bar", y,
         function() return DarkModeState(IsResourceBars) == true end,
         function(v) SetResourceBarDark(v) end,
-        "Darkens the class resource bar on its own, without changing the unit frames or raid frames.");
+        ns.EUIOwnershipTip(
+            "Darkens the class resource bar on its own, without changing the unit frames or raid frames.",
+            "darkresourcegap",
+            function() return DarkModeState(IsResourceBars) == true end,
+            "the colour of the gaps between its segments"));
                                                                                    y = y - h
 
     _, h = W:Toggle(parent, "Dark Cast Bar", y,

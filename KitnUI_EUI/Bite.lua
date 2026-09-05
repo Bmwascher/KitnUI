@@ -89,7 +89,7 @@ local function CastProfile(forWriting)
     return ns.EUIStoredProfile and ns.EUIStoredProfile(ERB_FOLDER) or nil
 end
 
-local function RefreshCastBar()
+local function RefreshResourceBars()
     local addon = ns.EUIAddon and ns.EUIAddon(ERB_FOLDER) or nil
     if not (addon and addon.ApplyAll) then return end
     if InCombatLockdown() then return end
@@ -170,21 +170,21 @@ local DARK_SECTION = "darkcastbar"
 -- read live, and the spec freezes these colours at the click. record.prev
 -- belongs to ns.EUIOverride; record.forced is this file's own field and is
 -- inert to EUIHolds, which tests prev only.
-local function HoldKey(cast, key, value, claiming)
-    local record = claiming and ns.EUISnap(DARK_SECTION, key) or ns.EUIPeekSnap(DARK_SECTION, key)
+local function HoldKey(tbl, section, key, value, claiming)
+    local record = claiming and ns.EUISnap(section, key) or ns.EUIPeekSnap(section, key)
     if not record then return end
     if claiming then
         record.forced = value
     elseif record.prev == nil then
         return
     end
-    ns.EUIOverride(cast, record, key, record.forced, claiming)
+    ns.EUIOverride(tbl, record, key, record.forced, claiming)
 end
 
-local function ReleaseKey(cast, key)
-    local record = ns.EUIPeekSnap(DARK_SECTION, key)
+local function ReleaseKey(tbl, section, key)
+    local record = ns.EUIPeekSnap(section, key)
     if not record then return end
-    ns.EUIRestore(cast, record, key)
+    ns.EUIRestore(tbl, record, key)
     record.forced = nil
 end
 
@@ -195,15 +195,15 @@ end
 -- Every key this control owns gets the same store treatment spell text gets,
 -- so a captured colour key cannot be banked out of a spec and returned after
 -- switch-off.
-local function ApplyDarkStore(key, value, on, claiming)
-    local fkey = ERB_FOLDER .. FS .. "castBar" .. PS .. key
+local function ApplyDarkStore(section, path, key, value, on, claiming)
+    local fkey = ERB_FOLDER .. FS .. path .. PS .. key
     local maps = CapturedMaps(fkey)
     if not maps then return end
     for i = 1, #maps do
         local slot = maps[i]
         local record = (on and claiming)
-            and ns.EUISnap(DARK_SECTION, DarkStoreKey(key, slot.key))
-            or ns.EUIPeekSnap(DARK_SECTION, DarkStoreKey(key, slot.key))
+            and ns.EUISnap(section, DarkStoreKey(key, slot.key))
+            or ns.EUIPeekSnap(section, DarkStoreKey(key, slot.key))
         if record then
             if on then
                 ns.EUIOverride(slot.map, record, fkey, value, claiming)
@@ -269,17 +269,17 @@ local function ApplyDarkCastBar(on, claiming)
                 claim = (value ~= nil)
             end
             if claim then
-                HoldKey(cast, key, value, claiming)
-                ApplyDarkStore(key, value, true, claiming)
+                HoldKey(cast, DARK_SECTION, key, value, claiming)
+                ApplyDarkStore(DARK_SECTION, "castBar", key, value, true, claiming)
             end
         end
     else
         for _, key in ipairs(DARK_CAST_BAR_KEYS) do
-            ApplyDarkStore(key, nil, false, false)
-            if cast then ReleaseKey(cast, key) end
+            ApplyDarkStore(DARK_SECTION, "castBar", key, nil, false, false)
+            if cast then ReleaseKey(cast, DARK_SECTION, key) end
         end
     end
-    RefreshCastBar()
+    RefreshResourceBars()
 end
 
 -- The re-apply asserts only while this control's own state is on. That is
@@ -331,6 +331,62 @@ local SPELL_TEXT_FKEY = ERB_FOLDER .. FS .. "castBar" .. PS .. "showSpellText"
 -- spellTextSide is never touched here: EllesmereUI's own dropdown writes both
 -- keys, and this control owns the visibility half only, so a user's chosen
 -- side survives the round trip.
+local GAP_SECTION = "darkresourcegap"
+local GAP_PATH = "secondary"
+local GAP_KEYS = { "gapColorEnabled", "gapR", "gapG", "gapB", "gapA" }
+
+-- The class resource bar draws the gaps between its pips BLACK whenever the
+-- module's dark theme is on and the bar's own gap colour is switched off, which
+-- is a black seam on a black bar. Switching that colour on is the only way to
+-- reach the seam at all, so this control owns the switch as well as the colour.
+local GAP_LEVEL = 0x4f / 255
+local GAP_VALUES = {
+    gapColorEnabled = true,
+    gapR = GAP_LEVEL,
+    gapG = GAP_LEVEL,
+    gapB = GAP_LEVEL,
+    gapA = 1,
+}
+
+-- The module's own dark switch for this bar, read from the shared provider list
+-- rather than tracked here, so the two can never disagree. nil means unreadable,
+-- which is not the same as off and must never release a hold.
+local function ResourceBarsDark()
+    local EUI = _G.EllesmereUI
+    local toggles = EUI and EUI._darkModeToggles
+    if type(toggles) ~= "table" then return nil end
+    for i = 1, #toggles do
+        local provider = toggles[i]
+        if type(provider) == "table" and provider.id == "resourceBars"
+           and type(provider.isOn) == "function" then
+            local ok, on = pcall(provider.isOn)
+            if not ok then return nil end
+            return on and true or false
+        end
+    end
+    return nil
+end
+
+function ns.ApplyResourceGap(on, claiming)
+    local profile = CastProfile(on)
+    if on and not profile then return end
+    local bar = profile and profile.secondary or nil
+    if type(bar) ~= "table" then bar = nil end
+    if on and not bar then return end
+
+    for _, key in ipairs(GAP_KEYS) do
+        if on then
+            HoldKey(bar, GAP_SECTION, key, GAP_VALUES[key], claiming)
+            ApplyDarkStore(GAP_SECTION, GAP_PATH, key, GAP_VALUES[key], true, claiming)
+        else
+            ApplyDarkStore(GAP_SECTION, GAP_PATH, key, nil, false, false)
+            if bar then ReleaseKey(bar, GAP_SECTION, key) end
+        end
+    end
+
+    RefreshResourceBars()
+end
+
 local function ApplySpellText(on, claiming)
     local profile = CastProfile(on)
     if on and not profile then return end
@@ -364,7 +420,7 @@ local function ApplySpellText(on, claiming)
         end
     end
 
-    RefreshCastBar()
+    RefreshResourceBars()
 end
 
 local CAST_KEY, POWER_KEY = "ERB_CastBar", "ERB_Power"
@@ -678,6 +734,19 @@ ns.EUIRegisterReapply(function()
             -- afresh instead of reading a marker from the previous one.
             local record = ns.EUIPeekSnap(BITE_SECTION, "darkWasOn")
             if record then record.darkWasOn = nil end
+        end
+    end, false, true)
+end)
+
+ns.EUIRegisterReapply(function()
+    RunOutOfCombat(function()
+        -- Only an explicit false releases. An unreadable switch is not an off
+        -- switch, and releasing on one would hand the seam back to black.
+        local dark = ResourceBarsDark()
+        if dark == true then
+            ns.ApplyResourceGap(true, false)
+        elseif dark == false and ns.EUIHolds(GAP_SECTION) then
+            ns.ApplyResourceGap(false, false)
         end
     end, false, true)
 end)
