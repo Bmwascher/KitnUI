@@ -282,6 +282,48 @@ ns.EUIRegisterReapply(function()
     end, false, true)
 end)
 
+local BITE_SECTION = "bite"
+local SPELL_TEXT_FKEY = ERB_FOLDER .. FS .. "castBar" .. PS .. "showSpellText"
+
+-- spellTextSide is never touched here: EllesmereUI's own dropdown writes both
+-- keys, and this control owns the visibility half only, so a user's chosen
+-- side survives the round trip.
+local function ApplySpellText(on, claiming)
+    local profile = CastProfile(on)
+    if on and not profile then return end
+    if profile and type(profile.castBar) == "table" then
+        local record = (on and claiming)
+            and ns.EUISnap(BITE_SECTION, "showSpellText")
+            or ns.EUIPeekSnap(BITE_SECTION, "showSpellText")
+        if record then
+            if on then
+                ns.EUIOverride(profile.castBar, record, "showSpellText", false, claiming)
+            else
+                ns.EUIRestore(profile.castBar, record, "showSpellText")
+            end
+        end
+    end
+
+    local maps = CapturedMaps(SPELL_TEXT_FKEY)
+    if maps then
+        for i = 1, #maps do
+            local slot = maps[i]
+            local key = "spellText" .. FS .. slot.key
+            local record = (on and claiming)
+                and ns.EUISnap(BITE_SECTION, key) or ns.EUIPeekSnap(BITE_SECTION, key)
+            if record then
+                if on then
+                    ns.EUIOverride(slot.map, record, SPELL_TEXT_FKEY, false, claiming)
+                else
+                    ns.EUIRestore(slot.map, record, SPELL_TEXT_FKEY)
+                end
+            end
+        end
+    end
+
+    RefreshCastBar()
+end
+
 local function Settings()
     return ns.EUISettings and ns.EUISettings() or nil
 end
