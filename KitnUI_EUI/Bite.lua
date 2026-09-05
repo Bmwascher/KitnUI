@@ -334,10 +334,18 @@ local function HoldKey(tbl, section, key, value, claiming)
     ns.EUIOverride(tbl, record, key, record.forced, claiming)
 end
 
+-- The same ownership test the store half uses, for the same reason: a value
+-- the user set themselves during the hold is not this addon's to hand back, and
+-- writing the recorded original over it would destroy what they chose. The
+-- record still goes, or the switch would read as holding something it does not.
 local function ReleaseKey(tbl, section, key)
     local record = ns.EUIPeekSnap(section, key)
     if not record then return end
-    ns.EUIRestore(tbl, record, key)
+    if OursInSlot(record, key, tbl) then
+        ns.EUIRestore(tbl, record, key)
+    else
+        record.prev = nil
+    end
     record.forced = nil
 end
 

@@ -1031,6 +1031,14 @@ boot:SetScript("OnEvent", function(self)
     if EUI.OnSpecSwitchComplete then hooksecurefunc(EUI, "OnSpecSwitchComplete", ns.EUIQueueReapply) end
     if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     ns.EUIQueueReapply) end
     if EUI.SetDarkModeAll       then hooksecurefunc(EUI, "SetDarkModeAll",       ns.EUIQueueReapply) end
+
+    -- Not a hook: a callback list the panel fires as it closes. It is the only
+    -- notice of EllesmereUI's own per-module dark switches, which write their
+    -- flag and repaint their own page without calling anything hookable. Those
+    -- switches live inside the panel, so closing it always follows one, and it
+    -- lands after EllesmereUI has banked its own values.
+    if EUI.RegisterOnHide then pcall(EUI.RegisterOnHide, EUI, ns.EUIQueueReapply) end
+
     if EUI.OnProfileRenamed     then hooksecurefunc(EUI, "OnProfileRenamed",     OnProfileRenamed)   end
     if EUI.OnProfileDeleted     then hooksecurefunc(EUI, "OnProfileDeleted",     OnProfileDeleted)   end
 
