@@ -159,6 +159,9 @@ local DEFAULTS = {
     profile = {
         -- Lulu
         lulu                    = false,
+        -- Bite Mode
+        bite                    = false,
+        darkCastBar             = false,
         -- Gameplay
         beginner                = false,
         hideAllTooltipsInCombat = false,
