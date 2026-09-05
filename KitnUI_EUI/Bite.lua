@@ -661,11 +661,14 @@ local function ApplyAnchors(on, claiming)
     else
         local castRecord = ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
         local powerRecord = ns.EUIPeekSnap(BITE_SECTION, POWER_KEY)
-        if castRecord then
+        -- Ownership is `prev ~= nil`, never the record's existence: a release
+        -- clears the value and leaves the table behind, so testing the table
+        -- would let a later pass mirror a key this switch has already given up.
+        if castRecord and castRecord.prev ~= nil then
             ns.EUIRestore(anchors, castRecord, CAST_KEY)
             MirrorToBaselineLayer(anchors, CAST_KEY)
         end
-        if powerRecord then
+        if powerRecord and powerRecord.prev ~= nil then
             ns.EUIRestore(anchors, powerRecord, POWER_KEY)
             MirrorToBaselineLayer(anchors, POWER_KEY)
         end
