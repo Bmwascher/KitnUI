@@ -579,14 +579,21 @@ local function ApplyBuffOffsets(anchors, on, swap, claiming)
             local held = (record and record.prev ~= nil) and true or false
             local before = bd[OFFSET_KEY]
             if on then
-                if not held and claiming
-                   and (tonumber(bd[OFFSET_KEY]) or 0) ~= 0
-                   and ChainReachesSwap(anchors, bd.key) then
+                -- Claimed on a re-apply as well as a click, which the anchor
+                -- halves must never do. It is safe HERE and only here: zero is
+                -- the only value this switch ever writes, so a non-zero live
+                -- offset is provably the user's own and never something this
+                -- switch left behind. Without it a switch that was already on
+                -- would never pick these up.
+                local claimNow = (not held)
+                    and (tonumber(bd[OFFSET_KEY]) or 0) ~= 0
+                    and ChainReachesSwap(anchors, bd.key)
+                if claimNow then
                     record = ns.EUISnap(BITE_SECTION, snapKey)
                     held = record and true or false
                 end
                 if held then
-                    ns.EUIOverride(bd, record, OFFSET_KEY, 0, claiming)
+                    ns.EUIOverride(bd, record, OFFSET_KEY, 0, claiming or claimNow)
                     if not swap then RevertLive(bd, record, OFFSET_KEY) end
                 end
             elseif held then
