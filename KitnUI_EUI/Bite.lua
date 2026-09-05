@@ -387,6 +387,38 @@ local function Original(record, live)
     return record.prev
 end
 
+local function CopyAnchorEntry(entry)
+    if type(entry) ~= "table" then return nil end
+    local copy = {}
+    for k, v in pairs(entry) do
+        if type(v) == "table" then
+            local inner = {}
+            for ik, iv in pairs(v) do inner[ik] = iv end
+            copy[k] = inner
+        else
+            copy[k] = v
+        end
+    end
+    return copy
+end
+
+-- The stored baseline layer, not the live table, is what a later layer change
+-- re-applies. EllesmereUI skips banking live into it while a settings view or
+-- an editing session is open, so a release that touched only the live table can
+-- be undone by the next layer change with the records already consumed. Only
+-- the release mirrors: while the switch is on, the re-apply re-asserts anyway.
+-- A profile with no group layers has no such store and nothing to mirror.
+local function MirrorToBaselineLayer(anchors, key)
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.GetActiveProfileData) then return end
+    local ok, prof = pcall(EUI.GetActiveProfileData)
+    if not ok or type(prof) ~= "table" then return end
+    local store = prof.specUnlockOverrides
+    local layer = (type(store) == "table") and store.baselineLayout or nil
+    if type(layer) ~= "table" or type(layer.anchors) ~= "table" then return end
+    layer.anchors[key] = CopyAnchorEntry(anchors[key])
+end
+
 local function ApplyAnchors(on, claiming)
     if not ns.BaselineLive() then return false end
     local anchors = AnchorDB()
@@ -404,8 +436,14 @@ local function ApplyAnchors(on, claiming)
     else
         local castRecord = ns.EUIPeekSnap(BITE_SECTION, CAST_KEY)
         local powerRecord = ns.EUIPeekSnap(BITE_SECTION, POWER_KEY)
-        if castRecord then ns.EUIRestore(anchors, castRecord, CAST_KEY) end
-        if powerRecord then ns.EUIRestore(anchors, powerRecord, POWER_KEY) end
+        if castRecord then
+            ns.EUIRestore(anchors, castRecord, CAST_KEY)
+            MirrorToBaselineLayer(anchors, CAST_KEY)
+        end
+        if powerRecord then
+            ns.EUIRestore(anchors, powerRecord, POWER_KEY)
+            MirrorToBaselineLayer(anchors, POWER_KEY)
+        end
     end
 
     local EUI = _G.EllesmereUI
