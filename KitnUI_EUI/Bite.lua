@@ -364,6 +364,7 @@ local function ApplySpellText(on, claiming)
 end
 
 local CAST_KEY, POWER_KEY = "ERB_CastBar", "ERB_Power"
+local REPOSITIONED_KEYS = { CAST_KEY, POWER_KEY }
 
 local function AnchorDB()
     local db = _G.EllesmereUIDB
@@ -425,10 +426,54 @@ local function MirrorToBaselineLayer(anchors, key)
     layer.anchors[key] = CopyAnchorEntry(anchors[key])
 end
 
+-- A spec override group can store its own position for an element in
+-- `unlockOverrideAnchors[element][gid]`, and while that group is active
+-- EllesmereUI positions the element from that entry and ignores the shared link
+-- outright. A group pinning the cast bar above the class resource bar therefore
+-- survives this switch's re-target and closes a loop: cast bar above class
+-- resource, class resource above power, power above cast bar. Every layout pass
+-- raises all three, so the stack walks off the top of the screen. Holding the
+-- whole per-element table down for as long as the switch is on removes the loop.
+-- The group's captured VALUES are untouched, so what it changes about the bar's
+-- appearance survives; only its position yields.
+local function OverrideAnchorStore()
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.GetActiveProfileData) then return nil end
+    local ok, prof = pcall(EUI.GetActiveProfileData)
+    if not ok or type(prof) ~= "table" then return nil end
+    if type(prof.unlockOverrideAnchors) ~= "table" then return nil end
+    return prof.unlockOverrideAnchors
+end
+
+-- Keyed apart from the link records: the two halves hold different stores under
+-- the same element name, and one snapshot cannot describe both.
+local function OverrideSnapKey(key)
+    return "override:" .. key
+end
+
+local function ApplyOverrideAnchors(on, claiming)
+    local store = OverrideAnchorStore()
+    if not store then return end
+    for i = 1, #REPOSITIONED_KEYS do
+        local key = REPOSITIONED_KEYS[i]
+        local snapKey = OverrideSnapKey(key)
+        if on then
+            local record = claiming and ns.EUISnap(BITE_SECTION, snapKey)
+                or ns.EUIPeekSnap(BITE_SECTION, snapKey)
+            ns.EUIOverride(store, record, key, nil, claiming)
+        else
+            local record = ns.EUIPeekSnap(BITE_SECTION, snapKey)
+            if record then ns.EUIRestore(store, record, key) end
+        end
+    end
+end
+
 local function ApplyAnchors(on, claiming)
     if not ns.BaselineLive() then return false end
     local anchors = AnchorDB()
     if not anchors then return false end
+
+    ApplyOverrideAnchors(on, claiming)
 
     if on then
         local castRecord = claiming and ns.EUISnap(BITE_SECTION, CAST_KEY)
@@ -453,8 +498,11 @@ local function ApplyAnchors(on, claiming)
     end
 
     local EUI = _G.EllesmereUI
-    if EUI and EUI.ReapplyAllUnlockAnchors and not InCombatLockdown() then
-        pcall(EUI.ReapplyAllUnlockAnchors)
+    if EUI and not InCombatLockdown() then
+        -- Releases every element the override store stopped holding, repainting
+        -- it through its normal owner before the links re-assert.
+        if EUI._ReapplyOverrideAnchors then pcall(EUI._ReapplyOverrideAnchors) end
+        if EUI.ReapplyAllUnlockAnchors then pcall(EUI.ReapplyAllUnlockAnchors) end
     end
     return true
 end
