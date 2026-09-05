@@ -918,6 +918,8 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "the cast bar's dark colors"));
                                                                                    y = y - h
 
+    _, h = W:Spacer(parent, y, 20);                                                y = y - h
+
     _, h = W:Toggle(parent, "Lulu Mode", y,
         function()
             if not ns.LuluEnabled then return false end
@@ -940,7 +942,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
         ns.BiteEnabled,
         ns.SetBiteMode,
         ns.EUIOwnershipTip(
-            "Moves the cast bar and power bar next to your cooldown tracker, darkens the cast bar to match, and hides its spell name. Asks nothing and needs no reload. Unavailable while a spec override layout is active.",
+            "Swaps the cast bar and power bar on specs that use an emphasized cast bar, darkens the cast bar, and hides its spell name. Other specs keep their layout and take the cast bar changes only. Asks nothing and needs no reload. Unavailable while a spec override layout is active.",
             "bite",
             ns.BiteEnabled,
             "where your cast bar and power bar sit, and the cast bar's spell text and dark colors"));
