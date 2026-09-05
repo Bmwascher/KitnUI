@@ -5,6 +5,7 @@
 ### Interface
 - **NEW:** **Bite Mode**, on the KitnUI page, swaps your cast bar and power bar on the specs that use an emphasized cast bar, darkens the cast bar and hides its spell name. Specs without one keep their layout and take the cast bar changes only. Everything it changes is recorded and handed straight back when you switch it off, and it needs no reload
 - **NEW:** **Dark Cast Bar** is its own switch under Dark Class Resource Bar, for darkening the cast bar on its own without touching the class resource bar, the unit frames or the raid frames. Bite Mode turns it on and then leaves it under your control
+- **NEW:** **Dark Class Resource Bar** now lights the seams between the bar's segments instead of leaving them black on a black bar. Turning it off gives your own spacing colour straight back
 - The BuffReminders and KitnEssentials profiles are refreshed, along with 21 Cooldown Manager layouts across Warrior, Paladin, Hunter, Priest, Death Knight, Druid, Demon Hunter and Evoker
 - KitnUI downloads about 2 MB smaller and takes up roughly 7 MB less on disk. The installer and options-panel artwork now ships in a more efficient format, and two old texture files that nothing used have been dropped from the download. The artwork itself is unchanged, pixel for pixel
 
