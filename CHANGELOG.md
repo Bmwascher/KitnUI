@@ -2,6 +2,16 @@
 
 ## v2.1.6
 
+Two new switches on the KitnUI page. Bite Mode rearranges the cast bar and
+power bar for the specializations that use an emphasized cast bar, and Dark
+Cast Bar darkens the cast bar on its own. Dark Class Resource Bar now also
+lights the seams between the bar's segments, which used to sit black on a
+black bar.
+
+Everything these switches change is recorded when you turn one on and handed
+straight back when you turn it off, including the values your specialization
+overrides have captured. None of them needs a reload.
+
 ### Interface
 - **NEW:** **Bite Mode**, on the KitnUI page, swaps your cast bar and power bar on the specs that use an emphasized cast bar, darkens the cast bar and hides its spell name. Specs without one keep their layout and take the cast bar changes only. Everything it changes is recorded and handed straight back when you switch it off, and it needs no reload
 - **NEW:** **Dark Cast Bar** is its own switch under Dark Class Resource Bar, for darkening the cast bar on its own without touching the class resource bar, the unit frames or the raid frames. Bite Mode turns it on and then leaves it under your control
