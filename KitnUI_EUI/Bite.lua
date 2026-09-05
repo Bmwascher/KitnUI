@@ -497,7 +497,7 @@ local GAP_KEYS = { "gapColorEnabled", "gapR", "gapG", "gapB", "gapA" }
 -- the bar's backdrop, and below it the module paints the gaps black itself while
 -- its dark theme is on. Either way the colour keys are unreachable until that
 -- switch is on, so this control owns the switch as well as the colour.
-local GAP_LEVEL = 0x4f / 255
+local GAP_LEVEL = 0xcc / 255
 local GAP_VALUES = {
     gapColorEnabled = true,
     gapR = GAP_LEVEL,
