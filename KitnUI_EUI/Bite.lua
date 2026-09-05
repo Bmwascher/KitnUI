@@ -106,23 +106,37 @@ local function ProfileRoot()
 end
 
 -- Indices shift when an entry is removed, so a store is scanned rather than
--- remembered by position, and records key off the fkey and the map key. The
--- first capturing entry ends the scan, which assumes a store never has two.
+-- remembered by position, and records key off the fkey and the map key.
+--
+-- EVERY capturing entry is collected, not the first. The resource bar migration
+-- builds one entry per differing spec and copies the same default and every spec
+-- map into each of them, so one fkey can live in several entries at once; the
+-- host harvests and applies all of them, and a slot this scan skips is one the
+-- release cannot hand back. The first entry keeps the bare map key so records
+-- already saved in the field keep their names, and later ones take the entry's
+-- group id, which those migrated entries always carry and never share.
 local function CollectMaps(store, prefix, fkey, found)
     if type(store) ~= "table" then return found end
+    local seen = 0
     for i = 1, #store do
         local entry = store[i]
         local values = (type(entry) == "table") and entry.values or nil
         local defaults = (type(values) == "table") and values.default or nil
         if type(defaults) == "table" and defaults[fkey] ~= nil then
+            seen = seen + 1
+            local tag = prefix
+            if seen > 1 then
+                local id = entry.group
+                if type(id) ~= "string" and type(id) ~= "number" then id = seen end
+                tag = prefix .. "e" .. tostring(id) .. FS
+            end
             found = found or {}
-            found[#found + 1] = { map = defaults, key = prefix .. "default" }
+            found[#found + 1] = { map = defaults, key = tag .. "default" }
             for mapKey, map in pairs(values) do
                 if mapKey ~= "default" and type(map) == "table" and map[fkey] ~= nil then
-                    found[#found + 1] = { map = map, key = prefix .. mapKey }
+                    found[#found + 1] = { map = map, key = tag .. mapKey }
                 end
             end
-            return found
         end
     end
     return found
@@ -776,8 +790,10 @@ end)
 -- The ownership sentence on the General page is a string fixed when the row is
 -- built, and it reads BOTH the module's dark switch and whether this control is
 -- holding. Either can move without that page's own click path running, so both
--- are tracked here. The first observation only seeds them: nothing has been
--- built yet that could be stale.
+-- are tracked here. The FIRST observation rebuilds as well: nothing orders the
+-- login re-apply ahead of the page being built, so a page built first with a
+-- since-changed input would otherwise keep its sentence until an input moved
+-- again.
 local gapTipSeen, gapTipDark, gapTipHeld = false, nil, false
 
 ns.EUIRegisterReapply(function()
@@ -792,10 +808,8 @@ ns.EUIRegisterReapply(function()
         end
 
         local held = ns.EUIHolds(GAP_SECTION)
-        if not gapTipSeen then
+        if not gapTipSeen or dark ~= gapTipDark or held ~= gapTipHeld then
             gapTipSeen, gapTipDark, gapTipHeld = true, dark, held
-        elseif dark ~= gapTipDark or held ~= gapTipHeld then
-            gapTipDark, gapTipHeld = dark, held
             ns.EUIRebuildForOwnership("General")
         end
     end, false, true)
