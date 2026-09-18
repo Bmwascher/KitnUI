@@ -402,14 +402,14 @@ eq(builds, 1, "no skip on record: the outdated list is built once")
 -- The login prompts record only a real answer
 ---------------------------------------------------------------------------------
 
--- Blizzard reaches a dialog's OnCancel from six places, and only two are
--- answers: the second button and Escape. A show refused for want of a free
--- frame calls OnCancel(nil, data); an override by another dialog and a
--- timeout call it with a dialog and a reason. A record written there
--- silences a prompt nobody saw. So each prompt declares OnButton2 and no
--- OnCancel, which the second button reaches only through
--- selectCallbackByIndex; the paths below are driven the way StaticPopup.lua
--- drives them.
+-- Blizzard reaches a dialog's OnCancel from six places, and the second
+-- button is the only one this addon records as an answer; Escape is
+-- deliberately not one. A show refused for want of a free frame calls
+-- OnCancel(nil, data); an override by another dialog and a timeout call it
+-- with a dialog and a reason. A record written there silences a prompt
+-- nobody saw. So each prompt declares OnButton2 and no OnCancel, which the
+-- second button reaches only through selectCallbackByIndex; the paths below
+-- are driven the way StaticPopup.lua drives them.
 local function rejectedShow(d) if d.OnCancel then d.OnCancel(nil, nil) end end
 local function escapePressed(d)
     if d.OnCancel and not d.noCancelOnEscape then d.OnCancel({}, nil, "clicked") end

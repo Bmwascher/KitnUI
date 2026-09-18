@@ -1403,12 +1403,9 @@ boot:SetScript("OnEvent", function()
                     ns.OpenInstaller()
                 end
             end,
-            -- OnButton2 and no OnCancel, as in LayoutWatch: Blizzard also calls
-            -- OnCancel when a show is refused for want of a free frame, when
-            -- another dialog overrides this one, and on Escape, and a dismissal
-            -- written there would silence a prompt nobody answered. Only Later
-            -- dismisses; Escape asks again next login. selectCallbackByIndex is
-            -- what routes the second button to OnButton2 at all.
+            -- OnButton2 and no OnCancel, for the reason LayoutWatch's dialog
+            -- gives. The second button reaches OnButton2 only under
+            -- selectCallbackByIndex; Escape asks again next login.
             selectCallbackByIndex = true,
             OnButton2 = function() ns.db.dismissedVersion = ns.version end,
             timeout = 0, whileDead = true, hideOnEscape = true,
