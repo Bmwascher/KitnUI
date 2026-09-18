@@ -1403,7 +1403,11 @@ boot:SetScript("OnEvent", function()
                     ns.OpenInstaller()
                 end
             end,
-            OnCancel = function() ns.db.dismissedVersion = ns.version end,
+            -- OnButton2 and no OnCancel, for the reason LayoutWatch's dialog
+            -- gives. The second button reaches OnButton2 only under
+            -- selectCallbackByIndex; Escape asks again next login.
+            selectCallbackByIndex = true,
+            OnButton2 = function() ns.db.dismissedVersion = ns.version end,
             timeout = 0, whileDead = true, hideOnEscape = true,
         }
         StaticPopup_Show("KITNUI_UPDATE")
@@ -1415,7 +1419,11 @@ boot:SetScript("OnEvent", function()
             button1 = "Yes",
             button2 = "No",
             OnAccept = function() if ns.OpenInstaller then ns.OpenInstaller(true) end end,
-            OnCancel = function() ns:SetCharLoaded() end,
+            -- Same shape as the update prompt above, for the same reason: a
+            -- character is marked loaded by its No, never by a show that
+            -- was refused, overridden or escaped.
+            selectCallbackByIndex = true,
+            OnButton2 = function() ns:SetCharLoaded() end,
             timeout = 0, whileDead = true, hideOnEscape = true,
         }
         StaticPopup_Show("KITNUI_LOAD")

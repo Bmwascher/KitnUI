@@ -399,6 +399,60 @@ eq(shown.KITNUI_UPDATE, true, "no skip on record: the update popup shows")
 eq(builds, 1, "no skip on record: the outdated list is built once")
 
 ---------------------------------------------------------------------------------
+-- The login prompts record only a real answer
+---------------------------------------------------------------------------------
+
+-- Blizzard reaches a dialog's OnCancel from six places, and the second
+-- button is the only one this addon records as an answer; Escape is
+-- deliberately not one. A show refused for want of a free frame calls
+-- OnCancel(nil, data); an override by another dialog and a timeout call it
+-- with a dialog and a reason. A record written there silences a prompt
+-- nobody saw. So each prompt declares OnButton2 and no OnCancel, which the
+-- second button reaches only through selectCallbackByIndex; the paths below
+-- are driven the way StaticPopup.lua drives them.
+local function rejectedShow(d) if d.OnCancel then d.OnCancel(nil, nil) end end
+local function escapePressed(d)
+    if d.OnCancel and not d.noCancelOnEscape then d.OnCancel({}, nil, "clicked") end
+end
+local function override(d) if d.OnCancel then d.OnCancel({}, nil, "override") end end
+local function secondButton(d)
+    local func = d.selectCallbackByIndex and (d.OnCancel or d.OnButton2) or d.OnCancel
+    if func then func({}, nil, "clicked") end
+end
+
+shown = loginPopups(loginDB({ imported = "2026.09.15", skipped = false, loaded = true }))
+eq(shown.KITNUI_UPDATE, true, "the update popup is on offer")
+local update = StaticPopupDialogs.KITNUI_UPDATE
+eq(update.OnCancel, nil, "the update popup declares no OnCancel")
+eq(update.selectCallbackByIndex, true, "the update popup routes its second button by index")
+rejectedShow(update)
+eq(ns.db.dismissedVersion, nil, "a refused show does not dismiss the update")
+override(update)
+eq(ns.db.dismissedVersion, nil, "an override does not dismiss the update")
+escapePressed(update)
+eq(ns.db.dismissedVersion, nil, "Escape does not dismiss the update")
+secondButton(update)
+eq(ns.db.dismissedVersion, ns.version, "Later dismisses the update for this version")
+
+-- Installed at the current version, so the update branch stands aside and the
+-- login reaches the load prompt.
+local loadDB = loginDB({ imported = shipped["X-BigWigs-Version"], skipped = false, loaded = false })
+loadDB.installedVersion = ns.version
+shown = loginPopups(loadDB)
+eq(shown.KITNUI_LOAD, true, "the load prompt is on offer")
+local load = StaticPopupDialogs.KITNUI_LOAD
+eq(load.OnCancel, nil, "the load prompt declares no OnCancel")
+eq(load.selectCallbackByIndex, true, "the load prompt routes its second button by index")
+rejectedShow(load)
+eq(not ns:IsCharLoaded(), true, "a refused show does not mark the character loaded")
+override(load)
+eq(not ns:IsCharLoaded(), true, "an override does not mark the character loaded")
+escapePressed(load)
+eq(not ns:IsCharLoaded(), true, "Escape does not mark the character loaded")
+secondButton(load)
+eq(ns:IsCharLoaded(), true, "No marks the character loaded")
+
+---------------------------------------------------------------------------------
 -- The loader never offers Skip
 ---------------------------------------------------------------------------------
 
