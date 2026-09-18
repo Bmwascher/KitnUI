@@ -786,9 +786,7 @@ end
 -- unimported buckets. The imported list is not gated that way: a profile carried
 -- in from an earlier run still counts as installed.
 --
--- Skip outranks import, matching the step rail: only a successful setup retires
--- a skip, so a step holding both was imported at an older version and then
--- declined.
+-- Skip outranks import, on the rule the step rail states.
 local function BuildRecapLists()
     local wasStep = {}
     local keys = ns.Wizard and ns.Wizard.stepKeys

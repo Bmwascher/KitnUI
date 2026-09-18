@@ -516,7 +516,7 @@ local defaults = {
     profiles = {},          -- [addonKey] = true when imported
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
-    skipped = {},           -- [addonKey] = shipped X-header version at the moment of the skip; the step returns once that version changes
+    skipped = {},           -- [addonKey] = shipped X-header version at the moment of the skip
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true }, installerTheme = "default"/"alt" }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
