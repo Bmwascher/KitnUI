@@ -797,8 +797,9 @@ end
 
 -- Offer Skip for one step, or hide it. `addonKey` is the step key straight from
 -- stepKeys, which is `false` on Welcome, Extras and Finish, so those pages hide
--- it without naming themselves. ns.CanSkipStep refuses a step with no shipped
--- version to record against -- Blizzard CDM is the one that matters.
+-- it without naming themselves. ns.CanSkipStep refuses a step with nothing
+-- shipped to decline: Blizzard CDM, which has no version, and a step already
+-- imported at the shipped version.
 function W:SetSkip(addonKey)
     local b = W.frame and W.frame.Skip
     if not b then return end
@@ -806,16 +807,16 @@ function W:SetSkip(addonKey)
         b:Hide()
         return
     end
-    -- Already declined, which only a plain install can still show a page for.
-    -- Offering Skip again would contradict the page's own status line and record
-    -- the same version twice; importing is the way back, not clicking this.
+    -- Already declined. A plain install, load mode and Back can all still show
+    -- this page, and a second click would only record the same version again.
+    -- Importing is the way back.
     if ns.IsStepSkipped and ns.IsStepSkipped(addonKey) then
         b:Hide()
         return
     end
-    -- The rail's own label for this step. Captured here rather than read inside
-    -- the handler: SetPage assigns W.page before calling this, so the name is
-    -- bound to the page the handler belongs to.
+    -- The rail's own label for this step, captured when the handler is bound
+    -- rather than read at click time. Every caller runs while its own page is
+    -- the one on screen, so W.page names the page the handler belongs to.
     local label = (W.stepTitles and W.stepTitles[W.page]) or addonKey
     b:SetScript("OnClick", function()
         if ns.SetStepSkipped then ns.SetStepSkipped(addonKey) end
@@ -824,7 +825,6 @@ function W:SetSkip(addonKey)
         -- plain install ignores the record and offers the step again.
         print(ns.title .. ": " .. label .. " skipped until its next profile update. Run " ..
             ns.Color("/kitn install") .. " to set it up sooner.")
-        -- Move on rather than leaving the user on a step they just declined.
         -- The page stays in this session's rail: dropping it mid-wizard would
         -- renumber every page after it under the index W.page is holding.
         if W.pages and W.page and W.page < #W.pages then W:SetPage(W.page + 1) end

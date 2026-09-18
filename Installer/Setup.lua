@@ -45,9 +45,10 @@ function ns.SetupAddon(addonKey, import, ...)
         return false
     end
     local result = fn(addonKey, import, ...)
-    -- The one funnel both modes pass through, so the skip is retired here rather
-    -- than at each caller.
-    if result ~= false and ns.ClearStepSkip then ns.ClearStepSkip(addonKey) end
+    -- Only an import retires a skip. A load activates a profile the account
+    -- already owns and says nothing about the shipped version the skip declined.
+    -- Every import passes through here, so the rule lives here, not at each caller.
+    if result ~= false and import and ns.ClearStepSkip then ns.ClearStepSkip(addonKey) end
     -- An addon that has just been handed a profile can raise its own reload
     -- prompt -- KitnEssentials does after every profile change -- and a user who
     -- accepts it never reaches Finish. So the load flow pays what it owes this

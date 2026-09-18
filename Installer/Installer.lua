@@ -211,6 +211,9 @@ local function ShowStatusAndVersion(addonKey)
     if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("PROFILE STATUS") end
     WF().Desc2:SetText("Status: " .. GetImportStatus(addonKey))
     WF().Desc3:SetText(GetVersionLine(addonKey))
+    -- Every install page calls this again after a successful import, which is
+    -- the moment the step stops having anything to skip.
+    if ns.Wizard.SetSkip then ns.Wizard:SetSkip(addonKey) end
 end
 
 local function ShowLoadStatusAndVersion(addonKey)
@@ -786,7 +789,7 @@ end
 -- unimported buckets. The imported list is not gated that way: a profile carried
 -- in from an earlier run still counts as installed.
 --
--- Skip outranks import, on the rule the step rail states.
+-- Among offered steps, skip outranks import, on the rule the step rail states.
 local function BuildRecapLists()
     local wasStep = {}
     local keys = ns.Wizard and ns.Wizard.stepKeys
@@ -1079,7 +1082,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     for _, step in ipairs(addonSteps) do
         if profileLoadMode then
             local isImported = ns.db and ns.db.profiles and ns.db.profiles[step.key]
-            if isImported and step.key ~= "BlizzardCDM" and not ns.IsStepSkipped(step.key) then
+            if isImported and step.key ~= "BlizzardCDM" then
                 if step.key == "EllesmereUI" then
                     tinsert(pages, EllesmereUILoadPage)
                 elseif step.key == "NSRT" then
@@ -1092,12 +1095,12 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
                 tinsert(stepTitles, step.short or step.display); tinsert(stepKeys, step.key)
             end
         -- The skip is honoured in update mode and NOT in a plain install, and
-        -- that asymmetry is the escape hatch. Only a successful setup retires a
-        -- skip, so a skip that hid its own step everywhere could never be undone
-        -- until the next shipped version -- possibly weeks. An explicit
-        -- /kitn install always lists every step, and importing there clears it.
+        -- that asymmetry is the escape hatch. Only an import retires a skip, so
+        -- a skip that hid its own step everywhere could never be undone until
+        -- the next shipped version -- possibly weeks. An explicit /kitn install
+        -- always lists every step, and importing there clears it.
         elseif not step.dormant and not (updateKeys and not updateKeys[step.key])
-            and not (updateKeys and ns.IsStepSkipped(step.key)) then
+            and not (updateKeys and ns.IsStepSkipped and ns.IsStepSkipped(step.key)) then
             local available = step.alwaysAvailable
             if not available and step.checkAddon then
                 available = IsAddOnLoaded(step.checkAddon)

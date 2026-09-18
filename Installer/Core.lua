@@ -144,8 +144,17 @@ end
 -- one version string cannot say which spec changed, so a composite invented
 -- here would be that same lie in a new place. Its per-spec fingerprints already
 -- answer whether it is stale.
+--
+-- Nor can a step already imported at the shipped version: there is nothing to
+-- decline. Update mode would not offer it anyway, so the skip would withhold
+-- nothing, yet it would still mark an imported step as skipped.
 function ns.CanSkipStep(addonKey)
-    return ns.GetAddonDataVersion(addonKey) ~= nil
+    local version = ns.GetAddonDataVersion(addonKey)
+    if not version then return false end
+    local db = ns.db
+    local current = db and db.profiles and db.profiles[addonKey]
+        and db.addonVersions and db.addonVersions[addonKey] == version
+    return not current
 end
 
 function ns.IsStepSkipped(addonKey)
@@ -156,15 +165,14 @@ function ns.IsStepSkipped(addonKey)
 end
 
 function ns.SetStepSkipped(addonKey)
-    local version = ns.GetAddonDataVersion(addonKey)
-    if not (ns.db and version) then return false end
+    if not (ns.db and ns.CanSkipStep(addonKey)) then return false end
     ns.db.skipped = ns.db.skipped or {}
-    ns.db.skipped[addonKey] = version
+    ns.db.skipped[addonKey] = ns.GetAddonDataVersion(addonKey)
     return true
 end
 
--- An import or a load outranks an earlier skip: the user just asked for the
--- thing they once declined.
+-- An import outranks an earlier skip: the user just asked for the thing they
+-- once declined.
 function ns.ClearStepSkip(addonKey)
     if ns.db and ns.db.skipped then ns.db.skipped[addonKey] = nil end
 end
@@ -420,7 +428,10 @@ function ns.GetOutdatedAddons()
             or (type(payload) == "string" and strtrim(payload) == "")
             or (type(payload) == "table" and not next(payload))
 
-        if emptyPayload or not current then -- luacheck: ignore 542
+        -- A skip recorded against the version shipping now declines exactly this
+        -- update. Every update prompt reads this list, so leaving it out here is
+        -- what keeps the login line, the popup and /kitn update quiet for it.
+        if emptyPayload or not current or ns.IsStepSkipped(addonKey) then -- luacheck: ignore 542
             -- nothing to offer; fall through to the next addon
         elseif installed and installed ~= current then
             outdated[#outdated + 1] = {
