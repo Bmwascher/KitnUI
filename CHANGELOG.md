@@ -3,6 +3,7 @@
 ## v2.1.7
 
 ### Interface
+- **Load All** in `/kitn load` now takes you straight to the finish page when every profile loads, instead of leaving you on the first page to click through a list of steps that are already done. If something fails to load it keeps you where you are, so the step you need is still in reach
 - **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
 
 ## v2.1.6
