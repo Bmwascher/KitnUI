@@ -137,6 +137,14 @@ if housingWatcher then
     housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
     home.attrs(button)
     eq(button.attributes.type1, "teleporthome", "world entry leaves the cached house intact")
+
+    -- The active half of that same branch, and the reason the event was added
+    -- at all: arriving with the flag already flipped has to re-wire. Without
+    -- this, dropping the change test from the world-entry branch still passes.
+    canReturn = true
+    local beforeArrival = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
+    eq(applyCalls, beforeArrival + 1, "world entry re-wires when the return flag has flipped")
 end
 
 if failures > 0 then

@@ -132,9 +132,9 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
         return
     end
 
-    -- Arrival, and the only trigger that catches a teleport at all: both a
+    -- Arrival, and the only trigger observed to catch a teleport: both a
     -- teleport home and a return cross a loading screen, while
-    -- HOUSE_PLOT_ENTERED does NOT fire on arriving home.
+    -- HOUSE_PLOT_ENTERED has not been seen to fire on arrival.
     --
     -- Its OWN branch, never a fallthrough: the payload here is isInitialLogin,
     -- and the house-list parser below would read that boolean as an empty list
