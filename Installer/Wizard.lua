@@ -810,9 +810,9 @@ function W:SetSkip(addonKey)
         b:Hide()
         return
     end
-    -- Already declined. A plain install, load mode and Back can all still show
-    -- this page, and a second click would only record the same version again.
-    -- Importing is the way back.
+    -- Already declined. A plain install and Back can both still show this page,
+    -- and a second click would only record the same version again. Importing is
+    -- the way back.
     if ns.IsStepSkipped and ns.IsStepSkipped(addonKey) then
         b:Hide()
         return
