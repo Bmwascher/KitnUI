@@ -1,5 +1,10 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.1.7
+
+### Interface
+- **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
+
 ## v2.1.6
 
 Two new switches on the KitnUI page. Bite Mode rearranges the cast bar and
