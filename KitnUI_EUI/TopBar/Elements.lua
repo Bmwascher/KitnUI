@@ -140,9 +140,8 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
     -- and the house-list parser below would read that boolean as an empty list
     -- and wipe cachedHouse.
     --
-    -- Both halves earn their place. The change test re-wires immediately when
-    -- the flag has already settled; the list request is the late net for a
-    -- world entry that lands before it has.
+    -- The change test re-wires when the flag has already settled; the list
+    -- request is the late net for an arrival that lands before it has.
     if event == "PLAYER_ENTERING_WORLD" then
         if HomeAction() ~= wiredAction then ApplyBar() end
         RequestHouseList()
@@ -170,9 +169,9 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
     -- Apply() is safe to call in combat: it defers its protected half and retries
     -- on PLAYER_REGEN_ENABLED. The change test is what keeps this cheap, since
     -- the button re-requests the list on every hover -- but it has to cover the
-    -- ACTION, not the house alone. Gating on identity swallowed every hover: the
-    -- house never changes while return-availability does, so a teleport left the
-    -- button wired to teleporthome for good.
+    -- ACTION, not the house alone: the house never changes while
+    -- return-availability does, so gating on identity leaves a teleport wired to
+    -- teleporthome for good.
     --
     -- SameHouse stays first. HomeAction() reads cachedHouse, which only stands in
     -- for `house` once SameHouse has said the two match.

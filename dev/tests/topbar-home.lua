@@ -25,10 +25,14 @@ local frames = {}
 local currentNeighborhood = "Neighborhood-A"
 local canReturn = false
 local applyCalls = 0
+local houseListRequests = 0
 
 _G.format = string.format
 _G.C_Housing = {
-    GetPlayerOwnedHouses = function() end,
+    -- Counted, not ignored: the world-entry branch's list request is the only
+    -- thing that repairs an arrival landing before the server settles the
+    -- return flag, and nothing else in this file observes that call.
+    GetPlayerOwnedHouses = function() houseListRequests = houseListRequests + 1 end,
     GetCurrentNeighborhoodGUID = function() return currentNeighborhood end,
 }
 _G.C_HousingNeighborhood = {
@@ -145,6 +149,20 @@ if housingWatcher then
     local beforeArrival = applyCalls
     housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
     eq(applyCalls, beforeArrival + 1, "world entry re-wires when the return flag has flipped")
+
+    -- The late net, as a sequence. An arrival that lands BEFORE the server
+    -- settles the flag finds nothing to change, so the repair has to come from
+    -- the list request the same branch fires.
+    canReturn = false
+    home.attrs(button)
+    local beforeRequests = houseListRequests
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
+    eq(houseListRequests, beforeRequests + 1, "world entry requests the house list")
+
+    canReturn = true
+    local beforeLate = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", HOUSE_A)
+    eq(applyCalls, beforeLate + 1, "the late list answer re-wires after an early world entry")
 end
 
 if failures > 0 then
