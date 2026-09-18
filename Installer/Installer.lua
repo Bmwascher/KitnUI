@@ -943,7 +943,7 @@ local function WelcomeLoadPage()
                 return
             end
         elseif destination == "cdm" then
-            -- The CDM page shows what failed per spec, or that the Cooldown
+            -- The CDM page offers the per-spec retry, or says the Cooldown
             -- Manager is off and where to turn it on, so the user lands on the
             -- remedy rather than reading it out of chat.
             local index = StepPageIndex("BlizzardCDM")

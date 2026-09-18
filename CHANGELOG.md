@@ -5,6 +5,7 @@
 ### Interface
 - **NEW:** An installer step whose profile you have not installed yet, or that has an update waiting, now has a **Skip until next update** button (Blizzard Cooldown Manager layouts excepted). A skipped profile stops showing up in the login reminder, the update popup and `/kitn update` until KitnUI ships a newer version of it. The step list marks it in amber and the finish page lists it on its own. `/kitn install` still offers every step if you want it sooner, and installing it clears the skip
 - **Load All** in `/kitn load` now takes you straight to the finish page when every profile loads, instead of leaving you on the first page to click through a list of steps that are already done. If something fails to load it keeps you where you are, so the step you need is still in reach
+- `/kitn load` now has a **Blizzard Cooldown Manager** step, since every character needs its own copy of the layouts. When a layout cannot be imported, or the Cooldown Manager is switched off, Load All takes you to that step instead of the finish page, so the retry or the setting to enable is right in front of you
 - **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
 
 ## v2.1.6
