@@ -891,8 +891,9 @@ local function WelcomeLoadPage()
             PlayInstallSound()
             -- Nothing left for the per-addon pages to do, so go to Finish rather
             -- than making the user page past a rail of completed steps to reach
-            -- the reload. Only on the clean path: a refusal leaves a page worth
-            -- visiting, and skipping past it would hide the retry.
+            -- the reload. Only this branch jumps: a refusal above still has its
+            -- own load page to retry on, and the CDM skip has a chat line to
+            -- read before moving on.
             --
             -- SetPage re-renders the frame, which is why this returns instead of
             -- falling through to the Next emphasis below -- Finish is the last
