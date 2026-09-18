@@ -772,31 +772,35 @@ local function IsProfileImported(key)
     return v and (type(v) ~= "table" or next(v)) and true or false
 end
 
-local function BuildImportedList()
-    local list = {}
-    for _, key in ipairs(recapOrder) do
-        if IsProfileImported(key) then
-            list[#list + 1] = recapNames[key] or key
-        end
-    end
-    return list
-end
-
--- Addons that had a page this session but weren't imported. A missing addon was
--- never offered (no step), so it isn't counted as skipped.
-local function BuildSkippedList()
+-- The recap's three buckets. Declining a step and never reaching it both left a
+-- step off the imported list, which read as one state; they are separated here
+-- because only the first expires by itself.
+--
+-- An addon with no page was never offered, so it lands in neither of the two
+-- unimported buckets. The imported list is not gated that way: a profile carried
+-- in from an earlier run still counts as installed.
+--
+-- Skip outranks import, matching the step rail: only a successful setup retires
+-- a skip, so a step holding both was imported at an older version and then
+-- declined.
+local function BuildRecapLists()
     local wasStep = {}
     local keys = ns.Wizard and ns.Wizard.stepKeys
     if keys then
         for _, key in ipairs(keys) do if key then wasStep[key] = true end end
     end
-    local list = {}
+    local imported, skipped, missed = {}, {}, {}
     for _, key in ipairs(recapOrder) do
-        if wasStep[key] and not IsProfileImported(key) then
-            list[#list + 1] = recapNames[key] or key
+        local name = recapNames[key] or key
+        if wasStep[key] and ns.IsStepSkipped and ns.IsStepSkipped(key) then
+            skipped[#skipped + 1] = name
+        elseif IsProfileImported(key) then
+            imported[#imported + 1] = name
+        elseif wasStep[key] then
+            missed[#missed + 1] = name
         end
     end
-    return list
+    return imported, skipped, missed
 end
 
 local function FinishPage()
@@ -809,15 +813,21 @@ local function FinishPage()
     -- CDM-only mode reuses this page but skips the summary.
     if ns.sessionExtras then
         if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("INSTALL SUMMARY") end
-        local imported, skipped = BuildImportedList(), BuildSkippedList()
+        local imported, skipped, missed = BuildRecapLists()
         local lines = {}
         if #imported > 0 then
             lines[#lines + 1] = CHECK .. " " .. ns.Green("Imported (" .. #imported .. "):") ..
                 "  |cffcfcfcf" .. table.concat(imported, ", ") .. "|r"
         end
+        -- Amber is the skip colour the rail uses; the steps merely passed over
+        -- stay grey, so the line that expires by itself is the one that stands out.
         if #skipped > 0 then
-            lines[#lines + 1] = ns.Amber("Skipped (" .. #skipped .. "):") ..
+            lines[#lines + 1] = ns.Amber("Skipped until update (" .. #skipped .. "):") ..
                 "  |cff9d9d9d" .. table.concat(skipped, ", ") .. "|r"
+        end
+        if #missed > 0 then
+            lines[#lines + 1] = "|cff9d9d9dNot installed (" .. #missed .. "):  " ..
+                table.concat(missed, ", ") .. "|r"
         end
         f.Desc2:SetText(table.concat(lines, "\n"))
 

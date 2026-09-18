@@ -82,6 +82,9 @@ local STEP_MAXW = 148                   -- max step-label width before the baked
 -- Skip's resting colour: muted red, so it reads as a way out of the step without
 -- competing with the page's own action buttons or the green Finish.
 local SKIP_R, SKIP_G, SKIP_B = 0.85, 0.3, 0.3
+-- The rail's mark for an already-skipped step. Matches ns.Amber (E6B24C) so the
+-- rail and the Finish recap name that state in one colour.
+local SKIP_MARK_R, SKIP_MARK_G, SKIP_MARK_B = 0.902, 0.698, 0.298
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
 -- border-hover(13-16), text(17-20), text-hover(21-24). Values match EUI's own buttons.
@@ -704,6 +707,16 @@ local function updateRail()
             row.chk:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
             row.chk:SetSize(12, 12)
             row.chk:SetPoint("LEFT", 3, 0)
+            -- Amber dash for a skipped step, sharing the check's gutter slot.
+            -- The two are mutually exclusive, so one gutter width carries both
+            -- marks. Centred because a dash is far narrower than the check it
+            -- stands in for.
+            row.skipMark = EllesmereUI.MakeFont(row, 13, "", SKIP_MARK_R, SKIP_MARK_G, SKIP_MARK_B)
+            row.skipMark:SetPoint("LEFT", 3, 0)
+            row.skipMark:SetWidth(12)
+            row.skipMark:SetJustifyH("CENTER")
+            row.skipMark:SetText("-")
+            row.skipMark:Hide()
             row.label = EllesmereUI.MakeFont(row, 13, "", 1, 1, 1)
             row.label:SetPoint("LEFT", 18, 0)
             row.label:SetJustifyH("LEFT")
@@ -736,13 +749,25 @@ local function updateRail()
             else
                 isDone = (i < (W.page or 1))
             end
+            -- An explicit skip outranks the check and suppresses it. Both can be
+            -- true at once: only a successful setup retires a skip, so a step
+            -- holding each was imported at an older version and then declined,
+            -- and the decline is the part the check cannot show.
+            local isSkipped = (not isCurrent) and key and ns.IsStepSkipped
+                and ns.IsStepSkipped(key) or false
+            if isSkipped then isDone = false end
             row._isCurrent = isCurrent
             row.bar:SetShown(isCurrent)
             row.activeBg:SetShown(isCurrent)
             row.chk:SetShown(isDone)
+            row.skipMark:SetShown(isSkipped)
             if isCurrent then
                 row.hover:Hide()  -- current row never shows the hover wash
                 row.label:SetTextColor(1, 1, 1, 1)      -- bright white; the accent bar marks "current"
+            elseif isSkipped then
+                -- Same alpha as an imported row: both are steps the player has
+                -- settled, and the colour alone separates them.
+                row.label:SetTextColor(SKIP_MARK_R, SKIP_MARK_G, SKIP_MARK_B, 0.75)
             elseif isDone then
                 row.label:SetTextColor(1, 1, 1, 0.75)
             else
