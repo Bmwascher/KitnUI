@@ -61,6 +61,10 @@ local variantBase = {}
 ns.variantBase = variantBase
 
 local function CompleteSetup(addonKey)
+    -- The one point every import reaches once its profile has actually landed,
+    -- and no load reaches at all. A setup call's return is not that point: an
+    -- import that asks the player first returns before the answer.
+    if ns.ClearStepSkip then ns.ClearStepSkip(addonKey) end
     ns.db.profiles = ns.db.profiles or {}
     ns.db.profiles[addonKey] = true
     if variantBase[addonKey] then

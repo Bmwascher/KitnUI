@@ -79,6 +79,12 @@ local STEP_DONE = { 0.43, 0.75, 0.61 }  -- green check for completed steps
 local OPTION_W  = 165                   -- default action-button width (CDM shrinks to fit)
 local OPTION_FONT = 14                  -- matches the nav row, so the action never reads smaller than Next
 local STEP_MAXW = 148                   -- max step-label width before the baked divider
+-- Skip's resting colour: muted red, so it reads as a way out of the step without
+-- competing with the page's own action buttons or the green Finish.
+local SKIP_R, SKIP_G, SKIP_B = 0.85, 0.3, 0.3
+-- The rail's mark for an already-skipped step. Matches ns.Amber (E6B24C) so the
+-- rail and the Finish recap name that state in one colour.
+local SKIP_MARK_R, SKIP_MARK_G, SKIP_MARK_B = 0.902, 0.698, 0.298
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
 -- border-hover(13-16), text(17-20), text-hover(21-24). Values match EUI's own buttons.
@@ -170,6 +176,22 @@ function W:Build()
     f.SubTitle:SetAlpha(0.98)
     f.SubTitle:SetPoint("TOPLEFT", CONTENT_X, -30)
     f.SubTitle:SetJustifyH("LEFT")
+
+    -- Built once in the shell rather than per page, so every addon step gets a
+    -- Skip without asking for one. SetPage hides it and re-offers it only where
+    -- the step key says it can be skipped, which is what keeps it off Welcome,
+    -- Extras and Finish. Anchored to SubTitle's right edge, which tracks the
+    -- title's own width because nothing sets one.
+    f.Skip = CreateFrame("Button", nil, f)
+    f.Skip:SetHeight(20)
+    f.Skip:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
+    f.Skip._lbl = EllesmereUI.MakeFont(f.Skip, 13, "", SKIP_R, SKIP_G, SKIP_B)
+    f.Skip._lbl:SetPoint("LEFT")
+    f.Skip._lbl:SetText("Skip until next update")
+    f.Skip:SetWidth(math.max(24, f.Skip._lbl:GetStringWidth() + 4))
+    f.Skip:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 0.45, 0.45) end)
+    f.Skip:SetScript("OnLeave", function(b) b._lbl:SetTextColor(SKIP_R, SKIP_G, SKIP_B) end)
+    f.Skip:Hide()
 
     -- Optional brand icon in the header band, left of the title. Hidden unless a
     -- page opts in via W:SetTitleIcon (KitnUI/Welcome/Finish pages).
@@ -685,6 +707,16 @@ local function updateRail()
             row.chk:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
             row.chk:SetSize(12, 12)
             row.chk:SetPoint("LEFT", 3, 0)
+            -- Amber dash for a skipped step, sharing the check's gutter slot.
+            -- The two are mutually exclusive, so one gutter width carries both
+            -- marks. Centred because a dash is far narrower than the check it
+            -- stands in for.
+            row.skipMark = EllesmereUI.MakeFont(row, 13, "", SKIP_MARK_R, SKIP_MARK_G, SKIP_MARK_B)
+            row.skipMark:SetPoint("LEFT", 3, 0)
+            row.skipMark:SetWidth(12)
+            row.skipMark:SetJustifyH("CENTER")
+            row.skipMark:SetText("-")
+            row.skipMark:Hide()
             row.label = EllesmereUI.MakeFont(row, 13, "", 1, 1, 1)
             row.label:SetPoint("LEFT", 18, 0)
             row.label:SetJustifyH("LEFT")
@@ -717,13 +749,26 @@ local function updateRail()
             else
                 isDone = (i < (W.page or 1))
             end
+            -- An explicit skip outranks the check and suppresses it. Both can be
+            -- true at once: only an import retires a skip, so a step holding
+            -- each was imported at an older version and then declined, and the
+            -- decline is the part the check cannot show. Never in the loader,
+            -- which ignores the skip entirely.
+            local isSkipped = (not isCurrent) and (not ns.installerIsLoadMode) and key
+                and ns.IsStepSkipped and ns.IsStepSkipped(key) or false
+            if isSkipped then isDone = false end
             row._isCurrent = isCurrent
             row.bar:SetShown(isCurrent)
             row.activeBg:SetShown(isCurrent)
             row.chk:SetShown(isDone)
+            row.skipMark:SetShown(isSkipped)
             if isCurrent then
                 row.hover:Hide()  -- current row never shows the hover wash
                 row.label:SetTextColor(1, 1, 1, 1)      -- bright white; the accent bar marks "current"
+            elseif isSkipped then
+                -- Same alpha as an imported row: both are steps the player has
+                -- settled, and the colour alone separates them.
+                row.label:SetTextColor(SKIP_MARK_R, SKIP_MARK_G, SKIP_MARK_B, 0.75)
             elseif isDone then
                 row.label:SetTextColor(1, 1, 1, 0.75)
             else
@@ -751,6 +796,51 @@ function W:Queue(data)
     W:Show()
 end
 
+-- Offer Skip for one step, or hide it. `addonKey` is the step key straight from
+-- stepKeys, which is `false` on Welcome, Extras and Finish, so those pages hide
+-- it without naming themselves. ns.CanSkipStep refuses a step with nothing
+-- shipped to decline: Blizzard CDM, which has no version, and a step already
+-- imported at the shipped version.
+function W:SetSkip(addonKey)
+    local b = W.frame and W.frame.Skip
+    if not b then return end
+    -- The loader neither honours nor retires a skip, so it offers none either:
+    -- one clicked there would be ignored by the loader's own next run.
+    if ns.installerIsLoadMode or not (addonKey and ns.CanSkipStep and ns.CanSkipStep(addonKey)) then
+        b:Hide()
+        return
+    end
+    -- Already declined. A plain install and Back can both still show this page,
+    -- and a second click would only record the same version again. Importing is
+    -- the way back.
+    if ns.IsStepSkipped and ns.IsStepSkipped(addonKey) then
+        b:Hide()
+        return
+    end
+    -- The rail's own label for this step, captured when the handler is bound
+    -- rather than read at click time. Every caller runs while its own page is
+    -- the one on screen, so W.page names the page the handler belongs to.
+    local label = (W.stepTitles and W.stepTitles[W.page]) or addonKey
+    b:SetScript("OnClick", function()
+        -- Refused once the step has become current since this was shown, as an
+        -- import that asks the player first does when the answer comes back.
+        -- Nothing was declined then, so nothing is announced.
+        if not (ns.SetStepSkipped and ns.SetStepSkipped(addonKey)) then
+            b:Hide()
+            return
+        end
+        -- Skip and Next both only turn the page, so nothing else tells the user
+        -- which one they pressed. Naming /kitn install states the way back: a
+        -- plain install ignores the record and offers the step again.
+        print(ns.title .. ": " .. label .. " skipped until its next profile update. Run " ..
+            ns.Color("/kitn install") .. " to set it up sooner.")
+        -- The page stays in this session's rail: dropping it mid-wizard would
+        -- renumber every page after it under the index W.page is holding.
+        if W.pages and W.page and W.page < #W.pages then W:SetPage(W.page + 1) end
+    end)
+    b:Show()
+end
+
 function W:SetPage(n)
     if not (W.pages and W.pages[n]) then return end
     W.page = n
@@ -758,6 +848,7 @@ function W:SetPage(n)
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
     W:SetTitleIcon(false)
+    W:SetSkip(W.stepKeys and W.stepKeys[n])
     -- Next is shared across pages, so a handoff on one page would otherwise leave
     -- it emphasised on every later page. Pages that earn the emphasis re-set it.
     W:SetButtonVariant(W.frame.Next, "ghost")

@@ -129,6 +129,55 @@ function ns.GetAddonDataVersion(addonKey)
 end
 
 ---------------------------------------------------------------------------------
+-- Per-step skip
+---------------------------------------------------------------------------------
+
+-- What is stored is the SHIPPED VERSION at the moment of the skip, not a
+-- boolean. That is what clears the skip on its own: the step comes back the
+-- first time KitnUI ships a newer profile for that addon, with no reset pass to
+-- forget and no stale `true` left holding a step down across an update.
+--
+-- Account-wide, alongside profiles and extras, because the profile a skip
+-- declines is itself account-wide.
+--
+-- Blizzard CDM cannot be skipped, and the absent header above is the reason:
+-- one version string cannot say which spec changed, so a composite invented
+-- here would be that same lie in a new place. Its per-spec fingerprints already
+-- answer whether it is stale.
+--
+-- Nor can a step already imported at the shipped version: there is nothing to
+-- decline. Update mode would not offer it anyway, so the skip would withhold
+-- nothing, yet it would still mark an imported step as skipped.
+function ns.CanSkipStep(addonKey)
+    local version = ns.GetAddonDataVersion(addonKey)
+    if not version then return false end
+    local db = ns.db
+    local current = db and db.profiles and db.profiles[addonKey]
+        and db.addonVersions and db.addonVersions[addonKey] == version
+    return not current
+end
+
+function ns.IsStepSkipped(addonKey)
+    if not (ns.db and ns.db.skipped) then return false end
+    local skippedAt = ns.db.skipped[addonKey]
+    if not skippedAt then return false end
+    return skippedAt == ns.GetAddonDataVersion(addonKey)
+end
+
+function ns.SetStepSkipped(addonKey)
+    if not (ns.db and ns.CanSkipStep(addonKey)) then return false end
+    ns.db.skipped = ns.db.skipped or {}
+    ns.db.skipped[addonKey] = ns.GetAddonDataVersion(addonKey)
+    return true
+end
+
+-- An import outranks an earlier skip: the user just asked for the thing they
+-- once declined.
+function ns.ClearStepSkip(addonKey)
+    if ns.db and ns.db.skipped then ns.db.skipped[addonKey] = nil end
+end
+
+---------------------------------------------------------------------------------
 -- Blizzard CDM: content fingerprints instead of a version header
 ---------------------------------------------------------------------------------
 
@@ -346,9 +395,10 @@ function ns.CDMNeedsOverwriteConfirm(snapshot, classId, specIndex)
 end
 
 -- Which addons have updated data since last install, or new data never imported.
+-- The second return counts the ones a skip withheld from that list.
 function ns.GetOutdatedAddons()
-    local outdated = {}
-    if not ns.db then return outdated end
+    local outdated, withheld = {}, 0
+    if not ns.db then return outdated, withheld end
 
     -- CDM rides the same list so every consumer downstream is unchanged. Only
     -- the RULE differs: fingerprints, not a header. isNew is true only when
@@ -381,6 +431,12 @@ function ns.GetOutdatedAddons()
 
         if emptyPayload or not current then -- luacheck: ignore 542
             -- nothing to offer; fall through to the next addon
+        elseif ns.IsStepSkipped(addonKey) then
+            -- A skip recorded against the version shipping now declines exactly
+            -- this update. Leaving it off the list quiets the login line and
+            -- /kitn update; the count is for the popup, whose trigger is
+            -- KitnUI's own version rather than this list.
+            withheld = withheld + 1
         elseif installed and installed ~= current then
             outdated[#outdated + 1] = {
                 key = addonKey,
@@ -400,7 +456,18 @@ function ns.GetOutdatedAddons()
             }
         end
     end
-    return outdated
+    return outdated, withheld
+end
+
+-- True when every profile update this version brings was declined. The update
+-- popup then has nothing to offer: accepting it opens a plain install, which
+-- ignores a skip and offers each declined profile again.
+local function EveryUpdateSkipped()
+    -- Nothing can have been withheld without a skip on record, so a player who
+    -- never used Skip is spared this second build of the list.
+    if not (ns.db and ns.db.skipped and next(ns.db.skipped)) then return false end
+    local outdated, withheld = ns.GetOutdatedAddons()
+    return #outdated == 0 and withheld > 0
 end
 
 -- Blizzard's cap is five layouts PER TYPE, not five in total, so a character can
@@ -475,6 +542,7 @@ local defaults = {
     profiles = {},          -- [addonKey] = true when imported
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
+    skipped = {},           -- [addonKey] = shipped X-header version at the moment of the skip
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true }, installerTheme = "default"/"alt" }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
@@ -1298,9 +1366,13 @@ boot:SetScript("OnEvent", function()
 
     -- Version update: prompt to re-install (overall version or per-addon versions).
     -- Dev-mode: always show popup when version is unresolved (@project-version@).
+    -- A skip that declined every update keeps this branch from claiming the
+    -- login at all, so a character that has not loaded still reaches the load
+    -- prompt below. Dev mode still forces it.
     elseif hasProfiles and ns.db.installedVersion and ns.version
         and (ns.db.installedVersion ~= ns.version or ns.db.devMode)
-        and ns.db.dismissedVersion ~= ns.version then
+        and ns.db.dismissedVersion ~= ns.version
+        and (ns.db.devMode or not EveryUpdateSkipped()) then
         local outdated = ns.GetOutdatedAddons()
         -- Both sides go through DisplayVersion: the test above compares the RAW
         -- stored value, but the sentence the user reads must not carry the

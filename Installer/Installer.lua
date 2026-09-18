@@ -154,6 +154,12 @@ local function GetImportState(addonKey)
 end
 
 local function GetImportStatus(addonKey)
+    -- A declined step outranks its import state here, the same way it does in the
+    -- rail. No information is lost: the version line below still carries the
+    -- delta that "Update available" would have named.
+    if ns.IsStepSkipped and ns.IsStepSkipped(addonKey) then
+        return ns.Amber("Skipped until next update")
+    end
     local state = GetImportState(addonKey)
     if state == "none" then return ns.Amber("Not Imported") end
     if state == "stale" then return ns.Amber("Update available") end
@@ -205,6 +211,12 @@ local function ShowStatusAndVersion(addonKey)
     if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("PROFILE STATUS") end
     WF().Desc2:SetText("Status: " .. GetImportStatus(addonKey))
     WF().Desc3:SetText(GetVersionLine(addonKey))
+    -- Every install page calls this again after a successful import, which is
+    -- the moment the step stops having anything to skip. The step on screen,
+    -- not addonKey: an overwrite runs this from a confirm callback, and nothing
+    -- here pins which page is showing when that fires.
+    local W = ns.Wizard
+    if W.SetSkip then W:SetSkip(W.stepKeys and W.page and W.stepKeys[W.page]) end
 end
 
 local function ShowLoadStatusAndVersion(addonKey)
@@ -772,31 +784,33 @@ local function IsProfileImported(key)
     return v and (type(v) ~= "table" or next(v)) and true or false
 end
 
-local function BuildImportedList()
-    local list = {}
-    for _, key in ipairs(recapOrder) do
-        if IsProfileImported(key) then
-            list[#list + 1] = recapNames[key] or key
-        end
-    end
-    return list
-end
-
--- Addons that had a page this session but weren't imported. A missing addon was
--- never offered (no step), so it isn't counted as skipped.
-local function BuildSkippedList()
+-- The recap's three buckets. Declining a step and never reaching it both left a
+-- step off the imported list, which read as one state; they are separated here
+-- because only the first expires by itself.
+--
+-- An addon with no page was never offered, so it lands in neither of the two
+-- unimported buckets. The imported list is not gated that way: a profile carried
+-- in from an earlier run still counts as installed.
+--
+-- Among offered steps, skip outranks import, on the rule the step rail states.
+local function BuildRecapLists()
     local wasStep = {}
     local keys = ns.Wizard and ns.Wizard.stepKeys
     if keys then
         for _, key in ipairs(keys) do if key then wasStep[key] = true end end
     end
-    local list = {}
+    local imported, skipped, missed = {}, {}, {}
     for _, key in ipairs(recapOrder) do
-        if wasStep[key] and not IsProfileImported(key) then
-            list[#list + 1] = recapNames[key] or key
+        local name = recapNames[key] or key
+        if wasStep[key] and ns.IsStepSkipped and ns.IsStepSkipped(key) then
+            skipped[#skipped + 1] = name
+        elseif IsProfileImported(key) then
+            imported[#imported + 1] = name
+        elseif wasStep[key] then
+            missed[#missed + 1] = name
         end
     end
-    return list
+    return imported, skipped, missed
 end
 
 local function FinishPage()
@@ -809,15 +823,21 @@ local function FinishPage()
     -- CDM-only mode reuses this page but skips the summary.
     if ns.sessionExtras then
         if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("INSTALL SUMMARY") end
-        local imported, skipped = BuildImportedList(), BuildSkippedList()
+        local imported, skipped, missed = BuildRecapLists()
         local lines = {}
         if #imported > 0 then
             lines[#lines + 1] = CHECK .. " " .. ns.Green("Imported (" .. #imported .. "):") ..
                 "  |cffcfcfcf" .. table.concat(imported, ", ") .. "|r"
         end
+        -- Amber is the skip colour the rail uses; the steps merely passed over
+        -- stay grey, so the line that expires by itself is the one that stands out.
         if #skipped > 0 then
-            lines[#lines + 1] = ns.Amber("Skipped (" .. #skipped .. "):") ..
+            lines[#lines + 1] = ns.Amber("Skipped until next update (" .. #skipped .. "):") ..
                 "  |cff9d9d9d" .. table.concat(skipped, ", ") .. "|r"
+        end
+        if #missed > 0 then
+            lines[#lines + 1] = "|cff9d9d9dNot installed (" .. #missed .. "):  " ..
+                table.concat(missed, ", ") .. "|r"
         end
         f.Desc2:SetText(table.concat(lines, "\n"))
 
@@ -1077,7 +1097,13 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
                 end
                 tinsert(stepTitles, step.short or step.display); tinsert(stepKeys, step.key)
             end
-        elseif not step.dormant and not (updateKeys and not updateKeys[step.key]) then
+        -- The skip is honoured in update mode and NOT in a plain install, and
+        -- that asymmetry is the escape hatch. Only an import retires a skip, so
+        -- a skip that hid its own step everywhere could never be undone until
+        -- the next shipped version -- possibly weeks. An explicit /kitn install
+        -- always lists every step, and importing there clears it.
+        elseif not step.dormant and not (updateKeys and not updateKeys[step.key])
+            and not (updateKeys and ns.IsStepSkipped and ns.IsStepSkipped(step.key)) then
             local available = step.alwaysAvailable
             if not available and step.checkAddon then
                 available = IsAddOnLoaded(step.checkAddon)
