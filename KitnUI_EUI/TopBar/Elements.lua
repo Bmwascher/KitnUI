@@ -67,6 +67,12 @@ end
 -- Apply() defers its whole protected half under lockdown.
 local cachedHouse
 
+-- The action HomeAttrs last WROTE onto the button. Recorded only where the
+-- SetAttribute actually lands, so an Apply that deferred its protected half
+-- leaves this showing the old action and the change test below fires again
+-- once combat ends.
+local wiredAction
+
 local function RequestHouseList()
     if C_Housing and C_Housing.GetPlayerOwnedHouses then
         C_Housing.GetPlayerOwnedHouses()
@@ -103,8 +109,20 @@ local function CanReturnAfterVisitingHome()
     return housingNeighborhood.CanReturnAfterVisitingHouse() and true or false
 end
 
+-- The secure action the button should be carrying right now. nil with no house
+-- cached, which clears type1 rather than leaving a stale teleport wired.
+local function HomeAction()
+    if not cachedHouse then return nil end
+    return CanReturnAfterVisitingHome() and "returnhome" or "teleporthome"
+end
+
+local function ApplyBar()
+    if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
+end
+
 local housingWatcher = CreateFrame("Frame")
 housingWatcher:RegisterEvent("PLAYER_LOGIN")
+housingWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 housingWatcher:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
 housingWatcher:RegisterEvent("HOUSE_PLOT_ENTERED")
 housingWatcher:RegisterEvent("HOUSE_PLOT_EXITED")
@@ -113,10 +131,28 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
         RequestHouseList()
         return
     end
-    if event == "HOUSE_PLOT_ENTERED" or event == "HOUSE_PLOT_EXITED" then
-        if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
+
+    -- Arrival, and the only trigger observed to catch a teleport: both a
+    -- teleport home and a return cross a loading screen, while
+    -- HOUSE_PLOT_ENTERED has not been seen to fire on arrival.
+    --
+    -- Its OWN branch, never a fallthrough: the payload here is isInitialLogin,
+    -- and the house-list parser below would read that boolean as an empty list
+    -- and wipe cachedHouse.
+    --
+    -- The change test re-wires when the flag has already settled; the list
+    -- request is the late net for an arrival that lands before it has.
+    if event == "PLAYER_ENTERING_WORLD" then
+        if HomeAction() ~= wiredAction then ApplyBar() end
+        RequestHouseList()
         return
     end
+
+    if event == "HOUSE_PLOT_ENTERED" or event == "HOUSE_PLOT_EXITED" then
+        if HomeAction() ~= wiredAction then ApplyBar() end
+        return
+    end
+
     local house = nil
     local first = type(houseInfoList) == "table" and houseInfoList[1] or nil
     if first and first.neighborhoodGUID and first.houseGUID and first.plotID then
@@ -132,10 +168,16 @@ housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
     --
     -- Apply() is safe to call in combat: it defers its protected half and retries
     -- on PLAYER_REGEN_ENABLED. The change test is what keeps this cheap, since
-    -- the button re-requests the list on every hover.
-    if SameHouse(house, cachedHouse) then return end
+    -- the button re-requests the list on every hover -- but it has to cover the
+    -- ACTION, not the house alone: the house never changes while
+    -- return-availability does, so gating on identity leaves a teleport wired to
+    -- teleporthome for good.
+    --
+    -- SameHouse stays first. HomeAction() reads cachedHouse, which only stands in
+    -- for `house` once SameHouse has said the two match.
+    if SameHouse(house, cachedHouse) and HomeAction() == wiredAction then return end
     cachedHouse = house
-    if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
+    ApplyBar()
 end)
 
 -- Left click with nothing cached: an insecure fallback that explains why. Right
@@ -169,8 +211,13 @@ end
 -- combat. Clearing type1 when nothing is cached stops a stale partial
 -- attribute set from firing a teleport to the wrong plot.
 local function HomeAttrs(btn)
+    -- Sampled once and recorded here, where the write lands, rather than at
+    -- either call site: a second CanReturnAfterVisitingHome() could straddle a
+    -- change and record an action the button never carried.
+    local action = HomeAction()
+    wiredAction = action
     if cachedHouse then
-        btn:SetAttribute("type1", CanReturnAfterVisitingHome() and "returnhome" or "teleporthome")
+        btn:SetAttribute("type1", action)
         btn:SetAttribute("house-neighborhood-guid", cachedHouse.neighborhoodGUID)
         btn:SetAttribute("house-guid", cachedHouse.houseGUID)
         btn:SetAttribute("house-plot-id", cachedHouse.plotID)

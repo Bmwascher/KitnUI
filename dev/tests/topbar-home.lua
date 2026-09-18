@@ -25,10 +25,14 @@ local frames = {}
 local currentNeighborhood = "Neighborhood-A"
 local canReturn = false
 local applyCalls = 0
+local houseListRequests = 0
 
 _G.format = string.format
 _G.C_Housing = {
-    GetPlayerOwnedHouses = function() end,
+    -- Counted, not ignored: the world-entry branch's list request is the only
+    -- thing that repairs an arrival landing before the server settles the
+    -- return flag, and nothing else in this file observes that call.
+    GetPlayerOwnedHouses = function() houseListRequests = houseListRequests + 1 end,
     GetCurrentNeighborhoodGUID = function() return currentNeighborhood end,
 }
 _G.C_HousingNeighborhood = {
@@ -68,6 +72,9 @@ check(housingWatcher ~= nil, "the housing watcher exists")
 if housingWatcher then
     check(housingWatcher.events.HOUSE_PLOT_ENTERED, "the watcher handles entering a housing plot")
     check(housingWatcher.events.HOUSE_PLOT_EXITED, "the watcher handles leaving a housing plot")
+    -- The arrival trigger. HOUSE_PLOT_ENTERED was measured not firing on a
+    -- teleport home, so without this the button has nothing to re-wire it.
+    check(housingWatcher.events.PLAYER_ENTERING_WORLD, "the watcher handles entering the world")
 
     housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", {
         {
@@ -109,6 +116,54 @@ tooltip.lines = {}
 home.tooltip(tooltip)
 check(tooltip.lines[3] and tooltip.lines[3]:find("Return to Previous Location", 1, true),
     "another owned house still describes the available return action", tooltip.lines[3])
+
+-- The regression this file could not catch before. The house never changes, so
+-- a refresh gated on identity alone swallowed every hover and left the button
+-- wired to a stale action for good.
+local HOUSE_A = { { neighborhoodGUID = "Neighborhood-A", houseGUID = "House-A", plotID = 7 } }
+
+if housingWatcher then
+    canReturn = false
+    local beforeChanged = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", HOUSE_A)
+    eq(applyCalls, beforeChanged + 1, "an unchanged house with a changed action still refreshes")
+
+    -- The other half of the same test: the change test must stay cheap, because
+    -- the button re-requests the list from every hover.
+    home.attrs(button)
+    local beforeSame = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", HOUSE_A)
+    eq(applyCalls, beforeSame, "an unchanged house and action does not refresh")
+
+    -- PLAYER_ENTERING_WORLD carries isInitialLogin, not a house list. Routed
+    -- into the list parser that boolean reads as an empty list and clears the
+    -- cache, which would leave the button with no secure action at all.
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
+    home.attrs(button)
+    eq(button.attributes.type1, "teleporthome", "world entry leaves the cached house intact")
+
+    -- The active half of that same branch, and the reason the event was added
+    -- at all: arriving with the flag already flipped has to re-wire. Without
+    -- this, dropping the change test from the world-entry branch still passes.
+    canReturn = true
+    local beforeArrival = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
+    eq(applyCalls, beforeArrival + 1, "world entry re-wires when the return flag has flipped")
+
+    -- The late net, as a sequence. An arrival that lands BEFORE the server
+    -- settles the flag finds nothing to change, so the repair has to come from
+    -- the list request the same branch fires.
+    canReturn = false
+    home.attrs(button)
+    local beforeRequests = houseListRequests
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
+    eq(houseListRequests, beforeRequests + 1, "world entry requests the house list")
+
+    canReturn = true
+    local beforeLate = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", HOUSE_A)
+    eq(applyCalls, beforeLate + 1, "the late list answer re-wires after an early world entry")
+end
 
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
