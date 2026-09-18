@@ -79,6 +79,9 @@ local STEP_DONE = { 0.43, 0.75, 0.61 }  -- green check for completed steps
 local OPTION_W  = 165                   -- default action-button width (CDM shrinks to fit)
 local OPTION_FONT = 14                  -- matches the nav row, so the action never reads smaller than Next
 local STEP_MAXW = 148                   -- max step-label width before the baked divider
+-- Skip's resting colour: muted red, so it reads as a way out of the step without
+-- competing with the page's own action buttons or the green Finish.
+local SKIP_R, SKIP_G, SKIP_B = 0.85, 0.3, 0.3
 
 -- MakeStyledButton colour array: bg(1-4), bg-hover(5-8), border(9-12),
 -- border-hover(13-16), text(17-20), text-hover(21-24). Values match EUI's own buttons.
@@ -170,6 +173,22 @@ function W:Build()
     f.SubTitle:SetAlpha(0.98)
     f.SubTitle:SetPoint("TOPLEFT", CONTENT_X, -30)
     f.SubTitle:SetJustifyH("LEFT")
+
+    -- Built once in the shell rather than per page, so every addon step gets a
+    -- Skip without asking for one. SetPage hides it and re-offers it only where
+    -- the step key says it can be skipped, which is what keeps it off Welcome,
+    -- Extras and Finish. Anchored to SubTitle's right edge, which tracks the
+    -- title's own width because nothing sets one.
+    f.Skip = CreateFrame("Button", nil, f)
+    f.Skip:SetHeight(20)
+    f.Skip:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
+    f.Skip._lbl = EllesmereUI.MakeFont(f.Skip, 13, "", SKIP_R, SKIP_G, SKIP_B)
+    f.Skip._lbl:SetPoint("LEFT")
+    f.Skip._lbl:SetText("Skip")
+    f.Skip:SetWidth(math.max(24, f.Skip._lbl:GetStringWidth() + 4))
+    f.Skip:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 0.45, 0.45) end)
+    f.Skip:SetScript("OnLeave", function(b) b._lbl:SetTextColor(SKIP_R, SKIP_G, SKIP_B) end)
+    f.Skip:Hide()
 
     -- Optional brand icon in the header band, left of the title. Hidden unless a
     -- page opts in via W:SetTitleIcon (KitnUI/Welcome/Finish pages).
@@ -751,6 +770,27 @@ function W:Queue(data)
     W:Show()
 end
 
+-- Offer Skip for one step, or hide it. `addonKey` is the step key straight from
+-- stepKeys, which is `false` on Welcome, Extras and Finish, so those pages hide
+-- it without naming themselves. ns.CanSkipStep refuses a step with no shipped
+-- version to record against -- Blizzard CDM is the one that matters.
+function W:SetSkip(addonKey)
+    local b = W.frame and W.frame.Skip
+    if not b then return end
+    if not (addonKey and ns.CanSkipStep and ns.CanSkipStep(addonKey)) then
+        b:Hide()
+        return
+    end
+    b:SetScript("OnClick", function()
+        if ns.SetStepSkipped then ns.SetStepSkipped(addonKey) end
+        -- Move on rather than leaving the user on a step they just declined.
+        -- The page stays in this session's rail: dropping it mid-wizard would
+        -- renumber every page after it under the index W.page is holding.
+        if W.pages and W.page and W.page < #W.pages then W:SetPage(W.page + 1) end
+    end)
+    b:Show()
+end
+
 function W:SetPage(n)
     if not (W.pages and W.pages[n]) then return end
     W.page = n
@@ -758,6 +798,7 @@ function W:SetPage(n)
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
     W:SetTitleIcon(false)
+    W:SetSkip(W.stepKeys and W.stepKeys[n])
     -- Next is shared across pages, so a handoff on one page would otherwise leave
     -- it emphasised on every later page. Pages that earn the emphasis re-set it.
     W:SetButtonVariant(W.frame.Next, "ghost")

@@ -129,6 +129,47 @@ function ns.GetAddonDataVersion(addonKey)
 end
 
 ---------------------------------------------------------------------------------
+-- Per-step skip
+---------------------------------------------------------------------------------
+
+-- What is stored is the SHIPPED VERSION at the moment of the skip, not a
+-- boolean. That is what clears the skip on its own: the step comes back the
+-- first time KitnUI ships a newer profile for that addon, with no reset pass to
+-- forget and no stale `true` left holding a step down across an update.
+--
+-- Account-wide, alongside profiles and extras, because the profile a skip
+-- declines is itself account-wide.
+--
+-- Blizzard CDM cannot be skipped, and the absent header above is the reason:
+-- one version string cannot say which spec changed, so a composite invented
+-- here would be that same lie in a new place. Its per-spec fingerprints already
+-- answer whether it is stale.
+function ns.CanSkipStep(addonKey)
+    return ns.GetAddonDataVersion(addonKey) ~= nil
+end
+
+function ns.IsStepSkipped(addonKey)
+    if not (ns.db and ns.db.skipped) then return false end
+    local skippedAt = ns.db.skipped[addonKey]
+    if not skippedAt then return false end
+    return skippedAt == ns.GetAddonDataVersion(addonKey)
+end
+
+function ns.SetStepSkipped(addonKey)
+    local version = ns.GetAddonDataVersion(addonKey)
+    if not (ns.db and version) then return false end
+    ns.db.skipped = ns.db.skipped or {}
+    ns.db.skipped[addonKey] = version
+    return true
+end
+
+-- An import or a load outranks an earlier skip: the user just asked for the
+-- thing they once declined.
+function ns.ClearStepSkip(addonKey)
+    if ns.db and ns.db.skipped then ns.db.skipped[addonKey] = nil end
+end
+
+---------------------------------------------------------------------------------
 -- Blizzard CDM: content fingerprints instead of a version header
 ---------------------------------------------------------------------------------
 
@@ -475,6 +516,7 @@ local defaults = {
     profiles = {},          -- [addonKey] = true when imported
     addonVersions = {},     -- [addonKey] = X-header version at time of import
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
+    skipped = {},           -- [addonKey] = shipped X-header version at the moment of the skip; the step returns once that version changes
     installedVersion = nil, -- addon version at last install
     perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true }, installerTheme = "default"/"alt" }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)

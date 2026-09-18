@@ -1051,7 +1051,7 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     for _, step in ipairs(addonSteps) do
         if profileLoadMode then
             local isImported = ns.db and ns.db.profiles and ns.db.profiles[step.key]
-            if isImported and step.key ~= "BlizzardCDM" then
+            if isImported and step.key ~= "BlizzardCDM" and not ns.IsStepSkipped(step.key) then
                 if step.key == "EllesmereUI" then
                     tinsert(pages, EllesmereUILoadPage)
                 elseif step.key == "NSRT" then
@@ -1063,7 +1063,13 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
                 end
                 tinsert(stepTitles, step.short or step.display); tinsert(stepKeys, step.key)
             end
-        elseif not step.dormant and not (updateKeys and not updateKeys[step.key]) then
+        -- The skip is honoured in update mode and NOT in a plain install, and
+        -- that asymmetry is the escape hatch. Only a successful setup retires a
+        -- skip, so a skip that hid its own step everywhere could never be undone
+        -- until the next shipped version -- possibly weeks. An explicit
+        -- /kitn install always lists every step, and importing there clears it.
+        elseif not step.dormant and not (updateKeys and not updateKeys[step.key])
+            and not (updateKeys and ns.IsStepSkipped(step.key)) then
             local available = step.alwaysAvailable
             if not available and step.checkAddon then
                 available = IsAddOnLoaded(step.checkAddon)
