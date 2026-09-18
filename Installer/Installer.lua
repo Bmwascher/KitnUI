@@ -154,6 +154,12 @@ local function GetImportState(addonKey)
 end
 
 local function GetImportStatus(addonKey)
+    -- A declined step outranks its import state here, the same way it does in the
+    -- rail. No information is lost: the version line below still carries the
+    -- delta that "Update available" would have named.
+    if ns.IsStepSkipped and ns.IsStepSkipped(addonKey) then
+        return ns.Amber("Skipped until next update")
+    end
     local state = GetImportState(addonKey)
     if state == "none" then return ns.Amber("Not Imported") end
     if state == "stale" then return ns.Amber("Update available") end
@@ -822,7 +828,7 @@ local function FinishPage()
         -- Amber is the skip colour the rail uses; the steps merely passed over
         -- stay grey, so the line that expires by itself is the one that stands out.
         if #skipped > 0 then
-            lines[#lines + 1] = ns.Amber("Skipped until update (" .. #skipped .. "):") ..
+            lines[#lines + 1] = ns.Amber("Skipped until next update (" .. #skipped .. "):") ..
                 "  |cff9d9d9d" .. table.concat(skipped, ", ") .. "|r"
         end
         if #missed > 0 then

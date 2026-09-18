@@ -187,7 +187,7 @@ function W:Build()
     f.Skip:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
     f.Skip._lbl = EllesmereUI.MakeFont(f.Skip, 13, "", SKIP_R, SKIP_G, SKIP_B)
     f.Skip._lbl:SetPoint("LEFT")
-    f.Skip._lbl:SetText("Skip until update")
+    f.Skip._lbl:SetText("Skip until next update")
     f.Skip:SetWidth(math.max(24, f.Skip._lbl:GetStringWidth() + 4))
     f.Skip:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 0.45, 0.45) end)
     f.Skip:SetScript("OnLeave", function(b) b._lbl:SetTextColor(SKIP_R, SKIP_G, SKIP_B) end)
@@ -806,6 +806,13 @@ function W:SetSkip(addonKey)
         b:Hide()
         return
     end
+    -- Already declined, which only a plain install can still show a page for.
+    -- Offering Skip again would contradict the page's own status line and record
+    -- the same version twice; importing is the way back, not clicking this.
+    if ns.IsStepSkipped and ns.IsStepSkipped(addonKey) then
+        b:Hide()
+        return
+    end
     -- The rail's own label for this step. Captured here rather than read inside
     -- the handler: SetPage assigns W.page before calling this, so the name is
     -- bound to the page the handler belongs to.
@@ -815,7 +822,7 @@ function W:SetSkip(addonKey)
         -- Skip and Next both only turn the page, so nothing else tells the user
         -- which one they pressed. Naming /kitn install states the way back: a
         -- plain install ignores the record and offers the step again.
-        print(ns.title .. ": " .. label .. " skipped until its profile updates. Run " ..
+        print(ns.title .. ": " .. label .. " skipped until its next profile update. Run " ..
             ns.Color("/kitn install") .. " to set it up sooner.")
         -- Move on rather than leaving the user on a step they just declined.
         -- The page stays in this session's rail: dropping it mid-wizard would
