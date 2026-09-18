@@ -356,6 +356,20 @@ shown = loginPopups(loginDB({ imported = "2026.09.15", skipped = true, loaded = 
 eq(shown.KITNUI_UPDATE, nil, "every update skipped on a new character: no update popup")
 eq(shown.KITNUI_LOAD, true, "every update skipped on a new character: the load prompt shows")
 
+-- A player who never used Skip must pay nothing for it: one build of the
+-- outdated list per login, as before the feature existed. Both builds resolve
+-- through ns, so counting there sees each one.
+local realOutdated = ns.GetOutdatedAddons
+local builds = 0
+ns.GetOutdatedAddons = function(...)
+    builds = builds + 1
+    return realOutdated(...)
+end
+shown = loginPopups(loginDB({ imported = "2026.09.15", skipped = false, loaded = true }))
+ns.GetOutdatedAddons = realOutdated
+eq(shown.KITNUI_UPDATE, true, "no skip on record: the update popup shows")
+eq(builds, 1, "no skip on record: the outdated list is built once")
+
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
     os.exit(1)

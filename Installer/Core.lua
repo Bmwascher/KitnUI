@@ -463,6 +463,9 @@ end
 -- popup then has nothing to offer: accepting it opens a plain install, which
 -- ignores a skip and offers each declined profile again.
 local function EveryUpdateSkipped()
+    -- Nothing can have been withheld without a skip on record, so a player who
+    -- never used Skip is spared this second build of the list.
+    if not (ns.db and ns.db.skipped and next(ns.db.skipped)) then return false end
     local outdated, withheld = ns.GetOutdatedAddons()
     return #outdated == 0 and withheld > 0
 end
