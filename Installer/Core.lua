@@ -1403,7 +1403,14 @@ boot:SetScript("OnEvent", function()
                     ns.OpenInstaller()
                 end
             end,
-            OnCancel = function() ns.db.dismissedVersion = ns.version end,
+            -- OnButton2 and no OnCancel, as in LayoutWatch: Blizzard also calls
+            -- OnCancel when a show is refused for want of a free frame, when
+            -- another dialog overrides this one, and on Escape, and a dismissal
+            -- written there would silence a prompt nobody answered. Only Later
+            -- dismisses; Escape asks again next login. selectCallbackByIndex is
+            -- what routes the second button to OnButton2 at all.
+            selectCallbackByIndex = true,
+            OnButton2 = function() ns.db.dismissedVersion = ns.version end,
             timeout = 0, whileDead = true, hideOnEscape = true,
         }
         StaticPopup_Show("KITNUI_UPDATE")
@@ -1415,7 +1422,11 @@ boot:SetScript("OnEvent", function()
             button1 = "Yes",
             button2 = "No",
             OnAccept = function() if ns.OpenInstaller then ns.OpenInstaller(true) end end,
-            OnCancel = function() ns:SetCharLoaded() end,
+            -- Same shape as the update prompt above, for the same reason: a
+            -- character is marked loaded by its No, never by a show that
+            -- was refused, overridden or escaped.
+            selectCallbackByIndex = true,
+            OnButton2 = function() ns:SetCharLoaded() end,
             timeout = 0, whileDead = true, hideOnEscape = true,
         }
         StaticPopup_Show("KITNUI_LOAD")
