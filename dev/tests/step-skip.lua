@@ -37,7 +37,18 @@ local shipped = {
     ["X-BigWigs-Version"]        = "2026.08.22.1",
     ["X-EllesmereUI-Version"]    = "2026.08.22",
     ["X-KitnEssentials-Version"] = "2026.08.30",
+    -- KitnUI's own version; the update popup fires when this differs from
+    -- the one recorded at the last install.
+    ["Version"]                  = "2.1.7",
 }
+
+-- Addons that report as not loaded. Everything else reports loaded, so the
+-- wizard offers every step; KitnUI_Lite is here because the login handler
+-- stops at a conflict popup when it is loaded.
+local notLoaded = { KitnUI_Lite = true }
+
+-- Popups the login handler asked for, in order. Reset by the caller.
+local shownPopups = {}
 
 _G.format = string.format
 _G.strtrim = function(s) return (tostring(s):gsub("^%s+", ""):gsub("%s+$", "")) end
@@ -51,13 +62,20 @@ end
 -- into a local at file scope, so a stub added later would never be seen.
 _G.C_AddOns = {
     GetAddOnMetadata = function(_, header) return shipped[header] end,
-    IsAddOnLoaded = function() return true end,
+    IsAddOnLoaded = function(name) return not notLoaded[name] end,
 }
 _G.tinsert = table.insert
 _G.InCombatLockdown = function() return false end
 _G.C_Timer = { After = function() end }
+-- Records what each frame registers and the scripts it sets, so a test can
+-- fire the login handler; every other method is a no-op.
+local frames = {}
 _G.CreateFrame = function()
-    return setmetatable({}, { __index = function() return function() end end })
+    local frame = { events = {}, scripts = {} }
+    function frame:RegisterEvent(event) self.events[event] = true end
+    function frame:SetScript(name, fn) self.scripts[name] = fn end
+    frames[#frames + 1] = frame
+    return setmetatable(frame, { __index = function() return function() end end })
 end
 _G.SlashCmdList = {}
 _G.UnitClass = function() return "Warrior", "WARRIOR", 1 end
@@ -70,7 +88,10 @@ _G.UnitName = function() return "Tester" end
 _G.GetRealmName = function() return "Realm" end
 _G.ReloadUI = function() end
 _G.StaticPopupDialogs = {}
-_G.StaticPopup_Show = function() end
+_G.StaticPopup_Show = function(name)
+    shownPopups[#shownPopups + 1] = name
+    return true
+end
 _G.print = print
 
 ---------------------------------------------------------------------------------
@@ -229,6 +250,111 @@ eq(ns.IsStepSkipped("KitnEssentials"), false, "a successful import retires the s
 eq(ns.CanSkipStep("KitnEssentials"), false, "a step imported at the shipped version cannot be skipped")
 eq(ns.SetStepSkipped("KitnEssentials"), false, "skipping a current step refuses")
 eq(ns.db.skipped.KitnEssentials, nil, "a refused skip of a current step records nothing")
+
+---------------------------------------------------------------------------------
+-- An import that answers later retires the skip only when it lands
+---------------------------------------------------------------------------------
+
+-- BigWigs registers its profile through a prompt of its own and returns before
+-- the player answers it, so the setup call's return says nothing about whether
+-- anything was imported.
+local pendingAnswer
+_G.BigWigsAPI = {
+    RegisterProfile = function(_, _, _, answer) pendingAnswer = answer end,
+}
+
+local function quietly(fn)
+    local realPrint = _G.print
+    _G.print = function() end
+    fn()
+    _G.print = realPrint
+end
+
+ns.data = { BigWigs = "payload" }
+shipped["X-BigWigs-Version"] = "2026.10.01"
+ns.db = { profiles = { BigWigs = true }, addonVersions = { BigWigs = "2026.09.15" }, perChar = {} }
+eq(ns.SetStepSkipped("BigWigs"), true, "a stale BigWigs import can be skipped")
+
+check(ns.SetupAddon("BigWigs", true) ~= false, "the BigWigs import is handed to BigWigs")
+check(type(pendingAnswer) == "function", "BigWigs holds the answer for later")
+eq(ns.IsStepSkipped("BigWigs"), true, "an unanswered BigWigs import leaves the skip in place")
+
+quietly(function() pendingAnswer(false) end)
+eq(ns.IsStepSkipped("BigWigs"), true, "a BigWigs import declined in its own prompt leaves the skip in place")
+
+pendingAnswer = nil
+ns.SetupAddon("BigWigs", true)
+pendingAnswer(true)
+eq(ns.IsStepSkipped("BigWigs"), false, "an accepted BigWigs import retires the skip")
+
+---------------------------------------------------------------------------------
+-- The login prompts honour the skip
+---------------------------------------------------------------------------------
+
+-- Driven through the shipped PLAYER_LOGIN handler rather than a copy of its
+-- condition, so the check covers the wiring as well as the decision.
+local loginHandler
+for _, frame in ipairs(frames) do
+    if frame.events.PLAYER_LOGIN then loginHandler = frame.scripts.OnEvent end
+end
+check(type(loginHandler) == "function", "the login handler is registered")
+
+ns.EUIReady = function() return true end
+
+local function loginPopups(db)
+    _G.KitnUIDB = db
+    for i = #shownPopups, 1, -1 do shownPopups[i] = nil end
+    loginHandler()
+    local shown = {}
+    for _, name in ipairs(shownPopups) do shown[name] = true end
+    return shown
+end
+
+local charKey = ns.GetCharKey()
+
+-- Only BigWigs ships a payload here, so nothing else can be reported new and
+-- hold the popup open for a reason these checks do not name.
+ns.data = { BigWigs = "payload" }
+
+-- CDM cannot be skipped, and with nothing recorded for this class it reports
+-- every shipped layout as new, which rightly keeps the popup open. Seeding it
+-- current from the shipped fingerprints themselves leaves BigWigs as the only
+-- update in play.
+local _, _, testClass = UnitClass("player")
+local currentCDM = {}
+for spec = 1, 3 do
+    currentCDM[ns.GetCDMKey(testClass, spec)] = ns.GetCDMShippedFingerprint(testClass, spec)
+end
+
+local function loginDB(opts)
+    return {
+        profiles = { BigWigs = true, BlizzardCDM = currentCDM },
+        addonVersions = { BigWigs = opts.imported },
+        skipped = opts.skipped and { BigWigs = shipped["X-BigWigs-Version"] } or {},
+        installedVersion = "2.1.6",
+        perChar = { [charKey] = { loaded = opts.loaded } },
+    }
+end
+
+local shown = loginPopups(loginDB({ imported = "2026.09.15", skipped = true, loaded = true }))
+-- Without this, a popup held open by some other outdated entry would pass the
+-- next check for a reason it does not name.
+eq(#ns.GetOutdatedAddons(), 0, "with the one update skipped, nothing is left outdated")
+eq(shown.KITNUI_UPDATE, nil, "every update skipped: no update popup")
+
+shown = loginPopups(loginDB({ imported = "2026.09.15", skipped = false, loaded = true }))
+eq(shown.KITNUI_UPDATE, true, "an update not skipped: the update popup shows")
+
+-- Unchanged behaviour: a new KitnUI with no profile changes still announces
+-- itself, because nothing was skipped.
+shown = loginPopups(loginDB({ imported = shipped["X-BigWigs-Version"], skipped = false, loaded = true }))
+eq(shown.KITNUI_UPDATE, true, "nothing outdated and nothing skipped: the update popup still shows")
+
+-- The update popup gives way rather than claiming the login, so a character
+-- that has not loaded gets the prompt a load needs, since loads ignore skips.
+shown = loginPopups(loginDB({ imported = "2026.09.15", skipped = true, loaded = false }))
+eq(shown.KITNUI_UPDATE, nil, "every update skipped on a new character: no update popup")
+eq(shown.KITNUI_LOAD, true, "every update skipped on a new character: the load prompt shows")
 
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")

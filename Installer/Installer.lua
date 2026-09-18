@@ -212,8 +212,11 @@ local function ShowStatusAndVersion(addonKey)
     WF().Desc2:SetText("Status: " .. GetImportStatus(addonKey))
     WF().Desc3:SetText(GetVersionLine(addonKey))
     -- Every install page calls this again after a successful import, which is
-    -- the moment the step stops having anything to skip.
-    if ns.Wizard.SetSkip then ns.Wizard:SetSkip(addonKey) end
+    -- the moment the step stops having anything to skip. The step on screen,
+    -- not addonKey: an overwrite runs this from a confirm callback, and nothing
+    -- here pins which page is showing when that fires.
+    local W = ns.Wizard
+    if W.SetSkip then W:SetSkip(W.stepKeys and W.page and W.stepKeys[W.page]) end
 end
 
 local function ShowLoadStatusAndVersion(addonKey)

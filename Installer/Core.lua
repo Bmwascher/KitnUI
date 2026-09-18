@@ -395,9 +395,10 @@ function ns.CDMNeedsOverwriteConfirm(snapshot, classId, specIndex)
 end
 
 -- Which addons have updated data since last install, or new data never imported.
+-- The second return counts the ones a skip withheld from that list.
 function ns.GetOutdatedAddons()
-    local outdated = {}
-    if not ns.db then return outdated end
+    local outdated, withheld = {}, 0
+    if not ns.db then return outdated, withheld end
 
     -- CDM rides the same list so every consumer downstream is unchanged. Only
     -- the RULE differs: fingerprints, not a header. isNew is true only when
@@ -428,11 +429,14 @@ function ns.GetOutdatedAddons()
             or (type(payload) == "string" and strtrim(payload) == "")
             or (type(payload) == "table" and not next(payload))
 
-        -- A skip recorded against the version shipping now declines exactly this
-        -- update. Every update prompt reads this list, so leaving it out here is
-        -- what keeps the login line, the popup and /kitn update quiet for it.
-        if emptyPayload or not current or ns.IsStepSkipped(addonKey) then -- luacheck: ignore 542
+        if emptyPayload or not current then -- luacheck: ignore 542
             -- nothing to offer; fall through to the next addon
+        elseif ns.IsStepSkipped(addonKey) then
+            -- A skip recorded against the version shipping now declines exactly
+            -- this update. Leaving it off the list quiets the login line and
+            -- /kitn update; the count is for the popup, whose trigger is
+            -- KitnUI's own version rather than this list.
+            withheld = withheld + 1
         elseif installed and installed ~= current then
             outdated[#outdated + 1] = {
                 key = addonKey,
@@ -452,7 +456,15 @@ function ns.GetOutdatedAddons()
             }
         end
     end
-    return outdated
+    return outdated, withheld
+end
+
+-- True when every profile update this version brings was declined. The update
+-- popup then has nothing to offer: accepting it opens a plain install, which
+-- ignores a skip and offers each declined profile again.
+local function EveryUpdateSkipped()
+    local outdated, withheld = ns.GetOutdatedAddons()
+    return #outdated == 0 and withheld > 0
 end
 
 -- Blizzard's cap is five layouts PER TYPE, not five in total, so a character can
@@ -1351,9 +1363,13 @@ boot:SetScript("OnEvent", function()
 
     -- Version update: prompt to re-install (overall version or per-addon versions).
     -- Dev-mode: always show popup when version is unresolved (@project-version@).
+    -- A skip that declined every update keeps this branch from claiming the
+    -- login at all, so a character that has not loaded still reaches the load
+    -- prompt below. Dev mode still forces it.
     elseif hasProfiles and ns.db.installedVersion and ns.version
         and (ns.db.installedVersion ~= ns.version or ns.db.devMode)
-        and ns.db.dismissedVersion ~= ns.version then
+        and ns.db.dismissedVersion ~= ns.version
+        and (ns.db.devMode or not EveryUpdateSkipped()) then
         local outdated = ns.GetOutdatedAddons()
         -- Both sides go through DisplayVersion: the test above compares the RAW
         -- stored value, but the sentence the user reads must not carry the

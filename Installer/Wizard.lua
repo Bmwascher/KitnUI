@@ -819,7 +819,13 @@ function W:SetSkip(addonKey)
     -- the one on screen, so W.page names the page the handler belongs to.
     local label = (W.stepTitles and W.stepTitles[W.page]) or addonKey
     b:SetScript("OnClick", function()
-        if ns.SetStepSkipped then ns.SetStepSkipped(addonKey) end
+        -- Refused once the step has become current since this was shown, as an
+        -- import that asks the player first does when the answer comes back.
+        -- Nothing was declined then, so nothing is announced.
+        if not (ns.SetStepSkipped and ns.SetStepSkipped(addonKey)) then
+            b:Hide()
+            return
+        end
         -- Skip and Next both only turn the page, so nothing else tells the user
         -- which one they pressed. Naming /kitn install states the way back: a
         -- plain install ignores the record and offers the step again.

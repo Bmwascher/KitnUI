@@ -45,10 +45,6 @@ function ns.SetupAddon(addonKey, import, ...)
         return false
     end
     local result = fn(addonKey, import, ...)
-    -- Only an import retires a skip. A load activates a profile the account
-    -- already owns and says nothing about the shipped version the skip declined.
-    -- Every import passes through here, so the rule lives here, not at each caller.
-    if result ~= false and import and ns.ClearStepSkip then ns.ClearStepSkip(addonKey) end
     -- An addon that has just been handed a profile can raise its own reload
     -- prompt -- KitnEssentials does after every profile change -- and a user who
     -- accepts it never reaches Finish. So the load flow pays what it owes this
@@ -65,6 +61,10 @@ local variantBase = {}
 ns.variantBase = variantBase
 
 local function CompleteSetup(addonKey)
+    -- The one point every import reaches once its profile has actually landed,
+    -- and no load reaches at all. A setup call's return is not that point: an
+    -- import that asks the player first returns before the answer.
+    if ns.ClearStepSkip then ns.ClearStepSkip(addonKey) end
     ns.db.profiles = ns.db.profiles or {}
     ns.db.profiles[addonKey] = true
     if variantBase[addonKey] then
