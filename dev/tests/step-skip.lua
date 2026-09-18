@@ -370,6 +370,33 @@ ns.GetOutdatedAddons = realOutdated
 eq(shown.KITNUI_UPDATE, true, "no skip on record: the update popup shows")
 eq(builds, 1, "no skip on record: the outdated list is built once")
 
+---------------------------------------------------------------------------------
+-- The loader never offers Skip
+---------------------------------------------------------------------------------
+
+-- A load neither honours nor retires a skip, so offering one there would
+-- record a decline the loader then ignores on its very next run.
+loadChunk("Installer/Wizard.lua")
+local W = ns.Wizard
+
+-- Stands in for the one Skip button the wizard shell builds.
+local skipButton = { shown = false }
+function skipButton:Show() self.shown = true end
+function skipButton:Hide() self.shown = false end
+function skipButton:SetScript() end
+W.frame = { Skip = skipButton }
+W.stepTitles, W.page = { "BigWigs" }, 1
+
+ns.db = { profiles = { BigWigs = true }, addonVersions = { BigWigs = "2026.09.15" } }
+ns.installerIsLoadMode = false
+W:SetSkip("BigWigs")
+eq(skipButton.shown, true, "outside load mode a skippable step offers Skip")
+
+ns.installerIsLoadMode = true
+W:SetSkip("BigWigs")
+eq(skipButton.shown, false, "in load mode Skip is not offered")
+ns.installerIsLoadMode = false
+
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
     os.exit(1)

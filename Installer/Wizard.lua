@@ -750,11 +750,12 @@ local function updateRail()
                 isDone = (i < (W.page or 1))
             end
             -- An explicit skip outranks the check and suppresses it. Both can be
-            -- true at once: only a successful setup retires a skip, so a step
-            -- holding each was imported at an older version and then declined,
-            -- and the decline is the part the check cannot show.
-            local isSkipped = (not isCurrent) and key and ns.IsStepSkipped
-                and ns.IsStepSkipped(key) or false
+            -- true at once: only an import retires a skip, so a step holding
+            -- each was imported at an older version and then declined, and the
+            -- decline is the part the check cannot show. Never in the loader,
+            -- which ignores the skip entirely.
+            local isSkipped = (not isCurrent) and (not ns.installerIsLoadMode) and key
+                and ns.IsStepSkipped and ns.IsStepSkipped(key) or false
             if isSkipped then isDone = false end
             row._isCurrent = isCurrent
             row.bar:SetShown(isCurrent)
@@ -803,7 +804,9 @@ end
 function W:SetSkip(addonKey)
     local b = W.frame and W.frame.Skip
     if not b then return end
-    if not (addonKey and ns.CanSkipStep and ns.CanSkipStep(addonKey)) then
+    -- The loader neither honours nor retires a skip, so it offers none either:
+    -- one clicked there would be ignored by the loader's own next run.
+    if ns.installerIsLoadMode or not (addonKey and ns.CanSkipStep and ns.CanSkipStep(addonKey)) then
         b:Hide()
         return
     end

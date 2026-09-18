@@ -60,7 +60,11 @@
 ---@field EUI_INERT boolean      # KitnUI_EUI only: set by its Core.lua when KitnUI's shared namespace is unreachable, and every other file in that addon stops on it
 ---@field TopBar KitnUITopBar    # KitnUI_EUI only: the Top Bar module (KitnUI_EUI/TopBar/), reached through the EXPORTS bridge in KitnUI_EUI/Core.lua
 ---@field GetAddonDataVersion fun(addonKey: string): string?
----@field GetOutdatedAddons fun(): table[]
+---@field CanSkipStep fun(addonKey: string): boolean
+---@field IsStepSkipped fun(addonKey: string): boolean
+---@field SetStepSkipped fun(addonKey: string): boolean
+---@field ClearStepSkip fun(addonKey: string)
+---@field GetOutdatedAddons fun(): table[], number   # the outdated entries, and how many a skip withheld from them
 ---@field IsAddonImported fun(addonKey: string): boolean
 --- Success returns nil (or true from EllesmereUI, NSRT, Edit Mode install and
 --- CDM install); a refusal prints and returns false. Callers test `== false`.
@@ -104,6 +108,7 @@ local KitnUINS
 ---@field profiles table<string, boolean|table>  # [addonKey] = true; BlizzardCDM is a table of ["<classId>:<specIndex>"] = <fingerprint string>, plus any surviving legacy [specIndex] = true keys from builds before 2026.08.11
 ---@field addonVersions table<string, string>    # [addonKey] = X-header version at import
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
+---@field skipped table<string, string>?         # [addonKey] = shipped X-header version at the moment of the skip; absent on a DB from before the feature
 ---@field installedVersion string?
 ---@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, editModeApplied = boolean, layoutWatchOff = { [specIndex] = true } }
 ---@field cdmLimitPending table<string, string[]>  # [charName-realm] = spec names the CDM layout cap blocked, raised as a popup at that character's next login
