@@ -444,8 +444,8 @@ do
 end
 
 -- The installer chrome and the named accent choice must be the same amber. Two
--- copies of a colour drift, which is why the brand pink already carries a
--- keep-in-step warning in three files.
+-- copies of a colour drift; the brand pink's copies get the same treatment in
+-- the block after this one.
 do
     local wizardFile = assert(io.open("Installer/Wizard.lua", "rb"))
     local wizardSource = wizardFile:read("*a")
@@ -469,6 +469,116 @@ do
         "the KitnUI page offers the alternate accent by name")
     check(generalSource:find("IsRastaAmber", 1, true) ~= nil,
         "the page can tell whether the stored accent is the alternate one")
+end
+
+-- The brand pink has more copies than the amber and, until now, only comments
+-- keeping them in step. Wizard.lua's KITN_PINK is the source of truth (it is the
+-- one exported as ns.KITN_PINK). Compared against it: the seven literal copies
+-- named below, and the hex form used by the chat prefix, ns.Color, the .toc
+-- titles and the /kitn command hints, which is derived from the same three
+-- channels rather than pinned to a literal.
+do
+    local function read(path)
+        local f = assert(io.open(path, "rb"))
+        local text = f:read("*a")
+        f:close()
+        return text
+    end
+    local wizard = read("Installer/Wizard.lua")
+    local core = read("Installer/Core.lua")
+    local general = read("KitnUI_EUI/General.lua")
+    local theme = read("KitnUI_EUI/Theme.lua")
+    local euiCore = read("KitnUI_EUI/Core.lua")
+    local bar = read("KitnUI_EUI/TopBar/Bar.lua")
+    local nameplates = read("KitnUI_EUI/Nameplates.lua")
+    local options = read("KitnUI_EUI/TopBar/Options.lua")
+
+    local pr, pg, pb = wizard:match("local KITN_PINK = { ([%d%.]+), ([%d%.]+), ([%d%.]+) }")
+    check(pr ~= nil, "the wizard declares the brand pink as a positional triple")
+
+    -- KEYED copies: the Theme.lua accent and the registered nameplate default.
+    local tr, tg, tb = theme:match("local ACCENT = { r = ([%d%.]+), g = ([%d%.]+), b = ([%d%.]+) }")
+    check(tr ~= nil, "Theme.lua declares its accent as a keyed table")
+    local nr, ng, nb = euiCore:match("npArrowColor%s*=%s*{ r = ([%d%.]+), g = ([%d%.]+), b = ([%d%.]+) }")
+    check(nr ~= nil, "the nameplate arrow default is a keyed literal")
+    local fr, fg, fb = nameplates:match("return { r = ([%d%.]+), g = ([%d%.]+), b = ([%d%.]+) } end")
+    check(fr ~= nil, "the nameplate arrow fallback is a keyed literal")
+
+    -- SCALAR copies: the KitnUI page accent and the Top Bar accent defaults.
+    local gr, gg, gb = general:match("local ACCENT_R, ACCENT_G, ACCENT_B = ([%d%.]+), ([%d%.]+), ([%d%.]+)")
+    check(gr ~= nil, "the KitnUI page declares the brand accent as three scalars")
+    local br = euiCore:match("tbAccentR%s*=%s*([%d%.]+)")
+    local bg = euiCore:match("tbAccentG%s*=%s*([%d%.]+)")
+    local bb = euiCore:match("tbAccentB%s*=%s*([%d%.]+)")
+    check(br ~= nil and bg ~= nil and bb ~= nil, "the Top Bar accent defaults are three scalars")
+    local sr, sg, sb = options:match('Get%("tbAccentR", ([%d%.]+)%), ns.TopBar.Get%("tbAccentG", ([%d%.]+)%), ns.TopBar.Get%("tbAccentB", ([%d%.]+)%)')
+    check(sr ~= nil, "the Top Bar swatch reads its defaults as three literals")
+
+    -- POSITIONAL call: the Top Bar's accent line is painted from literals.
+    local lr, lg, lb = bar:match("accent:SetColorTexture%(([%d%.]+), ([%d%.]+), ([%d%.]+), 1%)")
+    check(lr ~= nil, "the Top Bar accent line is painted from three literals")
+
+    if pr then
+        local copies = {
+            { "Theme.lua accent", tr, tg, tb },
+            { "nameplate arrow default", nr, ng, nb },
+            { "nameplate arrow fallback", fr, fg, fb },
+            { "KitnUI page accent", gr, gg, gb },
+            { "Top Bar accent default", br, bg, bb },
+            { "Top Bar swatch default", sr, sg, sb },
+            { "Top Bar accent line", lr, lg, lb },
+        }
+        for _, copy in ipairs(copies) do
+            local name, r, g, b = copy[1], copy[2], copy[3], copy[4]
+            if r then
+                eq(r, pr, "the " .. name .. " red channel matches the brand pink")
+                eq(g, pg, "the " .. name .. " green channel matches the brand pink")
+                eq(b, pb, "the " .. name .. " blue channel matches the brand pink")
+            end
+        end
+
+        -- The hex form. 0.549 * 255 rounds to 140, which is 8C; a change to the
+        -- triple that leaves the strings behind fails here.
+        local function channel(v) return math.floor(tonumber(v) * 255 + 0.5) end
+        local hex = string.format("%02X%02X%02X", channel(pr), channel(pg), channel(pb))
+        check(core:find('ns.title = "|cff' .. hex .. 'Kitn|r', 1, true) ~= nil,
+            "the chat prefix is drawn in the brand pink")
+        check(core:find('"|cff' .. hex .. '%s|r"', 1, true) ~= nil,
+            "ns.Color paints in the brand pink")
+
+        -- Every |cff string that names the addon or a /kitn command, in every
+        -- shipped Lua file and both .toc files. The Lua list comes from the XML
+        -- manifests, so a new file is covered the day it ships.
+        local shipped = {}
+        local function collect(xmlPath)
+            local dir = xmlPath:match("^(.*)/") or "."
+            local xml = read(xmlPath)
+            for file in xml:gmatch('<Script file="([^"]+)"') do
+                shipped[#shipped + 1] = dir .. "/" .. file:gsub("\\", "/")
+            end
+            for file in xml:gmatch('<Include file="([^"]+)"') do
+                collect(dir .. "/" .. file:gsub("\\", "/"))
+            end
+        end
+        collect("Installer/Installer.xml")
+        collect("KitnUI_EUI/EUITab.xml")
+        check(#shipped >= 18, "the manifests list every shipped Lua file")
+        shipped[#shipped + 1] = "KitnUI.toc"
+        shipped[#shipped + 1] = "KitnUI_EUI/KitnUI_EUI.toc"
+
+        local prefixes, strays = 0, 0
+        for _, path in ipairs(shipped) do
+            local text = read(path)
+            for _, pattern in ipairs({ "|cff(%x%x%x%x%x%x)Kitn|r", "|cff(%x%x%x%x%x%x)/kitn" }) do
+                for found in text:gmatch(pattern) do
+                    prefixes = prefixes + 1
+                    if found:upper() ~= hex then strays = strays + 1 end
+                end
+            end
+        end
+        check(prefixes >= 1, "the scan found at least one brand-coloured string")
+        eq(strays, 0, "every addon-name prefix and /kitn hint uses the brand pink hex")
+    end
 end
 
 -- The two named colour switches share one row. Built as full-width rows they
