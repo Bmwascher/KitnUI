@@ -857,6 +857,26 @@ end
 -- Load-mode pages (activate existing profiles, no reimport)
 ---------------------------------------------------------------------------------
 
+-- Where Load All leaves the user, from the three counts the handler gathers.
+-- A refused profile has its own load page to retry on, and there may be
+-- several, so that path stays on Welcome. A failed or skipped CDM has one
+-- page, and it is the page that shows the remedy, so both land there. Only
+-- the clean path jumps to Finish.
+function ns.LoadAllDestination(refused, cdmFailed, cdmSkipped)
+    if refused > 0 then return "stay" end
+    if cdmFailed > 0 or cdmSkipped then return "cdm" end
+    return "finish"
+end
+
+local function StepPageIndex(key)
+    local keys = ns.Wizard.stepKeys
+    if not keys then return nil end
+    for i, k in ipairs(keys) do
+        if k == key then return i end
+    end
+    return nil
+end
+
 local function WelcomeLoadPage()
     local f = WF()
     f.SubTitle:SetText(ns.WizardColor("KitnUI") .. " Profile Loader")
@@ -902,25 +922,33 @@ local function WelcomeLoadPage()
             ShowInstallToast(table.concat(trouble, " and ") .. " could not be loaded - see chat", 1, 0.2, 0.2)
         elseif cdmSkipped then
             -- Nothing failed, but "All profiles loaded!" would still be a lie:
-            -- the Cooldown Manager step never ran. Amber, and the chat line the
-            -- skip printed says how to turn it on.
+            -- the Cooldown Manager step never ran.
             ShowInstallToast("Profiles loaded, CDM layouts skipped - see chat", 1, 0.8, 0.2)
             PlayInstallSound()
         else
             SuccessToast("All profiles", "loaded!")
             PlayInstallSound()
+        end
+
+        -- A jump re-renders the frame, which is why each one returns instead
+        -- of falling through to the Next emphasis below.
+        local destination = ns.LoadAllDestination(refused, cdmFailed, cdmSkipped)
+        if destination == "finish" then
             -- Nothing left for the per-addon pages to do, so go to Finish rather
             -- than making the user page past a rail of completed steps to reach
-            -- the reload. Only this branch jumps: a refusal above still has its
-            -- own load page to retry on, and the CDM skip has a chat line to
-            -- read before moving on.
-            --
-            -- SetPage re-renders the frame, which is why this returns instead of
-            -- falling through to the Next emphasis below -- Finish is the last
-            -- page, so Next is hidden there anyway.
+            -- the reload. Finish is the last page, so Next is hidden there anyway.
             local pages = ns.Wizard.pages
             if pages and #pages > 0 then
                 ns.Wizard:SetPage(#pages)
+                return
+            end
+        elseif destination == "cdm" then
+            -- The CDM page shows what failed per spec, or that the Cooldown
+            -- Manager is off and where to turn it on, so the user lands on the
+            -- remedy rather than reading it out of chat.
+            local index = StepPageIndex("BlizzardCDM")
+            if index then
+                ns.Wizard:SetPage(index)
                 return
             end
         end
@@ -1085,13 +1113,18 @@ function ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode)
     for _, step in ipairs(addonSteps) do
         if profileLoadMode then
             local isImported = ns.db and ns.db.profiles and ns.db.profiles[step.key]
-            if isImported and step.key ~= "BlizzardCDM" then
+            if isImported then
                 if step.key == "EllesmereUI" then
                     tinsert(pages, EllesmereUILoadPage)
                 elseif step.key == "NSRT" then
                     tinsert(pages, NSRTLoadPage)
                 elseif step.key == "Blizzard_EditMode" then
                     tinsert(pages, EditModeLoadPage)
+                elseif step.key == "BlizzardCDM" then
+                    -- The import page, not a load page: CDM layouts belong to
+                    -- the character, so an alt has nothing to activate and has
+                    -- to be given its own copy.
+                    tinsert(pages, BlizzardCDMPage)
                 else
                     tinsert(pages, SimpleLoadPage(step.key, step.display))
                 end

@@ -223,6 +223,34 @@ eq(listsStep("BigWigs", false, nil), true, "a plain install still lists a skippe
 eq(listsStep("BigWigs", true, nil), true, "load mode lists a skipped step")
 
 ---------------------------------------------------------------------------------
+-- Load mode offers the Cooldown Manager page
+---------------------------------------------------------------------------------
+
+-- CDM layouts belong to the character, not the account, so loading them on an
+-- alt is the one load that is really an import. Gated like every other load
+-- step: an account that never took CDM is not handed it here.
+ns.db = { profiles = { BigWigs = true, BlizzardCDM = { [1] = "x" } }, addonVersions = {} }
+eq(listsStep("BlizzardCDM", true, nil), true, "load mode lists the CDM step once the account has used CDM")
+ns.db = { profiles = { BigWigs = true }, addonVersions = {} }
+eq(listsStep("BlizzardCDM", true, nil), false, "load mode withholds the CDM step from an account that never took it")
+
+---------------------------------------------------------------------------------
+-- Where Load All lands
+---------------------------------------------------------------------------------
+
+-- The decision is separate from the handler so the four outcomes can be pinned
+-- without a wizard frame. A refusal has its own page to retry on, so it stays;
+-- anything CDM-shaped lands on the page that shows the remedy; only the clean
+-- path jumps past the rail.
+check(type(ns.LoadAllDestination) == "function", "ns.LoadAllDestination is defined")
+eq(ns.LoadAllDestination(0, 0, false), "finish", "a clean load lands on Finish")
+eq(ns.LoadAllDestination(0, 2, false), "cdm", "failed CDM layouts land on the CDM page")
+eq(ns.LoadAllDestination(0, 0, true), "cdm", "a skipped CDM lands on the CDM page")
+eq(ns.LoadAllDestination(1, 0, false), "stay", "a refused profile stays on Welcome")
+eq(ns.LoadAllDestination(1, 2, false), "stay", "a refused profile outranks failed CDM layouts")
+eq(ns.LoadAllDestination(1, 0, true), "stay", "a refused profile outranks a skipped CDM")
+
+---------------------------------------------------------------------------------
 -- Only an import retires a skip
 ---------------------------------------------------------------------------------
 
@@ -395,7 +423,16 @@ eq(skipButton.shown, true, "outside load mode a skippable step offers Skip")
 ns.installerIsLoadMode = true
 W:SetSkip("BigWigs")
 eq(skipButton.shown, false, "in load mode Skip is not offered")
+
+-- The CDM page now renders in load mode, and two rules each hide Skip there:
+-- the loader offers none, and CDM has nothing to skip against. Both are pinned
+-- so that loosening either one alone cannot put a Skip on that page.
+ns.db.profiles.BlizzardCDM = { [1] = "x" }
+W:SetSkip("BlizzardCDM")
+eq(skipButton.shown, false, "in load mode the CDM step offers no Skip")
 ns.installerIsLoadMode = false
+W:SetSkip("BlizzardCDM")
+eq(skipButton.shown, false, "outside load mode the CDM step still offers no Skip")
 
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
