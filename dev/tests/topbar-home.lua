@@ -68,6 +68,9 @@ check(housingWatcher ~= nil, "the housing watcher exists")
 if housingWatcher then
     check(housingWatcher.events.HOUSE_PLOT_ENTERED, "the watcher handles entering a housing plot")
     check(housingWatcher.events.HOUSE_PLOT_EXITED, "the watcher handles leaving a housing plot")
+    -- The arrival trigger. HOUSE_PLOT_ENTERED was measured not firing on a
+    -- teleport home, so without this the button has nothing to re-wire it.
+    check(housingWatcher.events.PLAYER_ENTERING_WORLD, "the watcher handles entering the world")
 
     housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", {
         {
@@ -109,6 +112,32 @@ tooltip.lines = {}
 home.tooltip(tooltip)
 check(tooltip.lines[3] and tooltip.lines[3]:find("Return to Previous Location", 1, true),
     "another owned house still describes the available return action", tooltip.lines[3])
+
+-- The regression this file could not catch before. The house never changes, so
+-- a refresh gated on identity alone swallowed every hover and left the button
+-- wired to a stale action for good.
+local HOUSE_A = { { neighborhoodGUID = "Neighborhood-A", houseGUID = "House-A", plotID = 7 } }
+
+if housingWatcher then
+    canReturn = false
+    local beforeChanged = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", HOUSE_A)
+    eq(applyCalls, beforeChanged + 1, "an unchanged house with a changed action still refreshes")
+
+    -- The other half of the same test: the change test must stay cheap, because
+    -- the button re-requests the list from every hover.
+    home.attrs(button)
+    local beforeSame = applyCalls
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_HOUSE_LIST_UPDATED", HOUSE_A)
+    eq(applyCalls, beforeSame, "an unchanged house and action does not refresh")
+
+    -- PLAYER_ENTERING_WORLD carries isInitialLogin, not a house list. Routed
+    -- into the list parser that boolean reads as an empty list and clears the
+    -- cache, which would leave the button with no secure action at all.
+    housingWatcher.scripts.OnEvent(housingWatcher, "PLAYER_ENTERING_WORLD", true)
+    home.attrs(button)
+    eq(button.attributes.type1, "teleporthome", "world entry leaves the cached house intact")
+end
 
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
