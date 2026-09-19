@@ -11,6 +11,7 @@
     <Script file="Setup.lua" />
     <Script file="Merge.lua" />
     <Script file="MergeInputs.lua" />
+    <Script file="Update.lua" />
     <Script file="Wizard.lua" />
     <Script file="Installer.lua" />
     <Script file="Extras.lua" />
