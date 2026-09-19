@@ -553,6 +553,9 @@ local defaults = {
     euiSnapGlobal = {},     -- [key] = { prev = <old value> } for anything outside a profile: EllesmereUIDB root keys, plus Lulu's two per-character debts (keys prefixed "lulu")
     devMode = false,        -- toggle dev-mode update popup (/kitn dev)
     euiThemeChosen = nil,   -- true once an import or the login catch-up has decided the account-wide options theme; absent until KitnUI successfully applies and records one
+    euiBase = nil,          -- the EllesmereUI string the stored KitnUI profile came from (install or update); the base an update merges against
+    euiUpdateReport = nil,  -- the last update's { conflicts = {...}, kept, applied, noBase, overrideSet }, for the Finish recap and /kitn version
+    euiBackup = nil,        -- what Restore previous puts back beside the backup profile: { version, base, assignedSpecs, colorsPullFrom, ppUIScale, ppUIScaleAuto, scaleTaken }
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather
@@ -1050,6 +1053,10 @@ KitnCommands["version"] = function()
                 status = "Not Imported" .. (current and (" v" .. current) or "")
                 color = "|cffFF0000"
             end
+            local report = key == "EllesmereUI" and ns.db.euiUpdateReport
+            if type(report) == "table" and type(report.conflicts) == "table" then
+                status = status .. " (updated, " .. #report.conflicts .. " replaced)"
+            end
             print("  " .. (names[key] or key) .. ": " .. color .. status .. "|r")
         end
     end
@@ -1146,6 +1153,7 @@ local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
+    if ns.EUISeedBase then ns.EUISeedBase() end
 
     -- Next frame, not here: the companion addon copies the theme apply across
     -- the bridge on its own PLAYER_LOGIN, and this addon loads first, so a call
