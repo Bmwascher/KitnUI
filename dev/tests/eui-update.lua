@@ -458,7 +458,7 @@ eq(plan.warnMoved, false, "click: nothing moves to the backup")
 
 local text = ns.EUIConfirmText(plan)
 check(text:find("1 of your changes will be replaced", 1, true), "confirm: the count line", text)
-check(text:find("Kitn's version is used", 1, true), "confirm: the promise line")
+check(text:find("KitnUI's version is used", 1, true), "confirm: the promise line")
 check(not text:find("previous backup", 1, true), "confirm: no backup line without a backup")
 check(not text:find("Spec Overrides", 1, true), "confirm: no override line when no side carries one")
 
@@ -663,7 +663,7 @@ E.switchFails = true
 calls = {}
 ok, err = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback B: reports failure")
-check(err:find("Could not switch", 1, true), "rollback B: names the switch", err)
+check(err:find("Could not switch to the updated profile", 1, true), "rollback B: names the switch", err)
 eq(db.profiles[ns.EUIBackupName], nil, "rollback B: the backup name is gone")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback B: the player's profile is back")
 eq(db.activeProfile, "KitnUI", "rollback B: and active")

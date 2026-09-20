@@ -450,13 +450,20 @@ local function AmberToast(message) ShowInstallToast(message, 1, 0.8, 0.2) end
 -- The popup affords three message lines; the update's confirm carries up to
 -- seven sentences. Grown by the measured overflow, the way the popup grows
 -- itself for its type-to-confirm gate. Reached by name because the popup
--- returns nothing.
+-- returns nothing. The text is measured again on the next frame: until the
+-- popup lays out, the first measurement can still be the previous message's.
 local function GrowConfirmPopup()
     local popup = _G.EUIConfirmPopup
     local msg = popup and popup._msg
     if not (msg and msg.GetStringHeight and popup.GetHeight and popup.SetHeight) then return end
-    local extra = (msg:GetStringHeight() or 0) - 44
-    if extra > 0 then popup:SetHeight(popup:GetHeight() + extra) end
+    local base = popup:GetHeight()
+    local function grow()
+        if not popup:IsShown() then return end
+        local extra = (msg:GetStringHeight() or 0) - 44
+        popup:SetHeight(base + (extra > 0 and extra or 0))
+    end
+    grow()
+    C_Timer.After(0, grow)
 end
 
 local function RestoreEUIPrevious()
@@ -563,12 +570,12 @@ DrawEUIActions = function()
         if noBase then f.Option1:SetWidth(240) end
         SetVariant(f.Option1, "primary")
         if not noBase then
-            ns.Wizard:SetOption(2, "Reset to Kitn's profile", InstallEUIProfile, 12)
+            ns.Wizard:SetOption(2, "Reset to KitnUI's profile", InstallEUIProfile, 12)
             SetVariant(f.Option2, "selectable")
             secondAction = true
         end
     elseif state == "stale" then
-        ns.Wizard:SetOption(1, "Reset to Kitn's profile", InstallEUIProfile, 12)
+        ns.Wizard:SetOption(1, "Reset to KitnUI's profile", InstallEUIProfile, 12)
         SetVariant(f.Option1, "primary")
         if why then f.Desc2:SetText(f.Desc2:GetText() .. "  |cff9d9d9d" .. why .. "|r") end
     else

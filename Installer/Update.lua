@@ -20,12 +20,12 @@ local function DB() return _G.EllesmereUIDB end
 -- Every sentence the flow shows. The design's sentences are reproduced
 -- verbatim; the rest are this file's.
 ns.EUI_UPDATE_TEXT = {
-    promise = "Update keeps everything you changed and brings in everything Kitn changed. Where you both changed the same thing, Kitn's version is used.",
-    replaces = "%d of your changes will be replaced because Kitn changed the same things.",
+    promise = "Update keeps everything you changed and brings in everything KitnUI changed. Where you both changed the same thing, KitnUI's version is used.",
+    replaces = "%d of your changes will be replaced because KitnUI changed the same things.",
     noBase = "KitnUI has no record of the profile you installed, so this update replaces your changes.",
     backupReplaced = "Your previous backup will be replaced.",
     overridesKept = "Your Spec Overrides are kept.",
-    overridesTaken = "Kitn's Spec Overrides replace yours. Kitn's saved layouts may also replace bar and element positions, sizes and links you changed.",
+    overridesTaken = "KitnUI's Spec Overrides replace yours. KitnUI's saved layouts may also replace bar and element positions, sizes and links you changed.",
     links = "Links from updated bars to modules KitnUI disables, to modules with no Unlock Mode checkbox, or that EllesmereUI cannot identify will be removed. These are not included in the count.",
     health = "Your custom health bar colour will be reset to the class colour. This is not included in the count.",
     moved = "Your profile keybind and sync-group membership move to the backup. Restore previous brings them back.",
@@ -38,6 +38,7 @@ ns.EUI_UPDATE_TEXT = {
     preparing = "Preparing...",
     importFail = "EllesmereUI import failed",
     switchFail = "Could not switch to the backup.",
+    switchFailUpdate = "Could not switch to the updated profile.",
     renameFail = "Could not back up your profile.",
     sync = "Your active profile and the backup share a sync group. Remove one of them from the group first.",
     notRestorable = "Switch to your KitnUI profile first",
@@ -440,7 +441,7 @@ function ns.EUIApplyUpdate(plan)
 
     if status == "spec_locked" then
         e.SetProfile(NAME)
-        if d.activeProfile ~= NAME then return rollbackB(T.switchFail) end
+        if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate) end
         if plan.merged.customColors and d.colorsApplyToAllProfiles ~= false then
             d.colorsPullFrom = NAME
         end
