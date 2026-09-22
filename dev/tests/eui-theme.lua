@@ -4,7 +4,7 @@
 -- ╚══════════════════════════════════════════════════════════════╝
 --
 -- Run from the repo root:
---   C:\Users\Brandon\Documents\WoW-Dev\lua51\bin\lua.exe dev/tests/eui-theme.lua
+--   C:\Users\Brandon\Documents\KitnDev\tools\lua51\bin\lua.exe dev/tests/eui-theme.lua
 
 local failures = 0
 local checks = 0

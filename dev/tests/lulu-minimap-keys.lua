@@ -5,7 +5,7 @@
 -- ╚══════════════════════════════════════════════════════════════╝
 --
 -- Run from the repo root:
---   C:\Users\Brandon\Documents\WoW-Dev\lua51\bin\lua.exe dev/tests/lulu-minimap-keys.lua
+--   C:\Users\Brandon\Documents\KitnDev\tools\lua51\bin\lua.exe dev/tests/lulu-minimap-keys.lua
 -- Exits non-zero on the first failure and prints what broke.
 --
 -- IT LOADS KitnUI_EUI/Lulu.lua AS A CHUNK. A pasted copy of the table could pass

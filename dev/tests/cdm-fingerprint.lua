@@ -5,7 +5,7 @@
 -- ╚══════════════════════════════════════════════════════════════╝
 --
 -- Run from the repo root:
---   C:\Users\Brandon\Documents\WoW-Dev\lua51\bin\lua.exe dev/tests/cdm-fingerprint.lua
+--   C:\Users\Brandon\Documents\KitnDev\tools\lua51\bin\lua.exe dev/tests/cdm-fingerprint.lua
 -- Exits non-zero on the first failure and prints what broke.
 --
 -- IT LOADS Installer/Core.lua AND Data/Classes/BlizzardCDM.lua AS CHUNKS. A

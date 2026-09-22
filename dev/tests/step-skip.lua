@@ -6,7 +6,7 @@
 -- ╚══════════════════════════════════════════════════════════════╝
 --
 -- Run from the repo root:
---   C:\Users\Brandon\Documents\WoW-Dev\lua51\bin\lua.exe dev/tests/step-skip.lua
+--   C:\Users\Brandon\Documents\KitnDev\tools\lua51\bin\lua.exe dev/tests/step-skip.lua
 --
 -- The one property worth a gate: a skip stores the SHIPPED VERSION, not a
 -- boolean, so it retires itself when a newer profile ships. A boolean would
