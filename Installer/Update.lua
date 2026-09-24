@@ -501,7 +501,7 @@ function ns.EUIRestorePrevious()
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
     if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
-    restoreScale(rec)
+    local scaled = restoreScale(rec)
     ns.db.euiBase = rec.base
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.addonVersions.EllesmereUI = rec.version
@@ -509,5 +509,5 @@ function ns.EUIRestorePrevious()
     ns.db.euiBackup = nil
     refreshAll()
     ns.ApplyEUIModuleSet()
-    return true
+    return true, scaled and T.reloadScale or nil
 end

@@ -946,7 +946,7 @@ KitnCommands["reset"] = function()
     local euiDB = _G.EllesmereUIDB
     if ns.EUIBackupName and type(euiDB) == "table" and type(euiDB.profiles) == "table"
         and euiDB.profiles[ns.EUIBackupName] ~= nil then
-        ns.QueueMessage(ns.title .. ": Your EllesmereUI profile from before KitnUI's last update is still there as " .. ns.Color(ns.EUIBackupName) .. ". Switch to it or delete it in EllesmereUI's profiles.")
+        ns.QueueMessage(ns.title .. ": Your EllesmereUI profile from before KitnUI's last update is still there as " .. ns.Color(ns.EUIBackupName) .. ". It is yours to keep or delete in EllesmereUI's profiles.")
     end
 
     -- That teardown queues a line for anything it could NOT put back, and the

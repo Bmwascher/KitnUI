@@ -95,7 +95,7 @@ local function EUIToast(kind, message, detail)
         ShowInstallToast(message)
         PlayInstallSound()
     end
-    print(ns.title .. ": " .. message .. (detail and (" Error: " .. tostring(detail)) or ""))
+    print(ns.title .. ": " .. tostring(message) .. (detail and (" Error: " .. tostring(detail)) or ""))
 end
 
 ---------------------------------------------------------------------------------
@@ -505,7 +505,8 @@ local function RestoreEUIPrevious()
                 EUIToast("warn", err)
                 return
             end
-            EUIToast("success", ns.WizardColor("EllesmereUI") .. " previous profile restored!")
+            local line = ns.WizardColor("EllesmereUI") .. " previous profile restored!"
+            EUIToast("success", err and (line .. " " .. err) or line)
             EllesmereUIPage()
         end,
     })
@@ -1150,12 +1151,11 @@ local function EllesmereUILoadPage()
         -- installer opened, so a host that went away in between refuses here --
         -- and saying "profile loaded!" over that would be the one wrong answer.
         if ns.SetupAddon("EllesmereUI", false) == false then
-            ShowInstallToast("EllesmereUI load failed", 1, 0.2, 0.2)
+            EUIToast("fail", "EllesmereUI load failed")
             return
         end
         WF().Desc2:SetText("Status: " .. ns.Green("Loaded"))
-        SuccessToast("EllesmereUI", "profile loaded!")
-        PlayInstallSound()
+        EUIToast("success", ns.WizardColor("EllesmereUI") .. " profile loaded!")
         SetVariant(WF().Next, "primary")
     end)
 end
