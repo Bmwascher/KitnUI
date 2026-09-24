@@ -2,7 +2,8 @@
 -- ║  eui-reset.lua                                               ║
 -- ║  Purpose: Gate for what the full EllesmereUI install records ║
 -- ║           for the update: the base string, the cleared       ║
--- ║           report, and the scale flag on a kept backup.       ║
+-- ║           report, the scale flag on a kept backup, and the   ║
+-- ║           line /kitn reset leaves about the backup profile.  ║
 -- ║           Loads the SHIPPED code, never a copy.              ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
@@ -104,6 +105,43 @@ eq(ns.db.euiBase, "shipped-string", "another addon's completion leaves the base 
 ns.db = { profiles = { EllesmereUI = true }, addonVersions = {}, perChar = {} }
 eq(ns.SetupAddon("EllesmereUI", false), true, "the load succeeds")
 eq(ns.db.euiBase, nil, "the load records no base")
+
+---------------------------------------------------------------------------------
+-- /kitn reset names the backup profile it cannot take with it
+---------------------------------------------------------------------------------
+
+_G.format = string.format
+_G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+_G.C_AddOns.GetAddOnMetadata = function() return "test" end
+_G.ReloadUI = function() end
+_G.StaticPopupDialogs = {}
+_G.StaticPopup_Show = function() end
+
+local core = { data = {} }
+local coreChunk, coreErr = loadfile("Installer/Core.lua")
+if not coreChunk then
+    print("FAIL  could not load Installer/Core.lua: " .. tostring(coreErr))
+    os.exit(1)
+end
+coreChunk("KitnUI", core)
+core.EUIBackupName = "KitnUI (before update)"
+core.EUIResetAll = function() return true end
+
+local function resetLines(profiles)
+    _G.EllesmereUIDB = { profiles = profiles }
+    core.db = {}
+    _G.KitnUIDB = core.db
+    _G.KitnCommands.reset()
+    local found = 0
+    for _, line in ipairs(_G.KitnUIDB and _G.KitnUIDB.pendingMessages or {}) do
+        if line:find("KitnUI (before update)", 1, true) then found = found + 1 end
+    end
+    return found
+end
+
+check(type(_G.KitnCommands) == "table" and type(_G.KitnCommands.reset) == "function", "the reset command is defined")
+eq(resetLines({ KitnUI = {}, ["KitnUI (before update)"] = {} }), 1, "a reset with the backup profile present queues one line naming it")
+eq(resetLines({ KitnUI = {} }), 0, "a reset with no backup profile queues nothing about it")
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
