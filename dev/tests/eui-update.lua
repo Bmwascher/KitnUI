@@ -188,6 +188,8 @@ E.ImportProfile = function(payload, name)
     bump("import")
     E.lastImport = payload
     if E.importMode == "throw_before" then error("boom before store") end
+    if E.importMode == "false_silent" then return false end
+    if E.importMode == "false_said" then return false, "bad payload" end
     if E.importMode == "throw_scale" then
         if payload.data.uiScale then
             db.ppUIScale = payload.data.uiScale
@@ -626,15 +628,39 @@ ns.EUIStartDecodes()
 plan = ns.EUIPrepareUpdate()
 E.importMode = "throw_before"
 calls = {}
-ok, err = ns.EUIApplyUpdate(plan)
+local detail
+ok, err, detail = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback A: reports failure")
-check(err:find("boom before store", 1, true) and err:find("put back", 1, true), "rollback A: the error and the outcome are named", err)
+check(err:find("EllesmereUI import failed.", 1, true) and err:find("put back", 1, true), "rollback A: the failure and the outcome are named", err)
+check(not err:find("boom", 1, true), "rollback A: the raw error stays out of the toast line", err)
+check(detail and detail:find("boom before store", 1, true), "rollback A: the raw error comes back apart", detail)
+check(not err:find("/reload", 1, true), "rollback A: no reload asked for when the scale never moved", err)
 eq(db.profiles[ns.EUIBackupName], nil, "rollback A: the backup name is gone")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback A: the player's profile is back under its name")
 eq(db.activeProfile, "KitnUI", "rollback A: and active")
 eq(db.specProfiles[71], "KitnUI", "rollback A: assignments followed the rename back")
 eq(ns.db.euiBackup, nil, "rollback A: the record is cleared")
 eq(ns.db.addonVersions.EllesmereUI, "2026.08.22", "rollback A: not stamped")
+
+-- Rollback A on a refusal rather than a throw: the importer's own words, when it
+-- gives any, are the detail; none is invented when it gives none.
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.importMode = "false_said"
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "refused import: reports failure")
+check(err:find("EllesmereUI import failed.", 1, true) and err:find("put back", 1, true), "refused import: the failure and the outcome are named", err)
+eq(detail, "bad payload", "refused import: the importer's message is the detail")
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.importMode = "false_silent"
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "silent refusal: reports failure")
+check(err:find("EllesmereUI import failed.", 1, true), "silent refusal: the failure is named", err)
+eq(db.activeProfile, "KitnUI", "silent refusal: the player's profile is back")
+eq(detail, nil, "silent refusal: no detail is invented")
 
 -- Rollback A after the importer wrote the scale and then threw: the scale
 -- goes back with the profile.
@@ -646,6 +672,7 @@ E.importMode = "throw_scale"
 ok, err = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback A scale: reports failure")
 check(err:find("put back", 1, true), "rollback A scale: rolled back A", err)
+check(err:find("Type /reload to put your UI scale back.", 1, true), "rollback A scale: asks for a reload", err)
 eq(db.ppUIScale, 0.9, "rollback A scale: the scale is put back")
 eq(db.ppUIScaleAuto, false, "rollback A scale: and its auto flag")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback A scale: the player's profile is back")
@@ -661,9 +688,11 @@ plan = ns.EUIPrepareUpdate()
 E.importMode = "spec_locked"
 E.switchFails = true
 calls = {}
-ok, err = ns.EUIApplyUpdate(plan)
+ok, err, detail = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback B: reports failure")
 check(err:find("Could not switch to the updated profile", 1, true), "rollback B: names the switch", err)
+check(err:find("Type /reload to put your UI scale back.", 1, true), "rollback B: asks for a reload after the scale moved", err)
+eq(detail, nil, "rollback B: no importer error to report")
 eq(db.profiles[ns.EUIBackupName], nil, "rollback B: the backup name is gone")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback B: the player's profile is back")
 eq(db.activeProfile, "KitnUI", "rollback B: and active")
@@ -677,9 +706,11 @@ freshInstall()
 ns.EUIStartDecodes()
 plan = ns.EUIPrepareUpdate()
 E.importMode = "throw_stored"
-ok, err = ns.EUIApplyUpdate(plan)
+ok, err, detail = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback B (thrown): reports failure")
-check(err:find("boom after store", 1, true) and err:find("put back", 1, true), "rollback B (thrown): the error and the outcome are named", err)
+check(err:find("EllesmereUI import failed.", 1, true) and err:find("put back", 1, true), "rollback B (thrown): the failure and the outcome are named", err)
+check(detail and detail:find("boom after store", 1, true), "rollback B (thrown): the raw error comes back apart", detail)
+check(err:find("Type /reload to put your UI scale back.", 1, true), "rollback B (thrown): asks for a reload after the scale moved", err)
 eq(db.activeProfile, "KitnUI", "rollback B (thrown): the player's profile is active")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback B (thrown): and is the player's")
 
@@ -689,9 +720,10 @@ ns.EUIStartDecodes()
 plan = ns.EUIPrepareUpdate()
 E.importMode = "throw_active"
 calls = {}
-ok, err = ns.EUIApplyUpdate(plan)
+ok, err, detail = ns.EUIApplyUpdate(plan)
 eq(ok, false, "tail error: reports failure")
-check(err:find("boom in the tail", 1, true), "tail error: the error is reported", err)
+check(err:find("Restore previous puts your previous profile back.", 1, true), "tail error: points at Restore", err)
+check(detail and detail:find("boom in the tail", 1, true), "tail error: the error is reported apart", detail)
 eq(db.activeProfile, "KitnUI", "tail error: the merged profile stays active")
 eq(db.profiles.KitnUI.addons[F].x, 5, "tail error: and is the merge")
 check(db.profiles[ns.EUIBackupName] ~= nil, "tail error: the backup profile is kept")
@@ -730,6 +762,7 @@ eq(db.profiles.KitnUI.addons[F].y, 9, "restore: the player's profile is back")
 eq(db.activeProfile, "KitnUI", "restore: and active")
 check(db.specProfiles[71] == "KitnUI" and db.specProfiles[72] == "KitnUI", "restore: assignments are back")
 eq(db.ppUIScale, 0.9, "restore: the scale is back")
+eq(err, "Type /reload to put your UI scale back.", "restore: asks for a reload after the scale moved")
 eq(db.colorsPullFrom, nil, "restore: the colour source is back to nil")
 eq(calls.colors, 1, "restore: colours re-applied")
 eq(ns.db.euiBase, O_STR, "restore: the base is the backup's")

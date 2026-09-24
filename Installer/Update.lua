@@ -39,6 +39,8 @@ ns.EUI_UPDATE_TEXT = {
     importFail = "EllesmereUI import failed",
     switchFail = "Could not switch to the backup.",
     switchFailUpdate = "Could not switch to the updated profile.",
+    reloadScale = "Type /reload to put your UI scale back.",
+    tailRestore = "Restore previous puts your previous profile back.",
     renameFail = "Could not back up your profile.",
     sync = "Your active profile and the backup share a sync group. Remove one of them from the group first.",
     notRestorable = "Switch to your KitnUI profile first",
@@ -342,32 +344,37 @@ local function refreshAll()
     if e and e.RefreshAllAddons then e.RefreshAllAddons() end
 end
 
+-- True when the import had changed the scale. EllesmereUI applies the scale
+-- only at startup, so the one the import put on screen stays until a reload.
 local function restoreScale(rec)
     local d = DB()
-    if not (isTable(d) and isTable(rec) and rec.scaleTaken) then return end
+    if not (isTable(d) and isTable(rec) and rec.scaleTaken) then return false end
+    local changed = d.ppUIScale ~= rec.ppUIScale or d.ppUIScaleAuto ~= rec.ppUIScaleAuto
     d.ppUIScale = rec.ppUIScale
     d.ppUIScaleAuto = rec.ppUIScaleAuto
+    return changed
 end
 
-local function rolledBack(err, ok)
-    if ok then return false, err .. " Your previous profile was put back." end
-    return false, err .. " Your previous profile is named " .. BACKUP .. "."
+local function rolledBack(err, ok, detail, scaled)
+    local line = err .. (ok and " Your previous profile was put back." or (" Your previous profile is named " .. BACKUP .. "."))
+    if scaled then line = line .. " " .. T.reloadScale end
+    return false, line, detail
 end
 
 -- Nothing stored: the rename alone moves everything back.
-local function rollbackA(err)
+local function rollbackA(err, detail)
     local e, d = E(), DB()
     e.RenameProfile(BACKUP, NAME)
     local ok = d.activeProfile == NAME
-    restoreScale(ns.db.euiBackup)
+    local scaled = restoreScale(ns.db.euiBackup)
     ns.db.euiBackup = nil
     refreshAll()
-    return rolledBack(err, ok)
+    return rolledBack(err, ok, detail, scaled)
 end
 
 -- Stored without activating and the switch failed: remove the stored profile,
 -- put the backup back under its name and its assignments back on it.
-local function rollbackB(err)
+local function rollbackB(err, detail)
     local e, d = E(), DB()
     local rec = ns.db.euiBackup
     e.DeleteProfile(NAME)
@@ -376,15 +383,16 @@ local function rollbackB(err)
     for _, spec in ipairs(isTable(rec) and rec.assignedSpecs or {}) do
         e.AssignProfileToSpec(NAME, spec)
     end
-    restoreScale(rec)
+    local scaled = restoreScale(rec)
     ns.db.euiBackup = nil
     refreshAll()
-    return rolledBack(err, ok)
+    return rolledBack(err, ok, detail, scaled)
 end
 
 -- Applies a confirmed plan. Returns true on success; false and a line on a
--- refusal or a rolled-back failure; "reconfirm" and a new plan when the
--- activation prediction changed while the dialog was open.
+-- refusal or a failure, plus the importer's own error text when it raised one;
+-- "reconfirm" and a new plan when the activation prediction changed while the
+-- dialog was open.
 function ns.EUIApplyUpdate(plan)
     local why = refusal()
     if why then return false, why end
@@ -421,22 +429,23 @@ function ns.EUIApplyUpdate(plan)
     end
 
     local ok, result, importErr, status = pcall(e.ImportProfile, { version = 3, type = "full", data = plan.merged }, NAME)
-    local failure
+    local failed, detail = not ok or not result, nil
     if not ok then
-        failure = tostring(result)
+        detail = tostring(result)
     elseif not result then
-        failure = importErr or "unknown error"
+        detail = importErr
     end
-    if failure then
+    if failed then
+        local line = T.importFail .. "."
         if d.profiles[NAME] == nil then
-            return rollbackA(failure)
+            return rollbackA(line, detail)
         elseif d.activeProfile ~= NAME then
-            return rollbackB(failure)
+            return rollbackB(line, detail)
         end
         -- The activation tail threw after the account writes: the merged
         -- profile is active and the backup is intact, so Restore is offered.
         refreshAll()
-        return false, failure
+        return false, line .. " " .. T.tailRestore, detail
     end
 
     if status == "spec_locked" then
@@ -492,7 +501,7 @@ function ns.EUIRestorePrevious()
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
     if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
-    restoreScale(rec)
+    local scaled = restoreScale(rec)
     ns.db.euiBase = rec.base
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.addonVersions.EllesmereUI = rec.version
@@ -500,5 +509,5 @@ function ns.EUIRestorePrevious()
     ns.db.euiBackup = nil
     refreshAll()
     ns.ApplyEUIModuleSet()
-    return true
+    return true, scaled and T.reloadScale or nil
 end
