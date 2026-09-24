@@ -76,6 +76,28 @@ local function SuccessToast(name, action)
     ShowInstallToast(ns.WizardColor(name) .. " " .. action)
 end
 
+local function PlaySoundKit(key)
+    local id = SOUNDKIT and SOUNDKIT[key]
+    if id then PlaySound(id, "Master") end
+end
+
+-- The EllesmereUI step's toasts. Each is also heard, and said in chat, where it
+-- outlasts the toast; `detail` (an importer's own error text) goes to chat only,
+-- being too long for the toast. kind: "success", "warn" (a refusal) or "fail".
+local function EUIToast(kind, message, detail)
+    if kind == "fail" then
+        ShowInstallToast(message, 1, 0.2, 0.2)
+        PlaySoundKit("RAID_WARNING")
+    elseif kind == "warn" then
+        ShowInstallToast(message, 1, 0.8, 0.2)
+        PlaySoundKit("IG_QUEST_LOG_ABANDON_QUEST")
+    else
+        ShowInstallToast(message)
+        PlayInstallSound()
+    end
+    print(ns.title .. ": " .. message .. (detail and (" Error: " .. tostring(detail)) or ""))
+end
+
 ---------------------------------------------------------------------------------
 -- Per-addon overwrite confirmation (EllesmereUI's styled popup)
 ---------------------------------------------------------------------------------
@@ -412,7 +434,7 @@ local function ShowLookOptions()
             -- config page's own wrapper, not in it, so without this guard a
             -- mid-fight click stores a look the screen never finishes painting.
             if InCombatLockdown() then
-                ShowInstallToast("Appearance cannot be changed in combat", 1, 0.8, 0.2)
+                EUIToast("warn", "Appearance cannot be changed in combat")
                 return
             end
             ns.ApplyLook(look.key)
@@ -433,19 +455,16 @@ end
 local function InstallEUIProfile()
     ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
         if not ns.SetupAddon("EllesmereUI", true) then
-            ShowInstallToast("EllesmereUI import failed", 1, 0.2, 0.2)
+            EUIToast("fail", "EllesmereUI import failed")
             return
         end
         ShowStatusAndVersion("EllesmereUI")
-        SuccessToast("EllesmereUI", "profile imported!")
-        PlayInstallSound()
+        EUIToast("success", ns.WizardColor("EllesmereUI") .. " profile imported!")
         -- Redrawn rather than handed off in place: a reset changes which
         -- actions the page offers, and the look row appears with the profile.
         EllesmereUIPage()
     end)
 end
-
-local function AmberToast(message) ShowInstallToast(message, 1, 0.8, 0.2) end
 
 -- The popup affords three message lines; the update's confirm carries up to
 -- seven sentences. Grown by the measured overflow, the way the popup grows
@@ -472,7 +491,7 @@ end
 local function RestoreEUIPrevious()
     if not (ns.EUIRestorable and EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
     if ns.EUIRestorable() ~= "restore" then
-        AmberToast(ns.EUI_UPDATE_TEXT.notRestorable)
+        EUIToast("warn", ns.EUI_UPDATE_TEXT.notRestorable)
         return
     end
     EllesmereUI:ShowConfirmPopup({
@@ -483,11 +502,10 @@ local function RestoreEUIPrevious()
         onConfirm = function()
             local ok, err = ns.EUIRestorePrevious()
             if not ok then
-                AmberToast(err)
+                EUIToast("warn", err)
                 return
             end
-            SuccessToast("EllesmereUI", "previous profile restored!")
-            PlayInstallSound()
+            EUIToast("success", ns.WizardColor("EllesmereUI") .. " previous profile restored!")
             EllesmereUIPage()
         end,
     })
@@ -498,18 +516,17 @@ end
 local ConfirmEUIUpdate
 
 local function AcceptEUIUpdate(plan)
-    local ok, result = ns.EUIApplyUpdate(plan)
+    local ok, result, detail = ns.EUIApplyUpdate(plan)
     if ok == "reconfirm" then
         ConfirmEUIUpdate(result)
         return
     end
     if not ok then
-        ShowInstallToast(result, 1, 0.2, 0.2)
+        EUIToast("fail", result, detail)
         EllesmereUIPage()
         return
     end
-    ShowInstallToast(ns.EUIUpdateToast(plan))
-    PlayInstallSound()
+    EUIToast("success", ns.EUIUpdateToast(plan))
     EllesmereUIPage()
 end
 
@@ -542,7 +559,7 @@ local function UpdateEUIProfile()
     local plan, why = ns.EUIPrepareUpdate()
     if not plan then
         if why == ns.EUI_UPDATE_TEXT.preparing then ns.EUIStartDecodes(OnEUIDecodesReady) end
-        AmberToast(why)
+        EUIToast("warn", why)
         return
     end
     ConfirmEUIUpdate(plan)
