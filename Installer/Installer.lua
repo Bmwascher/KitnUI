@@ -95,7 +95,10 @@ local function EUIToast(kind, message, detail)
         ShowInstallToast(message)
         PlayInstallSound()
     end
-    print(ns.title .. ": " .. tostring(message) .. (detail and (" Error: " .. tostring(detail)) or ""))
+    print(ns.title .. ": " .. tostring(message))
+    if detail then
+        print(ns.title .. ": If this keeps happening, include this in a bug report: " .. tostring(detail))
+    end
 end
 
 ---------------------------------------------------------------------------------
