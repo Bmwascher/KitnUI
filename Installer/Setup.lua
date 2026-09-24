@@ -79,10 +79,20 @@ local function CompleteSetup(addonKey)
         ns.db.addonVersions[trackKey] = dataVersion
     end
 
+    -- The string that produced the stored profile is what a later update
+    -- compares the player's profile against.
+    if trackKey == "EllesmereUI" and type(ns.data.EllesmereUI) == "string" then
+        ns.db.euiBase = ns.data.EllesmereUI
+    end
+
     local charKey = UnitName("player") .. "-" .. GetRealmName()
     ns.db.perChar[charKey] = ns.db.perChar[charKey] or {}
     ns.db.perChar[charKey].loaded = true
 end
+
+-- The update path lands a profile through its own import call and reaches
+-- this point from another file.
+ns.CompleteSetup = CompleteSetup
 
 local function HasData(addonKey)
     local d = ns.data[addonKey]
@@ -140,6 +150,13 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
         end
 
         CompleteSetup(addonKey)
+
+        -- A full install replaces the profile whole, so the last update's
+        -- report no longer describes it. The backup profile stays: Restore
+        -- previous after a reset still returns the pre-update profile, and the
+        -- scale this install applied is what that restore has to undo.
+        ns.db.euiUpdateReport = nil
+        if type(ns.db.euiBackup) == "table" then ns.db.euiBackup.scaleTaken = true end
 
         -- The import's enable sweep just turned every module back on that the
         -- pack did not name, and the action bars are deliberately not named.

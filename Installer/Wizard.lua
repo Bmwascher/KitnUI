@@ -171,6 +171,12 @@ function W:Build()
     -- Esc closes the wizard (standard modal behavior); named frame required.
     tinsert(UISpecialFrames, "KitnUIWizard")
 
+    -- Esc and the close button both end here; a decode started for a page
+    -- must not report into a window that is gone.
+    f:SetScript("OnHide", function()
+        if ns.EUICancelDecodes then ns.EUICancelDecodes() end
+    end)
+
     -- Title: left-aligned in the content column, inside the baked header band.
     f.SubTitle = EllesmereUI.MakeFont(f, 24, "", 1, 1, 1)
     f.SubTitle:SetAlpha(0.98)

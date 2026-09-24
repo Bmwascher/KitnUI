@@ -9,7 +9,7 @@ Everything under `dev/` is **git-tracked but stripped from the player zip** by
 | `dev/claude-hooks/` | yes | Durable copies of the Claude Code hooks (`luacheck-postedit.ps1` edit-time lint, `git-guard.ps1` destructive-git-command guard) + their `settings.template.json`. `.claude/` is gitignored, so these templates are what survive a re-clone. |
 | `dev/githooks/` | yes | `pre-push` — release-tag guard + luacheck gate; `commit-msg` — upstream-name / AI-trailer guard; `pre-commit` — comment-rules guard on staged addon source. Opt in with `git config core.hooksPath dev/githooks` (the installer does this for you). |
 | `dev/scripts/` | yes | `install-claude-hooks.ps1` — restores the hooks + `core.hooksPath` config after a re-clone or PC reset. `lint-plan-fences.lua` — lints the ```` ```lua ```` blocks in a markdown plan (run by hand before a plan freezes). |
-| `dev/tests/` | yes | Standalone Lua 5.1 gates. `cdm-fingerprint.lua` loads the shipped `Installer/Core.lua` and `Data/Classes/BlizzardCDM.lua` as chunks and checks the CDM fingerprint scheme against fixed golden vectors. |
+| `dev/tests/` | yes | Standalone Lua 5.1 gates. `cdm-fingerprint.lua` loads the shipped `Installer/Core.lua` and `Data/Classes/BlizzardCDM.lua` as chunks and checks the CDM fingerprint scheme against fixed golden vectors. `eui-merge.lua`, `eui-merge-inputs.lua`, `eui-update.lua` and `eui-reset.lua` gate the EllesmereUI profile update: the three-way merge, the work around it, the flow against a stub EllesmereUI, and what the full install records. |
 | `dev/ARTWORK-REFERENCE.md` | yes | Authoritative asset specifications, visual identities, future image-chat reference order, normalization anchors, and media verification gates. |
 | `dev/docs/` | **no** (gitignored) | Local-only: the CurseForge readme (`CURSEFORGE_README.md`), source and working art files (`art/`), icon reference material (`topbar-icons/`), and planning / Superpowers artifacts (`superpowers/`). |
 
@@ -19,12 +19,13 @@ icon reference material stays here in `dev/docs/topbar-icons/` and is passed
 to the toolkit with `--ref-dir`.
 
 Almost nothing here is unit-testable: KitnUI is a profile loader whose behaviour
-is frame layout and SavedVariables writes. The one exception is the CDM
-fingerprint scheme, which is pure arithmetic, and `dev/tests/` covers it. Run it
-from the repo root:
+is frame layout and SavedVariables writes. The exceptions are pure arithmetic
+and pure table work: the CDM fingerprint scheme and the EllesmereUI profile
+update's merge and flow, which `dev/tests/` covers. Run every gate from the
+repo root:
 
 ```powershell
-lua.exe dev/tests/cdm-fingerprint.lua
+Get-ChildItem dev/tests/*.lua | ForEach-Object { lua.exe $_.FullName }
 ```
 
 Everything else is verified with **`luacheck`** (shared config in the tracked

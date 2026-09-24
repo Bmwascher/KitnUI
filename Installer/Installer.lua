@@ -427,33 +427,190 @@ local function ShowLookOptions()
     end
 end
 
+-- The full install, under whichever label the state gives it. Bail out before
+-- the success feedback when the import fails, so a failure cannot announce
+-- itself as a success.
+local function InstallEUIProfile()
+    ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
+        if not ns.SetupAddon("EllesmereUI", true) then
+            ShowInstallToast("EllesmereUI import failed", 1, 0.2, 0.2)
+            return
+        end
+        ShowStatusAndVersion("EllesmereUI")
+        SuccessToast("EllesmereUI", "profile imported!")
+        PlayInstallSound()
+        -- Redrawn rather than handed off in place: a reset changes which
+        -- actions the page offers, and the look row appears with the profile.
+        EllesmereUIPage()
+    end)
+end
+
+local function AmberToast(message) ShowInstallToast(message, 1, 0.8, 0.2) end
+
+-- The popup affords three message lines; the update's confirm carries up to
+-- seven sentences. Grown by the measured overflow, the way the popup grows
+-- itself for its type-to-confirm gate. Reached by name because the popup
+-- returns nothing. The text is measured again on the next frame: until the
+-- popup lays out, the first measurement can still be the previous message's.
+-- The deferred pass acts only on the showing that armed it: the popup must
+-- still be visible through its dimmer and still carry the same message.
+local function GrowConfirmPopup()
+    local popup = _G.EUIConfirmPopup
+    local msg = popup and popup._msg
+    if not (msg and msg.GetStringHeight and popup.GetHeight and popup.SetHeight) then return end
+    local base = popup:GetHeight()
+    local text = msg:GetText()
+    local function grow()
+        if not (popup:IsVisible() and msg:GetText() == text) then return end
+        local extra = (msg:GetStringHeight() or 0) - 44
+        popup:SetHeight(base + (extra > 0 and extra or 0))
+    end
+    grow()
+    C_Timer.After(0, grow)
+end
+
+local function RestoreEUIPrevious()
+    if not (ns.EUIRestorable and EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
+    if ns.EUIRestorable() ~= "restore" then
+        AmberToast(ns.EUI_UPDATE_TEXT.notRestorable)
+        return
+    end
+    EllesmereUI:ShowConfirmPopup({
+        title = "Restore previous?",
+        message = "Put back the profile you had before the last update. The updated KitnUI profile is deleted.",
+        confirmText = "Restore",
+        cancelText = "Cancel",
+        onConfirm = function()
+            local ok, err = ns.EUIRestorePrevious()
+            if not ok then
+                AmberToast(err)
+                return
+            end
+            SuccessToast("EllesmereUI", "previous profile restored!")
+            PlayInstallSound()
+            EllesmereUIPage()
+        end,
+    })
+end
+
+-- Declared ahead: the acceptance re-shows the confirm when its prediction
+-- changed while the dialog was open.
+local ConfirmEUIUpdate
+
+local function AcceptEUIUpdate(plan)
+    local ok, result = ns.EUIApplyUpdate(plan)
+    if ok == "reconfirm" then
+        ConfirmEUIUpdate(result)
+        return
+    end
+    if not ok then
+        ShowInstallToast(result, 1, 0.2, 0.2)
+        EllesmereUIPage()
+        return
+    end
+    ShowInstallToast(ns.EUIUpdateToast(plan))
+    PlayInstallSound()
+    EllesmereUIPage()
+end
+
+ConfirmEUIUpdate = function(plan)
+    if not (EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
+    EllesmereUI:ShowConfirmPopup({
+        title = "Update profile?",
+        message = ns.EUIConfirmText(plan),
+        confirmText = plan.noBase and "Update (replaces your changes)" or "Update",
+        cancelText = "Cancel",
+        onConfirm = function() AcceptEUIUpdate(plan) end,
+    })
+    GrowConfirmPopup()
+end
+
+-- Declared ahead: the slots are drawn again when a decode lands, without the
+-- page draw that would restart it.
+local DrawEUIActions
+
+-- The Update button reads "Preparing..." until both decodes have landed. The
+-- click is also the recovery path: a decode another EllesmereUI decode
+-- cancelled never reports, and clicking starts both again.
+local function OnEUIDecodesReady()
+    local W = ns.Wizard
+    if not (W.stepKeys and W.page and W.stepKeys[W.page] == "EllesmereUI") then return end
+    DrawEUIActions()
+end
+
+local function UpdateEUIProfile()
+    local plan, why = ns.EUIPrepareUpdate()
+    if not plan then
+        if why == ns.EUI_UPDATE_TEXT.preparing then ns.EUIStartDecodes(OnEUIDecodesReady) end
+        AmberToast(why)
+        return
+    end
+    ConfirmEUIUpdate(plan)
+end
+
+-- One label per state. "Preparing..." is the update label while a decode is
+-- in flight; the no-base label says what that update does.
+local function EUIUpdateLabel()
+    if not ns.EUIDecodesReady() then return ns.EUI_UPDATE_TEXT.preparing end
+    if ns.EUIDecodeCache.failedO then return "Update (replaces your changes)" end
+    return "Update Profile"
+end
+
+-- The four slots by state, from the cache as it stands. Called by the page
+-- draw and again when a decode lands; starts nothing itself.
+DrawEUIActions = function()
+    local f = WF()
+    -- Drawn again in place, so the slots are cleared here as well as on the
+    -- page change.
+    ns.Wizard:HideOptions()
+    ShowStatusAndVersion("EllesmereUI")
+
+    local state, why = ns.EUIUpdateState()
+    local secondAction = false
+    if state == "update" then
+        local noBase = ns.EUIDecodesReady() and ns.EUIDecodeCache.failedO
+        ns.Wizard:SetOption(1, EUIUpdateLabel(), UpdateEUIProfile, noBase and 12 or nil)
+        if noBase then f.Option1:SetWidth(240) end
+        SetVariant(f.Option1, "primary")
+        if not noBase then
+            ns.Wizard:SetOption(2, "Reset to KitnUI's profile", InstallEUIProfile, 12)
+            SetVariant(f.Option2, "selectable")
+            secondAction = true
+        end
+    elseif state == "stale" then
+        ns.Wizard:SetOption(1, "Reset to KitnUI's profile", InstallEUIProfile, 12)
+        SetVariant(f.Option1, "primary")
+        if why then f.Desc2:SetText(f.Desc2:GetText() .. "  |cff9d9d9d" .. why .. "|r") end
+    else
+        ns.Wizard:SetOption(1, "Install Profile", InstallEUIProfile)
+        ApplyActionState("EllesmereUI")
+    end
+
+    -- Restore previous sits in the first free slot after the actions, muted:
+    -- an exit, not an action the page is recommending. From another profile
+    -- it reads what the player has to do first.
+    local restorable = ns.EUIRestorable and ns.EUIRestorable()
+    if restorable then
+        local slot = secondAction and 3 or 2
+        local label = restorable == "switch" and ns.EUI_UPDATE_TEXT.notRestorable or "Restore previous"
+        ns.Wizard:SetOption(slot, label, RestoreEUIPrevious, 12)
+        if restorable == "switch" then f["Option" .. slot]:SetWidth(240) end
+        SetVariant(f["Option" .. slot], "ghost")
+    end
+    ShowLookOptions()
+end
+
+-- A page draw, first or again, drops whatever was decoded and starts over:
+-- the base can have changed underneath it (an update, a restore, a reset).
 function EllesmereUIPage()
     local f = WF()
     -- Hand-written, unlike the generic pages that title themselves from the
     -- step's `display` field, so keep the two in step by hand.
     f.SubTitle:SetText("EllesmereUI")
     f.Desc1:SetText(stepDesc("EllesmereUI"))
-    ShowStatusAndVersion("EllesmereUI")
-    -- Bail out before the success feedback when the import fails, so a failure
-    -- cannot announce itself as a success.
-    ns.Wizard:SetOption(1, "Install Profile", function()
-        ConfirmImport("EllesmereUI", "EllesmereUI Profile", function()
-            if not ns.SetupAddon("EllesmereUI", true) then
-                ShowInstallToast("EllesmereUI import failed", 1, 0.2, 0.2)
-                return
-            end
-            ShowStatusAndVersion("EllesmereUI")
-            SuccessToast("EllesmereUI", "profile imported!")
-            PlayInstallSound()
-            HandoffToNext(WF().Option1, CHECK .. " Re-import")
-            -- The import applies Dark (Setup.lua), so the buttons appear already
-            -- marked. Called here rather than only at page entry so a first
-            -- install does not have to leave and come back to see them.
-            ShowLookOptions()
-        end)
-    end)
-    ApplyActionState("EllesmereUI", "Update Profile")
-    ShowLookOptions()
+    if ns.EUICancelDecodes then ns.EUICancelDecodes() end
+    if ns.EUIUpdateState() == "update" then ns.EUIStartDecodes(OnEUIDecodesReady) end
+    DrawEUIActions()
 end
 
 local function SimpleInstallPage(addonKey, displayName)
@@ -802,6 +959,9 @@ local function BuildRecapLists()
     local imported, skipped, missed = {}, {}, {}
     for _, key in ipairs(recapOrder) do
         local name = recapNames[key] or key
+        if key == "EllesmereUI" and ns.euiUpdatedThisSession then
+            name = name .. " (updated, " .. #ns.euiUpdatedThisSession.conflicts .. " replaced)"
+        end
         if wasStep[key] and ns.IsStepSkipped and ns.IsStepSkipped(key) then
             skipped[#skipped + 1] = name
         elseif IsProfileImported(key) then
@@ -847,6 +1007,11 @@ local function FinishPage()
         if ns.sessionExtras.cleanIcons then ex[#ex + 1] = "Clean Icons" end
         f.Desc3:SetText("Extras run: " ..
             (#ex > 0 and ("|cffcfcfcf" .. table.concat(ex, ", ") .. "|r") or "|cff9d9d9dnone|r"))
+    elseif ns.euiUpdatedThisSession then
+        -- Update mode has no recap, but an update is worth one line.
+        if ns.Wizard.ShowStatusHeader then ns.Wizard:ShowStatusHeader("INSTALL SUMMARY") end
+        f.Desc2:SetText(CHECK .. " " .. ns.Green("EllesmereUI (updated, " ..
+            #ns.euiUpdatedThisSession.conflicts .. " replaced)"))
     end
 
     ns.Wizard:SetOption(1, "Finish", function() ns.FinishInstallation() end)
@@ -1218,6 +1383,8 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     -- Track Extras clicks for the Finish recap; only the plain install flow has an
     -- Extras page, so nil in load/update/cdm mode (which skip the recap).
     ns.sessionExtras = (not profileLoadMode and not updateKeys and not cdmMode) and {} or nil
+    -- Set by a successful update; read by the Finish page of the same wizard.
+    ns.euiUpdatedThisSession = nil
     ns.Wizard:Queue(ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode))
 end
 
@@ -1228,4 +1395,5 @@ ns.Wizard.ResetExtras = function()
     if cdmAllButton then cdmAllButton:Hide() end
     HideLookRow()
     if ns.Wizard.HideInput then ns.Wizard:HideInput() end
+    if ns.EUICancelDecodes then ns.EUICancelDecodes() end
 end
