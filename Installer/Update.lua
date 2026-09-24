@@ -429,23 +429,23 @@ function ns.EUIApplyUpdate(plan)
     end
 
     local ok, result, importErr, status = pcall(e.ImportProfile, { version = 3, type = "full", data = plan.merged }, NAME)
-    local failure
+    local failed, detail = not ok or not result, nil
     if not ok then
-        failure = tostring(result)
+        detail = tostring(result)
     elseif not result then
-        failure = importErr or "unknown error"
+        detail = importErr
     end
-    if failure then
+    if failed then
         local line = T.importFail .. "."
         if d.profiles[NAME] == nil then
-            return rollbackA(line, failure)
+            return rollbackA(line, detail)
         elseif d.activeProfile ~= NAME then
-            return rollbackB(line, failure)
+            return rollbackB(line, detail)
         end
         -- The activation tail threw after the account writes: the merged
         -- profile is active and the backup is intact, so Restore is offered.
         refreshAll()
-        return false, line .. " " .. T.tailRestore, failure
+        return false, line .. " " .. T.tailRestore, detail
     end
 
     if status == "spec_locked" then

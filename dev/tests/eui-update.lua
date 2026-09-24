@@ -188,6 +188,8 @@ E.ImportProfile = function(payload, name)
     bump("import")
     E.lastImport = payload
     if E.importMode == "throw_before" then error("boom before store") end
+    if E.importMode == "false_silent" then return false end
+    if E.importMode == "false_said" then return false, "bad payload" end
     if E.importMode == "throw_scale" then
         if payload.data.uiScale then
             db.ppUIScale = payload.data.uiScale
@@ -639,6 +641,26 @@ eq(db.activeProfile, "KitnUI", "rollback A: and active")
 eq(db.specProfiles[71], "KitnUI", "rollback A: assignments followed the rename back")
 eq(ns.db.euiBackup, nil, "rollback A: the record is cleared")
 eq(ns.db.addonVersions.EllesmereUI, "2026.08.22", "rollback A: not stamped")
+
+-- Rollback A on a refusal rather than a throw: the importer's own words, when it
+-- gives any, are the detail; none is invented when it gives none.
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.importMode = "false_said"
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "refused import: reports failure")
+check(err:find("EllesmereUI import failed.", 1, true) and err:find("put back", 1, true), "refused import: the failure and the outcome are named", err)
+eq(detail, "bad payload", "refused import: the importer's message is the detail")
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.importMode = "false_silent"
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "silent refusal: reports failure")
+check(err:find("EllesmereUI import failed.", 1, true), "silent refusal: the failure is named", err)
+eq(db.activeProfile, "KitnUI", "silent refusal: the player's profile is back")
+eq(detail, nil, "silent refusal: no detail is invented")
 
 -- Rollback A after the importer wrote the scale and then threw: the scale
 -- goes back with the profile.
