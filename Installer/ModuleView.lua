@@ -493,22 +493,27 @@ end
 -- draw. Dev mode prints the worst frame and the setup's cost ("prep"): the
 -- time of every step that began before the walk's seeding had finished.
 local function Pump(walker, gen, onDone)
-    local worst, prep = 0, 0
+    local worst, prep, steps, total, worstUnits, worstKB = 0, 0, 0, 0, 0, 0
     local function step()
         local f = WF()
         if view.gen ~= gen or not (f and f:IsVisible()) then return end
         local preparing = not walker.prepared
+        local kb = collectgarbage("count")
         local t0 = debugprofilestop()
         local done = walker:Step(EUI_DIFF_STEPS)
         local spent = debugprofilestop() - t0
-        if spent > worst then worst = spent end
+        steps, total = steps + 1, total + spent
+        if spent > worst then
+            worst, worstUnits, worstKB = spent, walker.units, collectgarbage("count") - kb
+        end
         if preparing then prep = prep + spent end
         if not done then
             C_Timer.After(0, step)
             return
         end
         if ns.db and ns.db.devMode then
-            print(ns.title .. (" count walk: worst frame %.2f ms, prep %.2f ms"):format(worst, prep))
+            print(ns.title .. (" count walk: worst frame %.2f ms (%d units, %+.0f KB), prep %.2f ms, %d steps, mean %.2f ms")
+                :format(worst, worstUnits, worstKB, prep, steps, total / steps))
         end
         onDone(walker.result)
     end
