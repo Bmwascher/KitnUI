@@ -162,10 +162,6 @@ E.SetProfile = function(name)
     if E.switchFails then return end
     if db.profiles[name] then db.activeProfile = name end
 end
-E.AssignProfileToSpec = function(name, spec)
-    bump("assign")
-    db.specProfiles[spec] = name
-end
 E.BuildImportKeyToFolder = function(ul, meta)
     local out = {}
     for _, map in ipairs({ "anchors", "widthMatch", "heightMatch" }) do
@@ -743,14 +739,14 @@ ns.EUIStartDecodes()
 plan = ns.EUIPrepareUpdate()
 ok, err = ns.EUIApplyUpdate(plan)
 eq(ok, true, "restore setup: the update succeeded", err)
-saved = E.AssignProfileToSpec
-E.AssignProfileToSpec = nil
+saved = E.DeleteProfile
+E.DeleteProfile = nil
 calls = {}
 ok, err = ns.EUIRestorePrevious()
 eq(ok, false, "restore: a missing API refuses")
 eq(err, "Update needs a newer EllesmereUI.", "restore: with the EllesmereUI line")
-check(calls.set == nil and calls.delete == nil and calls.rename == nil, "restore: and touches nothing")
-E.AssignProfileToSpec = saved
+check(calls.set == nil and calls.rename == nil, "restore: and touches nothing")
+E.DeleteProfile = saved
 E.live = { fonts = { global = "Edited" } }
 calls = {}
 ok, err = ns.EUIRestorePrevious()

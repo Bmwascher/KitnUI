@@ -67,8 +67,17 @@ end
 local REQUIRED = {
     "DecodeImportStringAsync", "DecodeImportString", "ExportProfile", "RenameProfile",
     "DeleteProfile", "ImportProfile", "BuildImportKeyToFolder", "FilterLayoutToFolders",
-    "SetProfile", "AssignProfileToSpec",
+    "SetProfile",
 }
+
+-- EllesmereUI has no setter for a spec's profile, so write its table. Looked up
+-- each time: EllesmereUI's options replace the table whole.
+local function assignSpec(spec)
+    local d = DB()
+    if not isTable(d) then return end
+    if not isTable(d.specProfiles) then d.specProfiles = {} end
+    d.specProfiles[spec] = NAME
+end
 
 local function hasRequired(e)
     if not e or not isTable(e._ADDON_DB_MAP) then return false end
@@ -381,7 +390,7 @@ local function rollbackB(err, detail)
     e.RenameProfile(BACKUP, NAME)
     local ok = d.activeProfile == NAME
     for _, spec in ipairs(isTable(rec) and rec.assignedSpecs or {}) do
-        e.AssignProfileToSpec(NAME, spec)
+        assignSpec(spec)
     end
     local scaled = restoreScale(rec)
     ns.db.euiBackup = nil
@@ -497,7 +506,7 @@ function ns.EUIRestorePrevious()
     e.RenameProfile(BACKUP, NAME)
     if not (d.profiles[NAME] and d.activeProfile == NAME) then return false, "Could not restore the backup." end
     for _, spec in ipairs(isTable(rec.assignedSpecs) and rec.assignedSpecs or {}) do
-        e.AssignProfileToSpec(NAME, spec)
+        assignSpec(spec)
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
     if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
