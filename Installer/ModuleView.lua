@@ -13,7 +13,7 @@ local _, ns = ... ---@type string, KitnUINS
 -- EUI_DIFF_STEPS units, a unit being one key read (ModuleRows.lua, tick),
 -- aiming at 2 ms a frame. Leaving the page or closing the wizard stops it;
 -- nothing runs while no list is showing.
-local EUI_DIFF_STEPS = 1200
+local EUI_DIFF_STEPS = 1000
 
 local ROW_H, ROW_H_MIN = 20, 14
 -- The list ends above the split line, which sits on the action row.
