@@ -317,5 +317,367 @@ check(at and at.Bad == nil and at.Worse == nil, "record: malformed entries are d
 eq(at and at.B and at.B.version, "V1", "record: a sound one stays")
 eq(bs and bs.V1, "s1", "record: with its string")
 
+---------------------------------------------------------------------------------
+-- The counting walk
+---------------------------------------------------------------------------------
+
+local wRows = {
+    { id = UF, label = "Unit Frames" },
+    { id = RB, label = "Resource Bars" },
+    { id = CDM, label = "Cooldown Manager" },
+    { id = "general", label = "General" },
+    { id = "overrides", label = "Spec Overrides" },
+}
+local wK2F = { UF_Player = UF }
+
+local function baseSide()
+    return {
+        addons = {
+            [UF] = { player = { healthHeight = 20, width = 200.5, castbarFillColor = { r = 1, g = 0, b = 0 } } },
+            [RB] = {
+                castBar = { fillR = 1, fillG = 1, fillB = 1, height = 10 },
+                health = { customColored = false, fillR = 0, fillG = 0, fillB = 0 },
+            },
+            [CDM] = { cdmBars = { bars = { { name = "Essential", iconSize = 30 } } } },
+        },
+        fonts = { global = "A" },
+        uiScale = 0.8,
+        unlockLayout = { anchors = { UF_Player = { target = "UIParent", x = 1 } } },
+    }
+end
+
+local function changedSide()
+    local s = baseSide()
+    s.addons[UF].player.healthHeight = 22
+    s.addons[UF].player.width = 200.50001
+    s.addons[UF].player.castbarFillColor = { r = 0.5, g = 0, b = 0 }
+    s.addons[RB].castBar.fillR = 0.2
+    s.addons[RB].castBar.fillG = 0.2
+    s.addons[CDM].cdmBars.bars[1].iconSize = 34
+    s.fonts.global = "B"
+    s.uiScale = 0.9
+    s.unlockLayout.anchors.UF_Player.x = 5
+    s.specOverrides = { { values = { default = { ["X\31y"] = 1 } } } }
+    return s
+end
+
+local function walkAll(A, B, opts)
+    local walker = ns.EUIRowDiff(A, B, wRows, wK2F, opts)
+    walker:Step(math.huge)
+    return walker.result
+end
+
+local function countOf(result, id) return result[id] and result[id].count or 0 end
+
+local whole = walkAll(baseSide(), changedSide())
+eq(countOf(whole, UF), 3, "walk: a leaf, a colour table and a position; a float inside tolerance is no change")
+eq(countOf(whole, RB), 1, "walk: sibling channels are one colour")
+eq(countOf(whole, CDM), 1, "walk: a list entry's setting")
+eq(countOf(whole, "general"), 2, "walk: a font and the scale")
+eq(countOf(whole, "overrides"), 1, "walk: a different override set counts once")
+
+local stepped = ns.EUIRowDiff(baseSide(), changedSide(), wRows, wK2F)
+local steps = 0
+while not stepped:Step(1) do steps = steps + 1 end
+check(steps > 5, "walk: one node per step takes many steps", steps)
+for _, row in ipairs(wRows) do
+    eq(countOf(stepped.result, row.id), countOf(whole, row.id), "walk: stepping one node at a time gives the same count for " .. row.id)
+end
+
+eq(whole[UF].groups[1].name, "Player", "names: the unit's group")
+eq(whole[UF].groups[2].name, "Positions", "names: positions are their own group, groups sorted")
+eq(whole[CDM].groups[1].name, "Essential", "names: a list entry is named by its name field")
+eq(whole[CDM].groups[1].items[1], "icon size", "names: the setting is its key, split and lower-cased")
+eq(whole[RB].groups[1].items[1], "fill", "names: sibling channels are named by their stem")
+
+local outOfRange = changedSide()
+outOfRange.uiScale = 2
+eq(countOf(walkAll(baseSide(), outOfRange), "general"), 1, "walk: a scale outside the range is not counted")
+
+local maskedBase, maskedSide = baseSide(), baseSide()
+maskedBase.specUnlockOverrides = { active = 1 }
+maskedSide.specUnlockOverrides = { active = 2 }
+eq(countOf(walkAll(maskedBase, maskedSide), "overrides"), 0, "walk: overrides compare through the masks")
+
+local addedByKitn = baseSide()
+addedByKitn.addons[UF].player.newKey = 1
+eq(countOf(walkAll(baseSide(), addedByKitn), UF), 1, "walk: a setting KitnUI adds is a change")
+-- The merge deletes a setting KitnUI removed inside a folder, so that is a
+-- change; a whole folder or root table its string lacks is inherited.
+local droppedByKitn = baseSide()
+droppedByKitn.addons[UF].player.healthHeight = nil
+eq(countOf(walkAll(baseSide(), droppedByKitn), UF), 1, "walk: a setting KitnUI removed inside a folder is a change, so a removal alone makes a row tickable")
+local folderGone = baseSide()
+folderGone.addons[CDM] = nil
+folderGone.fonts = nil
+local inherited = walkAll(baseSide(), folderGone)
+eq(countOf(inherited, CDM), 0, "walk: a folder KitnUI's string lacks is inherited, no change")
+eq(countOf(inherited, "general"), 0, "walk: and so is a root table it lacks")
+
+local noSlice = walkAll(nil, changedSide(), { missing = { [UF] = true } })
+check(noSlice[UF].noBase and noSlice[UF].count == 0, "walk: a row with no base is marked, not walked")
+
+---------------------------------------------------------------------------------
+-- The player's walk
+---------------------------------------------------------------------------------
+
+local playerBase = baseSide()
+playerBase.addons[UF].player.onlyBase = 3
+local playerSide = baseSide()
+playerSide.addons[UF].player.extra = 5
+playerSide.addons[UF].player.extra2 = 7
+playerSide.addons[RB].castBar.newLeaf = 1
+local mine = walkAll(playerBase, playerSide, {
+    player = true,
+    defaults = { [UF] = { player = { extra = 5, extra2 = 5, onlyBase = 3 } } },
+})
+eq(countOf(mine, UF), 1, "player: an untouched default is no change, a changed one is, a missing side reads as the default")
+eq(countOf(mine, RB), 0, "player: without defaults a one-sided setting is not counted")
+
+local healthSide = baseSide()
+healthSide.addons[RB].health.fillR = 0.5
+eq(countOf(walkAll(baseSide(), healthSide, { player = true }), RB), 0, "player: the health fill is not counted while the class colour is on")
+healthSide.addons[RB].health.customColored = true
+eq(countOf(walkAll(baseSide(), healthSide, { player = true }), RB), 2, "player: with a custom health colour the switch and the fill count")
+
+local heldBase = baseSide()
+heldBase.specOverrides = { { values = { default = { ["X\31y"] = true } } } }
+heldBase.unlockOverrideAnchors = { ERB_CastBar = { x = 1 } }
+local heldSide = changedSide()
+heldSide.specOverrides = { { values = { default = { ["X\31y"] = false } } } }
+local heldMine = walkAll(heldBase, heldSide, {
+    player = true,
+    held = {
+        ["addons." .. UF .. ".player.healthHeight"] = true,
+        ["unlockLayout.anchors.UF_Player"] = true,
+        [ns.EUI_HELD_FKEY .. "X\31y"] = true,
+        ["unlockOverrideAnchors.ERB_CastBar"] = true,
+    },
+})
+eq(countOf(heldMine, UF), 1, "held: a held setting and a held layout entry are not the player's")
+eq(countOf(heldMine, "overrides"), 0, "held: a held override value and a held override position are not the player's")
+
+local noBaseMine = walkAll(changedSide(), baseSide(), { player = true, noBase = true })
+check(noBaseMine[UF].noBase and noBaseMine[UF].count > 0, "player: with no base the entry is marked for differs")
+local fellBack = walkAll(nil, changedSide(), { player = true, missing = { [UF] = true }, fallback = changedSide() })
+check(fellBack[UF].noBase and fellBack[UF].count == 0, "player: a row with no base is compared with KitnUI's string")
+
+-- A General reset takes KitnUI's root tables whole, so a colour only the
+-- player's copy holds is one the reset replaces, and it counts.
+local colourSide = baseSide()
+colourSide.customColors = { mine = { r = 1, g = 0, b = 0 } }
+local colourBase = baseSide()
+colourBase.customColors = {}
+eq(countOf(walkAll(colourBase, colourSide, { player = true }), "general"), 1, "player: a General setting only the player holds counts")
+eq(countOf(walkAll(colourSide, colourBase, { player = true }), "general"), 1, "player: and one only the base holds")
+
+---------------------------------------------------------------------------------
+-- Work per step
+---------------------------------------------------------------------------------
+
+-- Work is measured, not taken from the walker's own count: every key any
+-- `pairs` loop reads, in the walk and in the merge helpers it borrows alike,
+-- is counted from the walker's construction to its first yield and from one
+-- yield to the next after that. Between two ticks the walk reads at
+-- most a node's keys for the colour test (five a side) and one key more, so
+-- a step of `budget` ticks reads at most (budget + 1) * READS_PER_TICK keys;
+-- a loop that forgot to tick reads its whole table in one step and fails.
+local READS_PER_TICK = 12
+local realPairs = pairs
+local reads = 0
+local function countingPairs(t)
+    return function(tt, k)
+        reads = reads + 1
+        return next(tt, k)
+    end, t, nil
+end
+
+-- Counting starts before the walker is built, so whatever its construction
+-- reads is charged to the first step.
+local function maxReads(A, B, rowList, budget, opts)
+    local most, stepCount = 0, 0
+    _G.pairs = countingPairs
+    reads = 0
+    local walker = ns.EUIRowDiff(A, B, rowList, wK2F, opts)
+    repeat
+        local done = walker:Step(budget)
+        stepCount = stepCount + 1
+        if reads > most then most = reads end
+        reads = 0
+    until done
+    _G.pairs = realPairs
+    return most, stepCount, walker
+end
+
+local BOUND = (10 + 1) * READS_PER_TICK
+
+-- Keys only one side holds, and keys both hold: the second side's scan reads
+-- the shared keys too.
+local wideBase, wideSide = baseSide(), baseSide()
+wideBase.addons[UF].player.shared, wideSide.addons[UF].player.shared = {}, {}
+wideSide.addons[UF].player.wide = {}
+for i = 1, 500 do
+    wideSide.addons[UF].player.wide["k" .. i] = i
+    wideBase.addons[UF].player.shared["k" .. i] = i
+    wideSide.addons[UF].player.shared["k" .. i] = i
+end
+local wideMost, wideSteps = maxReads(wideBase, wideSide, { wRows[1] }, 10)
+check(wideMost <= BOUND, "work: a wide table is read a budget at a time", wideMost)
+check(wideSteps >= 100, "work: over many steps", wideSteps)
+
+-- Equal stores, so the comparison reads every key to say so: a value map, and
+-- an unlock layer of plain values compared over the union of its keys.
+local bigBase, bigSide = baseSide(), baseSide()
+bigBase.specOverrides, bigSide.specOverrides = { { values = { default = {} } } }, { { values = { default = {} } } }
+bigBase.specUnlockOverrides = { baselineLayout = { elems = {} }, layouts = {} }
+bigSide.specUnlockOverrides = { baselineLayout = { elems = {} }, layouts = {} }
+for i = 1, 300 do
+    bigBase.specOverrides[1].values.default["F\31k" .. i] = i
+    bigSide.specOverrides[1].values.default["F\31k" .. i] = i
+    bigBase.specUnlockOverrides.baselineLayout["v" .. i] = i
+    bigSide.specUnlockOverrides.baselineLayout["v" .. i] = i
+end
+local bigMost, bigSteps = maxReads(bigBase, bigSide, { wRows[5] }, 10)
+check(bigMost <= BOUND, "work: the override comparison is read a budget at a time", bigMost)
+check(bigSteps >= 60, "work: over many steps", bigSteps)
+bigSide.specOverrides[1].values.default["F\31k300"] = 0
+local bigWalker = ns.EUIRowDiff(bigBase, bigSide, { wRows[5] }, wK2F)
+repeat until bigWalker:Step(10)
+eq(countOf(bigWalker.result, "overrides"), 1, "work: and a stepped comparison still finds the difference")
+
+-- Many recorded settings: each one costs the same, because only what the
+-- tooltip shows is kept, in order, and nothing is sorted at the end.
+local manyBase, manySide = baseSide(), baseSide()
+manyBase.addons[UF].player.many, manySide.addons[UF].player.many = {}, {}
+for i = 1, 500 do
+    manyBase.addons[UF].player.many[string.format("s%03d", i)] = 0
+    manySide.addons[UF].player.many[string.format("s%03d", i)] = 1
+end
+local manyMost, _, manyWalker = maxReads(manyBase, manySide, { wRows[1] }, 10)
+check(manyMost <= BOUND, "work: recording many settings is read a budget at a time", manyMost)
+local manyEntry = manyWalker.result[UF]
+eq(manyEntry.count, 500, "record: every setting is counted")
+local manyGroup
+for _, g in ipairs(manyEntry.groups) do
+    if g.name == "Player" then manyGroup = g end
+end
+eq(manyGroup and manyGroup.n, 500, "record: and every one in its group's total")
+eq(manyGroup and #manyGroup.items, 8, "record: but only the eight the tooltip shows are kept")
+eq(manyGroup and manyGroup.items[1], "s 001", "record: the first by name")
+eq(manyGroup and manyGroup.items[8], "s 008", "record: in order")
+
+-- The setup is work too: General's seeding scans every root key of both sides
+-- (an unknown root key is General's), and the held set is parsed path by path.
+-- A walker that did either while it was built would read them all at once.
+local rootBase, rootSide, rootHeld = baseSide(), baseSide(), {}
+for i = 1, 500 do
+    rootBase["root" .. i] = i
+    rootSide["root" .. i] = i
+    rootHeld["addons." .. UF .. ".player.h" .. i] = true
+end
+local rootMost, rootSteps, rootWalker = maxReads(rootBase, rootSide, { wRows[4] }, 10, { player = true, held = rootHeld })
+check(rootMost <= BOUND, "work: seeding a wide root and parsing a wide held set are read a budget at a time", rootMost)
+check(rootSteps >= 100, "work: over many steps", rootSteps)
+eq(countOf(rootWalker.result, "general"), 0, "work: and equal root keys are no change")
+
+-- A reset counts only the player's changes it alters.
+local resetBase, resetPlayer, resetN = baseSide(), baseSide(), baseSide()
+resetPlayer.addons[UF].player.healthHeight = 22
+resetN.addons[UF].player.healthHeight = 22
+resetPlayer.addons[UF].player.width = 300
+resetN.addons[UF].player.width = 250
+eq(countOf(walkAll(resetBase, resetPlayer, { player = true }), UF), 2, "reset count: both are the player's changes")
+eq(countOf(walkAll(resetBase, resetPlayer, { player = true, against = resetN }), UF), 1,
+    "reset count: a change already equal to KitnUI's is not replaced")
+local resetNoFonts = baseSide()
+resetNoFonts.fonts = nil
+local fontsPlayer = baseSide()
+fontsPlayer.fonts.global = "Mine"
+eq(countOf(walkAll(resetBase, fontsPlayer, { player = true, against = resetNoFonts }), "general"), 0,
+    "reset count: a root table KitnUI's string lacks stays the player's")
+
+---------------------------------------------------------------------------------
+-- Names and the tooltip
+---------------------------------------------------------------------------------
+
+local group, item = ns.EUISettingLabel("addons.EllesmereUIRaidFrames.frameWidth", { id = "EllesmereUIRaidFrames" })
+eq(group, "General", "label: a flat module's setting is in General")
+eq(item, "frame width", "label: camelCase split")
+group, item = ns.EUISettingLabel("addons." .. RB .. ".ERB_Thing.height", { id = RB }, { unlock = { ERB_Thing = "Resource Thing" } })
+eq(group, "Resource Thing", "label: the unlock label is the fallback group")
+eq(item, "height", "label: the item")
+group, item = ns.EUISettingLabel("addons." .. UF .. ".someGroup.leaf", { id = UF })
+eq(group, "Some group", "label: the tidied key is the last fallback")
+eq(item, "leaf", "label: a one-word item")
+group, item = ns.EUISettingLabel("addons." .. AB .. ".bars.MainBar.buttonPadding", { id = AB })
+eq(group, "Action Bar 1", "label: the group table, under a wrapper")
+eq(item, "button padding", "label: the item under a wrapper")
+group, item = ns.EUISettingLabel("unlockLayout.anchors.UF_Player", { id = UF }, { unlock = { UF_Player = "Player Frame" } })
+eq(group, "Positions", "label: a layout entry is a position")
+eq(item, "Player Frame", "label: named by its unlock label")
+group, item = ns.EUISettingLabel("uiScale", { id = "general" })
+eq(group, "General", "label: the scale's group")
+eq(item, "ui scale", "label: the scale")
+
+local many = { groups = {} }
+for gi = 1, 8 do
+    local items = {}
+    for ii = 1, (gi == 1 and 10 or 1) do items[ii] = "item" .. ii end
+    many.groups[gi] = { name = "G" .. gi, items = items }
+end
+local tipLines = ns.EUITooltipLines(many)
+local headers = 0
+for _, line in ipairs(tipLines) do
+    if line.header then headers = headers + 1 end
+end
+eq(headers, 6, "tooltip: at most six groups")
+eq(tipLines[10].text, "+2 more", "tooltip: at most eight settings a group")
+eq(tipLines[#tipLines].text, "+2 more", "tooltip: the settings of the groups left out are counted")
+
+---------------------------------------------------------------------------------
+-- Split links, override capture, override element keys
+---------------------------------------------------------------------------------
+
+local splitRows = {
+    { id = UF, label = "Unit Frames" },
+    { id = RB, label = "Resource Bars" },
+    { id = CDM, label = "Cooldown Manager" },
+    { id = NP, label = "Nameplates", off = "Plater chosen" },
+}
+local splitN = { unlockLayout = {
+    anchors = {
+        UF_Player = { target = "ERB_Health" },
+        ERB_CastBar = { target = "CDM_cooldowns" },
+        NP_Thing = { target = "UF_Player" },
+        ERB_Power = { target = "NP_Bar" },
+    },
+    widthMatch = { ERB_Health = "UF_Player" },
+} }
+local splitK2F = { UF_Player = UF, ERB_Health = RB, ERB_CastBar = RB, CDM_cooldowns = CDM, ERB_Power = RB, NP_Thing = NP, NP_Bar = NP }
+local splits = ns.EUISplitLinks(splitN, splitRows, { [UF] = true }, splitK2F)
+eq(#splits, 1, "split: a ticked child against an unticked target")
+check(splits[1] and splits[1].child.id == UF and splits[1].target.id == RB, "split: named by both rows")
+splits = ns.EUISplitLinks(splitN, splitRows, { [RB] = true }, splitK2F)
+eq(#splits, 2, "split: one reset row against every part keeping the player's copy, an off target left out")
+check(splits[1] and splits[1].target.id == UF and splits[2].target.id == CDM, "split: in row order")
+eq(#ns.EUISplitLinks(splitN, splitRows, { [UF] = true, [RB] = true, [CDM] = true }, splitK2F), 0, "split: nothing when both ends are ticked")
+
+local capP = {
+    specOverrides = { { values = { default = { [UF .. "\31player\30height"] = 1 } } } },
+    condOverrides = { { values = { [71] = { [RB .. "\31castBar\30x"] = 1 } } } },
+    unlockOverrideAnchors = { ERB_CastBar = {} },
+    specUnlockOverrides = { layouts = { [3] = { elems = { CDM_x = {} } } } },
+}
+local capK2F = { ERB_CastBar = AB, CDM_x = CDM }
+check(ns.EUIOverridesCapture(capP, UF, capK2F), "capture: a spec override value")
+check(ns.EUIOverridesCapture(capP, RB, capK2F), "capture: a conditional override value under a spec id")
+check(ns.EUIOverridesCapture(capP, AB, capK2F), "capture: an override position")
+check(ns.EUIOverridesCapture(capP, CDM, capK2F), "capture: an element of an override layer")
+check(not ns.EUIOverridesCapture(capP, "EllesmereUIMinimap", capK2F), "capture: nothing for a part none of them names")
+
+local elementSide = ns.EUIOverrideElementSide(capP)
+check(elementSide.unlockLayout.anchors.ERB_CastBar and elementSide.unlockLayout.anchors.CDM_x,
+    "element keys: override positions and layer elements reach the resolver")
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

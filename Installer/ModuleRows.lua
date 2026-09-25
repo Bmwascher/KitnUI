@@ -274,3 +274,632 @@ function ns.EUIRecordRows(kind, before, opts)
     end
     return next(rowAt) and rowAt or nil, next(bases) and bases or nil
 end
+
+---------------------------------------------------------------------------------
+-- Names
+---------------------------------------------------------------------------------
+
+local CHANNELS = { r = true, g = true, b = true, a = true }
+local STEM_CHANNELS = { "R", "G", "B", "A" }
+
+-- Keys that only wrap the group one level down.
+local GROUP_WRAPPERS = {
+    bars = true, cdmBars = true, positions = true, enabledFrames = true,
+    frameSource = true, minimap = true, questTracker = true,
+}
+
+local GROUP_NAMES = {
+    player = "Player", target = "Target", focus = "Focus", pet = "Pet",
+    targettarget = "Target of Target", focustarget = "Focus Target", boss = "Boss Frames",
+    MainBar = "Action Bar 1", Bar2 = "Action Bar 2", Bar3 = "Action Bar 3", Bar4 = "Action Bar 4",
+    Bar5 = "Action Bar 5", Bar6 = "Action Bar 6", Bar7 = "Action Bar 7", Bar8 = "Action Bar 8",
+    StanceBar = "Stance Bar", PetBar = "Pet Bar",
+    health = "Health Bar", primary = "Primary Resource", secondary = "Class Resource", castBar = "Cast Bar",
+    spec = "Spec Layouts", healerMana = "Healer Mana", palettes = "Palettes",
+    fonts = "Fonts", customColors = "Colours", darkMode = "Dark Mode", euiAccent = "Accent Colour",
+}
+
+local function tidy(key)
+    local n = key:match("^%[(%d+)%]$")
+    if n then return "#" .. n end
+    local s = key:gsub("_", " ")
+    s = s:gsub("(%l)(%u)", "%1 %2")
+    s = s:gsub("(%a)(%d)", "%1 %2")
+    return (s:lower())
+end
+
+local function capital(s) return (s:gsub("^%l", string.upper)) end
+
+-- (group, item) for one counted path. labels.unlock: element key -> Unlock
+-- Mode label; labels.names: list-entry path -> that entry's name field.
+function ns.EUISettingLabel(path, row, labels)
+    labels = labels or {}
+    local unlock, names = labels.unlock or {}, labels.names or {}
+    if path == "uiScale" then return "General", "ui scale" end
+    if path == "Spec Overrides" then return "Spec Overrides", "override set" end
+    local child = path:match("^unlockLayout%.[^.]+%.(.+)$")
+    if child then return "Positions", unlock[child] or capital(tidy(child)) end
+
+    local parts = {}
+    for part in path:gmatch("[^.]+") do parts[#parts + 1] = part end
+    local i = 1
+    if parts[1] == "addons" then i = 3 elseif parts[1] == "cdmSpells" then i = 2 end
+    while parts[i] and GROUP_WRAPPERS[parts[i]] and parts[i + 1] do i = i + 1 end
+    local group
+    if i >= #parts then
+        group = (row and row.id == "general" and GROUP_NAMES[parts[1]]) or "General"
+    else
+        local key = parts[i]
+        group = names[table.concat(parts, ".", 1, i)] or GROUP_NAMES[key] or unlock[key] or capital(tidy(key))
+    end
+    local last = #parts
+    while last > i and CHANNELS[parts[last]] do last = last - 1 end
+    return group, names[table.concat(parts, ".", 1, last)] or tidy(parts[last])
+end
+
+local TIP_GROUPS, TIP_ITEMS = 6, 8
+
+-- The hover list: { text, header } lines, capped, with "+N more" tails. A
+-- group's `n` and the entry's `count` are the totals behind the capped lists
+-- the walk keeps; without them the lists' own lengths are the totals.
+function ns.EUITooltipLines(entry)
+    local lines = {}
+    local groups = isTable(entry) and entry.groups or {}
+    local total, shown = 0, 0
+    for gi = 1, #groups do total = total + (groups[gi].n or #groups[gi].items) end
+    if isTable(entry) and type(entry.count) == "number" and entry.count > total then total = entry.count end
+    for gi = 1, math.min(#groups, TIP_GROUPS) do
+        local g = groups[gi]
+        local n = g.n or #g.items
+        shown = shown + n
+        lines[#lines + 1] = { text = g.name, header = true }
+        for ii = 1, math.min(#g.items, TIP_ITEMS) do lines[#lines + 1] = { text = g.items[ii] } end
+        if n > TIP_ITEMS then lines[#lines + 1] = { text = "+" .. (n - TIP_ITEMS) .. " more" } end
+    end
+    if total > shown then lines[#lines + 1] = { text = "+" .. (total - shown) .. " more" } end
+    return lines
+end
+
+---------------------------------------------------------------------------------
+-- Counting
+---------------------------------------------------------------------------------
+
+-- A held override value, as the held-path set spells it.
+local HELD_FKEY = "specOverride:"
+ns.EUI_HELD_FKEY = HELD_FKEY
+
+local function isColour(t)
+    if not isTable(t) or next(t) == nil then return false end
+    for k in pairs(t) do
+        if not CHANNELS[k] then return false end
+    end
+    return true
+end
+
+local function hasKey(a, b, key)
+    return (isTable(a) and a[key] ~= nil) or (isTable(b) and b[key] ~= nil)
+end
+
+-- "fillR" with "fillG" and "fillB" beside it is one colour, "fill".
+local function stemOf(k, a, b)
+    if type(k) ~= "string" then return nil end
+    local stem, ch = k:match("^(.+)([RGBA])$")
+    if stem and hasKey(a, b, stem .. "R") and hasKey(a, b, stem .. "G") and hasKey(a, b, stem .. "B") then
+        return stem, ch
+    end
+    return nil
+end
+
+local Walker = {}
+Walker.__index = Walker
+
+-- One unit of work: one key read from a table being walked, scanned, copied or
+-- compared. The walk runs in a coroutine that yields once a step's units are
+-- spent, so no single node, layout scan or override comparison can hold a
+-- frame past the budget. Outside that coroutine it never yields.
+local function tick(w)
+    w.units = w.units + 1
+    if w.units >= w.budget and w.co and coroutine.running() == w.co then coroutine.yield() end
+end
+
+local function entryFor(w, id)
+    local e = w.result[id]
+    if not e then
+        e = { count = 0, groups = {} }
+        w.result[id] = e
+        w.byName[id] = {}
+    end
+    return e
+end
+
+local function byGroupName(x, y) return x.name < y.name end
+local function byText(x, y) return x < y end
+
+-- Inserts v into a list kept sorted and at most `cap` long, in at most
+-- `cap` + 1 comparisons.
+local function insertCapped(list, v, cap, less)
+    local i = #list + 1
+    while i > 1 and less(v, list[i - 1]) do i = i - 1 end
+    if i > cap then return end
+    table.insert(list, i, v)
+    if #list > cap then list[#list] = nil end
+end
+
+-- A part keeps its total, each group's total, and only the first groups and
+-- settings by name, as many as the tooltip shows. A recorded setting costs the
+-- same however many came before it, and nothing is left to sort at the end.
+local function record(w, row, path)
+    local e = entryFor(w, row.id)
+    e.count = e.count + 1
+    local group, item = ns.EUISettingLabel(path, row, w.labels)
+    local g = w.byName[row.id][group]
+    if not g then
+        g = { name = group, items = {}, n = 0 }
+        w.byName[row.id][group] = g
+        insertCapped(e.groups, g, TIP_GROUPS, byGroupName)
+    end
+    g.n = g.n + 1
+    insertCapped(g.items, item, TIP_ITEMS, byText)
+end
+
+-- The player's walk leaves out what KitnUI's own switches hold, and the health
+-- fill the import's activation resets unless the player coloured it.
+local function excluded(w, path)
+    if not w.player then return false end
+    if w.held[path] then return true end
+    if w.healthCheck then
+        local leaf = path:match(ns.EUI_HEALTH_PATH)
+        if leaf and ns.EUI_HEALTH_LEAVES[leaf] then return true end
+    end
+    return false
+end
+
+-- Parallel arrays rather than a table per pending node. n is KitnUI's side,
+-- read only by a reset's count (opts.against).
+local function push(w, a, b, d, path, row, hasDefaults, fn, n)
+    local i = w.top + 1
+    w.top = i
+    w.sa[i], w.sb[i], w.sd[i], w.sp[i], w.sr[i], w.sh[i], w.sf[i], w.sn[i] = a, b, d, path, row, hasDefaults, fn, n
+end
+
+-- Where the import inherits rather than deletes: a root key (the importer
+-- builds on the active profile's copy), a module folder, a CDM spell entry.
+-- Absent from KitnUI's string there, a setting stays the player's; absent
+-- anywhere below, the merge deletes it (Merge.lua, unit and leaf).
+local function inheritedAt(path)
+    return not path:find(".", 1, true) or path:find("^addons%.[^.]+$") ~= nil
+        or path:find("^cdmSpells%.[^.]+$") ~= nil
+end
+
+-- Marks KitnUI's side below a level its string does not carry: the reset
+-- leaves everything there as the player has it.
+local INHERIT = {}
+
+-- a is the base side, b the side described. In the player's walk a setting one
+-- side lacks reads as the registered default there, and is not counted when
+-- the folder has none. In the update walk every difference counts; a level
+-- KitnUI's string does not carry at all is stopped in visit.
+local function differs(w, a, b, d, hasDefaults)
+    if ns.EUISame(a, b) then return false end
+    if not w.player then return true end
+    if a ~= nil and b ~= nil then return true end
+    if not hasDefaults then return false end
+    if a == nil then return not ns.EUISame(b, d) end
+    return not ns.EUISame(a, d)
+end
+
+-- A reset's count holds only the player's changes the reset alters: the
+-- player's value against KitnUI's, a registered default standing in for an
+-- absent side. Without opts.against every change counts.
+local function replaced(w, b, n, d, hasDefaults)
+    if not w.against then return true end
+    if n == INHERIT then return false end
+    local be, ne = b, n
+    if hasDefaults then
+        if be == nil then be = d end
+        if ne == nil then ne = d end
+    end
+    return not ns.EUISame(be, ne)
+end
+
+local function channelOf(t, key)
+    if isTable(t) then return t[key] end
+    return nil
+end
+
+local function stemDiffers(w, a, b, d, hasDefaults, stem)
+    local aHas, bHas, any = false, false, false
+    for _, ch in ipairs(STEM_CHANNELS) do
+        local av, bv = channelOf(a, stem .. ch), channelOf(b, stem .. ch)
+        if av ~= nil then aHas = true end
+        if bv ~= nil then bHas = true end
+        if not ns.EUISame(av, bv) then any = true end
+    end
+    if not any then return false end
+    if not w.player then return true end
+    if aHas and bHas then return true end
+    if not hasDefaults then return false end
+    local side = aHas and a or b
+    for _, ch in ipairs(STEM_CHANNELS) do
+        if not ns.EUISame(channelOf(side, stem .. ch), channelOf(d, stem .. ch)) then return true end
+    end
+    return false
+end
+
+local function stemReplaced(w, b, n, d, hasDefaults, stem)
+    if not w.against then return true end
+    if n == INHERIT then return false end
+    for _, ch in ipairs(STEM_CHANNELS) do
+        local k = stem .. ch
+        if replaced(w, channelOf(b, k), channelOf(n, k), channelOf(d, k), hasDefaults) then return true end
+    end
+    return false
+end
+
+local function visitKey(w, a, b, d, path, row, hasDefaults, n, k)
+    tick(w)
+    local stem, ch = stemOf(k, a, b)
+    if stem then
+        if ch ~= "R" then return end
+        for _, c in ipairs(STEM_CHANNELS) do
+            if excluded(w, ns.EUIJoinPath(path, stem .. c)) then return end
+        end
+        if stemDiffers(w, a, b, d, hasDefaults, stem) and stemReplaced(w, b, n, d, hasDefaults, stem) then
+            record(w, row, ns.EUIJoinPath(path, stem))
+        end
+        return
+    end
+    local av, bv = channelOf(a, k), channelOf(b, k)
+    local childPath = ns.EUIJoinPath(path, k)
+    if type(k) == "number" then
+        local named = (isTable(bv) and bv.name) or (isTable(av) and av.name)
+        if type(named) == "string" then w.labels.names[childPath] = named end
+    end
+    local nv = n
+    if n ~= INHERIT then nv = channelOf(n, k) end
+    push(w, av, bv, channelOf(d, k), childPath, row, hasDefaults, nil, nv)
+end
+
+-- Every key either side holds is one tick, the second side's keys included
+-- when the first already had them, so no table is read past the budget.
+local function visit(w, a, b, d, path, row, hasDefaults, n)
+    if excluded(w, path) then return end
+    if inheritedAt(path) then
+        if not w.player and b == nil then return end
+        if w.against and n == nil then n = INHERIT end
+    end
+    local ta, tb = isTable(a), isTable(b)
+    local descend = (ta or tb) and (ta or a == nil) and (tb or b == nil)
+        and not isColour(a) and not isColour(b)
+    if not descend then
+        if differs(w, a, b, d, hasDefaults) and replaced(w, b, n, d, hasDefaults) then record(w, row, path) end
+        return
+    end
+    if ta then
+        for k in pairs(a) do visitKey(w, a, b, d, path, row, hasDefaults, n, k) end
+    end
+    if tb then
+        for k in pairs(b) do
+            tick(w)
+            if not (ta and a[k] ~= nil) then visitKey(w, a, b, d, path, row, hasDefaults, n, k) end
+        end
+    end
+end
+
+-- One side's override stores with every held value and held position removed,
+-- so a switch holding one down is not read as the player's own change.
+local function withoutHeld(w, d)
+    if not (w.player and w.heldAny and isTable(d)) then return d end
+    local out = {}
+    for k, v in pairs(d) do
+        tick(w)
+        out[k] = v
+    end
+    for _, storeKey in ipairs({ "specOverrides", "condOverrides" }) do
+        if isTable(d[storeKey]) then
+            local store = ns.EUIDeepCopy(d[storeKey], w.tickFn)
+            for _, entry in pairs(store) do
+                tick(w)
+                if isTable(entry) and isTable(entry.values) then
+                    for _, map in pairs(entry.values) do
+                        tick(w)
+                        if isTable(map) then
+                            for fkey in pairs(w.heldFkeys) do
+                                tick(w)
+                                map[fkey] = nil
+                            end
+                        end
+                    end
+                end
+            end
+            out[storeKey] = store
+        end
+    end
+    if isTable(d.unlockOverrideAnchors) then
+        local store = ns.EUIDeepCopy(d.unlockOverrideAnchors, w.tickFn)
+        for key in pairs(w.heldAnchors) do
+            tick(w)
+            store[key] = nil
+        end
+        out.unlockOverrideAnchors = next(store) and store or nil
+    end
+    return out
+end
+
+local function layoutMap(d, map)
+    local ul = isTable(d) and d.unlockLayout
+    return isTable(ul) and isTable(ul[map]) and ul[map] or nil
+end
+
+-- Every layout entry, owned by its child's row, counted once when it differs
+-- (and, for a reset, when KitnUI's entry differs from the player's too).
+local function layoutJob(w, B, rowById, bases, keyToFolder)
+    local sources = {}
+    for _, src in pairs(bases) do
+        tick(w)
+        sources[src] = true
+    end
+    for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
+        local children = {}
+        for child in pairs(layoutMap(B, map) or {}) do
+            tick(w)
+            children[child] = true
+        end
+        for src in pairs(sources) do
+            for child in pairs(layoutMap(src, map) or {}) do
+                tick(w)
+                children[child] = true
+            end
+        end
+        for child in pairs(children) do
+            tick(w)
+            local row = rowById[keyToFolder[child]]
+            if row and bases[row.id] ~= nil then
+                local path = "unlockLayout." .. map .. "." .. tostring(child)
+                local am, bm = layoutMap(bases[row.id], map), layoutMap(B, map)
+                local nm = w.against and layoutMap(w.against, map)
+                if not excluded(w, path) and not ns.EUISame(am and am[child], bm and bm[child], w.tickFn)
+                    and not (w.against and ns.EUISame(bm and bm[child], nm and nm[child], w.tickFn)) then
+                    record(w, row, path)
+                end
+            end
+        end
+    end
+end
+
+local function inScale(v)
+    local range = ns.EUI_SCALE_RANGE
+    return type(v) == "number" and v >= range[1] and v <= range[2]
+end
+
+local function seedRow(w, row, src, B, defaults)
+    local N = w.against
+    if row.id == "overrides" then
+        push(w, nil, nil, nil, nil, nil, nil, function(self)
+            local ma = ns.EUIMaskedOverrideSet(withoutHeld(self, src), self.tickFn)
+            local mb = ns.EUIMaskedOverrideSet(withoutHeld(self, B), self.tickFn)
+            if ns.EUIOverrideSetsSame(ma, mb, self.tickFn) then return end
+            -- A reset takes KitnUI's set whole: nothing is replaced when the
+            -- player's already is KitnUI's.
+            if N then
+                local mn = ns.EUIMaskedOverrideSet(withoutHeld(self, N), self.tickFn)
+                if ns.EUIOverrideSetsSame(mn, mb, self.tickFn) then return end
+            end
+            record(self, row, "Spec Overrides")
+        end)
+        return
+    end
+    if row.id == "general" then
+        push(w, nil, nil, nil, nil, nil, nil, function(self)
+            local bu, au = channelOf(B, "uiScale"), channelOf(src, "uiScale")
+            if not inScale(bu) or ns.EUISame(au, bu) then return end
+            -- A reset applies KitnUI's scale only inside the range.
+            if N and not (inScale(N.uiScale) and not ns.EUISame(bu, N.uiScale)) then return end
+            record(self, row, "uiScale")
+        end)
+        local keys = {}
+        for k in pairs(isTable(src) and src or {}) do
+            tick(w)
+            keys[k] = true
+        end
+        for k in pairs(isTable(B) and B or {}) do
+            tick(w)
+            keys[k] = true
+        end
+        for k in pairs(keys) do
+            tick(w)
+            if type(k) == "string" and k ~= "uiScale" and ns.EUIRowOf(k, nil) == "general" then
+                -- A General reset takes KitnUI's root tables whole, and
+                -- EllesmereUI registers no defaults for them, so a setting only
+                -- one side holds is one the reset changes: it counts.
+                push(w, channelOf(src, k), channelOf(B, k), nil, k, row, true, nil, channelOf(N, k))
+            end
+        end
+        return
+    end
+    local folder = row.id
+    local d = defaults[folder]
+    push(w, channelOf(channelOf(src, "addons"), folder), channelOf(channelOf(B, "addons"), folder),
+        d, "addons." .. folder, row, d ~= nil, nil, channelOf(channelOf(N, "addons"), folder))
+    if folder == "EllesmereUICooldownManager" then
+        push(w, channelOf(src, "cdmSpells"), channelOf(B, "cdmSpells"), nil, "cdmSpells", row, false,
+            nil, channelOf(N, "cdmSpells"))
+    end
+end
+
+-- A resumable walk: Step(budget) does at most `budget` units of work (tick)
+-- and returns true once every row is counted. result[id] = { count,
+-- groups = { {name, n, items} }, noBase }, groups and items capped
+-- at what the tooltip shows. opts: player, noBase, missing, fallback, held,
+-- defaults, unlock, against (KitnUI's side, for a reset's count). Building
+-- the walker reads no table: the first Step does the setup, under the budget.
+function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
+    opts = opts or {}
+    local w = setmetatable({
+        A = A, B = B, rows = rows or {}, keyToFolder = keyToFolder or {}, opts = opts,
+        result = {}, byName = {}, top = 0, done = false, prepared = false, units = 0, budget = math.huge,
+        sa = {}, sb = {}, sd = {}, sp = {}, sr = {}, sh = {}, sf = {}, sn = {},
+        against = opts.against,
+        player = opts.player and true or false,
+        held = opts.held or {},
+        heldFkeys = {}, heldAnchors = {}, heldAny = false,
+        labels = { unlock = opts.unlock or {}, names = {} },
+    }, Walker)
+    w.tickFn = function() tick(w) end
+    return w
+end
+
+-- The setup: the held paths, the health switch and each row's seeds, General's
+-- scan of every root key among them. It runs inside the walk's coroutine and
+-- ticks as the walk does, so a wide root or held set is spread over frames.
+local function prepare(w)
+    local A, B, opts = w.A, w.B, w.opts
+    for path in pairs(w.held) do
+        tick(w)
+        if path:sub(1, #HELD_FKEY) == HELD_FKEY then
+            w.heldFkeys[path:sub(#HELD_FKEY + 1)] = true
+            w.heldAny = true
+        else
+            local key = path:match("^unlockOverrideAnchors%.(.+)$")
+            if key then
+                w.heldAnchors[key] = true
+                w.heldAny = true
+            end
+        end
+    end
+    local rb = channelOf(channelOf(B, "addons"), "EllesmereUIResourceBars")
+    local health = channelOf(rb, "health")
+    w.healthCheck = w.player and not (isTable(health) and health.customColored == true)
+
+    local defaults, missing = opts.defaults or {}, opts.missing or {}
+    local rowById, bases = {}, {}
+    for _, row in ipairs(w.rows) do
+        tick(w)
+        rowById[row.id] = row
+        local entry = entryFor(w, row.id)
+        local src = A
+        if missing[row.id] then
+            entry.noBase = true
+            src = w.player and opts.fallback or nil
+        elseif opts.noBase then
+            entry.noBase = true
+        end
+        if not row.off and not (missing[row.id] and not w.player) then
+            if src ~= nil then bases[row.id] = src end
+            seedRow(w, row, src, B, defaults)
+        end
+    end
+    push(w, nil, nil, nil, nil, nil, nil, function(self)
+        layoutJob(self, B, rowById, bases, self.keyToFolder)
+    end)
+    w.prepared = true
+end
+
+local function drain(w)
+    prepare(w)
+    while w.top > 0 do
+        tick(w)
+        local i = w.top
+        local a, b, d, path, row, hasDefaults, fn, n =
+            w.sa[i], w.sb[i], w.sd[i], w.sp[i], w.sr[i], w.sh[i], w.sf[i], w.sn[i]
+        w.sa[i], w.sb[i], w.sd[i], w.sp[i], w.sr[i], w.sh[i], w.sf[i], w.sn[i] =
+            nil, nil, nil, nil, nil, nil, nil, nil
+        w.top = i - 1
+        if fn then fn(w) else visit(w, a, b, d, path, row, hasDefaults, n) end
+    end
+    w.byName = {}
+    w.done = true
+end
+
+function Walker:Step(budget)
+    if self.done then return true end
+    self.budget, self.units = budget, 0
+    self.co = self.co or coroutine.create(drain)
+    local ok, err = coroutine.resume(self.co, self)
+    if not ok then
+        self.done = true
+        error(err, 0)
+    end
+    return self.done
+end
+
+---------------------------------------------------------------------------------
+-- Split links and override capture
+---------------------------------------------------------------------------------
+
+-- Every link whose child's row is ticked and whose target's row keeps the
+-- player's copy, one per pair of rows, in row order.
+function ns.EUISplitLinks(N, rows, ticked, keyToFolder)
+    local ul = isTable(N) and N.unlockLayout
+    if not isTable(ul) then return {} end
+    local rowById, order = {}, {}
+    for i, row in ipairs(rows) do
+        rowById[row.id] = row
+        order[row.id] = i
+    end
+    local out, seen = {}, {}
+    for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
+        for child, entry in pairs(isTable(ul[map]) and ul[map] or {}) do
+            local target = entry
+            if map == "anchors" then target = isTable(entry) and entry.target or nil end
+            local childRow = rowById[keyToFolder[child]]
+            local targetRow = type(target) == "string" and rowById[keyToFolder[target]] or nil
+            if childRow and targetRow and childRow ~= targetRow and ticked[childRow.id]
+                and not ticked[targetRow.id] and not targetRow.off then
+                local pair = childRow.id .. "\31" .. targetRow.id
+                if not seen[pair] then
+                    seen[pair] = true
+                    out[#out + 1] = { child = childRow, target = targetRow }
+                end
+            end
+        end
+    end
+    table.sort(out, function(x, y)
+        if order[x.child.id] ~= order[y.child.id] then return order[x.child.id] < order[y.child.id] end
+        return order[x.target.id] < order[y.target.id]
+    end)
+    return out
+end
+
+local UNLOCK_STORES = { "specUnlockOverrides", "condUnlockOverrides" }
+
+local function eachElementKey(P, fn)
+    for key in pairs(isTable(P.unlockOverrideAnchors) and P.unlockOverrideAnchors or {}) do fn(key) end
+    for _, storeKey in ipairs(UNLOCK_STORES) do
+        local layouts = isTable(P[storeKey]) and P[storeKey].layouts
+        for _, layer in pairs(isTable(layouts) and layouts or {}) do
+            for key in pairs(isTable(layer) and isTable(layer.elems) and layer.elems or {}) do fn(key) end
+        end
+    end
+end
+
+-- True when the player's Spec Overrides hold anything of this folder: a
+-- captured value whose fkey names it, or a position of one of its elements.
+function ns.EUIOverridesCapture(P, folder, keyToFolder)
+    if not (isTable(P) and folder) then return false end
+    local prefix = folder .. "\31"
+    for _, storeKey in ipairs({ "specOverrides", "condOverrides" }) do
+        for _, entry in pairs(isTable(P[storeKey]) and P[storeKey] or {}) do
+            for _, map in pairs(isTable(entry) and isTable(entry.values) and entry.values or {}) do
+                for fkey in pairs(isTable(map) and map or {}) do
+                    if type(fkey) == "string" and fkey:sub(1, #prefix) == prefix then return true end
+                end
+            end
+        end
+    end
+    local found = false
+    eachElementKey(P, function(key)
+        if keyToFolder[key] == folder then found = true end
+    end)
+    return found
+end
+
+-- A layout-shaped side holding every override element key, so the importer's
+-- resolver classifies them alongside the layout's own keys.
+function ns.EUIOverrideElementSide(P)
+    local anchors = {}
+    if isTable(P) then
+        eachElementKey(P, function(key) anchors[key] = {} end)
+    end
+    return { unlockLayout = { anchors = anchors } }
+end
