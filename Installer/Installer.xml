@@ -15,6 +15,7 @@
     <Script file="Update.lua" />
     <Script file="Wizard.lua" />
     <Script file="Installer.lua" />
+    <Script file="ModuleView.lua" />
     <Script file="Extras.lua" />
     <Script file="LayoutWatch.lua" />
 </Ui>
