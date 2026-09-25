@@ -555,7 +555,9 @@ local defaults = {
     euiThemeChosen = nil,   -- true once an import or the login catch-up has decided the account-wide options theme; absent until KitnUI successfully applies and records one
     euiBase = nil,          -- the EllesmereUI string the stored KitnUI profile came from (install or update); the base an update merges against
     euiUpdateReport = nil,  -- the last update's { conflicts = {...}, kept, applied, noBase, overrideSet }, for the Finish recap and /kitn version
-    euiBackup = nil,        -- what Restore previous puts back beside the backup profile: { version, base, assignedSpecs, colorsPullFrom, ppUIScale, ppUIScaleAuto, scaleTaken }
+    euiBackup = nil,        -- what Restore previous puts back beside the backup profile: { version, base, euiRowAt, euiBases, assignedSpecs, colorsPullFrom, ppUIScale, ppUIScaleAuto, scaleTaken }
+    euiRowAt = nil,         -- [partId] = { version = <X-EllesmereUI-Version or "none">, kitn = <KitnUI version that skipped it, absent on an off or reset-ahead entry> } for each EllesmereUI part recorded at its own version; an entry stays until that part is ticked in an update, taken or reset, even if the stamp later reaches its version
+    euiBases = nil,         -- [version] = that version's shipped EllesmereUI string, for every version euiRowAt names
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather

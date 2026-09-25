@@ -50,6 +50,25 @@ ns.EUI_UPDATE_TEXT = {
 }
 local T = ns.EUI_UPDATE_TEXT
 
+-- The per-part view's sentences.
+T.noneTicked = "Tick at least one part first."
+T.rowReplaced = "%s: %d of yours replaced"
+T.rowNone = "%s: none of yours"
+T.skipped = "Skipped: %s -- take them any time from /kitn install, EllesmereUI > Modules."
+T.movedScratch = "Your profile keybind and sync-group membership are removed; set them again in EllesmereUI."
+T.scratchFail = "Could not move your profile aside for the update. Nothing was imported."
+T.resetTitle = "Reset %s?"
+T.resetBody = "%s goes back to KitnUI's version."
+T.resetYours = "Your %d changes to %s will be replaced."
+T.resetNone = "You have no changes to %s."
+T.resetOthers = "Your other parts are not touched."
+T.resetCaptured = "Your Spec Overrides also hold settings for %s; they apply again when you change spec."
+T.split = "%s is placed against %s, which keeps yours."
+T.splitMore = " (+%d more)"
+T.restoreNow = "Restore previous puts back your profile as it is now."
+T.restoreEarlier = "Restore previous puts back the backup taken earlier in this visit, undoing every change since then."
+T.resetDone = "%s reset to KitnUI's version."
+
 ---------------------------------------------------------------------------------
 -- Base seeding and page state
 ---------------------------------------------------------------------------------
@@ -95,6 +114,13 @@ function ns.EUIUpdateState()
     return "update"
 end
 
+-- Whether the part list can be drawn: the functions and the map its inputs
+-- need. EUIUpdateState answers "current" before it checks them, and the
+-- standard page it serves needs none of them, so the list asks here instead.
+function ns.EUIListReady()
+    return hasRequired(E())
+end
+
 -- "restore" when the backup can be put back from here, "switch" when the
 -- player must be on their KitnUI profile first, nil when there is no backup.
 function ns.EUIRestorable()
@@ -109,15 +135,18 @@ end
 -- The two decodes
 ---------------------------------------------------------------------------------
 
-local cache = { gen = 0 }
+local cache = { gen = 0, byVersion = {} }
 ns.EUIDecodeCache = cache
 
 function ns.EUICancelDecodes()
     cache.gen = cache.gen + 1
-    if cache.handleO and cache.handleO.Cancel then cache.handleO:Cancel() end
-    if cache.handleN and cache.handleN.Cancel then cache.handleN:Cancel() end
-    cache.handleO, cache.handleN = nil, nil
+    for _, slot in ipairs({ "handleO", "handleV", "handleN" }) do
+        local handle = cache[slot]
+        if handle and handle.Cancel then handle:Cancel() end
+        cache[slot] = nil
+    end
     cache.O, cache.N = nil, nil
+    cache.byVersion = {}
     cache.failedO, cache.failedN = false, false
     cache.running = false
 end
@@ -126,8 +155,10 @@ local function decoded(payload)
     return isTable(payload) and isTable(payload.data) and payload or nil
 end
 
--- O from the base, then N from the shipped string, into this cache; a stale
--- generation drops its result. onReady runs once both have finished.
+-- The stamp's base, then each older base a part stands at, then the shipped
+-- string, one after another into this cache. A string already decoded is
+-- reused rather than decoded again; a stale generation drops its result.
+-- onReady runs once, at the end.
 function ns.EUIStartDecodes(onReady)
     ns.EUICancelDecodes()
     local e = E()
@@ -135,32 +166,61 @@ function ns.EUIStartDecodes(onReady)
     local gen = cache.gen
     cache.running = true
 
-    local function startN()
-        local handle = e.DecodeImportStringAsync(ns.data.EllesmereUI, function(payload)
-            if cache.gen ~= gen then return end
-            cache.N = decoded(payload)
-            cache.failedN = cache.N == nil
-            cache.handleN = nil
-            cache.running = false
-            if onReady then onReady() end
-        end)
-        if handle and cache.gen == gen and cache.running then cache.handleN = handle end
-    end
-
+    local steps = {}
     local base = ns.db and ns.db.euiBase
-    if type(base) ~= "string" then
+    if type(base) == "string" then
+        steps[#steps + 1] = { s = base, slot = "handleO", take = function(p)
+            cache.O = p
+            cache.failedO = p == nil
+        end }
+    else
         cache.failedO = true
-        startN()
-        return true
     end
-    local handle = e.DecodeImportStringAsync(base, function(payload)
-        if cache.gen ~= gen then return end
-        cache.O = decoded(payload)
-        cache.failedO = cache.O == nil
-        cache.handleO = nil
-        startN()
-    end)
-    if handle and cache.gen == gen and cache.O == nil and not cache.failedO then cache.handleO = handle end
+    local bases = ns.db and ns.db.euiBases
+    if isTable(bases) then
+        local versions = {}
+        for v, s in pairs(bases) do
+            if type(s) == "string" then versions[#versions + 1] = v end
+        end
+        table.sort(versions)
+        for _, v in ipairs(versions) do
+            steps[#steps + 1] = { s = bases[v], slot = "handleV", take = function(p) cache.byVersion[v] = p end }
+        end
+    end
+    steps[#steps + 1] = { s = ns.data.EllesmereUI, slot = "handleN", take = function(p)
+        cache.N = p
+        cache.failedN = p == nil
+    end }
+
+    local results, i = {}, 0
+    local function nextStep()
+        while true do
+            i = i + 1
+            local step = steps[i]
+            if not step then
+                cache.running = false
+                if onReady then onReady() end
+                return
+            end
+            if type(step.s) ~= "string" then
+                step.take(nil)
+            elseif results[step.s] ~= nil then
+                step.take(results[step.s] or nil)
+            else
+                local handle = e.DecodeImportStringAsync(step.s, function(payload)
+                    if cache.gen ~= gen then return end
+                    local p = decoded(payload)
+                    results[step.s] = p or false
+                    cache[step.slot] = nil
+                    step.take(p)
+                    nextStep()
+                end)
+                if handle and cache.gen == gen and results[step.s] == nil then cache[step.slot] = handle end
+                return
+            end
+        end
+    end
+    nextStep()
     return true
 end
 
@@ -190,11 +250,6 @@ local function assignedSpecs()
     return out
 end
 
-local function willLock()
-    local d = DB()
-    local profiles = isTable(d) and d.profiles
-    return ns.EUIWillLock(ns.EUICurrentSpecID(), isTable(d) and d.specProfiles, profiles and profiles[BACKUP] ~= nil)
-end
 
 local function healthResets(lock)
     local e = E()
@@ -244,86 +299,316 @@ local function movesToBackup()
     return false
 end
 
--- The click's inputs: the player's profile captured now, the two decodes
--- copied, all three folder-stripped, plus what the warnings read. Held on the
--- plan so a recount uses the profile the confirm described.
-local function gatherInputs()
-    local e, d = E(), DB()
-    local P, err = ns.EUICaptureP()
-    if not P then return nil, err end
+-- Every change after the visit's first keeps the visit's backup and swaps
+-- through a scratch profile instead (see EUIApplyUpdate).
+local function scratchPath()
+    local d = DB()
+    local profiles = isTable(d) and d.profiles
+    return ns.euiVisitBacked == true and isTable(profiles) and profiles[BACKUP] ~= nil
+        and ns.db ~= nil and isTable(ns.db.euiBackup)
+end
 
-    local stored = d.profiles[NAME]
-    ns.EUISupplementP(P.data, isTable(stored) and stored.addons)
+-- The importer's activation gate as it will see the assignments. The first
+-- change deletes the old backup, clearing its assignments; the scratch path
+-- keeps it.
+local function predictLock(scratch)
+    local d = DB()
+    local profiles = isTable(d) and d.profiles
+    local backupGoes = not scratch and isTable(profiles) and profiles[BACKUP] ~= nil
+    return ns.EUIWillLock(ns.EUICurrentSpecID(), isTable(d) and d.specProfiles, backupGoes)
+end
 
+-- What the list and the merge share: KitnUI's string and every recorded base,
+-- folder-stripped, the rows, the composite base and the key resolver. Pd, the
+-- player's capture when there is one, is stripped in place. Nil until the
+-- decodes land.
+local function sideInputs(Pd)
+    local e = E()
+    if not (hasRequired(e) and cache.N and isTable(cache.N.data)) then return nil end
     local keep, strip, stripCDM = ns.EUIStripSets(e._ADDON_DB_MAP, ns.GetEUIModuleSet())
-    local Od = cache.O and ns.EUIDeepCopy(cache.O.data) or nil
+    -- A map entry that cannot be read partitions nothing, and the final filter
+    -- drops every link of a folder the keep set lacks, so a row the list takes
+    -- from the payload would lose its links. When any entry fails, or none
+    -- names a folder, the payload's folders no readable entry names stand in,
+    -- the disabled ones stripped as the map would have them. The Top Bar's
+    -- folder stays out of both, as it is out of every map.
+    local partial = next(keep) == nil and next(strip) == nil
+    for _, entry in ipairs(isTable(e._ADDON_DB_MAP) and e._ADDON_DB_MAP or {}) do
+        if not (isTable(entry) and type(entry.folder) == "string") then partial = true end
+    end
+    if partial then
+        local disabled = {}
+        for _, folder in ipairs(ns.GetEUIModuleSet() or {}) do disabled[folder] = true end
+        for folder in pairs(isTable(cache.N.data.addons) and cache.N.data.addons or {}) do
+            if type(folder) == "string" and not (keep[folder] or strip[folder]) and folder ~= "KitnUI_EUI" then
+                if disabled[folder] then strip[folder] = true else keep[folder] = true end
+            end
+        end
+    end
     local Nd = ns.EUIDeepCopy(cache.N.data)
-    local Pd = P.data
-    ns.EUIStripFolders(Od, strip, stripCDM)
     ns.EUIStripFolders(Nd, strip, stripCDM)
-    ns.EUIStripFolders(Pd, strip, stripCDM)
+    if Pd then ns.EUIStripFolders(Pd, strip, stripCDM) end
 
-    local metaK2F = ns.EUIOverlayMeta(cache.N.data.unlockLayoutMeta, Pd.unlockLayoutMeta)
-    local storedLayout = isTable(stored) and stored.unlockLayout or nil
+    local stamp = ns.db.addonVersions and ns.db.addonVersions.EllesmereUI
+    local bases = {}
+    local function addBase(version, payload)
+        if version and isTable(payload) and isTable(payload.data) then
+            local data = ns.EUIDeepCopy(payload.data)
+            ns.EUIStripFolders(data, strip, stripCDM)
+            bases[version] = data
+        end
+    end
+    addBase(stamp, cache.O)
+    for version, payload in pairs(cache.byVersion) do addBase(version, payload) end
+
+    local metaK2F = ns.EUIOverlayMeta(cache.N.data.unlockLayoutMeta, Pd and Pd.unlockLayoutMeta)
+    local sides = { Nd }
+    if Pd then
+        sides[#sides + 1] = Pd
+        sides[#sides + 1] = ns.EUIOverrideElementSide(Pd)
+    end
+    for _, data in pairs(bases) do sides[#sides + 1] = data end
+    local keyToFolder = ns.EUILayoutKeyToFolder(sides, metaK2F, e.BuildImportKeyToFolder)
+    local rows = ns.EUIRows(e._ADDON_DB_MAP, e.ADDON_ROSTER, cache.N.data.addons, ns.GetEUIModuleSet())
+    local O, missing = ns.EUIComposeBase(rows, ns.db.euiRowAt, bases, stamp, keyToFolder)
     return {
-        O = Od, N = Nd, P = Pd,
-        keep = keep,
-        metaK2F = metaK2F,
-        keyToFolder = ns.EUILayoutKeyToFolder({ Od, Nd, Pd }, metaK2F, e.BuildImportKeyToFolder),
-        storedLayout = storedLayout,
-        storedK2F = e.BuildImportKeyToFolder(isTable(storedLayout) and storedLayout or {}, metaK2F) or {},
+        N = Nd, O = O, P = Pd, missing = missing, rows = rows, keep = keep,
+        metaK2F = metaK2F, keyToFolder = keyToFolder, stamp = stamp,
     }
 end
 
--- The merge over one set of inputs under one activation prediction.
-local function buildPlan(inputs, lock)
-    local e, d = E(), DB()
+-- The player's profile captured now, supplemented, with the shared inputs.
+-- Returns the inputs and the stored profile, or nil and a line.
+local function captureSide()
+    local P, err = ns.EUICaptureP()
+    if not P then return nil, err end
+    local stored = DB().profiles[NAME]
+    ns.EUISupplementP(P.data, isTable(stored) and stored.addons)
+    local side = sideInputs(P.data)
+    if not side then return nil, T.importFail end
+    return side, stored
+end
+
+-- The list's counts: KitnUI's string against the composite base.
+function ns.EUIPageInputs()
+    return sideInputs(nil)
+end
+
+-- The "Your copy" read, under the same refusals as an update.
+function ns.EUIReadPlayer()
+    local why = refusal()
+    if why then return nil, why end
+    if not ns.EUIDecodesReady() then return nil, T.preparing end
+    return captureSide()
+end
+
+-- The click's inputs, plus what the warnings read. Held on the plan so a
+-- recount uses the profile the confirm described.
+local function gatherInputs()
+    local inputs, stored = captureSide()
+    if not inputs then return nil, stored end
+    local storedLayout = isTable(stored) and stored.unlockLayout or nil
+    inputs.storedLayout = storedLayout
+    inputs.storedK2F = E().BuildImportKeyToFolder(isTable(storedLayout) and storedLayout or {}, inputs.metaK2F) or {}
+    return inputs
+end
+
+function ns.EUIUnlockLabels()
+    local out = {}
+    local e = E()
+    local elems = e and e._unlockRegisteredElements
+    if isTable(elems) then
+        for key, elem in pairs(elems) do
+            if isTable(elem) and type(elem.label) == "string" then out[key] = elem.label end
+        end
+    end
+    return out
+end
+
+-- What the player's walk needs besides the inputs: the defaults EllesmereUI
+-- registered per loaded module, the settings KitnUI's own switches hold, and
+-- the Unlock Mode labels.
+function ns.EUIPlayerContext()
+    local e = E()
+    local defaults = {}
+    local reg = e and e.Lite and e.Lite._dbRegistry
+    if isTable(reg) then
+        for i = 1, #reg do
+            local entry = reg[i]
+            if isTable(entry) and type(entry.folder) == "string" and isTable(entry._profileDefaults) then
+                defaults[entry.folder] = entry._profileDefaults
+            end
+        end
+    end
+    if ns.db and ns.db.devMode then
+        local n = 0
+        for _ in pairs(defaults) do n = n + 1 end
+        print(ns.title .. " folders with defaults: " .. n)
+    end
+    local held = ns.EUIHeldPaths and ns.EUIHeldPaths({ NAME, BACKUP }) or {}
+    return { defaults = defaults, held = held, unlock = ns.EUIUnlockLabels() }
+end
+
+-- The rows the update changes, counted the way the list counts them. Walked
+-- whole: the click already merges the whole payload in the same frame.
+local function changedRows(inputs)
+    local walker = ns.EUIRowDiff(inputs.O, inputs.N, inputs.rows, inputs.keyToFolder, { missing = inputs.missing })
+    walker:Step(math.huge)
+    local changed = {}
+    for _, row in ipairs(inputs.rows) do
+        local entry = walker.result[row.id]
+        if not row.off and entry and (entry.noBase or entry.count > 0) then changed[row.id] = true end
+    end
+    return changed
+end
+
+local function withWarnings(plan, removed)
+    local inputs = plan.inputs
+    local Pd = inputs.P
+    local rb = Pd.addons and Pd.addons[RESOURCE_BARS]
+    plan.warnLinks = ns.EUILinkWarning(plan.merged, inputs.storedLayout, Pd.unlockLayout, removed, inputs.storedK2F)
+    plan.warnHealth = isTable(rb) and isTable(rb.health) and rb.health.customColored == true
+        and healthResets(plan.willLock) or false
+    plan.warnMoved = movesToBackup()
+    plan.backupExists = DB().profiles[BACKUP] ~= nil
+    return plan
+end
+
+-- The merge over one set of inputs under one activation prediction, with every
+-- row outside `ticked` put back to the player's copy.
+local function buildPlan(inputs, lock, ticked, scratch, kind, changed)
     local merged, report = ns.EUIThreeWayMerge(inputs.O, inputs.N, inputs.P, {
         keyToFolder = inputs.keyToFolder,
         healthReset = healthResets(lock),
     })
-    local removed = ns.EUIFinalLayoutFilter(merged, report, inputs.metaK2F, inputs.keep, e)
+    ns.EUIKeepSlices(merged, report, inputs.P, inputs.rows, ticked, inputs.keyToFolder)
+    local removed = ns.EUIFinalLayoutFilter(merged, report, inputs.metaK2F, inputs.keep, E())
     if not removed then return nil, T.readFail end
     if ns.db and ns.db.devMode then
         for _, path in ipairs(report.conflicts) do print(ns.title .. " conflict: " .. path) end
+        for key in pairs(removed) do print(ns.title .. " removed: " .. key) end
     end
-
-    local Pd = inputs.P
-    local health = Pd.addons and Pd.addons[RESOURCE_BARS] and Pd.addons[RESOURCE_BARS].health
-    return {
+    return withWarnings({
+        kind = kind,
         inputs = inputs,
         merged = merged,
         report = report,
+        ticked = ticked,
+        changed = changed,
+        byRow = ns.EUIByRow(report.conflicts, ticked, inputs.keyToFolder),
         willLock = lock,
+        scratch = scratch,
         noBase = report.noBase,
-        warnLinks = ns.EUILinkWarning(merged, inputs.storedLayout, Pd.unlockLayout, removed, inputs.storedK2F),
-        warnHealth = isTable(health) and health.customColored == true and healthResets(lock),
-        warnMoved = movesToBackup(),
-        backupExists = d.profiles[BACKUP] ~= nil,
-    }
+        build = function(l, s) return buildPlan(inputs, l, ticked, s, kind, changed) end,
+    }, removed)
 end
 
--- The click. Returns a plan the confirm describes and the acceptance applies,
--- or nil and a line.
-function ns.EUIPrepareUpdate()
+-- One row back to KitnUI's version, everything else as the player has it.
+local function buildResetPlan(inputs, lock, row, context, scratch)
+    local P = inputs.P
+    -- The player's profile merged against itself: the same sanitising an update
+    -- applies (transport keys, the layout's shape, the scale rule), with nothing
+    -- of KitnUI's in it until the row is taken.
+    local merged, report = ns.EUIThreeWayMerge(P, P, P, {
+        keyToFolder = inputs.keyToFolder,
+        healthReset = healthResets(lock),
+    })
+    ns.EUITakeSlice(merged, inputs.N, row, inputs.keyToFolder)
+    if row.id == "overrides" then
+        report.overrideSet = next(ns.EUIMaskedOverrideSet(inputs.N)) and "kitn" or "none"
+    end
+    local removed = ns.EUIFinalLayoutFilter(merged, report, inputs.metaK2F, inputs.keep, E())
+    if not removed then return nil, T.readFail end
+
+    local base = (inputs.O == nil or inputs.missing[row.id]) and inputs.N or inputs.O
+    -- The player's changes to the row that the reset alters: one already equal
+    -- to KitnUI's value stays as it is, so it is not "replaced".
+    local walker = ns.EUIRowDiff(base, P, { row }, inputs.keyToFolder, {
+        player = true, held = context.held, defaults = context.defaults, unlock = context.unlock,
+        against = inputs.N,
+    })
+    walker:Step(math.huge)
+    local entry = walker.result[row.id]
+    return withWarnings({
+        kind = "reset",
+        row = row,
+        inputs = inputs,
+        merged = merged,
+        report = report,
+        ticked = { [row.id] = true },
+        changed = { [row.id] = true },
+        byRow = {},
+        yours = entry and entry.count or 0,
+        captured = ns.EUIOverridesCapture(P, row.id, inputs.keyToFolder),
+        splits = ns.EUISplitLinks(inputs.N, inputs.rows, { [row.id] = true }, inputs.keyToFolder),
+        willLock = lock,
+        scratch = scratch,
+        noBase = false,
+        build = function(l, s) return buildResetPlan(inputs, l, row, context, s) end,
+    }, removed)
+end
+
+-- The click. ticked: the rows to take, or nil for every row with a change.
+-- Returns a plan the confirm describes and the acceptance applies, or nil and
+-- a line.
+function ns.EUIPrepareUpdate(ticked)
     local why = refusal()
     if why then return nil, why end
+    -- A take cannot stamp what it installs without a shipped version, and its
+    -- part would then read waiting again; an update always has one.
+    if ns.GetAddonDataVersion("EllesmereUI") == nil then return nil, T.importFail end
+    if ticked ~= nil and next(ticked) == nil then return nil, T.noneTicked end
     if not ns.EUIDecodesReady() then return nil, T.preparing end
     if cache.failedN then return nil, T.importFail end
     local inputs, err = gatherInputs()
     if not inputs then return nil, err end
-    return buildPlan(inputs, willLock())
+    local changed = changedRows(inputs)
+    local take = {}
+    for id in pairs(changed) do
+        if ticked == nil or ticked[id] then take[id] = true end
+    end
+    if ticked ~= nil and next(take) == nil then return nil, T.noneTicked end
+    local kind = ns.EUIUpdateState() == "current" and "take" or "update"
+    local scratch = scratchPath()
+    return buildPlan(inputs, predictLock(scratch), take, scratch, kind, changed)
+end
+
+-- A Reset click. context: ns.EUIPlayerContext()'s result, reused from the page
+-- when it has one.
+function ns.EUIPrepareReset(rowId, context)
+    local why = refusal()
+    if why then return nil, why end
+    -- The reset part is recorded at the shipped version; without one the list
+    -- still shows (state "current"), but nothing may import.
+    if ns.GetAddonDataVersion("EllesmereUI") == nil then return nil, T.importFail end
+    if not ns.EUIDecodesReady() then return nil, T.preparing end
+    if cache.failedN then return nil, T.importFail end
+    local inputs, err = gatherInputs()
+    if not inputs then return nil, err end
+    local row
+    for _, r in ipairs(inputs.rows) do
+        if r.id == rowId and not r.off then row = r end
+    end
+    if not row then return nil, T.readFail end
+    local scratch = scratchPath()
+    return buildResetPlan(inputs, predictLock(scratch), row, context or ns.EUIPlayerContext(), scratch)
 end
 
 -- The confirm's message, one sentence per line.
 function ns.EUIConfirmText(plan)
     local lines = { T.promise }
+    for _, row in ipairs(plan.inputs.rows) do
+        if plan.ticked[row.id] then
+            local k = plan.byRow[row.id] or 0
+            lines[#lines + 1] = k > 0 and T.rowReplaced:format(row.label, k) or T.rowNone:format(row.label)
+        end
+    end
     if plan.noBase then
         lines[#lines + 1] = T.noBase
     else
         lines[#lines + 1] = T.replaces:format(#plan.report.conflicts)
     end
-    if plan.backupExists then lines[#lines + 1] = T.backupReplaced end
+    if plan.backupExists and not plan.scratch then lines[#lines + 1] = T.backupReplaced end
     if plan.report.overrideSet == "kitn" then
         lines[#lines + 1] = T.overridesTaken
     elseif plan.report.overrideSet == "player" then
@@ -331,8 +616,50 @@ function ns.EUIConfirmText(plan)
     end
     if plan.warnLinks then lines[#lines + 1] = T.links end
     if plan.warnHealth then lines[#lines + 1] = T.health end
-    if plan.warnMoved then lines[#lines + 1] = T.moved end
+    if plan.warnMoved then lines[#lines + 1] = plan.scratch and T.movedScratch or T.moved end
     return table.concat(lines, "\n")
+end
+
+-- A part reset's confirm message.
+function ns.EUIResetText(plan)
+    local label = plan.row.label
+    local lines = {
+        T.resetBody:format(label) .. " "
+            .. (plan.yours > 0 and T.resetYours:format(plan.yours, label) or T.resetNone:format(label))
+            .. " " .. T.resetOthers,
+    }
+    if plan.captured then lines[#lines + 1] = T.resetCaptured:format(label) end
+    local first = plan.splits[1]
+    if first then
+        lines[#lines + 1] = T.split:format(first.child.label, first.target.label)
+            .. (#plan.splits > 1 and T.splitMore:format(#plan.splits - 1) or "")
+    end
+    if plan.row.id == "overrides" then lines[#lines + 1] = T.overridesTaken end
+    if plan.warnHealth then lines[#lines + 1] = T.health end
+    if plan.backupExists and not plan.scratch then lines[#lines + 1] = T.backupReplaced end
+    if plan.warnMoved then lines[#lines + 1] = plan.scratch and T.movedScratch or T.moved end
+    -- What Restore will put back: the backup this reset takes, or the one an
+    -- earlier change took. A full reset takes none, so a promise of the
+    -- profile from before the visit would be false after one began it.
+    lines[#lines + 1] = plan.scratch and T.restoreEarlier or T.restoreNow
+    return table.concat(lines, "\n")
+end
+
+-- The rows an update leaves waiting: changed and not taken.
+function ns.EUISkippedLabels(plan)
+    local out = {}
+    for _, row in ipairs(plan.inputs.rows) do
+        if plan.changed[row.id] and not plan.ticked[row.id] then out[#out + 1] = row.label end
+    end
+    return out
+end
+
+-- The chat line after an update that left rows waiting, or nil.
+function ns.EUISkippedNote(plan)
+    if plan.kind ~= "update" then return nil end
+    local labels = ns.EUISkippedLabels(plan)
+    if #labels == 0 then return nil end
+    return T.skipped:format(table.concat(labels, ", "))
 end
 
 ---------------------------------------------------------------------------------
@@ -355,44 +682,118 @@ local function restoreScale(rec)
     return changed
 end
 
-local function rolledBack(err, ok, detail, scaled)
-    local line = err .. (ok and " Your previous profile was put back." or (" Your previous profile is named " .. BACKUP .. "."))
+-- `from` is the name the player's profile was moved to: the backup, or the
+-- scratch name on a later change of the visit.
+local function rolledBack(err, ok, detail, scaled, from)
+    local line = err .. (ok and " Your previous profile was put back." or (" Your previous profile is named " .. (from or BACKUP) .. "."))
     if scaled then line = line .. " " .. T.reloadScale end
     return false, line, detail
 end
 
--- Nothing stored: the rename alone moves everything back.
-local function rollbackA(err, detail)
+-- Nothing stored: the rename alone moves everything back. `rec` holds the
+-- scale to put back; only the visit's own backup record is cleared.
+local function rollbackA(err, detail, from, rec)
     local e, d = E(), DB()
-    e.RenameProfile(BACKUP, NAME)
+    e.RenameProfile(from, NAME)
     local ok = d.activeProfile == NAME
-    local scaled = restoreScale(ns.db.euiBackup)
-    ns.db.euiBackup = nil
+    local scaled = restoreScale(rec)
+    if from == BACKUP then ns.db.euiBackup = nil end
     refreshAll()
-    return rolledBack(err, ok, detail, scaled)
+    return rolledBack(err, ok, detail, scaled, from)
 end
 
 -- Stored without activating and the switch failed: remove the stored profile,
--- put the backup back under its name and its assignments back on it.
-local function rollbackB(err, detail)
+-- put the moved one back under its name and its assignments back on it.
+local function rollbackB(err, detail, from, rec)
     local e, d = E(), DB()
-    local rec = ns.db.euiBackup
     e.DeleteProfile(NAME)
-    e.RenameProfile(BACKUP, NAME)
+    e.RenameProfile(from, NAME)
     local ok = d.activeProfile == NAME
     for _, spec in ipairs(isTable(rec) and rec.assignedSpecs or {}) do
         e.AssignProfileToSpec(NAME, spec)
     end
     local scaled = restoreScale(rec)
-    ns.db.euiBackup = nil
+    if from == BACKUP then ns.db.euiBackup = nil end
     refreshAll()
-    return rolledBack(err, ok, detail, scaled)
+    return rolledBack(err, ok, detail, scaled, from)
+end
+
+-- What Restore previous puts back beside the backup profile.
+local function backupRecord(assigned, scaleTaken)
+    local d = DB()
+    return {
+        version = ns.db.addonVersions and ns.db.addonVersions.EllesmereUI,
+        base = ns.db.euiBase,
+        euiRowAt = ns.EUIDeepCopy(ns.db.euiRowAt),
+        euiBases = ns.EUIDeepCopy(ns.db.euiBases),
+        assignedSpecs = assigned,
+        colorsPullFrom = d.colorsPullFrom or false,
+        ppUIScale = d.ppUIScale,
+        ppUIScaleAuto = d.ppUIScaleAuto,
+        scaleTaken = scaleTaken,
+    }
+end
+
+-- The scratch name, or a numbered one when a profile already holds it: an
+-- existing profile of that name may be the player's own, so it is never
+-- deleted to make room.
+local function freeScratchName()
+    local profiles = DB().profiles
+    local name, i = ns.EUIScratchName, 1
+    while profiles[name] ~= nil do
+        i = i + 1
+        name = ns.EUIScratchName .. " " .. i
+    end
+    return name
+end
+
+-- The scratch profile goes once the import has landed. Its delete drops every
+-- note filed under it, so the notes move to the new profile first; a colour
+-- source still naming it would dangle, so it moves too.
+local function finishScratch(scratchName)
+    local e, d = E(), DB()
+    if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(scratchName, NAME) end
+    if d.colorsPullFrom == scratchName then d.colorsPullFrom = NAME end
+    if d.profiles[scratchName] then e.DeleteProfile(scratchName) end
+end
+
+local function finishApply(plan, before)
+    if plan.kind == "update" then ns.CompleteSetup("EllesmereUI") end
+    ns.db.euiRowAt, ns.db.euiBases = ns.EUIRecordRows(plan.kind, before, {
+        rows = plan.inputs.rows,
+        ticked = plan.ticked,
+        changed = plan.changed,
+        row = plan.row and plan.row.id,
+        prior = { version = before.stamp, base = before.base },
+        shipped = { version = ns.GetAddonDataVersion("EllesmereUI"), base = ns.data.EllesmereUI },
+        kitn = ns.DisplayVersion and ns.DisplayVersion() or ns.version,
+    })
+    if plan.kind ~= "reset" then
+        ns.db.euiUpdateReport = {
+            conflicts = plan.report.conflicts,
+            kept = plan.report.kept,
+            applied = plan.report.applied,
+            noBase = plan.report.noBase,
+            overrideSet = plan.report.overrideSet,
+            byRow = plan.byRow,
+            skipped = ns.EUISkippedLabels(plan),
+        }
+        ns.euiUpdatedThisSession = ns.db.euiUpdateReport
+    end
+    refreshAll()
+    ns.ApplyEUIModuleSet()
+end
+
+-- A visit runs from opening the wizard to closing it. Its first change takes
+-- the backup; every later one keeps it.
+function ns.EUIBeginVisit()
+    ns.euiVisitBacked = false
 end
 
 -- Applies a confirmed plan. Returns true on success; false and a line on a
 -- refusal or a failure, plus the importer's own error text when it raised one;
--- "reconfirm" and a new plan when the activation prediction changed while the
--- dialog was open.
+-- "reconfirm" and a new plan when the activation prediction or the path changed
+-- while the dialog was open.
 function ns.EUIApplyUpdate(plan)
     local why = refusal()
     if why then return false, why end
@@ -403,29 +804,41 @@ function ns.EUIApplyUpdate(plan)
     -- A prediction that moved while the dialog was open changes which leaves
     -- count; the recount runs over the inputs the confirm described, so edits
     -- made during the dialog stay out of the update and in the backup.
-    local lock = willLock()
-    if lock ~= plan.willLock then
-        local fresh, reason = buildPlan(plan.inputs, lock)
+    local scratch = scratchPath()
+    local lock = predictLock(scratch)
+    if lock ~= plan.willLock or scratch ~= plan.scratch then
+        local fresh, reason = plan.build(lock, scratch)
         if not fresh then return false, reason end
         return "reconfirm", fresh
     end
     local assigned = assignedSpecs()
     plan.merged.assignedSpecs = assigned
-
-    if d.profiles[BACKUP] then e.DeleteProfile(BACKUP) end
-    ns.db.euiBackup = {
-        version = ns.db.addonVersions and ns.db.addonVersions.EllesmereUI,
+    local before = {
+        rowAt = ns.db.euiRowAt,
+        bases = ns.db.euiBases,
         base = ns.db.euiBase,
-        assignedSpecs = assigned,
-        colorsPullFrom = d.colorsPullFrom or false,
-        ppUIScale = d.ppUIScale,
-        ppUIScaleAuto = d.ppUIScaleAuto,
-        scaleTaken = plan.merged.uiScale ~= nil,
+        stamp = ns.db.addonVersions and ns.db.addonVersions.EllesmereUI,
     }
-    e.RenameProfile(NAME, BACKUP)
-    if not (d.profiles[BACKUP] and d.activeProfile == BACKUP) then
-        ns.db.euiBackup = nil
-        return false, T.renameFail
+    local scaleTaken = plan.merged.uiScale ~= nil
+
+    local from, rec
+    if scratch then
+        -- A second import under the active profile's own name keeps the live
+        -- layout over the merged one, so the live profile moves aside first.
+        from = freeScratchName()
+        rec = { assignedSpecs = assigned, ppUIScale = d.ppUIScale, ppUIScaleAuto = d.ppUIScaleAuto, scaleTaken = scaleTaken }
+        e.RenameProfile(NAME, from)
+        if not (d.profiles[from] and d.activeProfile == from) then return false, T.scratchFail end
+    else
+        from = BACKUP
+        if d.profiles[BACKUP] then e.DeleteProfile(BACKUP) end
+        ns.db.euiBackup = backupRecord(assigned, scaleTaken)
+        e.RenameProfile(NAME, BACKUP)
+        if not (d.profiles[BACKUP] and d.activeProfile == BACKUP) then
+            ns.db.euiBackup = nil
+            return false, T.renameFail
+        end
+        rec = ns.db.euiBackup
     end
 
     local ok, result, importErr, status = pcall(e.ImportProfile, { version = 3, type = "full", data = plan.merged }, NAME)
@@ -438,39 +851,37 @@ function ns.EUIApplyUpdate(plan)
     if failed then
         local line = T.importFail .. "."
         if d.profiles[NAME] == nil then
-            return rollbackA(line, detail)
+            return rollbackA(line, detail, from, rec)
         elseif d.activeProfile ~= NAME then
-            return rollbackB(line, detail)
+            return rollbackB(line, detail, from, rec)
         end
         -- The activation tail threw after the account writes: the merged
-        -- profile is active and the backup is intact, so Restore is offered.
+        -- profile is active and the visit's backup is intact, so Restore is
+        -- offered.
+        if scratch then finishScratch(from) end
+        if scaleTaken then ns.db.euiBackup.scaleTaken = true end
+        ns.euiVisitBacked = true
         refreshAll()
         return false, line .. " " .. T.tailRestore, detail
     end
 
     if status == "spec_locked" then
         e.SetProfile(NAME)
-        if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate) end
+        if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate, nil, from, rec) end
         if plan.merged.customColors and d.colorsApplyToAllProfiles ~= false then
             d.colorsPullFrom = NAME
         end
     end
 
-    ns.CompleteSetup("EllesmereUI")
-    ns.db.euiUpdateReport = {
-        conflicts = plan.report.conflicts,
-        kept = plan.report.kept,
-        applied = plan.report.applied,
-        noBase = plan.report.noBase,
-        overrideSet = plan.report.overrideSet,
-    }
-    ns.euiUpdatedThisSession = ns.db.euiUpdateReport
-    refreshAll()
-    ns.ApplyEUIModuleSet()
+    if scratch then finishScratch(from) end
+    if scaleTaken then ns.db.euiBackup.scaleTaken = true end
+    ns.euiVisitBacked = true
+    finishApply(plan, before)
     return true
 end
 
 function ns.EUIUpdateToast(plan)
+    if plan.kind == "reset" then return T.resetDone:format(plan.row.label) end
     local n = #plan.report.conflicts
     if n > 0 then return T.updatedReplaced:format(n) end
     return T.updated
@@ -505,6 +916,9 @@ function ns.EUIRestorePrevious()
     ns.db.euiBase = rec.base
     ns.db.addonVersions = ns.db.addonVersions or {}
     ns.db.addonVersions.EllesmereUI = rec.version
+    ns.db.euiRowAt = rec.euiRowAt
+    ns.db.euiBases = rec.euiBases
+    ns.euiVisitBacked = false
     ns.db.euiUpdateReport = nil
     ns.db.euiBackup = nil
     refreshAll()

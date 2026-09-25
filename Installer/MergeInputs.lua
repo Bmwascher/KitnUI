@@ -14,6 +14,10 @@ local function isTable(v) return type(v) == "table" end
 
 ns.EUIBackupName = "KitnUI (before update)"
 
+-- The live profile's name for the moment a later change in the same visit
+-- imports under the KitnUI name, so the visit's backup is left alone.
+ns.EUIScratchName = "KitnUI (updating)"
+
 -- The partition ImportProfileSilent makes: a folder is stripped when it, or
 -- the addon hosting it, is in the disable list. Returns the kept set, the
 -- stripped set, and whether the CDM spell store goes with them.

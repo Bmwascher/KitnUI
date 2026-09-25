@@ -35,7 +35,7 @@ _G.GetSpecialization = function() return game.spec end
 _G.GetSpecializationInfo = function() return game.specID end
 
 local ns = { profileName = "KitnUI", data = {}, title = "KitnUI" }
-for _, file in ipairs({ "Installer/Merge.lua", "Installer/MergeInputs.lua", "Installer/Update.lua" }) do
+for _, file in ipairs({ "Installer/Merge.lua", "Installer/MergeInputs.lua", "Installer/ModuleRows.lua", "Installer/Update.lua" }) do
     local chunk, err = loadfile(file)
     if not chunk then
         print("FAIL  could not load " .. file .. ": " .. tostring(err))
@@ -55,7 +55,10 @@ ns.CompleteSetup = function(key)
     bump("complete")
     ns.db.profiles[key] = true
     ns.db.addonVersions[key] = SHIPPED
-    if key == "EllesmereUI" then ns.db.euiBase = ns.data.EllesmereUI end
+    if key == "EllesmereUI" then
+        ns.db.euiBase = ns.data.EllesmereUI
+        ns.db.euiRowAt, ns.db.euiBases = nil, nil
+    end
 end
 
 -- Strings are tokens into this table; "decoding" is a deep copy of the entry.
@@ -255,6 +258,7 @@ local function freshInstall(opts)
         euiBase = opts.base == nil and O_STR or opts.base,
     }
     ns.euiUpdatedThisSession = nil
+    ns.EUIBeginVisit()
     local p = base()
     p.addons[F].y = 9
     db.profiles.KitnUI = p
@@ -524,7 +528,8 @@ eq(ns.EUIUpdateToast({ report = { conflicts = {} } }), "Profile updated.", "appl
 eq(ns.EUIUpdateState(), "current", "apply: the page reads current")
 eq(ns.EUIRestorable(), "restore", "apply: restore is offered")
 
--- A second update replaces the previous backup.
+-- A second update in a new visit replaces the previous backup.
+ns.EUIBeginVisit()
 ns.db.addonVersions.EllesmereUI = "2026.08.22"
 ns.EUIStartDecodes()
 plan = ns.EUIPrepareUpdate()
@@ -811,6 +816,309 @@ eq(ok, true, "recovery: restores with the backup active", err)
 eq(calls.delete, nil, "recovery: nothing to delete")
 eq(db.activeProfile, "KitnUI", "recovery: KitnUI is active again")
 check(db.syncedModules.chat.KitnUI == nil, "recovery: sync membership is EllesmereUI's to move")
+
+---------------------------------------------------------------------------------
+-- Parts: a ticked update, the record it leaves, and nothing ticked
+---------------------------------------------------------------------------------
+
+-- The stub map carries no names, so a module row is labelled by its folder.
+freshInstall()
+ns.EUIStartDecodes()
+E.live = { addons = { [F] = { x = 7, y = 9 }, EllesmereUIActionBars = { bars = 3 } } }
+local partPlan, partWhy = ns.EUIPrepareUpdate({ [F] = true })
+check(partPlan ~= nil, "parts: a ticked plan is produced", partWhy)
+eq(partPlan.kind, "update", "parts: a stale stamp is an update")
+check(partPlan.ticked[F] and not partPlan.ticked.general, "parts: only the ticked row is taken")
+check(partPlan.changed[F] and partPlan.changed.general and not partPlan.changed.overrides, "parts: the rows KitnUI changes")
+eq(partPlan.merged.fonts.global, "F", "parts: an unticked General keeps the player's fonts")
+eq(partPlan.merged.uiScale, nil, "parts: and applies no scale")
+eq(partPlan.merged.addons[F].x, 5, "parts: the ticked row takes KitnUI's change")
+eq(partPlan.byRow[F], 1, "parts: the ticked row's replaced count")
+local partText = ns.EUIConfirmText(partPlan)
+check(partText:find(F .. ": 1 of yours replaced", 1, true), "parts: the confirm names the ticked row's replaced changes", partText)
+check(not partText:find("General:", 1, true), "parts: an unticked row has no confirm line", partText)
+eq(ns.EUISkippedNote(partPlan), "Skipped: General -- take them any time from /kitn install, EllesmereUI > Modules.",
+    "parts: the skipped note")
+
+calls = {}
+local partOk, partErr = ns.EUIApplyUpdate(partPlan)
+eq(partOk, true, "parts: the update applies", partErr)
+eq(ns.euiVisitBacked, true, "visit: the first change backs the visit")
+eq(ns.db.addonVersions.EllesmereUI, SHIPPED, "parts: the stamp moves")
+eq(ns.db.euiRowAt and ns.db.euiRowAt.general and ns.db.euiRowAt.general.version, "2026.08.22",
+    "parts: the skipped row stays at the old version")
+eq(ns.db.euiBases and ns.db.euiBases["2026.08.22"], O_STR, "parts: with its string")
+eq(ns.db.euiUpdateReport.skipped[1], "General", "parts: the report names the skipped row")
+eq(ns.db.euiUpdateReport.byRow[F], 1, "parts: and the replaced count per row")
+eq(ns.EUIUpdateState(), "current", "parts: the page reads current")
+
+---------------------------------------------------------------------------------
+-- The decode chain, then take the skipped row through the scratch path
+---------------------------------------------------------------------------------
+
+local decodedStrings = {}
+local realAsync = E.DecodeImportStringAsync
+E.DecodeImportStringAsync = function(s, onDone)
+    decodedStrings[#decodedStrings + 1] = s
+    return realAsync(s, onDone)
+end
+ns.EUIStartDecodes()
+E.DecodeImportStringAsync = realAsync
+eq(#decodedStrings, 2, "decodes: each distinct string is decoded once")
+check(ns.EUIDecodeCache.N == ns.EUIDecodeCache.O, "decodes: a shipped string equal to the base is not decoded again")
+eq(ns.EUIDecodeCache.byVersion["2026.08.22"] and ns.EUIDecodeCache.byVersion["2026.08.22"].data.addons[F].x, 1,
+    "decodes: an older base lands under its version")
+
+local moved = {}
+ns.EUIMoveProfileRecords = function(from, to) moved[#moved + 1] = from .. ">" .. to end
+local scratchDeletedAfterMove
+local realDelete = E.DeleteProfile
+E.DeleteProfile = function(name)
+    if name == ns.EUIScratchName then scratchDeletedAfterMove = #moved > 0 end
+    return realDelete(name)
+end
+db.profileKeybinds.KitnUI = "F5"
+local takePlan, takeWhy = ns.EUIPrepareUpdate({ general = true })
+check(takePlan ~= nil, "take: a plan is produced", takeWhy)
+eq(takePlan.kind, "take", "take: a current stamp takes skipped rows")
+eq(takePlan.scratch, true, "visit: a later change in the visit takes the scratch path")
+eq(takePlan.merged.fonts.global, "G", "take: the waiting row takes KitnUI's change from its own base")
+local takeText = ns.EUIConfirmText(takePlan)
+check(not takeText:find("Your previous backup will be replaced.", 1, true), "visit: the scratch path replaces no backup", takeText)
+check(takeText:find("are removed; set them again in EllesmereUI", 1, true), "visit: the scratch path warns the keybind is removed", takeText)
+local backupProfile, backupRec = db.profiles[ns.EUIBackupName], ns.db.euiBackup
+calls = {}
+local takeOk, takeErr = ns.EUIApplyUpdate(takePlan)
+E.DeleteProfile = realDelete
+ns.EUIMoveProfileRecords = nil
+eq(takeOk, true, "take: applies", takeErr)
+eq(ns.db.euiRowAt, nil, "take: the taken row is cleared")
+eq(ns.db.euiBases, nil, "take: and its string pruned")
+eq(ns.db.addonVersions.EllesmereUI, SHIPPED, "take: the stamp is unchanged")
+eq(calls.complete, nil, "take: CompleteSetup does not run")
+eq(db.profiles[ns.EUIScratchName], nil, "visit: the scratch profile is deleted")
+check(db.profiles[ns.EUIBackupName] == backupProfile, "visit: the visit's backup profile is kept")
+check(ns.db.euiBackup == backupRec, "visit: and its record")
+eq(moved[1], ns.EUIScratchName .. ">KitnUI", "visit: the notes move back to the new profile")
+eq(scratchDeletedAfterMove, true, "visit: before the scratch profile is deleted")
+eq(db.activeProfile, "KitnUI", "visit: KitnUI is active")
+
+freshInstall()
+ns.EUIStartDecodes()
+local noneA, noneWhyA = ns.EUIPrepareUpdate({})
+eq(noneA, nil, "parts: nothing ticked refuses")
+eq(noneWhyA, "Tick at least one part first.", "parts: with the tick line")
+local noneB, noneWhyB = ns.EUIPrepareUpdate({ overrides = true })
+eq(noneB, nil, "parts: a ticked row with no change is nothing ticked")
+eq(noneWhyB, "Tick at least one part first.", "parts: with the tick line again")
+
+---------------------------------------------------------------------------------
+-- Rollbacks on the scratch path
+---------------------------------------------------------------------------------
+
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+ns.EUIStartDecodes()
+local rbaPlan = ns.EUIPrepareUpdate({ general = true })
+E.importMode = "throw_before"
+local rbaOk, rbaErr = ns.EUIApplyUpdate(rbaPlan)
+eq(rbaOk, false, "rollback A': reports failure")
+check(rbaErr and rbaErr:find("put back", 1, true), "rollback A': the profile is put back", rbaErr)
+eq(db.profiles[ns.EUIScratchName], nil, "rollback A': no scratch profile is left")
+eq(db.activeProfile, "KitnUI", "rollback A': KitnUI is active")
+check(db.profiles[ns.EUIBackupName] ~= nil and ns.db.euiBackup ~= nil, "rollback A': the visit's backup stands")
+check(ns.db.euiRowAt and ns.db.euiRowAt.general, "rollback A': the record is untouched")
+
+freshInstall()
+db.specProfiles[72] = "KitnUI"
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+ns.EUIStartDecodes()
+local rbbPlan = ns.EUIPrepareUpdate({ general = true })
+E.importMode = "spec_locked"
+E.switchFails = true
+local rbbOk, rbbErr = ns.EUIApplyUpdate(rbbPlan)
+eq(rbbOk, false, "rollback B': reports failure")
+check(rbbErr and rbbErr:find("Could not switch to the updated profile", 1, true), "rollback B': names the switch", rbbErr)
+eq(db.profiles[ns.EUIScratchName], nil, "rollback B': no scratch profile is left")
+eq(db.activeProfile, "KitnUI", "rollback B': KitnUI is active")
+eq(db.specProfiles[72], "KitnUI", "rollback B': the assignments are re-pointed")
+eq(db.ppUIScale, 0.9, "rollback B': the scale the import wrote is put back")
+check(db.profiles[ns.EUIBackupName] ~= nil and ns.db.euiBackup ~= nil, "rollback B': the visit's backup stands")
+
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+db.profiles[ns.EUIScratchName] = { mine = true }
+ns.EUIStartDecodes()
+local ownOk, ownErr = ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ general = true }))
+eq(ownOk, true, "scratch: a later change applies beside a profile already holding the scratch name", ownErr)
+eq(db.profiles[ns.EUIScratchName] and db.profiles[ns.EUIScratchName].mine, true, "scratch: that profile is left alone")
+eq(db.profiles[ns.EUIScratchName .. " 2"], nil, "scratch: and the numbered scratch profile is deleted after")
+
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+ns.EUIStartDecodes()
+local stuckPlan = ns.EUIPrepareUpdate({ general = true })
+E.renameFails = true
+calls = {}
+local stuckOk, stuckErr = ns.EUIApplyUpdate(stuckPlan)
+E.renameFails = nil
+eq(stuckOk, false, "scratch: a rename that fails stops the change")
+eq(stuckErr, "Could not move your profile aside for the update. Nothing was imported.", "scratch: with its own line, not the backup's")
+eq(calls.import, nil, "scratch: and nothing is imported")
+
+---------------------------------------------------------------------------------
+-- Restore puts the record back and ends the visit's backing
+---------------------------------------------------------------------------------
+
+freshInstall()
+ns.db.euiRowAt = { general = { version = "2026.08.01", kitn = "k" } }
+ns.db.euiBases = { ["2026.08.01"] = O_STR }
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+eq(ns.db.euiRowAt, nil, "record: a full update clears it")
+local restoredOk, restoredErr = ns.EUIRestorePrevious()
+eq(restoredOk, true, "restore: succeeds after a visit", restoredErr)
+eq(ns.db.euiRowAt and ns.db.euiRowAt.general and ns.db.euiRowAt.general.version, "2026.08.01", "restore: the record from before the visit is back")
+eq(ns.db.euiBases and ns.db.euiBases["2026.08.01"], O_STR, "restore: with its strings")
+eq(ns.euiVisitBacked, false, "restore: the next change takes a fresh backup")
+
+---------------------------------------------------------------------------------
+-- A part reset
+---------------------------------------------------------------------------------
+
+local ctx = { defaults = {}, held = {}, unlock = {} }
+freshInstall()
+ns.EUIStartDecodes()
+local resetPlan, resetWhy = ns.EUIPrepareReset(F, ctx)
+check(resetPlan ~= nil, "reset: a plan is produced", resetWhy)
+eq(resetPlan.kind, "reset", "reset: the kind")
+eq(resetPlan.merged.addons[F].x, 5, "reset: the row is KitnUI's")
+eq(resetPlan.merged.addons[F].y, 2, "reset: the player's change in the row is replaced")
+eq(resetPlan.merged.fonts.global, "F", "reset: another row stays the player's")
+eq(resetPlan.yours, 1, "reset: the player's changes to the row are counted")
+eq(resetPlan.captured, false, "reset: no Spec Overrides capture the row")
+eq(#resetPlan.splits, 0, "reset: no split link")
+local resetText = ns.EUIResetText(resetPlan)
+check(resetText:find(F .. " goes back to KitnUI's version. Your 1 changes to " .. F .. " will be replaced. Your other parts are not touched.", 1, true),
+    "reset: the confirm's first line", resetText)
+check(resetText:find("Restore previous puts back your profile as it is now.", 1, true), "reset: the visit's first change promises the profile as it is now", resetText)
+check(not resetText:find("before this visit", 1, true), "reset: never the profile from before the visit, which a full reset may have replaced", resetText)
+check(not resetText:find("Spec Overrides also hold", 1, true), "reset: no capture line", resetText)
+calls = {}
+local resetOk, resetErr = ns.EUIApplyUpdate(resetPlan)
+eq(resetOk, true, "reset: applies", resetErr)
+eq(db.profiles.KitnUI.addons[F].y, 2, "reset: the stored profile has KitnUI's row")
+eq(ns.db.addonVersions.EllesmereUI, "2026.08.22", "reset: the stamp is unchanged")
+eq(calls.complete, nil, "reset: CompleteSetup does not run")
+eq(ns.db.euiRowAt and ns.db.euiRowAt[F] and ns.db.euiRowAt[F].version, SHIPPED, "reset: a row reset ahead of the stamp stands at the shipped version")
+eq(ns.db.euiBases and ns.db.euiBases[SHIPPED], N_STR, "reset: with the shipped string")
+eq(ns.EUIUpdateToast(resetPlan), F .. " reset to KitnUI's version.", "reset: the toast")
+ns.EUIStartDecodes()
+local laterReset = ns.EUIPrepareReset("general", ctx)
+local laterText = laterReset and ns.EUIResetText(laterReset) or ""
+check(laterText:find("Restore previous puts back the backup taken earlier in this visit, undoing every change since then.", 1, true),
+    "reset: a later change in the visit promises the earlier backup", laterText)
+
+freshInstall()
+db.profiles.KitnUI.specOverrides = { { values = { default = { [F .. "\31x"] = 3 } } } }
+ns.EUIStartDecodes()
+local capPlan = ns.EUIPrepareReset(F, ctx)
+eq(capPlan and capPlan.captured, true, "reset: a captured row is noticed")
+check(capPlan and ns.EUIResetText(capPlan):find("Your Spec Overrides also hold settings for " .. F .. "; they apply again when you change spec.", 1, true),
+    "reset: and named in the confirm")
+
+freshInstall()
+db.profiles.KitnUI.addons[F].x = 5
+ns.EUIStartDecodes()
+local equalPlan = ns.EUIPrepareReset(F, ctx)
+eq(equalPlan and equalPlan.yours, 1, "reset: a change already equal to KitnUI's value is not counted as replaced")
+
+-- Without a shipped version the list still shows, but a part reset has no
+-- version to record the part at, so it refuses before anything imports.
+freshInstall()
+ns.EUIStartDecodes()
+local realShipped = ns.GetAddonDataVersion
+ns.GetAddonDataVersion = function() return nil end
+local noVerPlan, noVerWhy = ns.EUIPrepareReset(F, ctx)
+ns.GetAddonDataVersion = realShipped
+eq(noVerPlan, nil, "reset: without a shipped version it refuses")
+eq(noVerWhy, "EllesmereUI import failed", "reset: with the import line")
+eq(db.profiles[ns.EUIBackupName], nil, "reset: and nothing is backed up or imported")
+
+-- A take would clear the part's record without stamping what it installed, so
+-- the part would read waiting again against a stamped base that differs from
+-- KitnUI's string. It refuses the same way.
+freshInstall()
+ns.db.euiRowAt = { general = { version = "2026.08.01", kitn = "k" } }
+ns.db.euiBases = { ["2026.08.01"] = O_STR }
+ns.EUIStartDecodes()
+ns.GetAddonDataVersion = function() return nil end
+local noVerTake, noVerTakeWhy = ns.EUIPrepareUpdate({ general = true })
+ns.GetAddonDataVersion = realShipped
+check(ns.data.EllesmereUI ~= ns.db.euiBase, "take: KitnUI's string differs from the stamped base")
+eq(noVerTake, nil, "take: without a shipped version it refuses")
+eq(noVerTakeWhy, "EllesmereUI import failed", "take: with the import line")
+eq(ns.db.euiRowAt and ns.db.euiRowAt.general and ns.db.euiRowAt.general.version, "2026.08.01", "take: and the part still waits")
+
+---------------------------------------------------------------------------------
+-- List readiness
+---------------------------------------------------------------------------------
+
+freshInstall()
+ns.db.addonVersions.EllesmereUI = SHIPPED
+eq(ns.EUIListReady(), true, "list: ready on a full EllesmereUI")
+local readyMap = E._ADDON_DB_MAP
+E._ADDON_DB_MAP = nil
+eq(ns.EUIUpdateState(), "current", "list: a current profile stays current without the map")
+eq(ns.EUIListReady(), false, "list: but gets no list")
+E._ADDON_DB_MAP = { "unreadable", { display = "no folder" } }
+eq(ns.EUIListReady(), true, "list: a map whose entries cannot be read is still a map")
+ns.EUIStartDecodes()
+local unreadInputs = ns.EUIPageInputs()
+local unreadIds = {}
+for _, row in ipairs(unreadInputs and unreadInputs.rows or {}) do unreadIds[#unreadIds + 1] = row.id end
+eq(table.concat(unreadIds, ","), F .. ",general,overrides",
+    "list: its rows come from the payload's folders, the always-off one left out")
+
+-- With that map an update still keeps the links of the payload's folders.
+freshInstall()
+local linkN = base()
+linkN.addons[F].x = 5
+linkN.unlockLayout.anchors = { UF_Player = { target = "UIParent" } }
+linkN.unlockLayoutMeta = { keyToFolder = { UF_Player = F } }
+ns.data.EllesmereUI = encode("N-links", payload(linkN))
+ns.EUIStartDecodes()
+local linkPlan, linkWhy = ns.EUIPrepareUpdate()
+ns.data.EllesmereUI = N_STR
+check(linkPlan ~= nil, "list: an unreadable map still updates", linkWhy)
+check(linkPlan and linkPlan.merged.unlockLayout.anchors.UF_Player ~= nil, "list: and keeps a link of the payload's folders")
+check(linkPlan and linkPlan.merged.addons.EllesmereUIActionBars == nil, "list: while a disabled folder is still stripped")
+
+-- One readable entry and one that cannot be read: a folder only the payload
+-- names keeps its links too, beside the readable entry's.
+freshInstall()
+E._ADDON_DB_MAP = { { folder = F }, "unreadable" }
+local RBF = "EllesmereUIResourceBars"
+local partN = base()
+partN.addons[RBF] = { z = 1 }
+partN.unlockLayout.anchors = { UF_Player = { target = "UIParent" }, ERB_Health = { target = "UIParent" } }
+partN.unlockLayoutMeta = { keyToFolder = { UF_Player = F, ERB_Health = RBF } }
+ns.data.EllesmereUI = encode("N-partial", payload(partN))
+ns.EUIStartDecodes()
+local partMapPlan, partMapWhy = ns.EUIPrepareUpdate()
+ns.data.EllesmereUI = N_STR
+check(partMapPlan ~= nil, "list: a partly unreadable map still updates", partMapWhy)
+check(partMapPlan and partMapPlan.merged.unlockLayout.anchors.ERB_Health ~= nil,
+    "list: and keeps a link of a folder only the payload names")
+check(partMapPlan and partMapPlan.merged.unlockLayout.anchors.UF_Player ~= nil,
+    "list: beside a link of the readable entry's folder")
+check(partMapPlan and partMapPlan.merged.addons.EllesmereUIActionBars == nil,
+    "list: while a disabled folder is still stripped")
+E._ADDON_DB_MAP = readyMap
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
