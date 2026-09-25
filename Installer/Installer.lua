@@ -82,9 +82,10 @@ local function PlaySoundKit(key)
 end
 
 -- The EllesmereUI step's toasts. Each is also heard, and said in chat, where it
--- outlasts the toast; `detail` (an importer's own error text) goes to chat only,
+-- outlasts the toast; `note` (a second sentence, such as the parts an update
+-- left waiting) and `detail` (an importer's own error text) go to chat only,
 -- being too long for the toast. kind: "success", "warn" (a refusal) or "fail".
-local function EUIToast(kind, message, detail)
+local function EUIToast(kind, message, detail, note)
     if kind == "fail" then
         ShowInstallToast(message, 1, 0.2, 0.2)
         PlaySoundKit("RAID_WARNING")
@@ -96,10 +97,12 @@ local function EUIToast(kind, message, detail)
         PlayInstallSound()
     end
     print(ns.title .. ": " .. tostring(message))
+    if note then print(ns.title .. ": " .. tostring(note)) end
     if detail then
         print(ns.title .. ": If this keeps happening, include this in a bug report: " .. tostring(detail))
     end
 end
+ns.EUIToast = EUIToast
 
 ---------------------------------------------------------------------------------
 -- Per-addon overwrite confirmation (EllesmereUI's styled popup)
@@ -491,6 +494,15 @@ local function GrowConfirmPopup()
     C_Timer.After(0, grow)
 end
 
+-- After an action: the page the player is on, drawn again from scratch.
+local function RedrawEUIPage()
+    if ns.Wizard.subPage and ns.EUIShowModules then
+        ns.EUIShowModules()
+    else
+        EllesmereUIPage()
+    end
+end
+
 local function RestoreEUIPrevious()
     if not (ns.EUIRestorable and EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
     if ns.EUIRestorable() ~= "restore" then
@@ -499,7 +511,7 @@ local function RestoreEUIPrevious()
     end
     EllesmereUI:ShowConfirmPopup({
         title = "Restore previous?",
-        message = "Put back the profile you had before the last update. The updated KitnUI profile is deleted.",
+        message = "Put back the profile KitnUI last saved as a backup. A full reset saves none. The current KitnUI profile is deleted.",
         confirmText = "Restore",
         cancelText = "Cancel",
         onConfirm = function()
@@ -510,10 +522,11 @@ local function RestoreEUIPrevious()
             end
             local line = ns.WizardColor("EllesmereUI") .. " previous profile restored!"
             EUIToast("success", err and (line .. " " .. err) or line)
-            EllesmereUIPage()
+            RedrawEUIPage()
         end,
     })
 end
+ns.EUIRestoreConfirm = RestoreEUIPrevious
 
 -- Declared ahead: the acceptance re-shows the confirm when its prediction
 -- changed while the dialog was open.
@@ -527,24 +540,28 @@ local function AcceptEUIUpdate(plan)
     end
     if not ok then
         EUIToast("fail", result, detail)
-        EllesmereUIPage()
+        RedrawEUIPage()
         return
     end
-    EUIToast("success", ns.EUIUpdateToast(plan))
-    EllesmereUIPage()
+    EUIToast("success", ns.EUIUpdateToast(plan), nil, ns.EUISkippedNote(plan))
+    RedrawEUIPage()
 end
 
+-- One confirm for an update, a take and a part reset.
 ConfirmEUIUpdate = function(plan)
     if not (EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
+    local T = ns.EUI_UPDATE_TEXT
+    local reset = plan.kind == "reset"
     EllesmereUI:ShowConfirmPopup({
-        title = "Update profile?",
-        message = ns.EUIConfirmText(plan),
-        confirmText = plan.noBase and "Update (replaces your changes)" or "Update",
+        title = reset and T.resetTitle:format(plan.row.label) or "Update profile?",
+        message = reset and ns.EUIResetText(plan) or ns.EUIConfirmText(plan),
+        confirmText = reset and "Reset" or (plan.noBase and "Update (replaces your changes)" or "Update"),
         cancelText = "Cancel",
         onConfirm = function() AcceptEUIUpdate(plan) end,
     })
     GrowConfirmPopup()
 end
+ns.EUIConfirmUpdate = ConfirmEUIUpdate
 
 -- Declared ahead: the slots are drawn again when a decode lands, without the
 -- page draw that would restart it.
@@ -556,8 +573,13 @@ local DrawEUIActions
 local function OnEUIDecodesReady()
     local W = ns.Wizard
     if not (W.stepKeys and W.page and W.stepKeys[W.page] == "EllesmereUI") then return end
+    if ns.EUIListShowing and ns.EUIListShowing() then
+        ns.EUIListRefresh()
+        return
+    end
     DrawEUIActions()
 end
+ns.EUIOnDecodesReady = OnEUIDecodesReady
 
 local function UpdateEUIProfile()
     local plan, why = ns.EUIPrepareUpdate()
@@ -577,8 +599,46 @@ local function EUIUpdateLabel()
     return "Update Profile"
 end
 
+-- Restore previous in the given action slot, muted: an exit, not an action the
+-- page recommends. From another profile it reads what the player must do
+-- first. Returns true when it drew one.
+function ns.EUIDrawRestoreSlot(slot)
+    local restorable = ns.EUIRestorable and ns.EUIRestorable()
+    if not restorable then return false end
+    local f = WF()
+    local label = restorable == "switch" and ns.EUI_UPDATE_TEXT.notRestorable or "Restore previous"
+    ns.Wizard:SetOption(slot, label, RestoreEUIPrevious, 12)
+    if restorable == "switch" then f["Option" .. slot]:SetWidth(240) end
+    SetVariant(f["Option" .. slot], "ghost")
+    return true
+end
+
+-- The install wizard's way into the per-part list. Built once and reused like
+-- the look row; ResetExtras hides it.
+local modulesButton
+
+local function ShowModulesButton(state)
+    if not ((state == "update" or state == "current") and ns.EUIShowModules
+        and ns.EUIListReady and ns.EUIListReady()) then
+        if modulesButton then modulesButton:Hide() end
+        return
+    end
+    local f = WF()
+    if not modulesButton then
+        modulesButton = CreateFrame("Button", nil, f)
+        modulesButton:SetSize(100, 20)
+        ns.Wizard:StyleButton(modulesButton, "Modules >", 13, function() ns.EUIShowModules() end)
+        SetVariant(modulesButton, "ghost")
+    end
+    modulesButton:ClearAllPoints()
+    modulesButton:SetPoint("BOTTOMRIGHT", f.detailRule, "TOPRIGHT", 0, 4)
+    modulesButton:Show()
+end
+
 -- The four slots by state, from the cache as it stands. Called by the page
--- draw and again when a decode lands; starts nothing itself.
+-- draw and again when a decode lands; starts nothing itself. The Profile
+-- Update wizard reaches this only without a list (state stale or none), and
+-- offers no looks there.
 DrawEUIActions = function()
     local f = WF()
     -- Drawn again in place, so the slots are cleared here as well as on the
@@ -607,30 +667,34 @@ DrawEUIActions = function()
         ApplyActionState("EllesmereUI")
     end
 
-    -- Restore previous sits in the first free slot after the actions, muted:
-    -- an exit, not an action the page is recommending. From another profile
-    -- it reads what the player has to do first.
-    local restorable = ns.EUIRestorable and ns.EUIRestorable()
-    if restorable then
-        local slot = secondAction and 3 or 2
-        local label = restorable == "switch" and ns.EUI_UPDATE_TEXT.notRestorable or "Restore previous"
-        ns.Wizard:SetOption(slot, label, RestoreEUIPrevious, 12)
-        if restorable == "switch" then f["Option" .. slot]:SetWidth(240) end
-        SetVariant(f["Option" .. slot], "ghost")
+    ns.EUIDrawRestoreSlot(secondAction and 3 or 2)
+    if ns.installerIsUpdateMode then
+        ns.Wizard:HideOptionHint()
+    else
+        ShowLookOptions()
+        ShowModulesButton(state)
     end
-    ShowLookOptions()
 end
 
 -- A page draw, first or again, drops whatever was decoded and starts over:
 -- the base can have changed underneath it (an update, a restore, a reset).
+-- The Profile Update wizard's step is the per-part list whenever there is one:
+-- "current" is decided before the functions the list needs are checked, so the
+-- list asks for them itself.
 function EllesmereUIPage()
     local f = WF()
+    local state = ns.EUIUpdateState()
+    if ns.installerIsUpdateMode and (state == "update" or state == "current") and ns.EUIUpdaterPage
+        and ns.EUIListReady and ns.EUIListReady() then
+        ns.EUIUpdaterPage()
+        return
+    end
     -- Hand-written, unlike the generic pages that title themselves from the
     -- step's `display` field, so keep the two in step by hand.
     f.SubTitle:SetText("EllesmereUI")
     f.Desc1:SetText(stepDesc("EllesmereUI"))
     if ns.EUICancelDecodes then ns.EUICancelDecodes() end
-    if ns.EUIUpdateState() == "update" then ns.EUIStartDecodes(OnEUIDecodesReady) end
+    if state == "update" then ns.EUIStartDecodes(OnEUIDecodesReady) end
     DrawEUIActions()
 end
 
@@ -1241,8 +1305,14 @@ local function WelcomeUpdatePage()
     local f = WF()
     f.SubTitle:SetText(ns.WizardColor("KitnUI") .. " Profile Update")
     ns.Wizard:SetTitleIcon(true)
-    f.Desc1:SetText("New or updated addon profiles are available.\n\n" ..
-        ns.Red("WARNING") .. ": Each step overwrites your current settings for that addon.")
+    local euiInUpdate = false
+    for _, key in ipairs(ns.Wizard.stepKeys or {}) do
+        if key == "EllesmereUI" then euiInUpdate = true end
+    end
+    local warning = euiInUpdate
+        and ": Each step except EllesmereUI overwrites your current settings for that addon. EllesmereUI keeps your changes and shows what KitnUI replaces, part by part."
+        or ": Each step overwrites your current settings for that addon."
+    f.Desc1:SetText("New or updated addon profiles are available.\n\n" .. ns.Red("WARNING") .. warning)
     f.Desc2:SetText("Click " .. ns.Green("Next") .. " to begin.")
 end
 
@@ -1405,15 +1475,19 @@ function ns.OpenInstaller(profileLoadMode, updateKeys, cdmMode)
     ns.sessionExtras = (not profileLoadMode and not updateKeys and not cdmMode) and {} or nil
     -- Set by a successful update; read by the Finish page of the same wizard.
     ns.euiUpdatedThisSession = nil
+    if ns.EUIBeginVisit then ns.EUIBeginVisit() end
     ns.Wizard:Queue(ns:GetInstallerData(profileLoadMode, updateKeys, cdmMode))
 end
 
 -- Hide the persistent per-page extras whenever the page changes: the CDM
--- "Import All" button, the appearance look row, and the NSRT nickname field.
--- All are built once and reused, so nothing hides them on the way out but this.
+-- "Import All" button, the appearance look row, the Modules button, the
+-- per-part list, and the NSRT nickname field. All are built once and reused, so
+-- nothing hides them on the way out but this.
 ns.Wizard.ResetExtras = function()
     if cdmAllButton then cdmAllButton:Hide() end
     HideLookRow()
+    if modulesButton then modulesButton:Hide() end
+    if ns.EUIHideModuleList then ns.EUIHideModuleList() end
     if ns.Wizard.HideInput then ns.Wizard:HideInput() end
     if ns.EUICancelDecodes then ns.EUICancelDecodes() end
 end
