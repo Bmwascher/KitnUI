@@ -47,6 +47,8 @@ local function joinPath(path, k)
     if path == "" then return part end
     return path .. "." .. part
 end
+-- ModuleRows.lua names the same paths, so it joins them the same way.
+ns.EUIJoinPath = joinPath
 
 -- The keys the importer takes as one set. Decided whole, never walked.
 local OV_KEYS = {
@@ -70,6 +72,7 @@ local SPECIAL = {
     overridesIncluded = true, overridesExcluded = true, partialImport = true,
 }
 for _, key in ipairs(OV_KEYS) do SPECIAL[key] = true end
+ns.EUI_SPECIAL_KEYS = SPECIAL
 
 -- Levels whose children the importer takes or inherits whole and never deletes.
 local ROOT_UNITS = { fonts = true, customColors = true, darkMode = true, euiAccent = true }
@@ -79,6 +82,8 @@ local UNIT_PARENTS = { addons = true, cdmSpells = true }
 -- import with Resource Bars loaded; excluded from the count then.
 local HEALTH_PATH = "^addons%.EllesmereUIResourceBars%.health%.(%w+)$"
 local HEALTH_LEAVES = { customColored = true, fillR = true, fillG = true, fillB = true }
+ns.EUI_HEALTH_PATH = HEALTH_PATH
+ns.EUI_HEALTH_LEAVES = HEALTH_LEAVES
 
 -- Dense numeric-keyed tables whose index carries meaning: a slot another
 -- setting points at, a colour's channels, a group number, or a map keyed by a
@@ -384,6 +389,7 @@ local function decideOverrides(ctx, O, N, P, merged)
 end
 
 local SCALE_MIN, SCALE_MAX = 0.40, 1.15
+ns.EUI_SCALE_RANGE = { SCALE_MIN, SCALE_MAX }
 
 local function specialKeys(ctx, O, N, P, merged)
     merged.assignedSpecs = deepCopy(P and P.assignedSpecs)
