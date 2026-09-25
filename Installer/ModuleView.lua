@@ -60,7 +60,7 @@ local TEXT = {
 local list
 local rowPool = {}
 local view = { gen = 0 }
-local Redraw
+local Redraw, Resume
 
 local function WF() return ns.Wizard.frame end
 
@@ -92,6 +92,10 @@ end
 
 local function Tickable(row)
     if not view.ticked or ReadOnly() then return false end
+    -- In state "current" a tick takes a skipped update, so a part needs its
+    -- waiting record as well as a change: without one (the stamp's base gone)
+    -- a take would replace the part and record nothing.
+    if view.state == "current" and not ns.EUIRowRecord(ns.db and ns.db.euiRowAt, row.id) then return false end
     return Changed(row)
 end
 
@@ -273,7 +277,7 @@ local function BuildRow(i)
         local row = r.row
         local entry = row and view.kitn and view.kitn[row.id]
         if not (entry and entry.count > 0) then return end
-        local rec = ns.db and ns.db.euiRowAt and ns.db.euiRowAt[row.id]
+        local rec = ns.EUIRowRecord(ns.db and ns.db.euiRowAt, row.id)
         ShowTip(cell, TEXT.tipTitle:format(row.label, entry.count), entry, rec and rec.kitn)
     end)
 
@@ -308,13 +312,15 @@ local function BuildList()
     list = CreateFrame("Frame", nil, f)
     list:SetPoint("TOPLEFT", f, "TOPLEFT", CONTENT_X, LIST_TOP)
     list:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", CONTENT_X + CONTENT_W, LIST_BOTTOM)
-    -- Hidden with the wizard as well as by a page change: the new generation
-    -- stops the walk and drops a deferred player read before it can toast.
-    -- The wizard always reopens through a page draw, which starts afresh.
+    -- Hidden with the wizard or the whole UI, as well as by a page change: the
+    -- new generation stops the walk and drops a deferred player read before it
+    -- can toast. Shown again without a page draw (the UI toggled back), the
+    -- list restarts whatever the hide cut short.
     list:SetScript("OnHide", function()
         view.gen = view.gen + 1
         if GameTooltip then GameTooltip:Hide() end
     end)
+    list:SetScript("OnShow", function() Resume() end)
 
     list.intro = Font(list, 13, 0.9)
     list.intro:SetPoint("TOPLEFT")
@@ -567,6 +573,20 @@ local function StartKitnWalk()
         Redraw()
         if view.mode == "modules" then StartPlayerRead() end
     end)
+end
+
+-- A count or read the list's hiding cut short starts over under a new
+-- generation, so a step still queued from before cannot run beside it. A page
+-- draw clears view.inputs before it shows the list, so this starts nothing then.
+Resume = function()
+    if not view.inputs then return end
+    if not view.kitn then
+        view.gen = view.gen + 1
+        StartKitnWalk()
+    elseif view.mode == "modules" and view.yours == nil then
+        view.gen = view.gen + 1
+        StartPlayerRead()
+    end
 end
 
 ---------------------------------------------------------------------------------

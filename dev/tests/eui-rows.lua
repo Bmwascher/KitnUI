@@ -143,6 +143,19 @@ eq(partO.addons[UF].v, "older", "compose: without the stamp's base an older row 
 check(partMissing[AB] and partMissing.general and partMissing.overrides and not partMissing[UF],
     "compose: and every row without a record is missing")
 
+-- Saved data can hold anything: an entry that is not a table with a string
+-- version is read as no entry, so its row is measured from the stamp's base.
+local badO, badMissing = ns.EUIComposeBase(simple, { [UF] = "x", [AB] = { kitn = "k" }, general = true },
+    { S = stampBase }, "S", k2f)
+eq(badO.addons[UF] and badO.addons[UF].v, "stamp", "compose: a malformed entry is read as absent")
+eq(badO.addons[AB] and badO.addons[AB].v, "stamp", "compose: as is an entry with no version")
+eq(badO.fonts and badO.fonts.f, "stamp", "compose: and a bare true")
+check(not (badMissing[UF] or badMissing[AB] or badMissing.general), "compose: none of them is reported missing")
+local readOk, readRec = pcall(ns.EUIRowRecord, "corrupt", UF)
+check(readOk and readRec == nil, "record: a store that is not a table has no entries", readRec)
+local soundOk, soundRec = pcall(ns.EUIRowRecord, { [UF] = { version = "V1" } }, UF)
+check(soundOk and type(soundRec) == "table" and soundRec.version == "V1", "record: a sound entry is read", soundRec)
+
 ---------------------------------------------------------------------------------
 -- Slice swap, conflicts by row, slice take
 ---------------------------------------------------------------------------------

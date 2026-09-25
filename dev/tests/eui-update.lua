@@ -399,6 +399,15 @@ ns.EUIStartDecodes()
 check(ns.EUIDecodesReady() and ns.EUIDecodeCache.failedN, "decodes: an undecodable shipped string is the failed-N state")
 ns.data.EllesmereUI = N_STR
 
+-- Saved data can hold anything: a stored base under a key that is not a
+-- version string is skipped, not sorted beside the others.
+freshInstall()
+ns.db.euiBases = { ["2026.08.01"] = O_STR, [5] = O_STR }
+local sortOk, sortErr = pcall(ns.EUIStartDecodes)
+check(sortOk, "decodes: a base stored under a key that is not a version string raises nothing", sortErr)
+check(ns.EUIDecodeCache.byVersion["2026.08.01"] ~= nil and ns.EUIDecodeCache.byVersion[5] == nil,
+    "decodes: and only version strings are decoded")
+
 ---------------------------------------------------------------------------------
 -- The click
 ---------------------------------------------------------------------------------
@@ -475,6 +484,22 @@ eq(plan.noBase, true, "click: no base plan")
 eq(plan.merged.addons[F].y, 2, "click: no base replaces the player's change")
 text = ns.EUIConfirmText(plan)
 check(text:find("replaces your changes", 1, true), "confirm: the no-base line")
+check(text:find(F .. ": replaces yours", 1, true), "confirm: with no base a ticked part replaces the player's changes", text)
+check(not text:find("none of yours", 1, true), "confirm: and no part claims none of theirs is replaced", text)
+
+-- One part with no base of its own: that part's line says so, and a part
+-- with its base still counts.
+freshInstall()
+ns.db.euiRowAt = { [F] = { version = "none" } }
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+eq(plan.noBase, false, "click: one part without a base is not the no-base path")
+check(plan.inputs.missing[F], "click: that part is missing its base")
+text = ns.EUIConfirmText(plan)
+check(text:find(F .. ": replaces yours", 1, true), "confirm: that part replaces the player's changes", text)
+check(not text:find(F .. ": none of yours", 1, true) and not text:find(F .. ": 2 of yours", 1, true),
+    "confirm: with no count of its own", text)
+check(text:find("General: none of yours", 1, true), "confirm: a part with its base still counts", text)
 
 freshInstall()
 db.profiles[ns.EUIBackupName] = base()
@@ -1030,6 +1055,19 @@ local capPlan = ns.EUIPrepareReset(F, ctx)
 eq(capPlan and capPlan.captured, true, "reset: a captured row is noticed")
 check(capPlan and ns.EUIResetText(capPlan):find("Your Spec Overrides also hold settings for " .. F .. "; they apply again when you change spec.", 1, true),
     "reset: and named in the confirm")
+
+-- A reset imports the whole profile, so the final layout filter runs over the
+-- parts it leaves alone too: a link removed there is named, as an update names it.
+freshInstall()
+db.profiles.KitnUI.addons.Quickdraw = { shown = true }
+db.profiles.KitnUI.unlockLayout.anchors = { QD_Bar = { target = "UIParent" } }
+db.profiles.KitnUI.unlockLayoutMeta = { keyToFolder = { QD_Bar = "Quickdraw" } }
+ns.EUIStartDecodes()
+local linkReset, linkResetWhy = ns.EUIPrepareReset(F, ctx)
+check(linkReset ~= nil, "reset: a plan is produced beside a link the filter removes", linkResetWhy)
+eq(linkReset and linkReset.warnLinks, true, "reset: the removed link is noticed")
+check(linkReset and ns.EUIResetText(linkReset):find(ns.EUI_UPDATE_TEXT.links, 1, true),
+    "reset: the removed link is named in the confirm")
 
 freshInstall()
 db.profiles.KitnUI.addons[F].x = 5

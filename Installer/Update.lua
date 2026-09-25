@@ -54,6 +54,7 @@ local T = ns.EUI_UPDATE_TEXT
 T.noneTicked = "Tick at least one part first."
 T.rowReplaced = "%s: %d of yours replaced"
 T.rowNone = "%s: none of yours"
+T.rowReplaces = "%s: replaces yours"
 T.skipped = "Skipped: %s -- take them any time from /kitn install, EllesmereUI > Modules."
 T.movedScratch = "Your profile keybind and sync-group membership are removed; set them again in EllesmereUI."
 T.scratchFail = "Could not move your profile aside for the update. Nothing was imported."
@@ -178,9 +179,11 @@ function ns.EUIStartDecodes(onReady)
     end
     local bases = ns.db and ns.db.euiBases
     if isTable(bases) then
+        -- Saved data can hold any key, and a number beside the version strings
+        -- would make the sort raise on every page draw.
         local versions = {}
         for v, s in pairs(bases) do
-            if type(s) == "string" then versions[#versions + 1] = v end
+            if type(v) == "string" and type(s) == "string" then versions[#versions + 1] = v end
         end
         table.sort(versions)
         for _, v in ipairs(versions) do
@@ -595,10 +598,20 @@ end
 -- The confirm's message, one sentence per line.
 function ns.EUIConfirmText(plan)
     local lines = { T.promise }
+    -- A part with no base of its own has no count of the player's changes:
+    -- each setting KitnUI's string holds there replaces theirs, as the part's
+    -- list cell says.
+    local missing = plan.inputs.missing or {}
     for _, row in ipairs(plan.inputs.rows) do
         if plan.ticked[row.id] then
             local k = plan.byRow[row.id] or 0
-            lines[#lines + 1] = k > 0 and T.rowReplaced:format(row.label, k) or T.rowNone:format(row.label)
+            if plan.noBase or missing[row.id] then
+                lines[#lines + 1] = T.rowReplaces:format(row.label)
+            elseif k > 0 then
+                lines[#lines + 1] = T.rowReplaced:format(row.label, k)
+            else
+                lines[#lines + 1] = T.rowNone:format(row.label)
+            end
         end
     end
     if plan.noBase then
@@ -632,6 +645,9 @@ function ns.EUIResetText(plan)
             .. (#plan.splits > 1 and T.splitMore:format(#plan.splits - 1) or "")
     end
     if plan.row.id == "overrides" then lines[#lines + 1] = T.overridesTaken end
+    -- A reset imports the whole profile, so the final layout filter can remove
+    -- a link in a part the reset leaves alone.
+    if plan.warnLinks then lines[#lines + 1] = T.links end
     if plan.warnHealth then lines[#lines + 1] = T.health end
     if plan.backupExists and not plan.scratch then lines[#lines + 1] = T.backupReplaced end
     if plan.warnMoved then lines[#lines + 1] = plan.scratch and T.movedScratch or T.moved end

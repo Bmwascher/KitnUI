@@ -688,6 +688,9 @@ function EllesmereUIPage()
         ns.EUIUpdaterPage()
         return
     end
+    -- A redraw after an action lands here without a page change, so a list
+    -- the step drew before the profile went stale would otherwise stay up.
+    if ns.EUIHideModuleList then ns.EUIHideModuleList() end
     -- Hand-written, unlike the generic pages that title themselves from the
     -- step's `display` field, so keep the two in step by hand.
     f.SubTitle:SetText("EllesmereUI")

@@ -143,6 +143,14 @@ local function copySlice(into, from, row, keyToFolder)
     end
 end
 
+-- A part's stored entry, or nil. Saved data can hold anything, so only a
+-- table with a string version counts as one.
+function ns.EUIRowRecord(rowAt, id)
+    local rec = isTable(rowAt) and rowAt[id] or nil
+    if isTable(rec) and type(rec.version) == "string" then return rec end
+    return nil
+end
+
 -- The one base the merge takes: each row's slice from the decoded base of the
 -- version it stands at, the rest from the stamp's. A row with no base of its
 -- own is left empty, so the merge replaces the player's changes there alone.
@@ -152,8 +160,9 @@ function ns.EUIComposeBase(rows, rowAt, byVersion, stamp, keyToFolder)
     byVersion = byVersion or {}
     local stampBase = stamp and byVersion[stamp] or nil
     local anyBase = stampBase ~= nil
-    for _, rec in pairs(rowAt) do
-        if isTable(rec) and byVersion[rec.version] then anyBase = true end
+    for id in pairs(rowAt) do
+        local rec = ns.EUIRowRecord(rowAt, id)
+        if rec and byVersion[rec.version] then anyBase = true end
     end
     local missing = {}
     if not anyBase then
@@ -162,9 +171,9 @@ function ns.EUIComposeBase(rows, rowAt, byVersion, stamp, keyToFolder)
     end
     local O = stampBase and ns.EUIDeepCopy(stampBase) or {}
     for _, row in ipairs(rows) do
-        local rec = rowAt[row.id]
+        local rec = ns.EUIRowRecord(rowAt, row.id)
         if rec or not stampBase then
-            local src = isTable(rec) and byVersion[rec.version] or nil
+            local src = rec and byVersion[rec.version] or nil
             copySlice(O, src, row, keyToFolder)
             if not src then missing[row.id] = true end
         end
@@ -232,9 +241,7 @@ function ns.EUIRecordRows(kind, before, opts)
     -- and counts nothing), and a part this version does not list may come back.
     -- An entry that is not a table with a version is skipped, as the composite
     -- base skips it: this runs after the import has landed.
-    for id, rec in pairs(oldAt) do
-        if isTable(rec) and type(rec.version) == "string" then rowAt[id] = rec end
-    end
+    for id in pairs(oldAt) do rowAt[id] = ns.EUIRowRecord(oldAt, id) end
     if kind == "update" then
         local prior = opts.prior or {}
         local version = (prior.base and prior.version) or "none"
