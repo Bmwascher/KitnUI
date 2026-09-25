@@ -144,11 +144,13 @@ local function copySlice(into, from, row, keyToFolder)
 end
 
 -- A part's stored entry, or nil. Saved data can hold anything, so only a
--- table with a string version counts as one.
+-- table with a string version counts as one, and a skip label the tooltip
+-- cannot format is read as absent.
 function ns.EUIRowRecord(rowAt, id)
     local rec = isTable(rowAt) and rowAt[id] or nil
-    if isTable(rec) and type(rec.version) == "string" then return rec end
-    return nil
+    if not (isTable(rec) and type(rec.version) == "string") then return nil end
+    if rec.kitn ~= nil and type(rec.kitn) ~= "string" then return { version = rec.version } end
+    return rec
 end
 
 -- The one base the merge takes: each row's slice from the decoded base of the

@@ -156,6 +156,20 @@ check(readOk and readRec == nil, "record: a store that is not a table has no ent
 local soundOk, soundRec = pcall(ns.EUIRowRecord, { [UF] = { version = "V1" } }, UF)
 check(soundOk and type(soundRec) == "table" and soundRec.version == "V1", "record: a sound entry is read", soundRec)
 
+-- The tooltip formats the skip label, so one that is not a string is read as
+-- absent, and the saved entry is left as it is until the next write.
+local badKitn = { [UF] = { version = "V1", kitn = true } }
+local kitnRec = ns.EUIRowRecord(badKitn, UF)
+eq(kitnRec and kitnRec.version, "V1", "record: an entry with a malformed skip label is still read")
+eq(kitnRec and kitnRec.kitn, nil, "record: without the label")
+eq(badKitn[UF].kitn, true, "record: and the saved entry is not written")
+eq((ns.EUIRowRecord({ [UF] = { version = "V1", kitn = "2.1.0" } }, UF) or {}).kitn, "2.1.0", "record: a string skip label is kept")
+local keptAt = ns.EUIRecordRows("update", { rowAt = { B = { version = "V1", kitn = 5 } }, bases = { V1 = "s1" }, stamp = "V2" }, {
+    rows = { { id = "B" } }, ticked = {}, changed = { B = true }, prior = { version = "V2", base = "s2" }, kitn = "k2",
+})
+eq(keptAt and keptAt.B and keptAt.B.version, "V1", "record: a waiting entry with a malformed label goes on waiting")
+eq(keptAt and keptAt.B and keptAt.B.kitn, nil, "record: and the next write drops the label")
+
 ---------------------------------------------------------------------------------
 -- Slice swap, conflicts by row, slice take
 ---------------------------------------------------------------------------------

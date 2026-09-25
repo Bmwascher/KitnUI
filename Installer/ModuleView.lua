@@ -314,10 +314,10 @@ local function BuildList()
     list:SetPoint("BOTTOMRIGHT", f, "BOTTOMLEFT", CONTENT_X + CONTENT_W, LIST_BOTTOM)
     -- Hidden with the wizard or the whole UI, as well as by a page change: the
     -- new generation stops the walk and drops a deferred player read before it
-    -- can toast. Shown again without a page draw (the UI toggled back), the
-    -- list restarts whatever the hide cut short.
+    -- can toast, and the mark tells the next show to restart what was cut short.
     list:SetScript("OnHide", function()
         view.gen = view.gen + 1
+        view.cut = true
         if GameTooltip then GameTooltip:Hide() end
     end)
     list:SetScript("OnShow", function() Resume() end)
@@ -575,17 +575,15 @@ local function StartKitnWalk()
     end)
 end
 
--- A count or read the list's hiding cut short starts over under a new
--- generation, so a step still queued from before cannot run beside it. A page
--- draw clears view.inputs before it shows the list, so this starts nothing then.
+-- Shown again after a hide, without a page draw. Hiding the wizard cancels the
+-- decodes the player read needs, so they start again and the restart waits
+-- for them in ns.EUIListRefresh.
 Resume = function()
-    if not view.inputs then return end
-    if not view.kitn then
-        view.gen = view.gen + 1
-        StartKitnWalk()
-    elseif view.mode == "modules" and view.yours == nil then
-        view.gen = view.gen + 1
-        StartPlayerRead()
+    if not view.cut then return end
+    if ns.EUIDecodesReady() then
+        ns.EUIListRefresh()
+    else
+        ns.EUIStartDecodes(ns.EUIOnDecodesReady)
     end
 end
 
@@ -594,12 +592,24 @@ end
 ---------------------------------------------------------------------------------
 
 -- Draws the list from the decode cache as it stands; the decode callback calls
--- it again when they land.
+-- it again when they land. A count or read a hide cut short starts over under
+-- a new generation, so a step still queued from before cannot run beside it.
+-- The mark is spent first, so a second call restarts nothing.
 function ns.EUIListRefresh()
     if not (list and list:IsShown()) then return end
-    if not view.inputs and ns.EUIDecodesReady() then
-        view.inputs = ns.EUIPageInputs()
-        if view.inputs then StartKitnWalk() end
+    if ns.EUIDecodesReady() then
+        local cut = view.cut
+        view.cut = nil
+        if not view.inputs then
+            view.inputs = ns.EUIPageInputs()
+            if view.inputs then StartKitnWalk() end
+        elseif cut and not view.kitn then
+            view.gen = view.gen + 1
+            StartKitnWalk()
+        elseif cut and view.mode == "modules" and view.yours == nil then
+            view.gen = view.gen + 1
+            StartPlayerRead()
+        end
     end
     Redraw()
 end
@@ -621,6 +631,8 @@ local function Open(mode)
     view.mode = mode
     view.state = ns.EUIUpdateState()
     view.inputs, view.kitn, view.yours, view.ticked, view.context = nil, nil, nil, nil, nil
+    -- The decodes start below, so the show must not start them as well.
+    view.cut = nil
     list:Show()
     ns.EUIStartDecodes(ns.EUIOnDecodesReady)
     ns.EUIListRefresh()
