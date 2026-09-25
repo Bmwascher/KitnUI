@@ -83,6 +83,8 @@ local function CompleteSetup(addonKey)
     -- compares the player's profile against.
     if trackKey == "EllesmereUI" and type(ns.data.EllesmereUI) == "string" then
         ns.db.euiBase = ns.data.EllesmereUI
+        -- Every part now stands at the shipped version.
+        ns.db.euiRowAt, ns.db.euiBases = nil, nil
     end
 
     local charKey = UnitName("player") .. "-" .. GetRealmName()

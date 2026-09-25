@@ -107,6 +107,15 @@ eq(ns.SetupAddon("EllesmereUI", false), true, "the load succeeds")
 eq(ns.db.euiBase, nil, "the load records no base")
 
 ---------------------------------------------------------------------------------
+-- The full install puts every part at the shipped version
+---------------------------------------------------------------------------------
+
+ns.db = { profiles = {}, addonVersions = {}, perChar = {}, euiRowAt = { general = { version = "v" } }, euiBases = { v = "s" } }
+ns.CompleteSetup("EllesmereUI")
+eq(ns.db.euiRowAt, nil, "record: the full install puts every part at the shipped version")
+eq(ns.db.euiBases, nil, "record: and drops the older strings")
+
+---------------------------------------------------------------------------------
 -- /kitn reset names the backup profile it cannot take with it
 ---------------------------------------------------------------------------------
 
