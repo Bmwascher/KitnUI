@@ -9,6 +9,7 @@
 - **Load All** in `/kitn load` now takes you straight to the finish page when every profile loads, instead of leaving you on the first page to click through a list of steps that are already done. If something fails to load it keeps you where you are, so the step you need is still in reach
 - `/kitn load` now has a **Blizzard Cooldown Manager** step, since every character needs its own copy of the layouts. When a layout cannot be imported, or the Cooldown Manager is switched off, Load All takes you to that step instead of the finish page, so the retry or the setting to enable is right in front of you
 - **FIXED:** The login prompts ("KitnUI has been updated" and "Load your installed profiles onto this character?") only take **Later** or **No** as an answer. Pressing Escape, or a prompt that never reached the screen because the game had no dialog free, used to count as a No and could silence the prompt for good; now it simply asks again next login
+- **FIXED:** **Update Profile** and **Restore previous** work again on EllesmereUI 9.2.9. The EllesmereUI step said "Update needs a newer EllesmereUI" on the newest EllesmereUI and only offered a full reset
 - **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
 
 ## v2.1.6
