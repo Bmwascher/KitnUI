@@ -11,7 +11,7 @@ local _, ns = ... ---@type string, KitnUINS
 -- The count walk is the one every-frame path here: while a count is pending,
 -- one C_Timer.After(0) step per frame, the first included, does at most
 -- EUI_DIFF_STEPS units, a unit being one key read (ModuleRows.lua, tick),
--- aiming at 2 ms a frame (dev mode prints the worst). Leaving the page or closing the wizard stops it;
+-- aiming at 2 ms a frame. Leaving the page or closing the wizard stops it;
 -- nothing runs while no list is showing.
 local EUI_DIFF_STEPS = 2000
 
@@ -163,8 +163,7 @@ local function OnUpdateClick()
         return
     end
     -- An update with no part left to change (each one reset, or a version
-    -- that changes nothing counted) still moves the stamp: it runs whole, as
-    -- the update always did.
+    -- that changes nothing counted) still moves the stamp, so it runs whole.
     local ticked = view.ticked
     if view.state == "update" and ChangedCount() == 0 then
         ticked = nil

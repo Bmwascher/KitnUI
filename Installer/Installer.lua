@@ -494,7 +494,6 @@ local function GrowConfirmPopup()
     C_Timer.After(0, grow)
 end
 
--- After an action: the page the player is on, drawn again from scratch.
 local function RedrawEUIPage()
     if ns.Wizard.subPage and ns.EUIShowModules then
         ns.EUIShowModules()

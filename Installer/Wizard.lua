@@ -199,9 +199,8 @@ function W:Build()
     f.Skip:SetScript("OnLeave", function(b) b._lbl:SetTextColor(SKIP_R, SKIP_G, SKIP_B) end)
     f.Skip:Hide()
 
-    -- A sub-page's way back, where Skip sits. A sub-page belongs to the step the
-    -- rail still marks, so leaving it redraws that step. ASCII "<", because the
-    -- font lacks the arrow glyphs.
+    -- Leaving a sub-page redraws the step the rail still marks. ASCII "<",
+    -- because the font lacks the arrow glyphs.
     f.SubBack = CreateFrame("Button", nil, f)
     f.SubBack:SetHeight(20)
     f.SubBack:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)

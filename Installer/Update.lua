@@ -326,12 +326,10 @@ local function sideInputs(Pd)
     local e = E()
     if not (hasRequired(e) and cache.N and isTable(cache.N.data)) then return nil end
     local keep, strip, stripCDM = ns.EUIStripSets(e._ADDON_DB_MAP, ns.GetEUIModuleSet())
-    -- A map entry that cannot be read partitions nothing, and the final filter
-    -- drops every link of a folder the keep set lacks, so a row the list takes
-    -- from the payload would lose its links. When any entry fails, or none
-    -- names a folder, the payload's folders no readable entry names stand in,
-    -- the disabled ones stripped as the map would have them. The Top Bar's
-    -- folder stays out of both, as it is out of every map.
+    -- An unreadable map entry partitions nothing, and the final filter drops
+    -- every link of a folder the keep set lacks. When any entry fails, or none
+    -- names a folder, the payload's unnamed folders are partitioned here; the
+    -- Top Bar's folder stays out, as it is out of every map.
     local partial = next(keep) == nil and next(strip) == nil
     for _, entry in ipairs(isTable(e._ADDON_DB_MAP) and e._ADDON_DB_MAP or {}) do
         if not (isTable(entry) and type(entry.folder) == "string") then partial = true end
@@ -620,7 +618,6 @@ function ns.EUIConfirmText(plan)
     return table.concat(lines, "\n")
 end
 
--- A part reset's confirm message.
 function ns.EUIResetText(plan)
     local label = plan.row.label
     local lines = {

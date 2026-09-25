@@ -228,11 +228,10 @@ function ns.EUIRecordRows(kind, before, opts)
     for v, s in pairs(isTable(before.bases) and before.bases or {}) do bases[v] = s end
 
     -- A waiting part is cleared only by being ticked, taken or reset. A count
-    -- of zero is no proof it caught up: a level the string omits is inherited
-    -- and counts nothing. A part this version does not list may come back. In
-    -- both cases it still stands at its own version.
-    -- A stored entry that is not a table with a version is skipped, as the
-    -- composite base skips it: this runs after the import has landed.
+    -- of zero is no proof it caught up (a level the string omits is inherited
+    -- and counts nothing), and a part this version does not list may come back.
+    -- An entry that is not a table with a version is skipped, as the composite
+    -- base skips it: this runs after the import has landed.
     for id, rec in pairs(oldAt) do
         if isTable(rec) and type(rec.version) == "string" then rowAt[id] = rec end
     end
