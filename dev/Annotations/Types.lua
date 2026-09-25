@@ -14,7 +14,6 @@
 ---@class EllesmereUI
 ---@field ImportProfile fun(str: string, name: string): boolean, string?, string?
 ---@field SetProfile fun(name: string)
----@field AssignProfileToSpec fun(name: string, specID: integer)
 ---@field RefreshAllAddons fun()
 ---@field MakeFont fun(parent: table, size: number, flags: string?, r: number?, g: number?, b: number?, a: number?): table
 ---@field MakeBorder fun(frame: table, r: number, g: number, b: number, a: number, pp: any)
