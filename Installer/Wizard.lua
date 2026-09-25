@@ -199,6 +199,21 @@ function W:Build()
     f.Skip:SetScript("OnLeave", function(b) b._lbl:SetTextColor(SKIP_R, SKIP_G, SKIP_B) end)
     f.Skip:Hide()
 
+    -- A sub-page's way back, where Skip sits. A sub-page belongs to the step the
+    -- rail still marks, so leaving it redraws that step. ASCII "<", because the
+    -- font lacks the arrow glyphs.
+    f.SubBack = CreateFrame("Button", nil, f)
+    f.SubBack:SetHeight(20)
+    f.SubBack:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
+    f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 13, "", 1, 1, 1, 0.7)
+    f.SubBack._lbl:SetPoint("LEFT")
+    f.SubBack._lbl:SetText("< Back to EllesmereUI")
+    f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
+    f.SubBack:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 1, 1, 1) end)
+    f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(1, 1, 1, 0.7) end)
+    f.SubBack:SetScript("OnClick", function() W:SetPage(W.page) end)
+    f.SubBack:Hide()
+
     -- Optional brand icon in the header band, left of the title. Hidden unless a
     -- page opts in via W:SetTitleIcon (KitnUI/Welcome/Finish pages).
     f.titleIcon = f:CreateTexture(nil, "ARTWORK")
@@ -850,6 +865,8 @@ end
 function W:SetPage(n)
     if not (W.pages and W.pages[n]) then return end
     W.page = n
+    W.subPage = nil
+    W.frame.SubBack:Hide()
     W:HideOptions()
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
@@ -871,6 +888,27 @@ function W:SetPage(n)
     if tw > 0 then W.frame.progFill:SetWidth(math.max(1, tw * frac)) end
     W.frame.progLabel:SetText(("Step %d of %d"):format(n, total))
     W.pages[n]()
+end
+
+-- A page inside a step: cleared the way SetPage clears a page, but W.page and
+-- the rail stay, so Back, Next and the rail leave it the way they leave the
+-- step. ResetExtras cancels the step's decodes; the sub-page starts its own.
+function W:ShowSubPage(title, draw)
+    if not W.frame then return end
+    local f = W.frame
+    W:HideOptions()
+    if W.ResetExtras then W.ResetExtras() end
+    W:HideStatusHeader()
+    W:SetTitleIcon(false)
+    f.Skip:Hide()
+    W:SetButtonVariant(f.Next, "ghost")
+    f.Desc1:SetText("")
+    f.Desc2:SetText("")
+    f.Desc3:SetText("")
+    W.subPage = draw
+    f.SubTitle:SetText(title)
+    f.SubBack:Show()
+    draw()
 end
 
 -- Repaint the window in whichever theme is now in force. The page is rendered
