@@ -428,6 +428,49 @@ function ns.EUIHolds(section)
     return HoldsAny(profile, 0)
 end
 
+-- One describer per note section, registered by the page file that owns the
+-- section's key tables. Reachable for the headless gate, which fails a section
+-- left without one.
+local heldDescribers = {}
+ns.EUIHeldDescribers = heldDescribers
+
+-- describe(noteKey, record, add, slot) calls add(path) for every export path the
+-- note holds. Only notes whose prev is set are described; a record's
+-- keys[slot] notes are described with their slot.
+function ns.EUIRegisterHeld(section, describe)
+    heldDescribers[section] = describe
+end
+
+-- The export paths KitnUI's own switches hold in the named profiles, as a set,
+-- for the per-part "changed by you" count. Global notes are left out: their
+-- values live on the EllesmereUIDB root, which no export carries. A describer
+-- that errors costs its own note, not the page.
+function ns.EUIHeldPaths(profileNames)
+    local out = {}
+    local root = ns.db and ns.db.euiSnap
+    if type(root) ~= "table" then return out end
+    local function add(path) out[path] = true end
+    for section, describe in pairs(heldDescribers) do
+        local sect = root[section]
+        for _, name in ipairs(profileNames or {}) do
+            local notes = type(sect) == "table" and sect[name]
+            if type(notes) == "table" then
+                for key, record in pairs(notes) do
+                    if type(record) == "table" then
+                        if record.prev ~= nil then pcall(describe, key, record, add) end
+                        if type(record.keys) == "table" then
+                            for slot, sub in pairs(record.keys) do
+                                if type(sub) == "table" and sub.prev ~= nil then pcall(describe, key, sub, add, slot) end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
 -- The same question, asked of two halves of one section at once. Returns two
 -- booleans: is anything held under a key IN the given set, and is anything held
 -- under a key outside it.
@@ -590,6 +633,10 @@ local function MoveProfileRecords(oldName, newName)
         end
     end
 end
+
+-- The update's scratch profile is deleted after its import, and the delete
+-- drops its notes; KitnUI moves them back to the new profile first.
+ns.EUIMoveProfileRecords = MoveProfileRecords
 
 -- EllesmereUI's RenameProfile moves the profile order entry, the spec
 -- assignments, the sync group membership and the CDM spell store to the new
@@ -1130,7 +1177,7 @@ KitnCommands["config"] = KitnCommands["options"]
 -- The read-through metatable above is one-way: KitnUI_EUI reads KitnUI's
 -- namespace, but anything this addon defines stays local until it is copied back
 -- here.
-local EXPORTS = { "EUIResetAll", "ApplyEUIOptionsTheme", "EUIThemeNames", "ApplyLook", "CurrentLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar" }
+local EXPORTS = { "EUIResetAll", "ApplyEUIOptionsTheme", "EUIThemeNames", "ApplyLook", "CurrentLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar", "EUIHeldPaths", "EUIMoveProfileRecords" }
 
 -- Its own frame, deliberately. The main boot handler above returns early when
 -- EllesmereUI is too old for RegisterModule, and none of these exports needs

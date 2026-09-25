@@ -140,6 +140,10 @@ local function ApplyEUIArrowSuppression(on, claiming)
     if _G._ENP_RefreshAllSettings then pcall(_G._ENP_RefreshAllSettings) end
 end
 
+ns.EUIRegisterHeld("nameplates", function(noteKey, _, add)
+    if noteKey == "euiArrows" then add("addons." .. NAMEPLATES .. ".showTargetArrows") end
+end)
+
 ---------------------------------------------------------------------------------
 -- The arrows
 ---------------------------------------------------------------------------------
