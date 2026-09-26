@@ -1311,5 +1311,121 @@ do
         "settle: and only its part waits")
 end
 
+---------------------------------------------------------------------------------
+-- The settled snapshot in the Modules read
+---------------------------------------------------------------------------------
+
+do
+    -- The profile as it settled after its install: the player's own y, and a
+    -- font EllesmereUI rewrote while it settled.
+    local snData = base()
+    snData.addons[F].y = 9
+    snData.fonts.global = "Live"
+    local SN_STR = encode("settled-S", payload(snData))
+    local function snInstall(held)
+        freshInstall()
+        ns.db.euiSettled = { [1] = { s = SN_STR, held = held or {} } }
+        ns.db.euiSettledAt = { ["*"] = 1 }
+        ns.EUIStartDecodes()
+        E.live = { fonts = { global = "Live" } }
+    end
+    -- "Your copy" for one part, walked as the Modules page walks it.
+    local function snYours(side, id)
+        if not side then return nil end
+        local snCtx = ns.EUIPlayerContext()
+        local snHeld = ns.EUISettledHeld and ns.EUISettledHeld(snCtx.held) or snCtx.held
+        local snWalker = ns.EUIRowDiff(side.S or side.O or side.N, side.P, side.rows, side.keyToFolder, {
+            player = true, noBase = side.O == nil, missing = side.missing, fallback = side.N,
+            held = snHeld, defaults = snCtx.defaults, unlock = snCtx.unlock,
+        })
+        snWalker:Step(math.huge)
+        local entry = snWalker.result[id]
+        return entry and entry.count or 0
+    end
+
+    snInstall()
+    local snSide, snWhy = ns.EUIReadPlayer()
+    check(snSide ~= nil, "settled: the read succeeds", snWhy)
+    eq(snYours(snSide, F), 0, "settled: a part as it settled holds no change of the player's")
+    eq(snYours(snSide, "general"), 0, "settled: nor does a font EllesmereUI rewrote while it settled")
+    check(snSide and snSide.settledRows and snSide.settledRows[F] and snSide.settledRows.general,
+        "settled: both parts read the snapshot")
+    E.live = { fonts = { global = "Mine" } }
+    eq(snYours(ns.EUIReadPlayer(), "general"), 1, "settled: a change made after it counts")
+
+    snInstall({ ["fonts.global"] = true })
+    E.live = { fonts = { global = "Mine" } }
+    local snHeldNow = ns.EUIPlayerContext().held
+    eq(ns.EUISettledHeld and ns.EUISettledHeld(snHeldNow)["fonts.global"], true,
+        "settled: a path a switch held at the capture is held for Your copy")
+    eq(snHeldNow["fonts.global"], nil, "settled: but not in the context a Reset uses")
+    eq(snYours(ns.EUIReadPlayer(), "general"), 0, "settled: so a value a switch held then is not counted")
+
+    -- The confirms stay cautious: a click reads no snapshot.
+    snInstall()
+    local snPlan, snPlanWhy = ns.EUIPrepareUpdate()
+    check(snPlan ~= nil, "settled: an update plan is produced", snPlanWhy)
+    if snPlan then
+        eq(snPlan.inputs.S, nil, "settled: a click's inputs carry no composite")
+        eq(#snPlan.report.conflicts, 1, "settled: the confirm counts a value EllesmereUI rewrote as the player's")
+        local snText = ns.EUIConfirmText(snPlan)
+        check(snText:find("General: 1 of yours replaced", 1, true), "settled: in the confirm's part line", snText)
+        check(snText:find("1 of your changes will be replaced", 1, true), "settled: and its total", snText)
+        eq(ns.EUIUpdateToast(snPlan), "Profile updated. 1 of your changes were replaced.", "settled: and the toast")
+    end
+    local snReset = ns.EUIPrepareReset("general", ctx)
+    eq(snReset and snReset.yours, 1, "settled: a Reset counts from KitnUI's string")
+
+    -- The snapshot joins the decode chain once.
+    freshInstall()
+    ns.db.euiSettled = { [1] = { s = SN_STR, held = {} } }
+    ns.db.euiSettledAt = { ["*"] = 1 }
+    local snDecoded = {}
+    local snAsync = E.DecodeImportStringAsync
+    E.DecodeImportStringAsync = function(s, onDone)
+        snDecoded[#snDecoded + 1] = s
+        return snAsync(s, onDone)
+    end
+    ns.EUIStartDecodes()
+    eq(#snDecoded, 3, "settled: the snapshot joins the decode chain")
+    check(ns.EUIDecodeCache.bySettled and ns.EUIDecodeCache.bySettled[1], "settled: under its id")
+    snDecoded = {}
+    ns.db.euiSettled[1].s = O_STR
+    ns.EUIStartDecodes()
+    eq(#snDecoded, 2, "settled: a snapshot equal to a base is not decoded again")
+
+    -- The timed capture records after the page's decodes landed.
+    freshInstall()
+    ns.db.euiSettlePending = { ["*"] = true }
+    ns.euiSettleDue, ns.euiSettleOpen = { ["*"] = true }, true
+    ns.EUIStartDecodes()
+    eq(ns.EUISettleCapture(), true, "settled: the capture records after the decodes landed")
+    eq(ns.db.euiSettledAt and ns.db.euiSettledAt["*"], 1, "settled: for every part")
+    snDecoded = {}
+    local snLate, snLateWhy = ns.EUIReadPlayer()
+    check(snLate ~= nil, "settled: the read after it goes ahead", snLateWhy)
+    check(snLate and snLate.settledRows and snLate.settledRows[F], "settled: and reads the snapshot the decodes missed")
+    eq(snYours(snLate, F), 0, "settled: which counts nothing of the player's")
+    eq(#snDecoded, 0, "settled: decoded in the read's own frame, not by the chain")
+
+    -- A change from an earlier session, due its snapshot.
+    freshInstall()
+    ns.db.euiSettlePending = { ["*"] = true }
+    ns.euiSettleDue, ns.euiSettleOpen = { ["*"] = true }, false
+    ns.EUIStartDecodes()
+    local snEarly, snEarlyWhy = ns.EUIReadPlayer()
+    check(snEarly == nil and snEarlyWhy == "Try again in a moment.", "settled: before the settle timer the read waits", snEarlyWhy)
+    eq(calls.export, nil, "settled: and exports nothing")
+    check(ns.EUIPrepareUpdate() ~= nil, "settled: an update does not wait")
+    check(ns.EUIPrepareReset(F, ctx) ~= nil, "settled: nor does a Reset")
+    ns.euiSettleOpen = true
+    snEarly, snEarlyWhy = ns.EUIReadPlayer()
+    check(snEarly ~= nil, "settled: after the timer, with the capture refused, the read goes ahead", snEarlyWhy)
+    eq(ns.db.euiSettled, nil, "settled: and records nothing")
+    ns.euiSettleDue, ns.euiSettleOpen = nil, nil
+    E.DecodeImportStringAsync = snAsync
+end
+
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

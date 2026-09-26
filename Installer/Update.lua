@@ -145,7 +145,7 @@ end
 -- The two decodes
 ---------------------------------------------------------------------------------
 
-local cache = { gen = 0, byVersion = {} }
+local cache = { gen = 0, byVersion = {}, bySettled = {} }
 ns.EUIDecodeCache = cache
 
 function ns.EUICancelDecodes()
@@ -156,7 +156,7 @@ function ns.EUICancelDecodes()
         cache[slot] = nil
     end
     cache.O, cache.N = nil, nil
-    cache.byVersion = {}
+    cache.byVersion, cache.bySettled = {}, {}
     cache.failedO, cache.failedN = false, false
     cache.running = false
 end
@@ -197,6 +197,18 @@ function ns.EUIStartDecodes(onReady)
         table.sort(versions)
         for _, v in ipairs(versions) do
             steps[#steps + 1] = { s = bases[v], slot = "handleV", take = function(p) cache.byVersion[v] = p end }
+        end
+    end
+    -- Each settled snapshot, in id order.
+    local settled = ns.db and ns.db.euiSettled
+    if isTable(settled) then
+        local ids = {}
+        for id, entry in pairs(settled) do
+            if type(id) == "number" and isTable(entry) and type(entry.s) == "string" then ids[#ids + 1] = id end
+        end
+        table.sort(ids)
+        for _, id in ipairs(ids) do
+            steps[#steps + 1] = { s = settled[id].s, slot = "handleV", take = function(p) cache.bySettled[id] = p or false end }
         end
     end
     steps[#steps + 1] = { s = ns.data.EllesmereUI, slot = "handleN", take = function(p)
@@ -457,9 +469,10 @@ end
 
 -- What the list and the merge share: KitnUI's string and every recorded base,
 -- folder-stripped, the rows, the composite base and the key resolver. Pd, the
--- player's capture when there is one, is stripped in place. Nil until the
--- decodes land.
-local function sideInputs(Pd)
+-- player's capture when there is one, is stripped in place. With `settled`,
+-- the Modules read's alone, come the settled composite S and the parts it
+-- settles. Nil until the decodes land.
+local function sideInputs(Pd, settled)
     local e = E()
     if not (hasRequired(e) and cache.N and isTable(cache.N.data)) then return nil end
     local keep, strip, stripCDM = ns.EUIStripSets(e._ADDON_DB_MAP, ns.GetEUIModuleSet())
@@ -495,6 +508,23 @@ local function sideInputs(Pd)
     end
     addBase(stamp, cache.O)
     for version, payload in pairs(cache.byVersion) do addBase(version, payload) end
+    -- Each snapshot is stripped as the bases are. One the timed capture took
+    -- after the decodes started is decoded here, and a failure is not retried.
+    local settledData = {}
+    if Pd and settled then
+        for id, entry in pairs(isTable(ns.db.euiSettled) and ns.db.euiSettled or {}) do
+            if type(id) == "number" and cache.bySettled[id] == nil and isTable(entry) and type(entry.s) == "string" then
+                cache.bySettled[id] = decoded(e.DecodeImportString(entry.s)) or false
+            end
+        end
+        for id, payload in pairs(cache.bySettled) do
+            if isTable(payload) and isTable(payload.data) then
+                local data = ns.EUIDeepCopy(payload.data)
+                ns.EUIStripFolders(data, strip, stripCDM)
+                settledData[id] = data
+            end
+        end
+    end
 
     local metaK2F = ns.EUIOverlayMeta(cache.N.data.unlockLayoutMeta, Pd and Pd.unlockLayoutMeta)
     local sides = { Nd }
@@ -503,23 +533,30 @@ local function sideInputs(Pd)
         sides[#sides + 1] = ns.EUIOverrideElementSide(Pd)
     end
     for _, data in pairs(bases) do sides[#sides + 1] = data end
+    for _, data in pairs(settledData) do sides[#sides + 1] = data end
     local keyToFolder = ns.EUILayoutKeyToFolder(sides, metaK2F, e.BuildImportKeyToFolder)
     local rows = ns.EUIRows(e._ADDON_DB_MAP, e.ADDON_ROSTER, cache.N.data.addons, ns.GetEUIModuleSet())
     local O, missing = ns.EUIComposeBase(rows, ns.db.euiRowAt, bases, stamp, keyToFolder)
+    local S, settledRows
+    if Pd and settled then S, settledRows = ns.EUIComposeSettled(O, rows, settleBefore(), settledData, keyToFolder, missing) end
     return {
         N = Nd, O = O, P = Pd, missing = missing, rows = rows, keep = keep,
         metaK2F = metaK2F, keyToFolder = keyToFolder, stamp = stamp,
+        S = S, settledRows = settledRows or {},
     }
 end
 
 -- The player's profile captured now, supplemented, with the shared inputs.
--- Returns the inputs and the stored profile, or nil and a line.
-local function captureSide()
+-- Returns the inputs and the stored profile, or nil and a line. The Modules
+-- read passes `settled`: while a change from an earlier session is due its
+-- snapshot, it waits for the settle timer before exporting.
+local function captureSide(settled)
+    if settled and settleDue() and not ns.euiSettleOpen then return nil, T.establish end
     local P, err = ns.EUICaptureP()
     if not P then return nil, err end
     local stored = DB().profiles[NAME]
     ns.EUISupplementP(P.data, isTable(stored) and stored.addons)
-    local side = sideInputs(P.data)
+    local side = sideInputs(P.data, settled)
     if not side then return nil, T.importFail end
     return side, stored
 end
@@ -529,12 +566,13 @@ function ns.EUIPageInputs()
     return sideInputs(nil)
 end
 
--- The "Your copy" read, under the same refusals as an update.
+-- The "Your copy" read, under the same refusals as an update, measured from
+-- each part's settled snapshot.
 function ns.EUIReadPlayer()
     local why = refusal()
     if why then return nil, why end
     if not ns.EUIDecodesReady() then return nil, T.preparing end
-    return captureSide()
+    return captureSide(true)
 end
 
 -- The click's inputs, plus what the warnings read. Held on the plan so a
@@ -582,6 +620,20 @@ function ns.EUIPlayerContext()
     end
     local held = ns.EUIHeldPaths and ns.EUIHeldPaths({ NAME, BACKUP }) or {}
     return { defaults = defaults, held = held, unlock = ns.EUIUnlockLabels() }
+end
+
+-- The held set for "Your copy": `held` joined with what a switch held when
+-- each snapshot was taken, KitnUI's in that snapshot. A Reset's context keeps
+-- only what is held now.
+function ns.EUISettledHeld(held)
+    local out = {}
+    for path in pairs(held or {}) do out[path] = true end
+    for _, entry in pairs(isTable(ns.db and ns.db.euiSettled) and ns.db.euiSettled or {}) do
+        for path in pairs(isTable(entry) and isTable(entry.held) and entry.held or {}) do
+            if type(path) == "string" then out[path] = true end
+        end
+    end
+    return out
 end
 
 -- The rows the update changes, counted the way the list counts them. Walked
