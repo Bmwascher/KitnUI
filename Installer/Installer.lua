@@ -476,8 +476,23 @@ end
 -- popup lays out, the first measurement can still be the previous message's.
 -- The deferred pass acts only on the showing that armed it: the popup must
 -- still be visible through its dimmer and still carry the same message.
-local function GrowConfirmPopup()
+-- EllesmereUI rebuilds the popup under the same names whenever its accent is
+-- applied, as an import does, and the globals keep the discarded frames; the
+-- showing popup is then found under its dimmer, a child of UIParent.
+local function ShowingConfirmPopup()
     local popup = _G.EUIConfirmPopup
+    if popup and popup.IsVisible and popup:IsVisible() then return popup end
+    for _, dimmer in ipairs({ UIParent:GetChildren() }) do
+        if not dimmer:IsForbidden() and dimmer:GetName() == "EUIConfirmDimmer" and dimmer:IsShown() then
+            for _, child in ipairs({ dimmer:GetChildren() }) do
+                if child:GetName() == "EUIConfirmPopup" then return child end
+            end
+        end
+    end
+end
+
+local function GrowConfirmPopup()
+    local popup = ShowingConfirmPopup()
     local msg = popup and popup._msg
     if not (msg and msg.GetStringHeight and popup.GetHeight and popup.SetHeight) then return end
     local base = popup:GetHeight()
