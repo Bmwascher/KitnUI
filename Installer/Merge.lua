@@ -237,18 +237,45 @@ local function layoutMap(d, map)
     return isTable(ul) and isTable(ul[map]) and ul[map] or nil
 end
 
+-- Each size-match map's extras: pixels added to the matched size, keyed by
+-- the child like its link and meaningful only beside that link.
+local MATCH_EXTRAS = { widthMatch = "widthMatchExtra", heightMatch = "heightMatchExtra" }
+ns.EUI_MATCH_EXTRAS = MATCH_EXTRAS
+
+-- A side's extra for a child it links in `map`; nil without that link.
+local function extraOf(d, map, child)
+    local links, extras = layoutMap(d, map), layoutMap(d, MATCH_EXTRAS[map])
+    if not (links and extras and links[child] ~= nil) then return nil end
+    return extras[child]
+end
+
 -- Layout entries are leaves compared whole, walked last, over children whose
--- owner is present in merged.addons; the root and its four maps always exist.
+-- owner is present in merged.addons; the root, its four maps and the two
+-- extras maps always exist. An extra follows the link the leaf wrote, and a
+-- player's extra lost to Kitn's link counts when it was the player's change.
 local function mergeLayout(ctx, O, N, P, merged)
-    local out = { anchors = {}, widthMatch = {}, heightMatch = {}, phantomBounds = {} }
+    local out = { anchors = {}, widthMatch = {}, heightMatch = {}, phantomBounds = {},
+        widthMatchExtra = {}, heightMatchExtra = {} }
     local addons = isTable(merged.addons) and merged.addons or {}
     for _, map in ipairs(LAYOUT_MAPS) do
         local om, nm, pm = layoutMap(O, map), layoutMap(N, map), layoutMap(P, map)
+        local xmap = MATCH_EXTRAS[map]
         for child in pairs(unionKeys(om, nm, pm)) do
             local owner = ctx.keyToFolder[child]
             if owner and addons[owner] ~= nil then
-                leaf(ctx, out[map], child, om and om[child], nm and nm[child], pm and pm[child],
-                    joinPath(joinPath("unlockLayout", map), child))
+                local ov, nv, pv = om and om[child], nm and nm[child], pm and pm[child]
+                leaf(ctx, out[map], child, ov, nv, pv, joinPath(joinPath("unlockLayout", map), child))
+                if xmap then
+                    local ox, nx, px = extraOf(O, map, child), extraOf(N, map, child), extraOf(P, map, child)
+                    if same(ov, nv) then
+                        out[xmap][child] = px
+                    else
+                        out[xmap][child] = nx
+                        if pv ~= nil and not same(px, ox) and not same(px, nx) then
+                            ctx.report.conflicts[#ctx.report.conflicts + 1] = joinPath(joinPath("unlockLayout", xmap), child)
+                        end
+                    end
+                end
             end
         end
     end
@@ -260,13 +287,16 @@ local function pruneLayout(ctx, merged)
     local ul = merged.unlockLayout
     if not isTable(ul) then return end
     local addons = isTable(merged.addons) and merged.addons or {}
-    for _, map in ipairs(LAYOUT_MAPS) do
-        if isTable(ul[map]) then
-            for child in pairs(ul[map]) do
-                local owner = ctx.keyToFolder[child]
-                if not (owner and addons[owner] ~= nil) then ul[map][child] = nil end
-            end
+    local function prune(map)
+        if not isTable(ul[map]) then return end
+        for child in pairs(ul[map]) do
+            local owner = ctx.keyToFolder[child]
+            if not (owner and addons[owner] ~= nil) then ul[map][child] = nil end
         end
+    end
+    for _, map in ipairs(LAYOUT_MAPS) do
+        prune(map)
+        if MATCH_EXTRAS[map] then prune(MATCH_EXTRAS[map]) end
     end
 end
 
