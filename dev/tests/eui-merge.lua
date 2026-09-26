@@ -368,6 +368,96 @@ do
     check(m.unlockLayout.anchors.bar1 ~= nil, "a player-only link from an imported child is kept by the walk")
 end
 
+-- P carries both extras tables beside its links, as the export writes them;
+-- O and N carry none unless a case gives them some.
+local function sided(wm, wx, hm, hx)
+    return { addons = { [F] = { x = 1 } },
+        unlockLayout = { anchors = {}, widthMatch = wm or {}, heightMatch = hm or {}, phantomBounds = {},
+            widthMatchExtra = wx, heightMatchExtra = hx } }
+end
+
+local function extraIn(m, xmap, child)
+    local t = m.unlockLayout and m.unlockLayout[xmap]
+    return t and t[child]
+end
+
+do
+    local O = sided({ bar1 = "other1" }, nil, { bar2 = "other1" })
+    local N = sided({ bar1 = "other1" }, nil, { bar2 = "other1" })
+    local P = sided({ bar1 = "other1" }, { bar1 = 6 }, { bar2 = "other1" }, { bar2 = -3 })
+    local m, r = merge(O, N, P, { keyToFolder = k2f })
+    eq(extraIn(m, "widthMatchExtra", "bar1"), 6, "extras: the player's width extra rides the link Kitn left alone")
+    eq(extraIn(m, "heightMatchExtra", "bar2"), -3, "extras: and the player's height extra")
+    eq(#r.conflicts, 0, "extras: an extra kept with its link counts nothing")
+end
+
+do
+    local O, N = sided({ bar1 = "other1" }), sided({ bar1 = "other1" })
+    local m, r = merge(O, N, sided({ bar1 = "bar2" }, { bar1 = 6 }), { keyToFolder = k2f })
+    eq(m.unlockLayout.widthMatch.bar1, "bar2", "extras: the player's re-pointed link is kept")
+    eq(extraIn(m, "widthMatchExtra", "bar1"), 6, "extras: with the player's extra")
+    eq(#r.conflicts, 0, "extras: and nothing is counted for either")
+    local O2 = sided({ bar1 = "other1" }, { bar1 = 4 })
+    local N2 = sided({ bar1 = "other1" }, { bar1 = 2 })
+    local m2, r2 = merge(O2, N2, sided({ bar1 = "other1" }, { bar1 = 4 }), { keyToFolder = k2f })
+    eq(extraIn(m2, "widthMatchExtra", "bar1"), 4, "extras: Kitn's extra change on a link it left alone does not reach the player")
+    eq(#r2.conflicts, 0, "extras: and counts nothing")
+    local m3 = merge(O2, N2, sided({ bar1 = "other1" }), { keyToFolder = k2f })
+    eq(extraIn(m3, "widthMatchExtra", "bar1"), nil, "extras: nor replaces an extra the player cleared")
+end
+
+do
+    local O = sided({ bar1 = "other1" })
+    local N = sided({ bar1 = "bar2" })
+    local P = sided({ bar1 = "other1" }, { bar1 = 6 })
+    local m, r = merge(O, N, P, { keyToFolder = k2f })
+    eq(m.unlockLayout.widthMatch.bar1, "bar2", "extras: Kitn's re-pointed link is taken")
+    eq(extraIn(m, "widthMatchExtra", "bar1"), nil, "extras: with Kitn's extra, none, in place of the player's")
+    eq(#r.conflicts, 1, "extras: the dropped extra is one change replaced")
+    eq(r.conflicts[1], "unlockLayout.widthMatchExtra.bar1", "extras: named by its map and child")
+    local _, r2 = merge(O, N, sided({ bar1 = "bar2" }, { bar1 = 6 }), { keyToFolder = k2f })
+    eq(#r2.conflicts, 1, "extras: counted when the player's link already equals Kitn's")
+    local m3, r3 = merge(O, sided({}), P, { keyToFolder = k2f })
+    eq(m3.unlockLayout.widthMatch.bar1, nil, "extras: Kitn's removal of the link is taken")
+    eq(extraIn(m3, "widthMatchExtra", "bar1"), nil, "extras: and the extra goes with it")
+    eq(#r3.conflicts, 1, "extras: counted when Kitn removed the link")
+    check(has(r3.conflicts, "unlockLayout.widthMatchExtra.bar1"), "extras: the removal's count is the extra")
+    local m4, r4 = merge(O, N, sided({ bar1 = "other2" }, { bar1 = 6 }), { keyToFolder = k2f })
+    eq(#r4.conflicts, 2, "extras: a changed link and its extra are two changes")
+    check(has(r4.conflicts, "unlockLayout.widthMatch.bar1") and has(r4.conflicts, "unlockLayout.widthMatchExtra.bar1"),
+        "extras: the link and the extra are both named")
+    eq(extraIn(m4, "widthMatchExtra", "bar1"), nil, "extras: and the extra is gone")
+end
+
+do
+    local O = sided({ bar1 = "other1" }, { bar1 = 4 })
+    local N = sided({ bar1 = "bar2" }, { bar1 = 2 })
+    local m, r = merge(O, N, sided({ bar1 = "other1" }, { bar1 = 4 }), { keyToFolder = k2f })
+    eq(extraIn(m, "widthMatchExtra", "bar1"), 2, "extras: Kitn's extra rides Kitn's link")
+    eq(#r.conflicts, 0, "extras: the player's extra equal to the base's is not their change")
+    local _, r2 = merge(O, N, sided({ bar1 = "other1" }, { bar1 = 2 }), { keyToFolder = k2f })
+    eq(#r2.conflicts, 0, "extras: the player's extra equal to Kitn's loses nothing")
+    local _, r3 = merge(O, N, sided({ bar1 = "other1" }, { bar1 = 7 }), { keyToFolder = k2f })
+    eq(#r3.conflicts, 1, "extras: the player's own extra is counted")
+    local _, r4 = merge(O, N, sided({ bar1 = "other1" }), { keyToFolder = k2f })
+    eq(#r4.conflicts, 1, "extras: clearing the base's extra is a change Kitn's replaces")
+end
+
+do
+    local O, N = sided({}), sided({})
+    local m, r = merge(O, N, sided({ bar1 = "other1" }, { bar1 = 5 }), { keyToFolder = k2f })
+    eq(extraIn(m, "widthMatchExtra", "bar1"), 5, "extras: a player-only link keeps its extra")
+    eq(#r.conflicts, 0, "extras: and counts nothing")
+    local m2, r2 = merge(sided({ bar1 = "other1" }), sided({ bar1 = "other1" }), sided({}, { bar1 = 5 }), { keyToFolder = k2f })
+    eq(extraIn(m2, "widthMatchExtra", "bar1"), nil, "extras: an extra without its own side's link is ignored")
+    eq(#r2.conflicts, 0, "extras: and counts nothing either")
+    local m3 = merge(O, N, sided({ gone1 = "other1" }, { gone1 = 5 }), { keyToFolder = k2f })
+    eq(extraIn(m3, "widthMatchExtra", "gone1"), nil, "extras: a child whose module is not carried gets none")
+    local m4 = merge({ addons = { [F] = { x = 1 } } }, { addons = { [F] = { x = 1 } } }, { addons = { [F] = { x = 1 } } })
+    check(type(m4.unlockLayout.widthMatchExtra) == "table" and type(m4.unlockLayout.heightMatchExtra) == "table",
+        "extras: both extras tables always exist on the walked branch")
+end
+
 ---------------------------------------------------------------------------------
 -- The override set
 ---------------------------------------------------------------------------------
@@ -520,6 +610,48 @@ do
     eq(#r3.conflicts, 1, "one conflict when P lacks the baseline and differs from both")
 end
 
+do
+    -- The current harvest writes both extras tables into every layer and banks
+    -- a Player Aura Bars element raw from its stored position; the base and
+    -- Kitn's string hold neither.
+    local visual = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = 3, y = -30, w = 200, h = 20 }
+    local function raw(x, design, w)
+        return { point = "TOPLEFT", relPoint = "TOPLEFT", x = x, y = -4, design = design, rawPos = true, w = w or 200, h = 20 }
+    end
+    local function layer(elem, wx)
+        return { anchors = {}, widthMatch = { bar1 = "other1" }, heightMatch = {}, cdmPos = { X = 10 },
+            elems = { PlayerBuffs = elem }, widthMatchExtra = wx, heightMatchExtra = wx and {} or nil }
+    end
+    local function set(default, baseElem, forkElem, baseWx, forkWx)
+        return overrides({
+            specOverrides = { { fkey = "a", values = { default = default } } },
+            specUnlockOverrides = { baselineLayout = layer(baseElem, baseWx), layouts = { [1] = layer(forkElem, forkWx) } },
+        })
+    end
+    local O, N = set(1, visual, visual), set(2, visual, visual)
+    local m, r = merge(O, N, set(1, raw(10), raw(10), { bar1 = 5 }, {}))
+    eq(r.overrideSet, "kitn", "layer format: Kitn's changed set is taken")
+    eq(#r.conflicts, 0, "layer format: extras tables and raw positions alone are not the player's change")
+    eq(m.specOverrides[1].values.default, 2, "layer format: the carried set is Kitn's")
+    local _, r2 = merge(O, N, set(1, raw(10), raw(10), {}, { bar1 = 5 }))
+    eq(#r2.conflicts, 1, "layer format: an extra the player set inside a layer is their change")
+    eq(r2.conflicts[1], "Spec Overrides", "layer format: counted as the override set")
+    local masked = ns.EUIMaskedOverrideSet(set(1, raw(10), raw(10), { bar1 = 5 }, {}))
+    eq(masked.specUnlockOverrides.baselineLayout.widthMatchExtra, nil, "layer format: the masked baseline carries no extras")
+    local _, r3 = merge(O, ns.EUIDeepCopy(O), set(1, raw(10), raw(10), { bar1 = 5 }, {}))
+    eq(r3.overrideSet, "player", "layer format: an unchanged Kitn set keeps the player's")
+
+    local rO, rN = set(1, raw(10), raw(10)), set(2, raw(10), raw(10))
+    local _, r4 = merge(rO, rN, set(1, raw(10), raw(12)))
+    eq(#r4.conflicts, 1, "raw positions: a moved raw element counts")
+    local _, r5 = merge(rO, rN, set(1, raw(10), raw(10, true)))
+    eq(#r5.conflicts, 1, "raw positions: a changed design flag counts")
+    local _, r6 = merge(rO, rN, set(1, raw(10), raw(10, nil, 180)))
+    eq(#r6.conflicts, 0, "raw positions: a raw size drift does not")
+    local _, r7 = merge(rO, set(1, raw(10), visual), set(1, raw(10), raw(10)))
+    eq(r7.overrideSet, "player", "raw positions: a format-only difference does not select Kitn's set")
+end
+
 ---------------------------------------------------------------------------------
 -- Special keys
 ---------------------------------------------------------------------------------
@@ -609,6 +741,14 @@ do
     local P = { addons = { [F] = { x = 5 } } }
     local m = merge(nil, N, P)
     eq(m.unlockLayout, nil, "a shipped string without a layout keeps N's shape on the no-base branch")
+end
+
+do
+    local N = sided({ bar1 = "other1", gone1 = "other1" }, { bar1 = 3, gone1 = 4 })
+    local m, r = merge(nil, N, sided({ bar1 = "other1" }, { bar1 = 9 }), { keyToFolder = k2f })
+    eq(extraIn(m, "widthMatchExtra", "bar1"), 3, "no base: Kitn's extra is carried")
+    eq(extraIn(m, "widthMatchExtra", "gone1"), nil, "no base: a pruned child's extra is pruned")
+    eq(#r.conflicts, 0, "no base: nothing is counted")
 end
 
 do

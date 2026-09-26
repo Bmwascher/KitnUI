@@ -140,8 +140,14 @@ eq(count(ns.EUILayoutKeyToFolder({}, {}, function() return nil end)), 0, "resolv
 local api = {
     BuildImportKeyToFolder = function(ul, m)
         local out = {}
+        local function add(key)
+            if type(key) == "string" and out[key] == nil then out[key] = m[key] end
+        end
         for _, map in ipairs({ "anchors", "widthMatch", "heightMatch" }) do
-            for child in pairs(ul[map] or {}) do out[child] = m[child] end
+            for child, v in pairs(ul[map] or {}) do
+                add(child)
+                if map == "anchors" then add(type(v) == "table" and v.target or nil) else add(v) end
+            end
         end
         return out
     end,
@@ -158,6 +164,12 @@ local api = {
         for _, map in ipairs({ "widthMatch", "heightMatch" }) do
             for child, target in pairs(ul[map] or {}) do
                 if endpointOK(child) and endpointOK(target) then out[map][child] = target end
+            end
+            -- An extra survives only beside a surviving link.
+            local xmap = map .. "Extra"
+            out[xmap] = {}
+            for child, px in pairs(ul[xmap] or {}) do
+                if out[map][child] ~= nil then out[xmap][child] = px end
             end
         end
         return out
@@ -202,6 +214,25 @@ local r2 = { conflicts = { "addons.FA.x" } }
 eq(count(ns.EUIFinalLayoutFilter(noLayout, r2, {}, {}, api)), 0, "filter: no layout removes nothing")
 eq(noLayout.unlockLayoutMeta, nil, "filter: no layout still drops the meta")
 eq(#r2.conflicts, 1, "filter: no layout leaves conflicts alone")
+
+do
+    local m = { unlockLayout = {
+        anchors = {}, phantomBounds = {},
+        widthMatch = { A_1 = "A_2", A_3 = "B_1" },
+        heightMatch = { A_2 = "A_1" },
+        widthMatchExtra = { A_1 = 4, A_3 = 6 },
+        heightMatchExtra = { A_2 = -2 },
+    } }
+    local rep = { conflicts = { "unlockLayout.widthMatchExtra.A_1", "unlockLayout.widthMatchExtra.A_3",
+        "unlockLayout.widthMatch.A_3", "unlockLayout.heightMatchExtra.A_2" } }
+    local gone = ns.EUIFinalLayoutFilter(m, rep, { A_1 = "FA", A_2 = "FA", A_3 = "FA", B_1 = "FB" }, { FA = true }, api)
+    check(gone["widthMatch.A_3"], "filter: a link crossing the strip boundary is removed")
+    eq(#rep.conflicts, 2, "filter: an extra's conflict is struck with its removed link")
+    check(rep.conflicts[1] == "unlockLayout.widthMatchExtra.A_1" and rep.conflicts[2] == "unlockLayout.heightMatchExtra.A_2",
+        "filter: extras on surviving links keep their conflicts")
+    eq(m.unlockLayout.widthMatchExtra.A_1, 4, "filter: a surviving link keeps its extra")
+    eq(m.unlockLayout.widthMatchExtra.A_3, nil, "filter: a removed link's extra goes with it")
+end
 
 -- Activation prediction -------------------------------------------------------
 
