@@ -469,16 +469,10 @@ local function InstallEUIProfile()
     end)
 end
 
--- The popup affords three message lines; the update's confirm carries up to
--- seven sentences. Grown by the measured overflow, the way the popup grows
--- itself for its type-to-confirm gate. Reached by name because the popup
--- returns nothing. The text is measured again on the next frame: until the
--- popup lays out, the first measurement can still be the previous message's.
--- The deferred pass acts only on the showing that armed it: the popup must
--- still be visible through its dimmer and still carry the same message.
--- EllesmereUI rebuilds the popup under the same names whenever its accent is
--- applied, as an import does, and the globals keep the discarded frames; the
--- showing popup is then found under its dimmer, a child of UIParent.
+-- The popup on screen, reached by name because ShowConfirmPopup returns
+-- nothing. EllesmereUI rebuilds the popup under the same names whenever its
+-- accent is applied, as an import does, and the globals keep the discarded
+-- frames; the showing popup is then found under its dimmer, a child of UIParent.
 local function ShowingConfirmPopup()
     local popup = _G.EUIConfirmPopup
     if popup and popup.IsVisible and popup:IsVisible() then return popup end
@@ -491,6 +485,13 @@ local function ShowingConfirmPopup()
     end
 end
 
+-- The popup affords three message lines; the update's confirm carries up to
+-- seven sentences. Grown by the measured overflow, the way the popup grows
+-- itself for its type-to-confirm gate. The text is measured again on the next
+-- frame: until the popup lays out, the first measurement can still be the
+-- previous message's. The deferred pass acts only on the showing that armed
+-- it: the popup must still be visible through its dimmer and still carry the
+-- same message.
 local function GrowConfirmPopup()
     local popup = ShowingConfirmPopup()
     local msg = popup and popup._msg
