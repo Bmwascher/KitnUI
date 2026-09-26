@@ -701,6 +701,21 @@ check(xWideMost <= BOUND, "work: extras are read a budget at a time", xWideMost)
 eq(countOf(xWideWalker.result, UF), 500, "work: and each differing extra counts once")
 for i = 1, 500 do wK2F["UF_W" .. i] = nil end
 
+-- A malformed extra that is a table is compared a budget at a time, against
+-- the base and against KitnUI's side of a reset's count.
+local function wideExtra()
+    local t = {}
+    for i = 1, 500 do t["k" .. i] = i end
+    return t
+end
+local xTblMost, _, xTblWalker = maxReads(matched("UF_Target", wideExtra()), matched("UF_Target", wideExtra()),
+    { wRows[1] }, 10, { player = true })
+check(xTblMost <= BOUND, "work: a table-valued extra is compared a budget at a time", xTblMost)
+eq(countOf(xTblWalker.result, UF), 0, "work: and an equal one is no change")
+local xTblAgainst = maxReads(matched("UF_Target", 1), matched("UF_Target", wideExtra()), { wRows[1] }, 10,
+    { player = true, against = matched("UF_Target", wideExtra()) })
+check(xTblAgainst <= BOUND, "work: and so is one on KitnUI's side of a reset's count", xTblAgainst)
+
 ---------------------------------------------------------------------------------
 -- Names and the tooltip
 ---------------------------------------------------------------------------------
@@ -783,6 +798,28 @@ check(not ns.EUIOverridesCapture(capP, "EllesmereUIMinimap", capK2F), "capture: 
 local elementSide = ns.EUIOverrideElementSide(capP)
 check(elementSide.unlockLayout.anchors.ERB_CastBar and elementSide.unlockLayout.anchors.CDM_x,
     "element keys: override positions and layer elements reach the resolver")
+
+-- A layer's links and extras name children it can hold no element entry for;
+-- a link's target is not one of them.
+local layerK2F = { UF_Player = UF, UF_Target = UF, ERB_Health = RB, CDM_y = CDM }
+local extraOnly = { condUnlockOverrides = { layouts = { [71] = { elems = {}, widthMatchExtra = { UF_Player = 4 } } } } }
+local linkOnly = { specUnlockOverrides = { layouts = { [3] = {
+    elems = {},
+    heightMatch = { ERB_Health = "UF_Target" },
+    anchors = { CDM_y = { target = "ERB_Health" } },
+} } } }
+check(ns.EUIOverridesCapture(extraOnly, UF, layerK2F), "capture: a layer's size-match extra for a child with no element entry")
+check(ns.EUIOverridesCapture(linkOnly, RB, layerK2F), "capture: a layer's size-match link for a child with no element entry")
+check(ns.EUIOverridesCapture(linkOnly, CDM, layerK2F), "capture: a layer's anchor for a child with no element entry")
+check(not ns.EUIOverridesCapture(linkOnly, UF, layerK2F), "capture: a link's target is no capture of the target's part")
+local layerSide = ns.EUIOverrideElementSide({
+    specUnlockOverrides = linkOnly.specUnlockOverrides,
+    condUnlockOverrides = extraOnly.condUnlockOverrides,
+})
+local layerKeys = layerSide.unlockLayout.anchors
+check(layerKeys.UF_Player and layerKeys.ERB_Health and layerKeys.CDM_y,
+    "element keys: a layer's links and extras reach the resolver")
+eq(layerKeys.UF_Target, nil, "element keys: but not a link's target")
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

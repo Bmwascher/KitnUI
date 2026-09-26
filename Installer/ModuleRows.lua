@@ -18,8 +18,9 @@ local TOP_BAR = "KitnUI_EUI"
 local OVERRIDE_KEYS = {}
 for _, key in ipairs(ns.EUI_OV_KEYS) do OVERRIDE_KEYS[key] = true end
 
--- A part's layout slice: the link maps, each size-match map followed by its
--- extras, which are keyed by the same child and go where the link goes.
+-- The link maps, each size-match map followed by its extras, which are keyed
+-- by the same child and go where the link goes: a part's layout slice, and the
+-- maps a Spec Overrides layer carries under the same names.
 local SLICE_MAPS = {}
 for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
     SLICE_MAPS[#SLICE_MAPS + 1] = map
@@ -686,8 +687,8 @@ local function layoutJob(w, B, rowById, bases, keyToFolder)
                 if xmap and (w.player or linkDiffers) then
                     tick(w)
                     local xb = ns.EUIExtraOf(B, map, child)
-                    if not ns.EUISame(ns.EUIExtraOf(bases[row.id], map, child), xb)
-                        and not (w.against and ns.EUISame(xb, ns.EUIExtraOf(w.against, map, child))) then
+                    if not ns.EUISame(ns.EUIExtraOf(bases[row.id], map, child), xb, w.tickFn)
+                        and not (w.against and ns.EUISame(xb, ns.EUIExtraOf(w.against, map, child), w.tickFn)) then
                         record(w, row, "unlockLayout." .. xmap .. "." .. tostring(child))
                     end
                 end
@@ -897,7 +898,14 @@ local function eachElementKey(P, fn)
     for _, storeKey in ipairs(UNLOCK_STORES) do
         local layouts = isTable(P[storeKey]) and P[storeKey].layouts
         for _, layer in pairs(isTable(layouts) and layouts or {}) do
-            for key in pairs(isTable(layer) and isTable(layer.elems) and layer.elems or {}) do fn(key) end
+            if isTable(layer) then
+                for key in pairs(isTable(layer.elems) and layer.elems or {}) do fn(key) end
+                -- A layer's links and extras can name a child it holds no
+                -- element entry for, and applying the layer writes them all.
+                for _, map in ipairs(SLICE_MAPS) do
+                    for key in pairs(isTable(layer[map]) and layer[map] or {}) do fn(key) end
+                end
+            end
         end
     end
 end
