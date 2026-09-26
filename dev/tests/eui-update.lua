@@ -644,6 +644,16 @@ ns.db.devMode = nil
 eq(#printed, #plan.report.conflicts, "click: dev mode prints each conflict path")
 check(printed[1] and printed[1]:find("fonts.global", 1, true), "click: the printed line names the path")
 
+-- A re-pointed link whose new target sits in a disabled module is removed
+-- by the filter; the extra it displaced is not counted, the warning shows.
+do
+    local cut = prepareExtras("bar_ab")
+    eq(cut.merged.unlockLayout.widthMatch.player_cb, nil, "extras: a link into a disabled module is removed by the filter")
+    eq(#cut.report.conflicts, 0, "extras: the displaced extra's count is struck with its link")
+    eq(cut.warnLinks, true, "extras: the links warning shows instead")
+    resetExtras()
+end
+
 -- A resolver that answers nothing refuses the click.
 freshInstall()
 ns.EUIStartDecodes()

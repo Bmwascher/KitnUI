@@ -90,8 +90,9 @@ end
 
 -- The shipped endpoint filter, applied once to the merged layout with the
 -- complete surviving-folder set. Every conflict under a removed entry is
--- struck. Returns the removed entries as a set of "map.child" keys, or nil
--- when either resolver answers with something other than a table.
+-- struck, an extra's with its link's. Returns the removed entries as a set
+-- of "map.child" keys, or nil when either resolver answers with something
+-- other than a table.
 function ns.EUIFinalLayoutFilter(merged, report, metaK2F, keepSet, api)
     local ul = merged.unlockLayout
     if not isTable(ul) then
@@ -112,10 +113,12 @@ function ns.EUIFinalLayoutFilter(merged, report, metaK2F, keepSet, api)
             end
         end
     end
+    local linkMapOf = {}
+    for map, xmap in pairs(ns.EUI_MATCH_EXTRAS) do linkMapOf[xmap] = map end
     local kept = {}
     for _, path in ipairs(report.conflicts) do
-        local rest = path:match("^unlockLayout%.(.+)$")
-        if not (rest and removed[rest]) then kept[#kept + 1] = path end
+        local map, child = path:match("^unlockLayout%.([^.]+)%.(.+)$")
+        if not (map and removed[(linkMapOf[map] or map) .. "." .. child]) then kept[#kept + 1] = path end
     end
     report.conflicts = kept
     merged.unlockLayout = out
