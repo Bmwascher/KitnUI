@@ -228,11 +228,13 @@ end
 
 -- KitnUI's folder holds the Top Bar's settings, its tb* keys, beside the
 -- switch states of KitnUI's other pages and what those pages keep. The Top Bar
--- row is the tb* keys alone. Returns a shallow copy of t's keys on the `top` side.
-local function topBarKeys(t, top)
+-- row is the tb* keys alone. Returns a shallow copy of t's keys on the `top`
+-- side; a walk passes its tick, charged once per key read.
+local function topBarKeys(t, top, tickFn)
     if not isTable(t) then return nil end
     local out = {}
     for k, v in pairs(t) do
+        if tickFn then tickFn() end
         if (type(k) == "string" and k:sub(1, 2) == "tb") == top then out[k] = v end
     end
     return out
@@ -782,7 +784,9 @@ local function seedRow(w, row, src, B, defaults)
     -- The player's walk reads the Top Bar row as the Top Bar's own settings;
     -- a switch state is KitnUI's, and a Reset keeps it.
     if folder == TOP_BAR and w.player then
-        a, b, n, d = topBarKeys(a, true), topBarKeys(b, true), topBarKeys(n, true), topBarKeys(d, true)
+        local tickFn = w.tickFn
+        a, b = topBarKeys(a, true, tickFn), topBarKeys(b, true, tickFn)
+        n, d = topBarKeys(n, true, tickFn), topBarKeys(d, true, tickFn)
     end
     push(w, a, b, d, "addons." .. folder, row, d ~= nil, nil, n)
     if folder == "EllesmereUICooldownManager" then

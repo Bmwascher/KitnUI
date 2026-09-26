@@ -687,6 +687,28 @@ check(rootMost <= BOUND, "work: seeding a wide root and parsing a wide held set 
 check(rootSteps >= 100, "work: over many steps", rootSteps)
 eq(countOf(rootWalker.result, "general"), 0, "work: and equal root keys are no change")
 
+-- A wide folder behind the Top Bar row: its filter reads every key of both
+-- sides, of KitnUI's side for a Reset and of the defaults, and charges each one.
+do
+    local tbWideRows = { { id = TOP_BAR, label = "Top Bar" } }
+    local tbWideBase, tbWideSide = { addons = { [TOP_BAR] = {} } }, { addons = { [TOP_BAR] = {} } }
+    local tbWideDefaults = {}
+    for i = 1, 300 do
+        tbWideBase.addons[TOP_BAR]["np" .. i] = i
+        tbWideSide.addons[TOP_BAR]["np" .. i] = i + 1
+        tbWideDefaults["np" .. i] = i
+    end
+    for _, t in ipairs({ tbWideBase.addons[TOP_BAR], tbWideSide.addons[TOP_BAR], tbWideDefaults }) do
+        t.tbOpacity, t.tbSpacing = 85, 14
+    end
+    tbWideSide.addons[TOP_BAR].tbSpacing = 20
+    local tbWideMost, tbWideSteps, tbWideWalker = maxReads(tbWideBase, tbWideSide, tbWideRows, 10,
+        { player = true, defaults = { [TOP_BAR] = tbWideDefaults }, against = tbWideBase })
+    check(tbWideMost <= BOUND, "work: the Top Bar filter over a wide folder is read a budget at a time", tbWideMost)
+    check(tbWideSteps >= 90, "work: over many steps", tbWideSteps)
+    eq(countOf(tbWideWalker.result, TOP_BAR), 1, "work: and only the Top Bar setting that differs counts")
+end
+
 -- A reset counts only the player's changes it alters.
 local resetBase, resetPlayer, resetN = baseSide(), baseSide(), baseSide()
 resetPlayer.addons[UF].player.healthHeight = 22
