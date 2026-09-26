@@ -199,7 +199,6 @@ function ns.EUIStartDecodes(onReady)
             steps[#steps + 1] = { s = bases[v], slot = "handleV", take = function(p) cache.byVersion[v] = p end }
         end
     end
-    -- Each settled snapshot, in id order.
     local settled = ns.db and ns.db.euiSettled
     if isTable(settled) then
         local ids = {}
@@ -373,7 +372,6 @@ function ns.EUISettleCapture()
     if t0 then
         print(ns.title .. (" settled snapshot: %.1f ms"):format(debugprofilestop() - t0))
     end
-    -- A Modules page that shows reads "Your copy" again against the snapshot.
     if ns.EUISettleLanded then ns.EUISettleLanded() end
     return true
 end

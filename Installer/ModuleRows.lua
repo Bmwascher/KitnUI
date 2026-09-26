@@ -977,9 +977,10 @@ local function cleanSettle(before)
 end
 
 -- kind: "update" | "take" | "reset" (opts.parts, the parts installed;
--- opts.rows, the plan's rows), or "capture" (opts.id, opts.entry). before: { settled, at, pending, due } as
--- they stood. Returns the new settled, at and pending, nil when empty, and the
--- new due set. A full install is CompleteSetup's own write.
+-- opts.rows, the plan's rows), or "capture" (opts.id, opts.entry).
+-- before: { settled, at, pending, due } as they stood. Returns the new
+-- settled, at and pending, nil when empty, and the new due set. A full
+-- install is CompleteSetup's own write.
 function ns.EUISettleRecord(kind, before, opts)
     opts = opts or {}
     local settled, at, pending, due = cleanSettle(before)

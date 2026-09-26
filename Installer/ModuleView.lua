@@ -640,10 +640,9 @@ function ns.EUIListShowing()
     return list ~= nil and list:IsShown()
 end
 
--- Every page change and every sub-page open runs this through ResetExtras,
--- and closing the wizard runs it too. The new generation stops any walk still
--- running. What the list read, decoded copies of whole profiles, is dropped
--- rather than kept for the next open, which reads everything afresh.
+-- The new generation stops any walk still running. What the list read,
+-- decoded copies of whole profiles, is dropped rather than kept for the next
+-- open, which reads everything afresh.
 function ns.EUIHideModuleList()
     view.gen = view.gen + 1
     view.inputs, view.kitn, view.yours, view.ticked, view.context = nil, nil, nil, nil, nil
