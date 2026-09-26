@@ -41,6 +41,7 @@ local TEXT = {
     asInstalled = "as installed",
     differs = "differs",
     matches = "matches",
+    reloadToCheck = "reload to check",
     refused = "-",
     tipTitle = "%s - changes %d settings",
     tipSkipped = "Skipped in KitnUI %s",
@@ -114,6 +115,8 @@ end
 
 local function YoursText(row)
     if row.off or view.yours == false then return TEXT.refused end
+    local settle = ns.EUIPartSettle and ns.EUIPartSettle(row.id)
+    if settle == "pending" or settle == "due" then return TEXT.reloadToCheck end
     local e = view.yours and view.yours[row.id]
     if not e then return TEXT.checking end
     if e.noBase then return e.count > 0 and TEXT.differs or TEXT.matches end
@@ -269,7 +272,9 @@ local function BuildRow(i)
         RowEnter(r)
         local row = r.row
         local entry = row and view.yours and view.yours[row.id]
-        if entry and entry.count > 0 then ShowTip(cell, row.label .. " - " .. YoursText(row), entry) end
+        if entry and entry.count > 0 and YoursText(row) ~= TEXT.reloadToCheck then
+            ShowTip(cell, row.label .. " - " .. YoursText(row), entry)
+        end
     end)
     r.kitn = Cell(r, 120)
     r.kitn:SetScript("OnEnter", function(cell)
@@ -527,11 +532,13 @@ local function Pump(walker, gen, onDone)
 end
 
 -- "Your copy": the player's profile read a frame after the page draws, then
--- walked against the composite base, KitnUI's own held settings left out.
+-- walked against the settled composite, which is the composite base wherever a
+-- part has no snapshot, KitnUI's own held settings left out, then and now.
 local function StartPlayerRead()
     local gen = view.gen
     C_Timer.After(0, function()
         if view.gen ~= gen then return end
+        local t0 = ns.db and ns.db.devMode and debugprofilestop()
         local side, why = ns.EUIReadPlayer()
         if not side then
             view.yours = false
@@ -540,15 +547,20 @@ local function StartPlayerRead()
             return
         end
         view.context = ns.EUIPlayerContext()
-        local walker = ns.EUIRowDiff(side.O or side.N, side.P, side.rows, side.keyToFolder, {
+        local held = view.context.held
+        if ns.EUISettledHeld then held = ns.EUISettledHeld(held) end
+        local walker = ns.EUIRowDiff(side.S or side.O or side.N, side.P, side.rows, side.keyToFolder, {
             player = true,
             noBase = side.O == nil,
             missing = side.missing,
             fallback = side.N,
-            held = view.context.held,
+            held = held,
             defaults = view.context.defaults,
             unlock = view.context.unlock,
         })
+        if t0 then
+            print(ns.title .. (" player read: %.1f ms"):format(debugprofilestop() - t0))
+        end
         Pump(walker, gen, function(result)
             view.yours = result
             Redraw()
@@ -612,6 +624,16 @@ function ns.EUIListRefresh()
         end
     end
     Redraw()
+end
+
+-- A snapshot landed: a "Your copy" read or refusal from before it is read
+-- again. While KitnUI's walk runs, the read it starts comes after the capture.
+function ns.EUISettleLanded()
+    if not (list and list:IsShown() and view.mode == "modules" and view.kitn) then return end
+    view.gen = view.gen + 1
+    view.yours = nil
+    Redraw()
+    if list:IsVisible() then StartPlayerRead() else view.cut = true end
 end
 
 function ns.EUIListShowing()
