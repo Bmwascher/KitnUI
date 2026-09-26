@@ -115,6 +115,21 @@ ns.CompleteSetup("EllesmereUI")
 eq(ns.db.euiRowAt, nil, "record: the full install puts every part at the shipped version")
 eq(ns.db.euiBases, nil, "record: and drops the older strings")
 
+-- The full install starts the settled record over: no snapshot, every part
+-- waiting for the next session, none due in this one.
+ns.db = { profiles = {}, addonVersions = {}, perChar = {},
+    euiSettled = { [1] = { s = "s" } }, euiSettledAt = { ["*"] = 1 }, euiSettlePending = { general = true } }
+ns.euiSettleDue = { general = true }
+ns.CompleteSetup("EllesmereUI")
+eq(ns.db.euiSettled, nil, "settle: the full install drops every snapshot")
+eq(ns.db.euiSettledAt, nil, "settle: and every pointer")
+check(ns.db.euiSettlePending and ns.db.euiSettlePending["*"] == true and ns.db.euiSettlePending.general == nil,
+    "settle: every part waits for the next session")
+check(type(ns.euiSettleDue) == "table" and next(ns.euiSettleDue) == nil, "settle: and none is due in this one")
+ns.db.euiSettled = { [2] = { s = "t" } }
+ns.CompleteSetup("BigWigs")
+check(ns.db.euiSettled and ns.db.euiSettled[2], "settle: another addon's completion leaves the record alone")
+
 ---------------------------------------------------------------------------------
 -- /kitn reset names the backup profile it cannot take with it
 ---------------------------------------------------------------------------------

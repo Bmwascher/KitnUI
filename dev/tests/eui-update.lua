@@ -58,6 +58,9 @@ ns.CompleteSetup = function(key)
     if key == "EllesmereUI" then
         ns.db.euiBase = ns.data.EllesmereUI
         ns.db.euiRowAt, ns.db.euiBases = nil, nil
+        ns.db.euiSettled, ns.db.euiSettledAt = nil, nil
+        ns.db.euiSettlePending = { ["*"] = true }
+        ns.euiSettleDue = {}
     end
 end
 
@@ -280,6 +283,7 @@ local function freshInstall(opts)
         euiBase = opts.base == nil and O_STR or opts.base,
     }
     ns.euiUpdatedThisSession = nil
+    ns.euiSettleDue, ns.euiSettleOpen = nil, nil
     ns.EUIBeginVisit()
     local p = base()
     p.addons[F].y = 9
@@ -1242,6 +1246,70 @@ check(partMapPlan and partMapPlan.merged.unlockLayout.anchors.UF_Player ~= nil,
 check(partMapPlan and partMapPlan.merged.addons.EllesmereUIActionBars == nil,
     "list: while a disabled folder is still stripped")
 E._ADDON_DB_MAP = readyMap
+
+---------------------------------------------------------------------------------
+-- The settled record through the flow
+---------------------------------------------------------------------------------
+
+do
+    -- An update installs only the parts it ticks: the others keep their
+    -- snapshot, although it runs CompleteSetup.
+    freshInstall()
+    ns.db.euiSettled = { [1] = { s = O_STR, held = {} } }
+    ns.db.euiSettledAt = { ["*"] = 1, overrides = false }
+    ns.db.euiSettlePending = { overrides = true }
+    ns.EUIStartDecodes()
+    E.live = { addons = { [F] = { x = 7, y = 9 }, EllesmereUIActionBars = { bars = 3 } } }
+    local snOk, snErr = ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+    eq(snOk, true, "settle: a ticked update applies", snErr)
+    eq(calls.complete, 1, "settle: the update ran CompleteSetup")
+    local snAt = ns.db.euiSettledAt or {}
+    eq(snAt["*"], 1, "settle: an update keeps the snapshot of the parts it does not tick")
+    eq(snAt[F], false, "settle: the ticked part has none until it settles")
+    eq(snAt.overrides, false, "settle: nor has a part already waiting")
+    eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, O_STR, "settle: the kept snapshot stays")
+    local snPending = ns.db.euiSettlePending or {}
+    check(snPending[F] and snPending.overrides and not snPending["*"],
+        "settle: the ticked part waits beside the one already waiting")
+    local snRec = ns.db.euiBackup or {}
+    check(snRec.euiSettledAt and snRec.euiSettledAt["*"] == 1 and snRec.euiSettledAt[F] == nil,
+        "settle: the backup holds the pointers from before the update")
+    eq(snRec.euiSettled and snRec.euiSettled[1] and snRec.euiSettled[1].s, O_STR, "settle: with the snapshot they name")
+    check(snRec.euiSettlePending and snRec.euiSettlePending.overrides, "settle: and what was waiting")
+
+    -- Restore puts the record back, and nothing is due until the next login.
+    ns.euiSettleDue = { overrides = true }
+    local snRestored, snRestoreErr = ns.EUIRestorePrevious()
+    eq(snRestored, true, "settle: restore succeeds", snRestoreErr)
+    snAt = ns.db.euiSettledAt or {}
+    check(snAt["*"] == 1 and snAt[F] == nil and snAt.overrides == false, "settle: restore puts the pointers back")
+    check(ns.db.euiSettlePending and ns.db.euiSettlePending.overrides and not ns.db.euiSettlePending[F],
+        "settle: restore puts the waiting set back")
+    check(type(ns.euiSettleDue) == "table" and next(ns.euiSettleDue) == nil, "settle: restore leaves nothing due this session")
+
+    -- A take marks the part it takes.
+    freshInstall({ stamp = SHIPPED })
+    ns.db.euiRowAt = { general = { version = "2026.08.22", kitn = "k" } }
+    ns.db.euiBases = { ["2026.08.22"] = O_STR }
+    ns.db.euiSettled = { [1] = { s = O_STR, held = {} } }
+    ns.db.euiSettledAt = { ["*"] = 1 }
+    ns.EUIStartDecodes()
+    local snTake, snTakeWhy = ns.EUIPrepareUpdate({ general = true })
+    eq(snTake and snTake.kind, "take", "settle: a take", snTakeWhy)
+    if snTake then ns.EUIApplyUpdate(snTake) end
+    snAt = ns.db.euiSettledAt or {}
+    check(snAt.general == false and snAt["*"] == 1, "settle: a take marks the part it takes and keeps the others' snapshot")
+    check(ns.db.euiSettlePending and ns.db.euiSettlePending.general, "settle: the taken part waits for the next session")
+
+    -- A part reset marks its part, on a profile from before snapshots too.
+    freshInstall()
+    ns.EUIStartDecodes()
+    local snReset = ns.EUIPrepareReset(F, ctx)
+    if snReset then ns.EUIApplyUpdate(snReset) end
+    eq(ns.db.euiSettledAt and ns.db.euiSettledAt[F], false, "settle: a part reset marks its part")
+    check(ns.db.euiSettlePending and ns.db.euiSettlePending[F] and not ns.db.euiSettlePending["*"],
+        "settle: and only its part waits")
+end
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

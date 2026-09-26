@@ -873,6 +873,9 @@ local function backupRecord(assigned, scaleTaken)
         base = ns.db.euiBase,
         euiRowAt = ns.EUIDeepCopy(ns.db.euiRowAt),
         euiBases = ns.EUIDeepCopy(ns.db.euiBases),
+        euiSettled = ns.EUIDeepCopy(ns.db.euiSettled),
+        euiSettledAt = ns.EUIDeepCopy(ns.db.euiSettledAt),
+        euiSettlePending = ns.EUIDeepCopy(ns.db.euiSettlePending),
         assignedSpecs = assigned,
         colorsPullFrom = d.colorsPullFrom or false,
         ppUIScale = d.ppUIScale,
@@ -915,6 +918,12 @@ local function finishApply(plan, before)
         shipped = { version = ns.GetAddonDataVersion("EllesmereUI"), base = ns.data.EllesmereUI },
         kitn = ns.DisplayVersion and ns.DisplayVersion() or ns.version,
     })
+    -- Written after an update's CompleteSetup, whose full-install transition
+    -- this replaces: only the parts this change installed wait to settle. A
+    -- reset plan's ticked set is its one part.
+    writeSettle(ns.EUISettleRecord(plan.kind, before.settle, {
+        parts = plan.ticked, rows = plan.inputs and plan.inputs.rows,
+    }))
     if plan.kind ~= "reset" then
         ns.db.euiUpdateReport = {
             conflicts = plan.report.conflicts,
@@ -965,6 +974,7 @@ function ns.EUIApplyUpdate(plan)
         bases = ns.db.euiBases,
         base = ns.db.euiBase,
         stamp = ns.db.addonVersions and ns.db.addonVersions.EllesmereUI,
+        settle = settleBefore(),
     }
     local scaleTaken = plan.merged.uiScale ~= nil
 
@@ -1065,6 +1075,11 @@ function ns.EUIRestorePrevious()
     ns.db.addonVersions.EllesmereUI = rec.version
     ns.db.euiRowAt = rec.euiRowAt
     ns.db.euiBases = rec.euiBases
+    ns.db.euiSettled = rec.euiSettled
+    ns.db.euiSettledAt = rec.euiSettledAt
+    ns.db.euiSettlePending = rec.euiSettlePending
+    -- A part the restored record has pending is captured at the next login.
+    ns.euiSettleDue = {}
     ns.euiVisitBacked = false
     ns.db.euiUpdateReport = nil
     ns.db.euiBackup = nil
