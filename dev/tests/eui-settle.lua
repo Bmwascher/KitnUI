@@ -225,6 +225,31 @@ eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1
     "loading inside the delay: and records when it ends")
 eq(landed, 1, "loading inside the delay: and tells the list once")
 
+-- An end of combat during a loading screen starts no delay; the capture comes
+-- a whole delay after the loading screen ends.
+frame = login({ euiSettlePending = { ["*"] = true } })
+fire(frame, "PLAYER_ENTERING_WORLD")
+fire(frame, "LOADING_SCREEN_ENABLED")
+fire(frame, "PLAYER_REGEN_ENABLED")
+eq(#timers, 1, "combat ending during loading: it starts no delay")
+runTimers()
+eq(exports, 0, "combat ending during loading: no timer captures during it")
+eq(ns.euiSettleOpen, false, "combat ending during loading: and the settle moment has not come")
+fire(frame, "PLAYER_ENTERING_WORLD")
+eq(#timers, 1, "combat ending during loading: the loading screen's end starts the delay")
+eq(timers[1] and timers[1].delay, ns.EUI_SETTLE_DELAY, "combat ending during loading: the whole delay")
+eq(runTimers(), 1, "combat ending during loading: which runs")
+eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1",
+    "combat ending during loading: and records when it ends")
+eq(landed, 1, "combat ending during loading: and tells the list once")
+
+-- A new arming starts with no loading screen up, whatever the last one saw.
+frame = login({ euiSettlePending = { ["*"] = true } })
+fire(frame, "LOADING_SCREEN_ENABLED")
+frame = login({ euiSettlePending = { ["*"] = true } })
+fire(frame, "PLAYER_REGEN_ENABLED")
+eq(#timers, 1, "armed again: an end of combat starts the delay")
+
 local refusals = {
     { "establishing", function(on) E.establishPending = on end },
     { "import establishing", function(on) profile._importEstablishPending = on or nil end },

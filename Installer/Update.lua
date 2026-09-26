@@ -404,6 +404,7 @@ end
 
 local settleFrame
 local settleGen = 0
+local settleLoading = false
 
 -- A refusal waits for the next loading screen or end of combat, which the
 -- frame listens for until the capture lands.
@@ -415,9 +416,9 @@ local function trySettle()
     end
 end
 
--- The end of each loading screen and each end of combat starts the delay
--- again, and only the latest timer runs: the profile's own work after either
--- has settled by the time it fires.
+-- The end of each loading screen, and each end of combat outside one, starts
+-- the delay again, and only the latest timer runs: the profile's own work after
+-- either has settled by the time it fires.
 local function startDelay()
     settleGen = settleGen + 1
     local gen = settleGen
@@ -426,12 +427,17 @@ local function startDelay()
     end)
 end
 
--- The start of a loading screen cancels a running delay and starts none, so no
--- timer runs out during it; its end starts the delay again.
+-- The start of a loading screen cancels a running delay, and nothing starts one
+-- until its end: a timer from an end of combat during it could run out before
+-- the screen does, and the screen's end starts a whole delay anyway.
 local function onSettleEvent(_, event)
     if event == "LOADING_SCREEN_ENABLED" then
+        settleLoading = true
         settleGen = settleGen + 1
-    else
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        settleLoading = false
+        startDelay()
+    elseif not settleLoading then
         startDelay()
     end
 end
@@ -440,6 +446,7 @@ end
 -- session, so it is due; with nothing due, nothing is created.
 function ns.EUIArmSettle()
     ns.euiSettleOpen = false
+    settleLoading = false
     local due = {}
     local pending = ns.db and ns.db.euiSettlePending
     for part, v in pairs(isTable(pending) and pending or {}) do
