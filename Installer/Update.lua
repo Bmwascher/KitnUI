@@ -415,15 +415,25 @@ local function trySettle()
     end
 end
 
--- Each loading screen and each end of combat starts the delay again, and only
--- the latest timer runs: EllesmereUI's own work after either has settled by
--- the time it fires.
+-- The end of each loading screen and each end of combat starts the delay
+-- again, and only the latest timer runs: the profile's own work after either
+-- has settled by the time it fires.
 local function startDelay()
     settleGen = settleGen + 1
     local gen = settleGen
     C_Timer.After(EUI_SETTLE_DELAY, function()
         if gen == settleGen then trySettle() end
     end)
+end
+
+-- The start of a loading screen cancels a running delay and starts none, so no
+-- timer runs out during it; its end starts the delay again.
+local function onSettleEvent(_, event)
+    if event == "LOADING_SCREEN_ENABLED" then
+        settleGen = settleGen + 1
+    else
+        startDelay()
+    end
 end
 
 -- The boot's call at PLAYER_LOGIN. What is pending now changed in an earlier
@@ -438,7 +448,8 @@ function ns.EUIArmSettle()
     ns.euiSettleDue = due
     if next(due) == nil then return end
     settleFrame = CreateFrame("Frame")
-    settleFrame:SetScript("OnEvent", startDelay)
+    settleFrame:SetScript("OnEvent", onSettleEvent)
+    settleFrame:RegisterEvent("LOADING_SCREEN_ENABLED")
     settleFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     settleFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 end
