@@ -932,19 +932,19 @@ do
         unlockLayout = { anchors = { UF_Player = { s = "S" } } },
     }
     local snRec = { settled = { [1] = { s = "one" }, [2] = { s = "two" } }, at = { ["*"] = 1, overrides = 2 } }
-    local snS, snTook = ns.EUIComposeSettled(snO, snRows, snRec, { [1] = snSnap }, k2f, {})
+    local snS = ns.EUIComposeSettled(snO, snRows, snRec, { [1] = snSnap }, k2f, {})
     eq(snS.addons[UF].v, "S", "compose: a part with a snapshot takes its slice")
     eq(snS.unlockLayout.anchors.UF_Player.s, "S", "compose: with its layout entries")
     eq(snS.fonts.f, "S", "compose: General too")
     eq(snS.addons[AB].v, "O", "compose: a folder part the snapshot lacks keeps the base's")
     eq(snS.specOverrides[1], "O", "compose: a part whose snapshot did not decode keeps the base's")
-    check(snTook[UF] and snTook.general and not snTook[AB] and not snTook.overrides,
-        "compose: and only the parts that took a snapshot are settled")
+    eq(select("#", ns.EUIComposeSettled(snO, snRows, snRec, { [1] = snSnap }, k2f, {})), 1,
+        "compose: it returns the composite alone")
     eq(snO.addons[UF].v, "O", "compose: the base is not written")
     local snMissing = ns.EUIComposeSettled(snO, snRows, snRec, { [1] = snSnap }, k2f, { [UF] = true })
     eq(snMissing.addons[UF].v, "O", "compose: a part with no base of its own keeps the base's")
-    local snNone, snNoneTook = ns.EUIComposeSettled(snO, snRows, {}, {}, k2f, {})
-    check(rawequal(snNone, snO) and next(snNoneTook) == nil, "compose: with nothing settled the base is used as it is")
+    local snNone = ns.EUIComposeSettled(snO, snRows, {}, {}, k2f, {})
+    check(rawequal(snNone, snO), "compose: with nothing settled the base is used as it is")
     local snPart = ns.EUIComposeSettled(snO, snRows, { settled = { [1] = { s = "one" } }, at = { [UF] = 1 } },
         { [1] = snSnap }, k2f, {})
     eq(snPart.fonts.f, "O", "compose: a part with no snapshot keeps the base's")

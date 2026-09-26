@@ -1348,8 +1348,7 @@ do
     check(snSide ~= nil, "settled: the read succeeds", snWhy)
     eq(snYours(snSide, F), 0, "settled: a part as it settled holds no change of the player's")
     eq(snYours(snSide, "general"), 0, "settled: nor does a font EllesmereUI rewrote while it settled")
-    check(snSide and snSide.settledRows and snSide.settledRows[F] and snSide.settledRows.general,
-        "settled: both parts read the snapshot")
+    eq(snSide and snSide.settledRows, nil, "settled: the read carries no list of settled parts")
     E.live = { fonts = { global = "Mine" } }
     eq(snYours(ns.EUIReadPlayer(), "general"), 1, "settled: a change made after it counts")
 
@@ -1376,7 +1375,7 @@ do
     local snReset = ns.EUIPrepareReset("general", ctx)
     eq(snReset and snReset.yours, 1, "settled: a Reset counts from KitnUI's string")
 
-    -- The snapshot joins the decode chain once.
+    -- Only the Modules page's decodes take in the snapshot, and once.
     freshInstall()
     ns.db.euiSettled = { [1] = { s = SN_STR, held = {} } }
     ns.db.euiSettledAt = { ["*"] = 1 }
@@ -1387,12 +1386,17 @@ do
         return snAsync(s, onDone)
     end
     ns.EUIStartDecodes()
-    eq(#snDecoded, 3, "settled: the snapshot joins the decode chain")
+    eq(#snDecoded, 2, "settled: the standard page and the updater list decode no snapshot")
+    snDecoded = {}
+    ns.EUIListReadsSettled = function() return true end
+    ns.EUIStartDecodes()
+    eq(#snDecoded, 3, "settled: the Modules page's decodes take it in")
     check(ns.EUIDecodeCache.bySettled and ns.EUIDecodeCache.bySettled[1], "settled: under its id")
     snDecoded = {}
     ns.db.euiSettled[1].s = O_STR
     ns.EUIStartDecodes()
     eq(#snDecoded, 2, "settled: a snapshot equal to a base is not decoded again")
+    ns.EUIListReadsSettled = nil
 
     -- The timed capture records after the page's decodes landed.
     freshInstall()
@@ -1404,7 +1408,7 @@ do
     snDecoded = {}
     local snLate, snLateWhy = ns.EUIReadPlayer()
     check(snLate ~= nil, "settled: the read after it goes ahead", snLateWhy)
-    check(snLate and snLate.settledRows and snLate.settledRows[F], "settled: and reads the snapshot the decodes missed")
+    check(snLate and snLate.S and snLate.S ~= snLate.O, "settled: and composes from the snapshot the decodes missed")
     eq(snYours(snLate, F), 0, "settled: which counts nothing of the player's")
     eq(#snDecoded, 0, "settled: decoded in the read's own frame, not by the chain")
 

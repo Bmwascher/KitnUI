@@ -627,17 +627,24 @@ function ns.EUIListRefresh()
 end
 
 -- A snapshot landed: a "Your copy" read or refusal from before it is read
--- again. While KitnUI's walk runs, the read it starts comes after the capture.
+-- again, through the restart path, which waits for decodes a hide cancelled.
+-- While KitnUI's walk runs, the read it starts comes after the capture.
 function ns.EUISettleLanded()
     if not (list and list:IsShown() and view.mode == "modules" and view.kitn) then return end
     view.gen = view.gen + 1
     view.yours = nil
-    Redraw()
-    if list:IsVisible() then StartPlayerRead() else view.cut = true end
+    view.cut = true
+    if list:IsVisible() then ns.EUIListRefresh() else Redraw() end
 end
 
 function ns.EUIListShowing()
     return list ~= nil and list:IsShown()
+end
+
+-- Only the Modules page reads snapshots, so only its decodes take them in.
+-- Every path that starts them for it shows the list first.
+function ns.EUIListReadsSettled()
+    return list ~= nil and list:IsShown() and view.mode == "modules"
 end
 
 -- The new generation stops any walk still running. What the list read,

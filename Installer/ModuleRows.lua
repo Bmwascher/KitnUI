@@ -1058,13 +1058,12 @@ local function holdsPart(src, row)
     return isTable(src.addons) and src.addons[row.id] ~= nil
 end
 
--- S: the composite base with each settled part's slice from its snapshot, and
--- the parts that took one. decodedById: id -> decoded, stripped data. A part
--- keeps O's slice with no snapshot, a failed decode, no base of its own, or a
--- folder the snapshot lacks. S is O itself when no part settles, nil when O is.
+-- S: the composite base with each settled part's slice from its snapshot.
+-- decodedById: id -> decoded, stripped data. A part keeps O's slice with no
+-- snapshot, a failed decode, no base of its own, or a folder the snapshot
+-- lacks. S is O itself when no part settles, nil when O is.
 function ns.EUIComposeSettled(O, rows, rec, decodedById, keyToFolder, missing)
-    local settledRows = {}
-    if O == nil then return nil, settledRows end
+    if O == nil then return nil end
     decodedById, missing = decodedById or {}, missing or {}
     local S = O
     for _, row in ipairs(rows or {}) do
@@ -1073,8 +1072,7 @@ function ns.EUIComposeSettled(O, rows, rec, decodedById, keyToFolder, missing)
         if isTable(src) and not missing[row.id] and holdsPart(src, row) then
             if S == O then S = ns.EUIDeepCopy(O) end
             copySlice(S, src, row, keyToFolder or {})
-            settledRows[row.id] = true
         end
     end
-    return S, settledRows
+    return S
 end

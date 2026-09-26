@@ -199,7 +199,7 @@ function ns.EUIStartDecodes(onReady)
             steps[#steps + 1] = { s = bases[v], slot = "handleV", take = function(p) cache.byVersion[v] = p end }
         end
     end
-    local settled = ns.db and ns.db.euiSettled
+    local settled = ns.EUIListReadsSettled and ns.EUIListReadsSettled() and ns.db and ns.db.euiSettled
     if isTable(settled) then
         local ids = {}
         for id, entry in pairs(settled) do
@@ -362,9 +362,17 @@ end
 -- left due, or false and the refusal.
 function ns.EUISettleCapture()
     if not (ns.db and settleDue()) then return true end
-    if not hasRequired(E()) then return false, T.needsNewer end
+    local e = E()
+    if not hasRequired(e) then return false, T.needsNewer end
     local why = settleRefusal()
     if why then return false, why end
+    -- The export's harvest would end a Spec Overrides edit the player has
+    -- open, so the options panel waits like any refusal that is not combat.
+    local panel = e._mainFrame
+    if (isTable(panel) and panel.IsShown and panel:IsShown())
+        or (e.SpecOverrides_EditSessionActive and e.SpecOverrides_EditSessionActive()) then
+        return false, T.establish
+    end
     local t0 = ns.db.devMode and debugprofilestop()
     local s, err = ns.EUIBankCurrent()
     if not s then return false, err end
@@ -385,8 +393,9 @@ end
 local settleFrame
 local settleGen = 0
 
--- Combat waits for its end; any other refusal waits for the next loading
--- screen, which the frame still listens for.
+-- A combat refusal waits for combat to end, which starts the delay again; any
+-- other refusal waits for the next loading screen, which the frame still
+-- listens for.
 local function trySettle()
     ns.euiSettleOpen = true
     local done, why = ns.EUISettleCapture()
@@ -398,8 +407,9 @@ local function trySettle()
     end
 end
 
--- Each loading screen starts the delay again, and only the latest timer runs:
--- EllesmereUI's settle windows open again at every zone-in.
+-- Each loading screen, and the end of combat after a combat refusal, starts
+-- the delay again, and only the latest timer runs: EllesmereUI's own work after
+-- either has settled by the time it fires.
 local function startDelay()
     settleGen = settleGen + 1
     local gen = settleGen
@@ -420,15 +430,11 @@ function ns.EUIArmSettle()
     ns.euiSettleDue = due
     if next(due) == nil then return end
     settleFrame = CreateFrame("Frame")
-    settleFrame:SetScript("OnEvent", function(self, event)
-        if event == "PLAYER_REGEN_ENABLED" then
-            self:UnregisterEvent(event)
-            trySettle()
-        else
-            -- A combat retry left registered would cut the new delay short.
-            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-            startDelay()
-        end
+    -- Either event drops a waiting combat retry, which would cut the new delay
+    -- short.
+    settleFrame:SetScript("OnEvent", function(self)
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        startDelay()
     end)
     settleFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
@@ -468,8 +474,8 @@ end
 -- What the list and the merge share: KitnUI's string and every recorded base,
 -- folder-stripped, the rows, the composite base and the key resolver. Pd, the
 -- player's capture when there is one, is stripped in place. With `settled`,
--- the Modules read's alone, come the settled composite S and the parts it
--- settles. Nil until the decodes land.
+-- the Modules read's alone, comes the settled composite S. Nil until the
+-- decodes land.
 local function sideInputs(Pd, settled)
     local e = E()
     if not (hasRequired(e) and cache.N and isTable(cache.N.data)) then return nil end
@@ -535,12 +541,11 @@ local function sideInputs(Pd, settled)
     local keyToFolder = ns.EUILayoutKeyToFolder(sides, metaK2F, e.BuildImportKeyToFolder)
     local rows = ns.EUIRows(e._ADDON_DB_MAP, e.ADDON_ROSTER, cache.N.data.addons, ns.GetEUIModuleSet())
     local O, missing = ns.EUIComposeBase(rows, ns.db.euiRowAt, bases, stamp, keyToFolder)
-    local S, settledRows
-    if Pd and settled then S, settledRows = ns.EUIComposeSettled(O, rows, settleBefore(), settledData, keyToFolder, missing) end
+    local S
+    if Pd and settled then S = ns.EUIComposeSettled(O, rows, settleBefore(), settledData, keyToFolder, missing) end
     return {
         N = Nd, O = O, P = Pd, missing = missing, rows = rows, keep = keep,
-        metaK2F = metaK2F, keyToFolder = keyToFolder, stamp = stamp,
-        S = S, settledRows = settledRows or {},
+        metaK2F = metaK2F, keyToFolder = keyToFolder, stamp = stamp, S = S,
     }
 end
 

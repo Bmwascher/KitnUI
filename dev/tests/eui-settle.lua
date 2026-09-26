@@ -164,9 +164,13 @@ eq(ns.EUIPartSettle("general"), "due", "combat: the parts stay due")
 eq(landed, 0, "combat: a refusal tells the list nothing")
 game.combat = false
 fire(frame, "PLAYER_REGEN_ENABLED")
-eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1", "combat: recorded when it ends")
+eq(ns.db.euiSettled, nil, "combat: its end records nothing at once")
+eq(#timers, 1, "combat: it starts the settle delay again")
+eq(timers[1] and timers[1].delay, ns.EUI_SETTLE_DELAY, "combat: the whole delay")
+eq(listening(frame), "PLAYER_ENTERING_WORLD", "combat: and no longer waits for combat")
+runTimers()
+eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1", "combat: recorded when the delay ends")
 eq(listening(frame), "", "combat: and the frame listens for nothing")
-eq(#timers, 0, "combat: without another timer")
 
 -- Refused in combat, then a loading screen before combat ends: the new delay
 -- runs whole, and combat ending inside it captures nothing.
@@ -187,6 +191,12 @@ local refusals = {
     { "establishing", function(on) E.establishPending = on end },
     { "import establishing", function(on) profile._importEstablishPending = on or nil end },
     { "another profile", function(on) _G.EllesmereUIDB.activeProfile = on and "Other" or "KitnUI" end },
+    { "options panel open", function(on)
+        E._mainFrame = on and { IsShown = function() return true end } or nil
+    end },
+    { "override edit", function(on)
+        E.SpecOverrides_EditSessionActive = on and function() return true end or nil
+    end },
 }
 for _, case in ipairs(refusals) do
     local name, set = case[1], case[2]
