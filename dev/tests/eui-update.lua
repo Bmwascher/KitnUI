@@ -1430,6 +1430,53 @@ do
     E.DecodeImportStringAsync = snAsync
 end
 
+---------------------------------------------------------------------------------
+-- A decoder that keeps its callbacks keeps no decoded payload
+---------------------------------------------------------------------------------
+
+do
+    -- EllesmereUI's driver keeps its last callback after the run ends; this
+    -- stub keeps every one it is handed.
+    local keptCallbacks = {}
+    local keepAsync = E.DecodeImportStringAsync
+    E.DecodeImportStringAsync = function(s, onDone)
+        keptCallbacks[#keptCallbacks + 1] = onDone
+        return keepAsync(s, onDone)
+    end
+    -- A weak-keyed watch empties once a full collection finds nothing else
+    -- that reaches the payload.
+    local function watch(p)
+        local w = setmetatable({}, { __mode = "k" })
+        if p then w[p] = true end
+        return w
+    end
+    local function released(w)
+        collectgarbage("collect")
+        collectgarbage("collect")
+        return next(w) == nil
+    end
+
+    freshInstall()
+    ns.EUIStartDecodes()
+    check(ns.EUIDecodesReady() and ns.EUIDecodeCache.O ~= nil, "release: the chain lands")
+    local landedWatch = watch(ns.EUIDecodeCache.O)
+    ns.EUICancelDecodes()
+    eq(released(landedWatch), true, "release: a landed chain's payload goes with the cache, though the decoder keeps its callbacks")
+
+    freshInstall()
+    E.asyncMode = "deferred"
+    ns.EUIStartDecodes()
+    E.FirePending()
+    check(ns.EUIDecodeCache.O ~= nil and not ns.EUIDecodesReady(), "release: the chain is half way")
+    local halfWatch = watch(ns.EUIDecodeCache.O)
+    ns.EUICancelDecodes()
+    eq(released(halfWatch), true, "release: a cancelled chain's payload goes, though its next decode is still pending")
+    check(#keptCallbacks > 0, "release: the stub kept the callbacks it was handed")
+
+    E.DecodeImportStringAsync = keepAsync
+    E.asyncMode, E.pending = "sync", nil
+end
+
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

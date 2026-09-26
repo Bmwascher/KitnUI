@@ -125,11 +125,11 @@ eq(ns.EUI_SETTLE_DELAY, 10, "the settle delay is ten seconds")
 local frame = login({ euiSettlePending = { ["*"] = true } })
 check(frame ~= nil, "armed: a pending change creates a frame")
 eq(#frames, 1, "armed: one frame")
-eq(listening(frame), "PLAYER_ENTERING_WORLD", "armed: waiting for the loading screen")
+eq(listening(frame), "PLAYER_ENTERING_WORLD,PLAYER_REGEN_ENABLED", "armed: waiting for a loading screen or the end of combat")
 eq(ns.EUIPartSettle("general"), "due", "armed: a part changed before this session is due")
 eq(ns.euiSettleOpen, false, "armed: the settle moment has not passed")
 fire(frame, "PLAYER_ENTERING_WORLD")
-eq(listening(frame), "PLAYER_ENTERING_WORLD", "armed: the frame still listens for loading screens")
+eq(listening(frame), "PLAYER_ENTERING_WORLD,PLAYER_REGEN_ENABLED", "armed: the frame still listens for both")
 eq(#timers, 1, "armed: the loading screen starts one timer")
 eq(timers[1] and timers[1].delay, ns.EUI_SETTLE_DELAY, "armed: of the settle delay")
 fire(frame, "PLAYER_ENTERING_WORLD")
@@ -167,23 +167,39 @@ fire(frame, "PLAYER_REGEN_ENABLED")
 eq(ns.db.euiSettled, nil, "combat: its end records nothing at once")
 eq(#timers, 1, "combat: it starts the settle delay again")
 eq(timers[1] and timers[1].delay, ns.EUI_SETTLE_DELAY, "combat: the whole delay")
-eq(listening(frame), "PLAYER_ENTERING_WORLD", "combat: and no longer waits for combat")
+eq(listening(frame), "PLAYER_ENTERING_WORLD,PLAYER_REGEN_ENABLED", "combat: and still listens for both while the delay runs")
 runTimers()
 eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1", "combat: recorded when the delay ends")
 eq(listening(frame), "", "combat: and the frame listens for nothing")
 
--- Refused in combat, then a loading screen before combat ends: the new delay
--- runs whole, and combat ending inside it captures nothing.
+-- Combat ending inside a running delay starts it again, with no refusal before
+-- it: only the timer combat's end started captures, a whole delay after it.
+frame = login({ euiSettlePending = { ["*"] = true } })
+fire(frame, "PLAYER_ENTERING_WORLD")
+fire(frame, "PLAYER_REGEN_ENABLED")
+eq(#timers, 2, "combat inside the delay: its end starts the delay again")
+local early = table.remove(timers, 1)
+if early then early.fn() end
+eq(exports, 0, "combat inside the delay: the loading screen's timer captures nothing")
+eq(ns.euiSettleOpen, false, "combat inside the delay: and the settle moment has not come")
+eq(runTimers(), 1, "combat inside the delay: the delay from combat's end runs")
+eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1",
+    "combat inside the delay: and records when it ends")
+
+-- Refused in combat, then a loading screen, then combat ending inside the new
+-- delay: only the delay combat's end started captures.
 frame = login({ euiSettlePending = { ["*"] = true } })
 fire(frame, "PLAYER_ENTERING_WORLD")
 game.combat = true
 runTimers()
 fire(frame, "PLAYER_ENTERING_WORLD")
-eq(listening(frame), "PLAYER_ENTERING_WORLD", "combat then loading: the new delay drops the wait for combat")
 game.combat = false
 fire(frame, "PLAYER_REGEN_ENABLED")
-eq(ns.db.euiSettled, nil, "combat then loading: combat ending inside the new delay records nothing")
-eq(runTimers(), 1, "combat then loading: the new delay runs")
+eq(#timers, 2, "combat then loading: combat's end starts the delay again")
+local stale = table.remove(timers, 1)
+if stale then stale.fn() end
+eq(ns.db.euiSettled, nil, "combat then loading: the loading screen's delay records nothing")
+eq(runTimers(), 1, "combat then loading: the delay from combat's end runs")
 eq(ns.db.euiSettled and ns.db.euiSettled[1] and ns.db.euiSettled[1].s, "export-1",
     "combat then loading: and records when it ends")
 
@@ -207,7 +223,8 @@ for _, case in ipairs(refusals) do
     eq(ns.db.euiSettled, nil, name .. ": nothing is recorded")
     eq(exports, 0, name .. ": and nothing exported")
     eq(landed, 0, name .. ": and the list is told nothing")
-    eq(listening(frame), "PLAYER_ENTERING_WORLD", name .. ": the capture waits for the next loading screen")
+    eq(listening(frame), "PLAYER_ENTERING_WORLD,PLAYER_REGEN_ENABLED",
+        name .. ": the capture waits for the next loading screen or end of combat")
     set(false)
     fire(frame, "PLAYER_ENTERING_WORLD")
     eq(runTimers(), 1, name .. ": which starts the timer again")

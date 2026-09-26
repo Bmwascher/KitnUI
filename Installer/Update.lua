@@ -155,6 +155,10 @@ function ns.EUICancelDecodes()
         if handle and handle.Cancel then handle:Cancel() end
         cache[slot] = nil
     end
+    -- The decoder keeps the callback of a run it no longer drives; emptied,
+    -- its box reaches nothing of the chain.
+    if cache.box then cache.box.land = nil end
+    cache.box = nil
     cache.O, cache.N = nil, nil
     cache.byVersion, cache.bySettled = {}, {}
     cache.failedO, cache.failedN = false, false
@@ -168,7 +172,9 @@ end
 -- The stamp's base, then each older base a part stands at, then the shipped
 -- string, one after another into this cache. A string already decoded is
 -- reused rather than decoded again; a stale generation drops its result.
--- onReady runs once, at the end.
+-- onReady runs once, at the end. EllesmereUI's decoder keeps its last callback
+-- after the run ends, so the callback reaches the chain only through a box
+-- that its landing and a cancel empty.
 function ns.EUIStartDecodes(onReady)
     ns.EUICancelDecodes()
     local e = E()
@@ -230,13 +236,19 @@ function ns.EUIStartDecodes(onReady)
             elseif results[step.s] ~= nil then
                 step.take(results[step.s] or nil)
             else
-                local handle = e.DecodeImportStringAsync(step.s, function(payload)
-                    if cache.gen ~= gen then return end
+                local box = { land = function(payload)
                     local p = decoded(payload)
                     results[step.s] = p or false
                     cache[step.slot] = nil
                     step.take(p)
                     nextStep()
+                end }
+                cache.box = box
+                local handle = e.DecodeImportStringAsync(step.s, function(payload)
+                    local land = box.land
+                    if cache.gen ~= gen or not land then return end
+                    box.land = nil
+                    land(payload)
                 end)
                 if handle and cache.gen == gen and results[step.s] == nil then cache[step.slot] = handle end
                 return
@@ -393,23 +405,19 @@ end
 local settleFrame
 local settleGen = 0
 
--- A combat refusal waits for combat to end, which starts the delay again; any
--- other refusal waits for the next loading screen, which the frame still
--- listens for.
+-- A refusal waits for the next loading screen or end of combat, which the
+-- frame listens for until the capture lands.
 local function trySettle()
     ns.euiSettleOpen = true
-    local done, why = ns.EUISettleCapture()
-    if done then
+    if ns.EUISettleCapture() then
         settleGen = settleGen + 1
         settleFrame:UnregisterAllEvents()
-    elseif why == T.combat then
-        settleFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     end
 end
 
--- Each loading screen, and the end of combat after a combat refusal, starts
--- the delay again, and only the latest timer runs: EllesmereUI's own work after
--- either has settled by the time it fires.
+-- Each loading screen and each end of combat starts the delay again, and only
+-- the latest timer runs: EllesmereUI's own work after either has settled by
+-- the time it fires.
 local function startDelay()
     settleGen = settleGen + 1
     local gen = settleGen
@@ -430,13 +438,9 @@ function ns.EUIArmSettle()
     ns.euiSettleDue = due
     if next(due) == nil then return end
     settleFrame = CreateFrame("Frame")
-    -- Either event drops a waiting combat retry, which would cut the new delay
-    -- short.
-    settleFrame:SetScript("OnEvent", function(self)
-        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        startDelay()
-    end)
+    settleFrame:SetScript("OnEvent", startDelay)
     settleFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    settleFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 end
 
 
