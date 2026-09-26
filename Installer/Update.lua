@@ -299,6 +299,131 @@ function ns.EUICaptureP()
     return payload
 end
 
+---------------------------------------------------------------------------------
+-- The settled snapshot
+---------------------------------------------------------------------------------
+
+-- Seconds after the loading screen before the profile counts as settled.
+-- EllesmereUI's own settle passes end within about two seconds of it.
+local EUI_SETTLE_DELAY = 10
+ns.EUI_SETTLE_DELAY = EUI_SETTLE_DELAY
+
+local function settleBefore()
+    local db = ns.db or {}
+    return { settled = db.euiSettled, at = db.euiSettledAt, pending = db.euiSettlePending, due = ns.euiSettleDue }
+end
+
+local function writeSettle(settled, at, pending, due)
+    ns.db.euiSettled, ns.db.euiSettledAt, ns.db.euiSettlePending = settled, at, pending
+    ns.euiSettleDue = due
+end
+
+-- True while a change from an earlier session waits for its snapshot.
+local function settleDue()
+    return isTable(ns.euiSettleDue) and next(ns.euiSettleDue) ~= nil
+end
+
+-- The click's refusals, and a profile EllesmereUI is still establishing,
+-- whose export would not be the settled one.
+local function settleRefusal()
+    local why = refusal()
+    if why then return why end
+    local e, d = E(), DB()
+    if e and e.Conditions_EstablishPending and e.Conditions_EstablishPending() then return T.establish end
+    local stored = isTable(d.profiles) and d.profiles[NAME]
+    if isTable(stored) and stored._importEstablishPending then return T.establish end
+    return nil
+end
+
+-- Records `s`, an export of the KitnUI profile, as the snapshot of every part
+-- due one, with what KitnUI's switches hold now.
+local function recordSettled(s)
+    local id = 1
+    for k in pairs(isTable(ns.db.euiSettled) and ns.db.euiSettled or {}) do
+        if type(k) == "number" and k >= id then id = math.floor(k) + 1 end
+    end
+    local held = ns.EUIHeldPaths and ns.EUIHeldPaths({ NAME, BACKUP }) or {}
+    writeSettle(ns.EUISettleRecord("capture", settleBefore(), { id = id, entry = { s = s, held = held } }))
+end
+
+-- The only writer of a snapshot: a read or a click never records one, as it
+-- would take in every edit up to that moment. Returns true when nothing is
+-- left due, or false and the refusal.
+function ns.EUISettleCapture()
+    if not (ns.db and settleDue()) then return true end
+    if not hasRequired(E()) then return false, T.needsNewer end
+    local why = settleRefusal()
+    if why then return false, why end
+    local t0 = ns.db.devMode and debugprofilestop()
+    local s, err = ns.EUIBankCurrent()
+    if not s then return false, err end
+    recordSettled(s)
+    if t0 then
+        print(ns.title .. (" settled snapshot: %.1f ms"):format(debugprofilestop() - t0))
+    end
+    -- A Modules page that shows reads "Your copy" again against the snapshot.
+    if ns.EUISettleLanded then ns.EUISettleLanded() end
+    return true
+end
+
+-- A part's state for the list: "settled", "due", "pending" or nil.
+function ns.EUIPartSettle(part)
+    local before = settleBefore()
+    return ns.EUISettleState(before, before.due, part)
+end
+
+local settleFrame
+local settleGen = 0
+
+-- Combat waits for its end; any other refusal waits for the next loading
+-- screen, which the frame still listens for.
+local function trySettle()
+    ns.euiSettleOpen = true
+    local done, why = ns.EUISettleCapture()
+    if done then
+        settleGen = settleGen + 1
+        settleFrame:UnregisterAllEvents()
+    elseif why == T.combat then
+        settleFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    end
+end
+
+-- Each loading screen starts the delay again, and only the latest timer runs:
+-- EllesmereUI's settle windows open again at every zone-in.
+local function startDelay()
+    settleGen = settleGen + 1
+    local gen = settleGen
+    C_Timer.After(EUI_SETTLE_DELAY, function()
+        if gen == settleGen then trySettle() end
+    end)
+end
+
+-- The boot's call at PLAYER_LOGIN. What is pending now changed in an earlier
+-- session, so it is due; with nothing due, nothing is created.
+function ns.EUIArmSettle()
+    ns.euiSettleOpen = false
+    local due = {}
+    local pending = ns.db and ns.db.euiSettlePending
+    for part, v in pairs(isTable(pending) and pending or {}) do
+        if type(part) == "string" and v == true then due[part] = true end
+    end
+    ns.euiSettleDue = due
+    if next(due) == nil then return end
+    settleFrame = CreateFrame("Frame")
+    settleFrame:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_REGEN_ENABLED" then
+            self:UnregisterEvent(event)
+            trySettle()
+        else
+            -- A combat retry left registered would cut the new delay short.
+            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            startDelay()
+        end
+    end)
+    settleFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+end
+
+
 local function movesToBackup()
     local d = DB()
     if not isTable(d) then return false end

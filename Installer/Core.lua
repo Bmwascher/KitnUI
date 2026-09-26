@@ -555,9 +555,12 @@ local defaults = {
     euiThemeChosen = nil,   -- true once an import or the login catch-up has decided the account-wide options theme; absent until KitnUI successfully applies and records one
     euiBase = nil,          -- the EllesmereUI string the stored KitnUI profile came from (install or update); the base an update merges against
     euiUpdateReport = nil,  -- the last update's { conflicts = {...}, kept, applied, noBase, overrideSet }, for the Finish recap and /kitn version
-    euiBackup = nil,        -- what Restore previous puts back beside the backup profile: { version, base, euiRowAt, euiBases, assignedSpecs, colorsPullFrom, ppUIScale, ppUIScaleAuto, scaleTaken }
+    euiBackup = nil,        -- what Restore previous puts back beside the backup profile: { version, base, euiRowAt, euiBases, euiSettled, euiSettledAt, euiSettlePending, assignedSpecs, colorsPullFrom, ppUIScale, ppUIScaleAuto, scaleTaken }
     euiRowAt = nil,         -- [partId] = { version = <X-EllesmereUI-Version or "none">, kitn = <KitnUI version that skipped it, absent on an off or reset-ahead entry> } for each EllesmereUI part recorded at its own version (rules: EUIRecordRows)
     euiBases = nil,         -- [version] = that version's shipped EllesmereUI string, for every version euiRowAt names
+    euiSettled = nil,       -- [id] = { s = <export of the KitnUI profile once it settled>, held = { [path] = true } } (rules: EUISettleRecord)
+    euiSettledAt = nil,     -- [partId or "*"] = the euiSettled id a part's "changed by you" counts from, or false while its install settles
+    euiSettlePending = nil, -- [partId or "*"] = true for each part installed since its snapshot, captured the session after
 }
 
 -- The key every per-character record in KitnUIDB is stored under. Nil rather
@@ -1165,6 +1168,7 @@ boot:RegisterEvent("PLAYER_LOGIN")
 boot:SetScript("OnEvent", function()
     InitDB()
     if ns.EUISeedBase then ns.EUISeedBase() end
+    if ns.EUIArmSettle then ns.EUIArmSettle() end
 
     -- Next frame, not here: the companion addon copies the theme apply across
     -- the bridge on its own PLAYER_LOGIN, and this addon loads first, so a call
