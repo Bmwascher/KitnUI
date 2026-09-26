@@ -940,3 +940,140 @@ function ns.EUIOverrideElementSide(P)
     end
     return { unlockLayout = { anchors = anchors } }
 end
+
+---------------------------------------------------------------------------------
+-- The settled record
+---------------------------------------------------------------------------------
+
+-- Stands for every part the pointers do not name.
+local ALL = "*"
+
+local function validId(v)
+    return type(v) == "number" and v >= 1 and math.floor(v) == v
+end
+
+local function sound(entry)
+    return isTable(entry) and type(entry.s) == "string"
+end
+
+-- The record read into fresh tables. Saved data can hold anything, so a value
+-- of the wrong type is read as absent, and so dropped at this write.
+local function cleanSettle(before)
+    before = isTable(before) and before or {}
+    local settled, at, pending, due = {}, {}, {}, {}
+    for id, entry in pairs(isTable(before.settled) and before.settled or {}) do
+        if validId(id) and sound(entry) then settled[id] = entry end
+    end
+    for part, v in pairs(isTable(before.at) and before.at or {}) do
+        if type(part) == "string" and (v == false or validId(v)) then at[part] = v end
+    end
+    for part, v in pairs(isTable(before.pending) and before.pending or {}) do
+        if type(part) == "string" and v == true then pending[part] = true end
+    end
+    for part, v in pairs(isTable(before.due) and before.due or {}) do
+        if type(part) == "string" and v == true then due[part] = true end
+    end
+    return settled, at, pending, due
+end
+
+-- kind: "update" | "take" | "reset" (opts.parts, the parts installed;
+-- opts.rows, the plan's rows), or "capture" (opts.id, opts.entry). before: { settled, at, pending, due } as
+-- they stood. Returns the new settled, at and pending, nil when empty, and the
+-- new due set. A full install is CompleteSetup's own write.
+function ns.EUISettleRecord(kind, before, opts)
+    opts = opts or {}
+    local settled, at, pending, due = cleanSettle(before)
+    if kind == "update" or kind == "take" or kind == "reset" then
+        -- An installed part has not settled: no snapshot, and not due until
+        -- the session after this one.
+        for part in pairs(opts.parts or {}) do
+            at[part] = false
+            pending[part] = true
+            due[part] = nil
+        end
+        -- With every row named, no part reads the snapshot for every part.
+        local unnamed = not (isTable(opts.rows) and opts.rows[1])
+        for _, row in ipairs(isTable(opts.rows) and opts.rows or {}) do
+            if not (isTable(row) and at[row.id] ~= nil) then unnamed = true end
+        end
+        if not unnamed then at[ALL] = nil end
+    elseif kind == "capture" and validId(opts.id) and sound(opts.entry) then
+        settled[opts.id] = opts.entry
+        if due[ALL] then
+            -- A part named in pending but not due was installed this session.
+            local named = {}
+            for part in pairs(pending) do
+                if part ~= ALL and not due[part] then named[part] = false end
+            end
+            named[ALL] = opts.id
+            at = named
+        else
+            for part in pairs(due) do at[part] = opts.id end
+        end
+        for part in pairs(due) do pending[part] = nil end
+        due = {}
+    end
+    local used = {}
+    for _, v in pairs(at) do
+        if v then used[v] = true end
+    end
+    for id in pairs(settled) do
+        if not used[id] then settled[id] = nil end
+    end
+    return next(settled) and settled or nil, next(at) and at or nil, next(pending) and pending or nil, due
+end
+
+-- The snapshot a part is measured from, or nil: its own pointer, else the one
+-- for every part not named, and only a pointer to a sound entry.
+function ns.EUISettledId(rec, part)
+    rec = isTable(rec) and rec or {}
+    local at = isTable(rec.at) and rec.at or {}
+    local id = at[part]
+    if id ~= false and not validId(id) then id = at[ALL] end
+    local settled = isTable(rec.settled) and rec.settled or {}
+    if validId(id) and sound(settled[id]) then return id end
+    return nil
+end
+
+-- "due" (waiting from an earlier session), "pending" (installed this
+-- session), "settled", or nil for a part with no snapshot and none waiting.
+function ns.EUISettleState(rec, due, part)
+    rec = isTable(rec) and rec or {}
+    local at = isTable(rec.at) and rec.at or {}
+    local named = at[part] == false or validId(at[part])
+    local function marked(set)
+        return isTable(set) and (set[part] == true or (not named and set[ALL] == true))
+    end
+    if marked(due) then return "due" end
+    if marked(rec.pending) then return "pending" end
+    if ns.EUISettledId(rec, part) then return "settled" end
+    return nil
+end
+
+-- An export leaves out a module that was not loaded, so a snapshot holds a
+-- folder part only when it carries the folder.
+local function holdsPart(src, row)
+    if row.id == "general" or row.id == "overrides" then return true end
+    return isTable(src.addons) and src.addons[row.id] ~= nil
+end
+
+-- S: the composite base with each settled part's slice from its snapshot, and
+-- the parts that took one. decodedById: id -> decoded, stripped data. A part
+-- keeps O's slice with no snapshot, a failed decode, no base of its own, or a
+-- folder the snapshot lacks. S is O itself when no part settles, nil when O is.
+function ns.EUIComposeSettled(O, rows, rec, decodedById, keyToFolder, missing)
+    local settledRows = {}
+    if O == nil then return nil, settledRows end
+    decodedById, missing = decodedById or {}, missing or {}
+    local S = O
+    for _, row in ipairs(rows or {}) do
+        local id = ns.EUISettledId(rec, row.id)
+        local src = id and decodedById[id]
+        if isTable(src) and not missing[row.id] and holdsPart(src, row) then
+            if S == O then S = ns.EUIDeepCopy(O) end
+            copySlice(S, src, row, keyToFolder or {})
+            settledRows[row.id] = true
+        end
+    end
+    return S, settledRows
+end

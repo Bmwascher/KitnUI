@@ -821,5 +821,135 @@ check(layerKeys.UF_Player and layerKeys.ERB_Health and layerKeys.CDM_y,
     "element keys: a layer's links and extras reach the resolver")
 eq(layerKeys.UF_Target, nil, "element keys: but not a link's target")
 
+---------------------------------------------------------------------------------
+-- The settled record and the settled composite
+---------------------------------------------------------------------------------
+
+do
+    -- An update or a take marks only what it installs, and drops a snapshot
+    -- no pointer names any more.
+    local snSettled, snAt, snPending, snDue = ns.EUISettleRecord("update", {
+        settled = { [1] = { s = "one" }, [2] = { s = "two" } },
+        at = { ["*"] = 1, [UF] = 2 },
+    }, { parts = { [UF] = true } })
+    check(snAt and snAt["*"] == 1 and snAt[UF] == false, "settle: an update marks the part it installs and keeps the others'")
+    check(snPending and snPending[UF] and not snPending["*"], "settle: the installed part waits for the next session")
+    check(snSettled and snSettled[1] and snSettled[2] == nil, "settle: a snapshot no part points at is dropped")
+    eq(next(snDue), nil, "settle: nothing is due")
+
+    snSettled, snAt = ns.EUISettleRecord("take", { settled = { [1] = { s = "one" } }, at = { ["*"] = 1 } },
+        { parts = { general = true } })
+    check(snAt and snAt.general == false and snAt["*"] == 1 and snSettled and snSettled[1],
+        "settle: a take marks the part it takes")
+
+    -- The snapshot for every part goes once every row is named.
+    local twoRows = { { id = UF }, { id = "general" } }
+    local starAt = select(2, ns.EUISettleRecord("take", { settled = { [1] = { s = "one" } }, at = { ["*"] = 1 } },
+        { parts = { general = true }, rows = twoRows }))
+    eq(starAt and starAt["*"], 1, "settle: while a row is not named, the one for every part stays")
+    snSettled, snAt = ns.EUISettleRecord("update", {
+        settled = { [1] = { s = "one" }, [2] = { s = "two" } }, at = { ["*"] = 1, [UF] = 2 },
+    }, { parts = { general = true }, rows = twoRows })
+    check(snAt and snAt["*"] == nil and snAt.general == false and snAt[UF] == 2,
+        "settle: naming the last row drops the pointer for every part")
+    check(snSettled and snSettled[1] == nil and snSettled[2], "settle: and its snapshot with it")
+
+    -- A part due its snapshot and installed again this session leaves due.
+    local _, rsAt, rsPending, rsDue = ns.EUISettleRecord("reset", {
+        settled = { [1] = { s = "one" } }, at = { ["*"] = 1, [AB] = false },
+        pending = { [AB] = true }, due = { [AB] = true },
+    }, { parts = { [AB] = true } })
+    check(rsAt and rsAt[AB] == false and rsPending and rsPending[AB], "settle: a reset marks its part")
+    eq(rsDue[AB], nil, "settle: and a part installed again is no longer due")
+
+    -- The capture after a full install: every part but one installed since.
+    local snEntry = { s = "snap", held = {} }
+    snSettled, snAt, snPending, snDue = ns.EUISettleRecord("capture", {
+        at = { [AB] = false }, pending = { ["*"] = true, [AB] = true }, due = { ["*"] = true },
+    }, { id = 1, entry = snEntry })
+    check(snSettled and snSettled[1] == snEntry, "capture: records the snapshot under its id")
+    check(snAt and snAt["*"] == 1 and snAt[AB] == false, "capture: for every part but one installed this session")
+    check(snPending and snPending[AB] and not snPending["*"], "capture: which alone still waits")
+    eq(next(snDue), nil, "capture: and nothing is due")
+
+    -- A capture of named parts points only those.
+    snSettled, snAt, snPending = ns.EUISettleRecord("capture", {
+        settled = { [1] = { s = "one" } }, at = { ["*"] = 1, [UF] = false, [AB] = false },
+        pending = { [UF] = true, [AB] = true }, due = { [UF] = true },
+    }, { id = 2, entry = { s = "two" } })
+    check(snAt and snAt[UF] == 2 and snAt[AB] == false and snAt["*"] == 1, "capture: a named due part gets the new snapshot")
+    check(snSettled and snSettled[1] and snSettled[2], "capture: beside the one the others keep")
+    check(snPending and snPending[AB] and not snPending[UF], "capture: and the part installed since still waits")
+    snSettled = ns.EUISettleRecord("capture", { settled = { [1] = { s = "one" } }, at = { ["*"] = 1 } },
+        { id = 0, entry = { s = "x" } })
+    check(snSettled and snSettled[1] and snSettled[0] == nil, "capture: a bad id records nothing")
+
+    -- Saved data can hold anything: a value of the wrong type is read as
+    -- absent, and dropped at the write.
+    local snOk, snBad, snBadAt, snBadPending, snBadDue = pcall(ns.EUISettleRecord, "take", {
+        settled = { [1] = { s = 5 }, x = { s = "s" }, [2] = { s = "two" } },
+        at = { [UF] = "bad", ["*"] = 2, [AB] = 0.5 },
+        pending = { [UF] = "yes", general = true },
+        due = "corrupt",
+    }, { parts = {} })
+    check(snOk, "settle: a malformed record raises nothing", snBad)
+    check(snOk and snBad and snBad[2] and snBad[1] == nil and snBad.x == nil, "settle: only sound snapshots are kept")
+    check(snOk and snBadAt and snBadAt["*"] == 2 and snBadAt[UF] == nil and snBadAt[AB] == nil, "settle: and sound pointers")
+    check(snOk and snBadPending and snBadPending.general and snBadPending[UF] == nil, "settle: and true marks")
+    check(snOk and type(snBadDue) == "table" and next(snBadDue) == nil, "settle: a due set that is not a table is empty")
+
+    -- A part's snapshot and state.
+    local snRecord = {
+        settled = { [1] = { s = "a" }, [2] = { s = "b" } },
+        at = { ["*"] = 1, [UF] = 2, [AB] = false, [CDM] = 9 },
+        pending = { [AB] = true, [RB] = true },
+    }
+    eq(ns.EUISettledId(snRecord, UF), 2, "state: a named part's own snapshot")
+    eq(ns.EUISettledId(snRecord, "general"), 1, "state: an unnamed part's is the one for every part")
+    eq(ns.EUISettledId(snRecord, AB), nil, "state: a part installed since has none, not the one for every part")
+    eq(ns.EUISettledId(snRecord, CDM), nil, "state: a pointer to no snapshot is none")
+    eq(ns.EUISettleState(snRecord, {}, UF), "settled", "state: settled")
+    eq(ns.EUISettleState(snRecord, {}, AB), "pending", "state: installed this session is pending")
+    eq(ns.EUISettleState(snRecord, { [RB] = true }, RB), "due", "state: waiting from an earlier session is due")
+    local snAll = { settled = { [1] = { s = "a" } }, at = { [UF] = 1 }, pending = { ["*"] = true } }
+    eq(ns.EUISettleState(snAll, { ["*"] = true }, "general"), "due", "state: after a full install every part not named is due")
+    eq(ns.EUISettleState(snAll, {}, "general"), "pending", "state: and pending in the session of the install")
+    eq(ns.EUISettleState(snAll, { ["*"] = true }, UF), "settled", "state: the mark for every part skips a named one")
+    eq(ns.EUISettleState({}, {}, UF), nil, "state: a profile from before snapshots has no state")
+
+    -- The settled composite. The export left out Action Bars, which was not
+    -- loaded, and the Spec Overrides snapshot did not decode.
+    local snRows = { { id = UF }, { id = AB }, { id = "general" }, { id = "overrides" } }
+    local snO = {
+        addons = { [UF] = { v = "O" }, [AB] = { v = "O" } },
+        fonts = { f = "O" },
+        unlockLayout = { anchors = { UF_Player = { s = "O" } } },
+        specOverrides = { "O" },
+    }
+    local snSnap = {
+        addons = { [UF] = { v = "S" } },
+        fonts = { f = "S" },
+        unlockLayout = { anchors = { UF_Player = { s = "S" } } },
+    }
+    local snRec = { settled = { [1] = { s = "one" }, [2] = { s = "two" } }, at = { ["*"] = 1, overrides = 2 } }
+    local snS, snTook = ns.EUIComposeSettled(snO, snRows, snRec, { [1] = snSnap }, k2f, {})
+    eq(snS.addons[UF].v, "S", "compose: a part with a snapshot takes its slice")
+    eq(snS.unlockLayout.anchors.UF_Player.s, "S", "compose: with its layout entries")
+    eq(snS.fonts.f, "S", "compose: General too")
+    eq(snS.addons[AB].v, "O", "compose: a folder part the snapshot lacks keeps the base's")
+    eq(snS.specOverrides[1], "O", "compose: a part whose snapshot did not decode keeps the base's")
+    check(snTook[UF] and snTook.general and not snTook[AB] and not snTook.overrides,
+        "compose: and only the parts that took a snapshot are settled")
+    eq(snO.addons[UF].v, "O", "compose: the base is not written")
+    local snMissing = ns.EUIComposeSettled(snO, snRows, snRec, { [1] = snSnap }, k2f, { [UF] = true })
+    eq(snMissing.addons[UF].v, "O", "compose: a part with no base of its own keeps the base's")
+    local snNone, snNoneTook = ns.EUIComposeSettled(snO, snRows, {}, {}, k2f, {})
+    check(rawequal(snNone, snO) and next(snNoneTook) == nil, "compose: with nothing settled the base is used as it is")
+    local snPart = ns.EUIComposeSettled(snO, snRows, { settled = { [1] = { s = "one" } }, at = { [UF] = 1 } },
+        { [1] = snSnap }, k2f, {})
+    eq(snPart.fonts.f, "O", "compose: a part with no snapshot keeps the base's")
+    eq(ns.EUIComposeSettled(nil, snRows, snRec, { [1] = snSnap }, k2f, {}), nil, "compose: no base gives no composite")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
