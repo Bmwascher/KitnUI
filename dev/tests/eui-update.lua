@@ -184,7 +184,8 @@ E.FilterLayoutToFolders = function(ul, keepSet, k2f)
     end
     local out = { anchors = {}, widthMatch = {}, heightMatch = {}, phantomBounds = {} }
     for child, info in pairs(ul.anchors or {}) do
-        if type(info) == "table" and endpointOK(child) and endpointOK(info.target) then out.anchors[child] = info end
+        local edge = E.IsScreenEdgeKey and E.IsScreenEdgeKey(info and info.target)
+        if type(info) == "table" and endpointOK(child) and (endpointOK(info.target) or edge) then out.anchors[child] = info end
     end
     for map, xmap in pairs({ widthMatch = "widthMatchExtra", heightMatch = "heightMatchExtra" }) do
         for child, target in pairs(ul[map] or {}) do
