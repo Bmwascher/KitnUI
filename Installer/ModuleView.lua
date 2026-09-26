@@ -13,7 +13,7 @@ local _, ns = ... ---@type string, KitnUINS
 -- EUI_DIFF_STEPS units, a unit being one key read (ModuleRows.lua, tick),
 -- aiming at 2 ms a frame. Leaving the page or closing the wizard stops it;
 -- nothing runs while no list is showing.
-local EUI_DIFF_STEPS = 1000
+local EUI_DIFF_STEPS = 900
 
 local ROW_H, ROW_H_MIN = 20, 14
 -- The list ends above the split line, which sits on the action row.
@@ -618,10 +618,14 @@ function ns.EUIListShowing()
     return list ~= nil and list:IsShown()
 end
 
--- Every page change and every sub-page open runs this through ResetExtras;
--- the new generation stops any walk still running.
+-- Every page change and every sub-page open runs this through ResetExtras,
+-- and closing the wizard runs it too. The new generation stops any walk still
+-- running. What the list read, decoded copies of whole profiles, is dropped
+-- rather than kept for the next open, which reads everything afresh.
 function ns.EUIHideModuleList()
     view.gen = view.gen + 1
+    view.inputs, view.kitn, view.yours, view.ticked, view.context = nil, nil, nil, nil, nil
+    for _, r in ipairs(rowPool) do r.row = nil end
     if list then list:Hide() end
 end
 

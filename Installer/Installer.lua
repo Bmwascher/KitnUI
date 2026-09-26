@@ -562,17 +562,27 @@ local function AcceptEUIUpdate(plan)
     RedrawEUIPage()
 end
 
--- One confirm for an update, a take and a part reset.
+-- One confirm for an update, a take and a part reset. EllesmereUI keeps the
+-- options after the popup closes, and an import discards the popup without
+-- freeing it, so the callbacks reach the plan, decoded copies of whole
+-- profiles, through a box every answer empties.
 ConfirmEUIUpdate = function(plan)
     if not (EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
     local T = ns.EUI_UPDATE_TEXT
     local reset = plan.kind == "reset"
+    local box = { plan = plan }
     EllesmereUI:ShowConfirmPopup({
         title = reset and T.resetTitle:format(plan.row.label) or "Update profile?",
         message = reset and ns.EUIResetText(plan) or ns.EUIConfirmText(plan),
         confirmText = reset and "Reset" or (plan.noBase and "Update (replaces your changes)" or "Update"),
         cancelText = "Cancel",
-        onConfirm = function() AcceptEUIUpdate(plan) end,
+        onConfirm = function()
+            local taken = box.plan
+            box.plan = nil
+            if taken then AcceptEUIUpdate(taken) end
+        end,
+        -- Escape and a click outside fall back to this as well.
+        onCancel = function() box.plan = nil end,
     })
     GrowConfirmPopup()
 end
