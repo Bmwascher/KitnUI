@@ -573,6 +573,19 @@ do
     eq(moved.merged.unlockLayout.widthMatchExtra.player_cb, nil, "extras: the player's extra is dropped with the link")
     check(ns.EUIConfirmText(moved):find("1 of your changes will be replaced", 1, true),
         "extras: the confirm counts the dropped extra")
+    eq(moved.byRow[F], 1, "extras: the dropped extra counts under the part that owns the bar")
+    -- Unticked, the part keeps the player's link and the extra beside it, and
+    -- the dropped extra leaves the count with the link.
+    local unticked = ns.EUIPrepareUpdate({ general = true })
+    eq(unticked and unticked.merged.unlockLayout.widthMatch.player_cb, "player", "extras: an unticked part keeps the player's link")
+    eq(unticked and unticked.merged.unlockLayout.widthMatchExtra.player_cb, 6, "extras: and the player's extra beside it")
+    eq(unticked and #unticked.report.conflicts, 0, "extras: with nothing of that part counted")
+    -- A part reset takes KitnUI's link and KitnUI's extra, none here, and its
+    -- count holds the extra it replaces beside the player's own change.
+    local extrasReset = ns.EUIPrepareReset(F, { defaults = {}, held = {}, unlock = {} })
+    eq(extrasReset and extrasReset.merged.unlockLayout.widthMatch.player_cb, "target", "extras: a part reset takes KitnUI's link")
+    eq(extrasReset and extrasReset.merged.unlockLayout.widthMatchExtra.player_cb, nil, "extras: and KitnUI's extra, not the player's")
+    eq(extrasReset and extrasReset.yours, 2, "extras: the reset's count holds the player's change and the extra")
     resetExtras()
 end
 

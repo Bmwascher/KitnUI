@@ -237,6 +237,41 @@ N.uiScale = 2
 ns.EUITakeSlice(taken, N, { id = "general" }, k2f)
 eq(taken.uiScale, nil, "take: a scale outside the range is not applied")
 
+-- Size-match extras go where the links a part owns go, keyed by the same child.
+eq(ns.EUIRowOf("unlockLayout.heightMatchExtra.UF_Player", k2f), UF, "owner: a size-match extra by its child")
+local xMerged = {
+    addons = { [UF] = { v = "merged" }, [AB] = { v = "merged" } },
+    unlockLayout = {
+        widthMatch = { UF_Player = "UF_Target", AB_Main = "AB_Kitn" },
+        widthMatchExtra = { AB_Main = 4 },
+    },
+}
+local xReport = { conflicts = { "unlockLayout.widthMatchExtra.UF_Player", "unlockLayout.widthMatchExtra.AB_Main" } }
+local xP = {
+    addons = { [UF] = { v = "player" }, [AB] = { v = "player" } },
+    unlockLayout = {
+        widthMatch = { UF_Player = "UF_Target", AB_Main = "AB_Mine" },
+        widthMatchExtra = { UF_Player = 6, AB_Main = 2 },
+    },
+}
+ns.EUIKeepSlices(xMerged, xReport, xP, simple, { [AB] = true }, k2f)
+eq(xMerged.unlockLayout.widthMatchExtra.UF_Player, 6, "keep: an unticked part gets the player's extra back beside the player's link")
+eq(xMerged.unlockLayout.widthMatchExtra.AB_Main, 4, "keep: a ticked part keeps the merge's extra")
+eq(#xReport.conflicts, 1, "keep: an unticked part's extra conflict leaves the report")
+eq(xReport.conflicts[1], "unlockLayout.widthMatchExtra.AB_Main", "keep: and a ticked part's stays")
+eq(ns.EUIByRow(xReport.conflicts, { [AB] = true }, k2f)[AB], 1, "by row: an extra's conflict counts under the part that owns the child")
+
+local xTaken = { unlockLayout = { widthMatch = { UF_Player = "UF_Target" }, widthMatchExtra = { UF_Player = 6 } } }
+ns.EUITakeSlice(xTaken, { unlockLayout = { widthMatch = { UF_Player = "UF_Kitn" } } }, { id = UF }, k2f)
+eq(xTaken.unlockLayout.widthMatch.UF_Player, "UF_Kitn", "take: the part takes KitnUI's link")
+eq(xTaken.unlockLayout.widthMatchExtra.UF_Player, nil, "take: and KitnUI's extra, here none, not the player's")
+
+local xStamp = { unlockLayout = { widthMatch = { UF_Player = "UF_Target" }, widthMatchExtra = { UF_Player = 3 } } }
+local xOlder = { unlockLayout = { widthMatch = { UF_Player = "UF_Target" }, widthMatchExtra = { UF_Player = 5 } } }
+local xO = ns.EUIComposeBase(simple, { [UF] = { version = "V1" } }, { S = xStamp, V1 = xOlder }, "S", k2f)
+eq(xO and xO.unlockLayout.widthMatchExtra and xO.unlockLayout.widthMatchExtra.UF_Player, 5,
+    "compose: a part at an older version takes that version's extras with its links")
+
 ---------------------------------------------------------------------------------
 -- The per-part record
 ---------------------------------------------------------------------------------
@@ -622,6 +657,49 @@ local fontsPlayer = baseSide()
 fontsPlayer.fonts.global = "Mine"
 eq(countOf(walkAll(resetBase, fontsPlayer, { player = true, against = resetNoFonts }), "general"), 0,
     "reset count: a root table KitnUI's string lacks stays the player's")
+
+-- Size-match extras: read beside their own side's link, each one setting of
+-- the part that owns the child.
+local function matched(target, extra)
+    local s = baseSide()
+    s.unlockLayout.widthMatch = { UF_Player = target }
+    s.unlockLayout.widthMatchExtra = { UF_Player = extra }
+    return s
+end
+eq(countOf(walkAll(matched("UF_Target"), matched("UF_Target", 6), { player = true }), UF), 1,
+    "player: an extra the player set on a link they kept is one of their changes")
+eq(countOf(walkAll(matched("UF_Target"), matched("UF_Other", 6), { player = true }), UF), 2,
+    "player: a changed link with an extra is two changes, the link and the extra")
+local unlinked = matched("UF_Target", 6)
+unlinked.unlockLayout.widthMatch = {}
+eq(countOf(walkAll(matched("UF_Target"), unlinked, { player = true }), UF), 1,
+    "player: an extra without its own side's link is no setting; the removed link is the one change")
+eq(countOf(walkAll(matched("UF_Target"), matched("UF_Target", 4)), UF), 0,
+    "walk: an extra KitnUI changes on a link it left alone is no change, since the player keeps that link")
+eq(countOf(walkAll(matched("UF_Target", 3), matched("UF_Kitn")), UF), 2,
+    "walk: a link KitnUI re-points takes KitnUI's extra with it, one change each")
+eq(countOf(walkAll(matched("UF_Target"), matched("UF_Target", 6), { player = true, against = matched("UF_Target") }), UF), 1,
+    "reset count: an extra KitnUI's part does not carry is replaced")
+eq(countOf(walkAll(matched("UF_Target"), matched("UF_Target", 6), { player = true, against = matched("UF_Target", 6) }), UF), 0,
+    "reset count: an extra equal to KitnUI's is not")
+local xWalk = walkAll(matched("UF_Target"), matched("UF_Target", 6), { player = true })
+eq(xWalk[UF] and xWalk[UF].groups[1] and xWalk[UF].groups[1].name, "Positions", "names: an extra is under Positions")
+
+-- Many linked children with extras: the extras are read inside the ticked
+-- child loop, a budget at a time.
+local xWideBase, xWideSide = baseSide(), baseSide()
+xWideBase.unlockLayout.widthMatch, xWideSide.unlockLayout.widthMatch = {}, {}
+xWideSide.unlockLayout.widthMatchExtra = {}
+for i = 1, 500 do
+    wK2F["UF_W" .. i] = UF
+    xWideBase.unlockLayout.widthMatch["UF_W" .. i] = "UF_Player"
+    xWideSide.unlockLayout.widthMatch["UF_W" .. i] = "UF_Player"
+    xWideSide.unlockLayout.widthMatchExtra["UF_W" .. i] = i
+end
+local xWideMost, _, xWideWalker = maxReads(xWideBase, xWideSide, { wRows[1] }, 10, { player = true })
+check(xWideMost <= BOUND, "work: extras are read a budget at a time", xWideMost)
+eq(countOf(xWideWalker.result, UF), 500, "work: and each differing extra counts once")
+for i = 1, 500 do wK2F["UF_W" .. i] = nil end
 
 ---------------------------------------------------------------------------------
 -- Names and the tooltip

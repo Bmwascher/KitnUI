@@ -261,6 +261,9 @@ local function extraOf(d, map, child)
     return extras[child]
 end
 
+-- The part walk reads an extra by the same rule.
+ns.EUIExtraOf = extraOf
+
 -- Layout entries are leaves compared whole, walked last, over children whose
 -- owner is present in merged.addons; the root, its four maps and the two
 -- extras maps always exist. An extra follows the link the leaf wrote, and a

@@ -18,6 +18,14 @@ local TOP_BAR = "KitnUI_EUI"
 local OVERRIDE_KEYS = {}
 for _, key in ipairs(ns.EUI_OV_KEYS) do OVERRIDE_KEYS[key] = true end
 
+-- A part's layout slice: the link maps, each size-match map followed by its
+-- extras, which are keyed by the same child and go where the link goes.
+local SLICE_MAPS = {}
+for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
+    SLICE_MAPS[#SLICE_MAPS + 1] = map
+    if ns.EUI_MATCH_EXTRAS[map] then SLICE_MAPS[#SLICE_MAPS + 1] = ns.EUI_MATCH_EXTRAS[map] end
+end
+
 ---------------------------------------------------------------------------------
 -- Parts
 ---------------------------------------------------------------------------------
@@ -126,7 +134,7 @@ local function copySlice(into, from, row, keyToFolder)
     end
     if folder == CDM then into.cdmSpells = copy(from.cdmSpells) end
     local fromLayout = isTable(from.unlockLayout) and from.unlockLayout or {}
-    for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
+    for _, map in ipairs(SLICE_MAPS) do
         local dst = isTable(into.unlockLayout) and into.unlockLayout[map]
         if isTable(dst) then
             for child in pairs(dst) do
@@ -666,9 +674,22 @@ local function layoutJob(w, B, rowById, bases, keyToFolder)
                 local path = "unlockLayout." .. map .. "." .. tostring(child)
                 local am, bm = layoutMap(bases[row.id], map), layoutMap(B, map)
                 local nm = w.against and layoutMap(w.against, map)
-                if not excluded(w, path) and not ns.EUISame(am and am[child], bm and bm[child], w.tickFn)
+                local linkDiffers = not ns.EUISame(am and am[child], bm and bm[child], w.tickFn)
+                if not excluded(w, path) and linkDiffers
                     and not (w.against and ns.EUISame(bm and bm[child], nm and nm[child], w.tickFn)) then
                     record(w, row, path)
+                end
+                -- A size-match extra counts apart from its link, as the merge
+                -- counts it. KitnUI's reaches the player only with KitnUI's
+                -- link, so the update walk reads it only where the link differs.
+                local xmap = ns.EUI_MATCH_EXTRAS[map]
+                if xmap and (w.player or linkDiffers) then
+                    tick(w)
+                    local xb = ns.EUIExtraOf(B, map, child)
+                    if not ns.EUISame(ns.EUIExtraOf(bases[row.id], map, child), xb)
+                        and not (w.against and ns.EUISame(xb, ns.EUIExtraOf(w.against, map, child))) then
+                        record(w, row, "unlockLayout." .. xmap .. "." .. tostring(child))
+                    end
                 end
             end
         end
