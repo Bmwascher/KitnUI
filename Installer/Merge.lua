@@ -301,9 +301,11 @@ local function pruneLayout(ctx, merged)
 end
 
 -- The override set with the masks applied: the three spec stores' `active`
--- pointer, the unlock baseline's three link maps, and the two id counters.
+-- pointer, the unlock baseline's link maps and match extras (the importer
+-- rewrites them from the merged layout), and the two id counters.
 local LAYER_STORES = { specUnlockOverrides = true, specBmOverrides = true, specDmOverrides = true }
-local BASELINE_LINKS = { anchors = true, widthMatch = true, heightMatch = true }
+local BASELINE_LINKS = { anchors = true, widthMatch = true, heightMatch = true,
+    widthMatchExtra = true, heightMatchExtra = true }
 local COUNTERS = { specOverrideNextId = true, condOverrideNextId = true }
 local UNLOCK_STORES = { specUnlockOverrides = true, condUnlockOverrides = true }
 
@@ -336,6 +338,8 @@ ns.EUIMaskedOverrideSet = maskedSet
 -- An unlock layer's element entries carry live sizes and exist only for the
 -- elements the character registers, so two sets are compared over the
 -- elements both hold, sizes ignored; positions and everything else compare.
+-- An entry banked raw (`rawPos`) holds a stored offset where the other form
+-- holds an on-screen one, so a raw entry against the other form is the same.
 local function elemsSame(a, b)
     if not (isTable(a) and isTable(b)) then return true end
     for key, ea in pairs(a) do
@@ -343,7 +347,7 @@ local function elemsSame(a, b)
         if eb ~= nil then
             if not (isTable(ea) and isTable(eb)) then
                 if not same(ea, eb) then return false end
-            else
+            elseif (ea.rawPos == true) == (eb.rawPos == true) then
                 for k in pairs(unionKeys(ea, eb)) do
                     if k ~= "w" and k ~= "h" and not same(ea[k], eb[k]) then return false end
                 end
@@ -353,11 +357,18 @@ local function elemsSame(a, b)
     return true
 end
 
+-- A layer's match extras compare with an absent table read as empty, so a
+-- layer written before extras existed matches one holding none.
+local LAYER_EXTRAS = { widthMatchExtra = true, heightMatchExtra = true }
+local NO_EXTRAS = {}
+
 local function layerSame(a, b)
     if not (isTable(a) and isTable(b)) then return same(a, b) end
     for k in pairs(unionKeys(a, b)) do
         if k == "elems" then
             if not elemsSame(a.elems, b.elems) then return false end
+        elseif LAYER_EXTRAS[k] then
+            if not same(a[k] or NO_EXTRAS, b[k] or NO_EXTRAS) then return false end
         elseif not same(a[k], b[k]) then
             return false
         end

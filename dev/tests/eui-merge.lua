@@ -608,6 +608,48 @@ do
     eq(#r3.conflicts, 1, "one conflict when P lacks the baseline and differs from both")
 end
 
+do
+    -- The current harvest writes both extras tables into every layer and banks
+    -- a Player Aura Bars element raw from its stored position; the base and
+    -- Kitn's string hold neither.
+    local visual = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = 3, y = -30, w = 200, h = 20 }
+    local function raw(x, design, w)
+        return { point = "TOPLEFT", relPoint = "TOPLEFT", x = x, y = -4, design = design, rawPos = true, w = w or 200, h = 20 }
+    end
+    local function layer(elem, wx)
+        return { anchors = {}, widthMatch = { bar1 = "other1" }, heightMatch = {}, cdmPos = { X = 10 },
+            elems = { PlayerBuffs = elem }, widthMatchExtra = wx, heightMatchExtra = wx and {} or nil }
+    end
+    local function set(default, baseElem, forkElem, baseWx, forkWx)
+        return overrides({
+            specOverrides = { { fkey = "a", values = { default = default } } },
+            specUnlockOverrides = { baselineLayout = layer(baseElem, baseWx), layouts = { [1] = layer(forkElem, forkWx) } },
+        })
+    end
+    local O, N = set(1, visual, visual), set(2, visual, visual)
+    local m, r = merge(O, N, set(1, raw(10), raw(10), { bar1 = 5 }, {}))
+    eq(r.overrideSet, "kitn", "layer format: Kitn's changed set is taken")
+    eq(#r.conflicts, 0, "layer format: extras tables and raw positions alone are not the player's change")
+    eq(m.specOverrides[1].values.default, 2, "layer format: the carried set is Kitn's")
+    local _, r2 = merge(O, N, set(1, raw(10), raw(10), {}, { bar1 = 5 }))
+    eq(#r2.conflicts, 1, "layer format: an extra the player set inside a layer is their change")
+    eq(r2.conflicts[1], "Spec Overrides", "layer format: counted as the override set")
+    local masked = ns.EUIMaskedOverrideSet(set(1, raw(10), raw(10), { bar1 = 5 }, {}))
+    eq(masked.specUnlockOverrides.baselineLayout.widthMatchExtra, nil, "layer format: the masked baseline carries no extras")
+    local _, r3 = merge(O, ns.EUIDeepCopy(O), set(1, raw(10), raw(10), { bar1 = 5 }, {}))
+    eq(r3.overrideSet, "player", "layer format: an unchanged Kitn set keeps the player's")
+
+    local rO, rN = set(1, raw(10), raw(10)), set(2, raw(10), raw(10))
+    local _, r4 = merge(rO, rN, set(1, raw(10), raw(12)))
+    eq(#r4.conflicts, 1, "raw positions: a moved raw element counts")
+    local _, r5 = merge(rO, rN, set(1, raw(10), raw(10, true)))
+    eq(#r5.conflicts, 1, "raw positions: a changed design flag counts")
+    local _, r6 = merge(rO, rN, set(1, raw(10), raw(10, nil, 180)))
+    eq(#r6.conflicts, 0, "raw positions: a raw size drift does not")
+    local _, r7 = merge(rO, set(1, raw(10), visual), set(1, raw(10), raw(10)))
+    eq(r7.overrideSet, "player", "raw positions: a format-only difference does not select Kitn's set")
+end
+
 ---------------------------------------------------------------------------------
 -- Special keys
 ---------------------------------------------------------------------------------
