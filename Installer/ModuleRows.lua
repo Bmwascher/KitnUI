@@ -226,9 +226,37 @@ function ns.EUIByRow(conflicts, ticked, keyToFolder)
     return byRow
 end
 
+-- KitnUI's folder holds the Top Bar's settings, its tb* keys, beside the
+-- switch states of KitnUI's other pages and what those pages keep. The Top Bar
+-- row is the tb* keys alone. Returns a shallow copy of t's keys on the `top` side.
+local function topBarKeys(t, top)
+    if not isTable(t) then return nil end
+    local out = {}
+    for k, v in pairs(t) do
+        if (type(k) == "string" and k:sub(1, 2) == "tb") == top then out[k] = v end
+    end
+    return out
+end
+
 -- The reset's rule: one row from KitnUI's string, everything else as it is.
+-- A Top Bar reset keeps the player's switch states: only a switch's own page
+-- changes one, and releases what it holds when it does.
 function ns.EUITakeSlice(merged, N, row, keyToFolder)
+    local kept
+    if row.id == TOP_BAR then
+        kept = topBarKeys(isTable(merged.addons) and merged.addons[TOP_BAR], false) or {}
+    end
     copySlice(merged, N, row, keyToFolder)
+    if kept then
+        if not isTable(merged.addons) then merged.addons = {} end
+        local folder = merged.addons[TOP_BAR]
+        if not isTable(folder) then
+            folder = {}
+            merged.addons[TOP_BAR] = folder
+        end
+        for k in pairs(topBarKeys(folder, false)) do folder[k] = nil end
+        for k, v in pairs(kept) do folder[k] = v end
+    end
     if row.id == "general" then
         local nu = isTable(N) and N.uiScale
         local range = ns.EUI_SCALE_RANGE
@@ -749,8 +777,14 @@ local function seedRow(w, row, src, B, defaults)
     end
     local folder = row.id
     local d = defaults[folder]
-    push(w, channelOf(channelOf(src, "addons"), folder), channelOf(channelOf(B, "addons"), folder),
-        d, "addons." .. folder, row, d ~= nil, nil, channelOf(channelOf(N, "addons"), folder))
+    local a, b = channelOf(channelOf(src, "addons"), folder), channelOf(channelOf(B, "addons"), folder)
+    local n = channelOf(channelOf(N, "addons"), folder)
+    -- The player's walk reads the Top Bar row as the Top Bar's own settings;
+    -- a switch state is KitnUI's, and a Reset keeps it.
+    if folder == TOP_BAR and w.player then
+        a, b, n, d = topBarKeys(a, true), topBarKeys(b, true), topBarKeys(n, true), topBarKeys(d, true)
+    end
+    push(w, a, b, d, "addons." .. folder, row, d ~= nil, nil, n)
     if folder == "EllesmereUICooldownManager" then
         push(w, channelOf(src, "cdmSpells"), channelOf(B, "cdmSpells"), nil, "cdmSpells", row, false,
             nil, channelOf(N, "cdmSpells"))

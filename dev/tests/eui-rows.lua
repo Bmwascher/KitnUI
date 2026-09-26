@@ -237,6 +237,26 @@ N.uiScale = 2
 ns.EUITakeSlice(taken, N, { id = "general" }, k2f)
 eq(taken.uiScale, nil, "take: a scale outside the range is not applied")
 
+-- A Top Bar take is the Top Bar's own settings: the player's switches stay.
+do
+    local tbTaken = { addons = { [TOP_BAR] = {
+        bite = true, darkCastBar = true, lulu = true, tbOpacity = 60, tbPos = { x = 1 },
+    } } }
+    local tbKitn = { addons = { [TOP_BAR] = { bite = false, darkCastBar = false, accentPink = true, tbOpacity = 85 } } }
+    ns.EUITakeSlice(tbTaken, tbKitn, { id = TOP_BAR }, k2f)
+    local tbFolder = tbTaken.addons[TOP_BAR]
+    eq(tbFolder.tbOpacity, 85, "take: the Top Bar takes KitnUI's Top Bar settings")
+    eq(tbFolder.tbPos, nil, "take: and none of the player's KitnUI's string lacks")
+    check(tbFolder.bite == true and tbFolder.darkCastBar == true and tbFolder.lulu == true,
+        "take: the player's switch states stay as they are")
+    eq(tbFolder.accentPink, nil, "take: and KitnUI's are not added")
+    local tbBare = {}
+    ns.EUITakeSlice(tbBare, { addons = { [TOP_BAR] = { bite = true, tbOpacity = 85 } } }, { id = TOP_BAR }, k2f)
+    local tbBareFolder = tbBare.addons and tbBare.addons[TOP_BAR]
+    check(tbBareFolder and tbBareFolder.bite == nil and tbBareFolder.tbOpacity == 85,
+        "take: with no folder of the player's, KitnUI's switch states still stay out")
+end
+
 -- Size-match extras go where the links a part owns go, keyed by the same child.
 eq(ns.EUIRowOf("unlockLayout.heightMatchExtra.UF_Player", k2f), UF, "owner: a size-match extra by its child")
 local xMerged = {
@@ -532,6 +552,31 @@ local colourBase = baseSide()
 colourBase.customColors = {}
 eq(countOf(walkAll(colourBase, colourSide, { player = true }), "general"), 1, "player: a General setting only the player holds counts")
 eq(countOf(walkAll(colourSide, colourBase, { player = true }), "general"), 1, "player: and one only the base holds")
+
+-- The Top Bar row counts the Top Bar's own settings, never the switch states
+-- and switch settings that share its folder.
+do
+    local tbRows = { { id = TOP_BAR, label = "Top Bar" } }
+    local function tbSide(on, opacity)
+        local folder = { bite = on, darkCastBar = on, npArrowW = on and 30 or 24, tbOpacity = opacity }
+        return { addons = { [TOP_BAR] = folder } }
+    end
+    local function tbCount(A, B, opts)
+        local walker = ns.EUIRowDiff(A, B, tbRows, {}, opts)
+        walker:Step(math.huge)
+        return walker.result[TOP_BAR] and walker.result[TOP_BAR].count or 0
+    end
+    eq(tbCount(tbSide(false, 85), tbSide(true, 85), { player = true }), 0,
+        "top bar: switches the player turned on are not Top Bar changes")
+    eq(tbCount(tbSide(false, 85), tbSide(true, 60), { player = true }), 1, "top bar: a Top Bar setting the player changed is")
+    eq(tbCount(tbSide(false, 85), tbSide(true, 85), { player = true, against = tbSide(false, 85) }), 0,
+        "top bar: a Reset's count leaves them out too, as the Reset keeps them")
+    local tbDefaults = { [TOP_BAR] = { bite = false, darkCastBar = false, npArrowW = 24, tbOpacity = 85 } }
+    local tbAbsent = { addons = { [TOP_BAR] = { tbOpacity = 85 } } }
+    eq(tbCount(tbAbsent, tbSide(true, 85), { player = true, defaults = tbDefaults }), 0,
+        "top bar: a switch the base lacks, on against its default, is not counted either")
+    eq(tbCount(tbSide(false, 85), tbSide(true, 60)), 4, "top bar: the update walk still counts every key that differs")
+end
 
 ---------------------------------------------------------------------------------
 -- Work per step
