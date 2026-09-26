@@ -178,6 +178,8 @@ E.BuildImportKeyToFolder = function(ul, meta)
     end
     return out
 end
+local SCREEN_EDGES = { SCREEN_LEFT = true, SCREEN_RIGHT = true, SCREEN_TOP = true, SCREEN_BOTTOM = true }
+E.IsScreenEdgeKey = function(key) return SCREEN_EDGES[key] ~= nil end
 E.FilterLayoutToFolders = function(ul, keepSet, k2f)
     local function endpointOK(key)
         return type(key) == "string" and k2f[key] ~= nil and keepSet[k2f[key]] == true
@@ -197,6 +199,10 @@ E.FilterLayoutToFolders = function(ul, keepSet, k2f)
         end
     end
     return out
+end
+do
+    local kept = E.FilterLayoutToFolders({ anchors = { bar = { target = "SCREEN_TOP" } } }, { Mod = true }, { bar = "Mod" })
+    check(kept.anchors.bar ~= nil, "stub: an anchor to a screen edge is kept, as the real filter keeps it")
 end
 -- "activate" | "spec_locked" | "throw_before" | "throw_scale" | "throw_stored" | "throw_active"
 E.importMode = "activate"
