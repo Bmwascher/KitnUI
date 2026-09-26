@@ -165,21 +165,47 @@ E.SetProfile = function(name)
     if E.switchFails then return end
     if db.profiles[name] then db.activeProfile = name end
 end
+-- The resolver classifies every endpoint, children and targets alike. The
+-- filter keeps a link only when both endpoints resolve to a kept folder, and
+-- an extra only beside a surviving link.
 E.BuildImportKeyToFolder = function(ul, meta)
     local out = {}
-    for _, map in ipairs({ "anchors", "widthMatch", "heightMatch" }) do
-        for child in pairs(ul[map] or {}) do out[child] = meta[child] end
+    local function add(key)
+        if type(key) == "string" and out[key] == nil then out[key] = meta[key] end
     end
-    return out
-end
-E.FilterLayoutToFolders = function(ul, keepSet, k2f)
-    local out = { anchors = {}, widthMatch = {}, heightMatch = {}, phantomBounds = {} }
     for _, map in ipairs({ "anchors", "widthMatch", "heightMatch" }) do
         for child, v in pairs(ul[map] or {}) do
-            if k2f[child] and keepSet[k2f[child]] then out[map][child] = v end
+            add(child)
+            if map == "anchors" then add(type(v) == "table" and v.target or nil) else add(v) end
         end
     end
     return out
+end
+local SCREEN_EDGES = { SCREEN_LEFT = true, SCREEN_RIGHT = true, SCREEN_TOP = true, SCREEN_BOTTOM = true }
+E.IsScreenEdgeKey = function(key) return SCREEN_EDGES[key] ~= nil end
+E.FilterLayoutToFolders = function(ul, keepSet, k2f)
+    local function endpointOK(key)
+        return type(key) == "string" and k2f[key] ~= nil and keepSet[k2f[key]] == true
+    end
+    local out = { anchors = {}, widthMatch = {}, heightMatch = {}, phantomBounds = {} }
+    for child, info in pairs(ul.anchors or {}) do
+        local edge = E.IsScreenEdgeKey and E.IsScreenEdgeKey(info and info.target)
+        if type(info) == "table" and endpointOK(child) and (endpointOK(info.target) or edge) then out.anchors[child] = info end
+    end
+    for map, xmap in pairs({ widthMatch = "widthMatchExtra", heightMatch = "heightMatchExtra" }) do
+        for child, target in pairs(ul[map] or {}) do
+            if endpointOK(child) and endpointOK(target) then out[map][child] = target end
+        end
+        out[xmap] = {}
+        for child, px in pairs(ul[xmap] or {}) do
+            if out[map][child] ~= nil then out[xmap][child] = px end
+        end
+    end
+    return out
+end
+do
+    local kept = E.FilterLayoutToFolders({ anchors = { bar = { target = "SCREEN_TOP" } } }, { Mod = true }, { bar = "Mod" })
+    check(kept.anchors.bar ~= nil, "stub: an anchor to a screen edge is kept, as the real filter keeps it")
 end
 -- "activate" | "spec_locked" | "throw_before" | "throw_scale" | "throw_stored" | "throw_active"
 E.importMode = "activate"
@@ -510,6 +536,46 @@ text = ns.EUIConfirmText(plan)
 check(text:find("Your previous backup will be replaced.", 1, true), "confirm: the backup line")
 check(text:find("keybind", 1, true), "confirm: the moved line")
 
+-- Match extras through the click. O, N and P share one width link whose
+-- endpoints the meta places, and P carries an extra on it. These prove what
+-- the update hands the importer, not what the importer stores.
+local EXTRAS_META = { keyToFolder = { player_cb = F, player = F, target = F, bar_ab = "EllesmereUIActionBars" } }
+
+local function linkExtras(d, target)
+    d.unlockLayout.widthMatch = { player_cb = target }
+    d.unlockLayoutMeta = ns.EUIDeepCopy(EXTRAS_META)
+end
+
+local function resetExtras()
+    for _, d in ipairs({ strings.O.data, nData }) do
+        d.unlockLayout.widthMatch, d.unlockLayoutMeta = {}, { keyToFolder = {} }
+    end
+end
+
+local function prepareExtras(nTarget)
+    linkExtras(strings.O.data, "player")
+    linkExtras(nData, nTarget)
+    freshInstall()
+    linkExtras(db.profiles.KitnUI, "player")
+    db.profiles.KitnUI.unlockLayout.widthMatchExtra = { player_cb = 6 }
+    ns.EUIStartDecodes()
+    return ns.EUIPrepareUpdate()
+end
+
+do
+    local kept = prepareExtras("player")
+    eq(kept.merged.unlockLayout.widthMatchExtra.player_cb, 6, "extras: the plan keeps the player's extra on a link Kitn left alone")
+    eq(#kept.report.conflicts, 0, "extras: and adds nothing to the count")
+    eq(ns.EUIApplyUpdate(kept), true, "extras: the kept plan applies")
+    eq(E.lastImport.data.unlockLayout.widthMatchExtra.player_cb, 6, "extras: the payload handed to the importer carries the extra")
+    local moved = prepareExtras("target")
+    eq(moved.merged.unlockLayout.widthMatch.player_cb, "target", "extras: Kitn's re-pointed link is taken")
+    eq(moved.merged.unlockLayout.widthMatchExtra.player_cb, nil, "extras: the player's extra is dropped with the link")
+    check(ns.EUIConfirmText(moved):find("1 of your changes will be replaced", 1, true),
+        "extras: the confirm counts the dropped extra")
+    resetExtras()
+end
+
 ---------------------------------------------------------------------------------
 -- The acceptance
 ---------------------------------------------------------------------------------
@@ -614,6 +680,16 @@ _G.print = savedPrint
 ns.db.devMode = nil
 eq(#printed, #plan.report.conflicts, "click: dev mode prints each conflict path")
 check(printed[1] and printed[1]:find("fonts.global", 1, true), "click: the printed line names the path")
+
+-- A re-pointed link whose new target sits in a disabled module is removed
+-- by the filter; the extra it displaced is not counted, the warning shows.
+do
+    local cut = prepareExtras("bar_ab")
+    eq(cut.merged.unlockLayout.widthMatch.player_cb, nil, "extras: a link into a disabled module is removed by the filter")
+    eq(#cut.report.conflicts, 0, "extras: the displaced extra's count is struck with its link")
+    eq(cut.warnLinks, true, "extras: the links warning shows instead")
+    resetExtras()
+end
 
 -- A resolver that answers nothing refuses the click.
 freshInstall()
@@ -1122,8 +1198,8 @@ eq(table.concat(unreadIds, ","), F .. ",general,overrides",
 freshInstall()
 local linkN = base()
 linkN.addons[F].x = 5
-linkN.unlockLayout.anchors = { UF_Player = { target = "UIParent" } }
-linkN.unlockLayoutMeta = { keyToFolder = { UF_Player = F } }
+linkN.unlockLayout.anchors = { UF_Player = { target = "UF_Target" } }
+linkN.unlockLayoutMeta = { keyToFolder = { UF_Player = F, UF_Target = F } }
 ns.data.EllesmereUI = encode("N-links", payload(linkN))
 ns.EUIStartDecodes()
 local linkPlan, linkWhy = ns.EUIPrepareUpdate()
@@ -1139,8 +1215,8 @@ E._ADDON_DB_MAP = { { folder = F }, "unreadable" }
 local RBF = "EllesmereUIResourceBars"
 local partN = base()
 partN.addons[RBF] = { z = 1 }
-partN.unlockLayout.anchors = { UF_Player = { target = "UIParent" }, ERB_Health = { target = "UIParent" } }
-partN.unlockLayoutMeta = { keyToFolder = { UF_Player = F, ERB_Health = RBF } }
+partN.unlockLayout.anchors = { UF_Player = { target = "UF_Target" }, ERB_Health = { target = "ERB_Power" } }
+partN.unlockLayoutMeta = { keyToFolder = { UF_Player = F, UF_Target = F, ERB_Health = RBF, ERB_Power = RBF } }
 ns.data.EllesmereUI = encode("N-partial", payload(partN))
 ns.EUIStartDecodes()
 local partMapPlan, partMapWhy = ns.EUIPrepareUpdate()
