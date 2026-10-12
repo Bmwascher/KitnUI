@@ -81,7 +81,7 @@ function ns.EUIRows(map, roster, nAddons, disableList)
     if nAddons[TOP_BAR] ~= nil then
         rows[#rows + 1] = { id = TOP_BAR, label = "Top Bar", sub = "KitnUI" }
     end
-    rows[#rows + 1] = { id = "general", label = "General", sub = "fonts, colours, scale" }
+    rows[#rows + 1] = { id = "general", label = "General", sub = "fonts, colors, scale" }
     rows[#rows + 1] = { id = "overrides", label = "Spec Overrides", sub = "all or nothing" }
     return rows
 end
@@ -343,7 +343,7 @@ local GROUP_NAMES = {
     StanceBar = "Stance Bar", PetBar = "Pet Bar",
     health = "Health Bar", primary = "Primary Resource", secondary = "Class Resource", castBar = "Cast Bar",
     spec = "Spec Layouts", healerMana = "Healer Mana", palettes = "Palettes",
-    fonts = "Fonts", customColors = "Colours", darkMode = "Dark Mode", euiAccent = "Accent Colour",
+    fonts = "Fonts", customColors = "Colors", darkMode = "Dark Mode", euiAccent = "Accent Color",
 }
 
 local function tidy(key)
@@ -357,9 +357,93 @@ end
 
 local function capital(s) return (s:gsub("^%l", string.upper)) end
 
+-- EllesmereUI stores a buff placed on a cooldown bar as -(base + spellID) in
+-- the bar's assignedSpells, beside plain spell IDs. A cooldown claim marker,
+-- -(claim base + cooldownID), lies past every hosted marker and names no spell.
+local CDM_HOSTED_BASE, CDM_CLAIM_BASE = 2000000000, 3000000000
+
+-- The spell one bar list entry names, or nil. assignedSpells holds spell IDs
+-- as values; customSpellIDs is a set keyed by spell ID. The other lists there
+-- hold durations.
+local function cdmSpellID(list, key, value)
+    if list == "assignedSpells" and key:match("^%[%d+%]$") and type(value) == "number" then
+        if value > 0 then return value end
+        if value <= -CDM_HOSTED_BASE and value > -CDM_CLAIM_BASE then return -value - CDM_HOSTED_BASE end
+    elseif list == "customSpellIDs" then
+        local id = tonumber(key:match("^%[(%d+)%]$") or "")
+        if id and id > 0 then return id end
+    end
+    return nil
+end
+
+-- Top Bar settings the tidied key would misname. Any other tb key reads as
+-- its tidied name without the prefix: "tbIconSize" is "Icon size".
+local TOP_BAR_NAMES = {
+    tbOff = "Hidden elements", tbOrder = "Element order", tbPos = "Bar position",
+    tbSysPos = "FPS and latency position", tbSysSize = "FPS / MS size", tbUse24h = "24-hour clock",
+    tbHideSerious = "Hide in keystones, raids and rated PvP", tbAccent = "Custom accent color",
+    tbEnabled = "Top Bar on",
+}
+
+-- A name from the walk's lookups (EUIRowDiff, opts.names), or nil. Each
+-- answer is kept, so an ID costs one lookup, and one unit of the walk's
+-- budget, however often it is named.
+local function lookup(labels, kind, id)
+    local fn = labels[kind]
+    if type(fn) ~= "function" or type(id) ~= "number" then return nil end
+    local memoKey = kind .. "Memo"
+    local memo = labels[memoKey]
+    if not memo then
+        memo = {}
+        labels[memoKey] = memo
+    end
+    local name = memo[id]
+    if name == nil then
+        if labels.tick then labels.tick() end
+        name = fn(id)
+        if type(name) ~= "string" or name == "" then name = false end
+        memo[id] = name
+    end
+    return name or nil
+end
+
+-- A Cooldown Manager path, cdmSpells.<specID>.<rest>: the spec is the group,
+-- a spell list's entry is its spell, and anything under a bar names the bar.
+local function cdmLabel(parts, labels, value)
+    local specID = tonumber(parts[2]:match("^%[?(%d+)%]?$") or "")
+    local group = lookup(labels, "spec", specID) or ("Spec " .. (specID and tostring(specID) or parts[2]))
+    local bar = parts[3] == "barSpells" and parts[4] and capital(tidy(parts[4])) or nil
+    local last = #parts
+    while last > 2 and CHANNELS[parts[last]] do last = last - 1 end
+    local item
+    if bar and last == 6 then
+        local spellID = cdmSpellID(parts[5], parts[6], value)
+        if spellID then item = lookup(labels, "spell", spellID) or ("spell " .. spellID) end
+    end
+    item = item or (labels.names and labels.names[table.concat(parts, ".", 1, last)]) or tidy(parts[last])
+    if bar then item = item .. " (" .. bar .. ")" end
+    return group, item
+end
+
+-- A Top Bar setting: its name, then what lies below it, as "Hidden elements (clock)".
+local function topBarItem(parts)
+    local last = #parts
+    while last > 3 and CHANNELS[parts[last]] do last = last - 1 end
+    local key = parts[3]
+    local item = TOP_BAR_NAMES[key] or capital(tidy(key:sub(3)))
+    if last > 3 then
+        local below = {}
+        for j = 4, last do below[#below + 1] = tidy(parts[j]) end
+        item = item .. " (" .. table.concat(below, " ") .. ")"
+    end
+    return item
+end
+
 -- (group, item) for one counted path. labels.unlock: element key -> Unlock
--- Mode label; labels.names: list-entry path -> that entry's name field.
-function ns.EUISettingLabel(path, row, labels)
+-- Mode label; labels.names: list-entry path -> that entry's name field;
+-- labels.spec and labels.spell: the walk's name lookups. value: the setting's
+-- own value, which names a Cooldown Manager list entry.
+function ns.EUISettingLabel(path, row, labels, value)
     labels = labels or {}
     local unlock, names = labels.unlock or {}, labels.names or {}
     if path == "uiScale" then return "General", "ui scale" end
@@ -369,8 +453,12 @@ function ns.EUISettingLabel(path, row, labels)
 
     local parts = {}
     for part in path:gmatch("[^.]+") do parts[#parts + 1] = part end
+    if parts[1] == "cdmSpells" and parts[2] then return cdmLabel(parts, labels, value) end
+    if parts[1] == "addons" and parts[2] == TOP_BAR and parts[3] and parts[3]:sub(1, 2) == "tb" then
+        return "Top Bar", topBarItem(parts)
+    end
     local i = 1
-    if parts[1] == "addons" then i = 3 elseif parts[1] == "cdmSpells" then i = 2 end
+    if parts[1] == "addons" then i = 3 end
     while parts[i] and GROUP_WRAPPERS[parts[i]] and parts[i + 1] do i = i + 1 end
     local group
     if i >= #parts then
@@ -386,9 +474,11 @@ end
 
 local TIP_GROUPS, TIP_ITEMS = 6, 8
 
--- The hover list: { text, header } lines, capped, with "+N more" tails. A
--- group's `n` and the entry's `count` are the totals behind the capped lists
--- the walk keeps; without them the lists' own lengths are the totals.
+-- The hover list: { text, header } lines, capped. A group listing fewer
+-- settings than it holds shows its total in its heading, and the settings of
+-- the groups left out are counted in a last "+N more" line. A group's `n` and
+-- the entry's `count` are the totals behind the capped lists the walk keeps;
+-- without them the lists' own lengths are the totals.
 function ns.EUITooltipLines(entry)
     local lines = {}
     local groups = isTable(entry) and entry.groups or {}
@@ -398,10 +488,10 @@ function ns.EUITooltipLines(entry)
     for gi = 1, math.min(#groups, TIP_GROUPS) do
         local g = groups[gi]
         local n = g.n or #g.items
+        local listed = math.min(#g.items, TIP_ITEMS)
         shown = shown + n
-        lines[#lines + 1] = { text = g.name, header = true }
-        for ii = 1, math.min(#g.items, TIP_ITEMS) do lines[#lines + 1] = { text = g.items[ii] } end
-        if n > TIP_ITEMS then lines[#lines + 1] = { text = "+" .. (n - TIP_ITEMS) .. " more" } end
+        lines[#lines + 1] = { text = n > listed and (g.name .. " (" .. n .. ")") or g.name, header = true }
+        for ii = 1, listed do lines[#lines + 1] = { text = g.items[ii] } end
     end
     if total > shown then lines[#lines + 1] = { text = "+" .. (total - shown) .. " more" } end
     return lines
@@ -475,10 +565,10 @@ end
 -- A part keeps its total, each group's total, and only the first groups and
 -- settings by name, as many as the tooltip shows. A recorded setting costs the
 -- same however many came before it, and nothing is left to sort at the end.
-local function record(w, row, path)
+local function record(w, row, path, value)
     local e = entryFor(w, row.id)
     e.count = e.count + 1
-    local group, item = ns.EUISettingLabel(path, row, w.labels)
+    local group, item = ns.EUISettingLabel(path, row, w.labels, value)
     local g = w.byName[row.id][group]
     if not g then
         g = { name = group, items = {}, n = 0 }
@@ -619,7 +709,11 @@ local function visit(w, a, b, d, path, row, hasDefaults, n)
     local descend = (ta or tb) and (ta or a == nil) and (tb or b == nil)
         and not isColour(a) and not isColour(b)
     if not descend then
-        if differs(w, a, b, d, hasDefaults) and replaced(w, b, n, d, hasDefaults) then record(w, row, path) end
+        if differs(w, a, b, d, hasDefaults) and replaced(w, b, n, d, hasDefaults) then
+            local value = b
+            if value == nil then value = a end
+            record(w, row, path, value)
+        end
         return
     end
     if ta then
@@ -799,10 +893,12 @@ end
 -- and returns true once every row is counted. result[id] = { count,
 -- groups = { {name, n, items} }, noBase }, groups and items capped
 -- at what the tooltip shows. opts: player, noBase, missing, fallback, held,
--- defaults, unlock, against (KitnUI's side, for a reset's count). Building
+-- defaults, unlock, against (KitnUI's side, for a reset's count), names
+-- ({ spec = fn(id), spell = fn(id) }, the tooltip's name lookups). Building
 -- the walker reads no table: the first Step does the setup, under the budget.
 function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
     opts = opts or {}
+    local lookups = isTable(opts.names) and opts.names or {}
     local w = setmetatable({
         A = A, B = B, rows = rows or {}, keyToFolder = keyToFolder or {}, opts = opts,
         result = {}, byName = {}, top = 0, done = false, prepared = false, units = 0, budget = math.huge,
@@ -811,9 +907,10 @@ function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
         player = opts.player and true or false,
         held = opts.held or {},
         heldFkeys = {}, heldAnchors = {}, heldAny = false,
-        labels = { unlock = opts.unlock or {}, names = {} },
+        labels = { unlock = opts.unlock or {}, names = {}, spec = lookups.spec, spell = lookups.spell },
     }, Walker)
     w.tickFn = function() tick(w) end
+    w.labels.tick = w.tickFn
     return w
 end
 
