@@ -488,23 +488,26 @@ local function ShowingConfirmPopup()
     end
 end
 
--- The popup affords three message lines; the update's confirm carries up to
--- seven sentences. Grown by the measured overflow, the way the popup grows
--- itself for its type-to-confirm gate. The text is measured again on the next
--- frame: until the popup lays out, the first measurement can still be the
--- previous message's. The deferred pass acts only on the showing that armed
--- it: the popup must still be visible through its dimmer and still carry the
--- same message.
+-- The popup's base height affords three message lines; the update's confirm
+-- carries up to seven sentences. A popup that already sizes itself to its
+-- message is left alone; an older one is grown to its base plus the measured
+-- overflow. The text is measured again on the next frame: until the popup
+-- lays out, the first measurement can still be the previous message's. The
+-- deferred pass acts only on the showing that armed it: the popup must still
+-- be visible through its dimmer and still carry the same message.
 local function GrowConfirmPopup()
     local popup = ShowingConfirmPopup()
     local msg = popup and popup._msg
     if not (msg and msg.GetStringHeight and popup.GetHeight and popup.SetHeight) then return end
-    local base = popup:GetHeight()
+    local base = popup._baseH or popup:GetHeight()
     local text = msg:GetText()
     local function grow()
         if not (popup:IsVisible() and msg:GetText() == text) then return end
-        local extra = (msg:GetStringHeight() or 0) - 44
-        popup:SetHeight(base + (extra > 0 and extra or 0))
+        local textH, current = msg:GetStringHeight() or 0, popup:GetHeight()
+        local isv = issecretvalue
+        if isv and (isv(textH) or isv(current) or isv(base)) then return end
+        local target = base + math.max(0, textH - 44)
+        if current < target then popup:SetHeight(target) end
     end
     grow()
     C_Timer.After(0, grow)
