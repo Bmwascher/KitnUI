@@ -976,7 +976,7 @@ local function freeScratchName()
 end
 
 -- The scratch profile goes once the import has landed. Its delete drops every
--- note filed under it, so the notes move to the new profile first; a colour
+-- note filed under it, so the notes move to the new profile first; a color
 -- source still naming it would be cleared by the delete, so it moves too.
 local function finishScratch(scratchName)
     local e, d = E(), DB()

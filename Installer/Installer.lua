@@ -489,10 +489,12 @@ local function ShowingConfirmPopup()
 end
 
 -- The popup's base height affords three message lines; the update's confirm
--- carries up to seven sentences. A popup that already sizes itself to its
--- message is left alone; an older one is grown to its base plus the measured
--- overflow. The text is measured again on the next frame: until the popup
--- lays out, the first measurement can still be the previous message's. The
+-- carries up to seven sentences. Set to the base plus the measured overflow,
+-- which is the height a popup that sizes itself to its message picks for this
+-- confirm (it shows no checkbox, scale warning, typed word or disclaimer), so
+-- that popup is not grown twice. The text is measured again on the next
+-- frame: until the popup lays out, the first measurement can still be the
+-- previous message's, so the second pass may shrink as well as grow. The
 -- deferred pass acts only on the showing that armed it: the popup must still
 -- be visible through its dimmer and still carry the same message.
 local function GrowConfirmPopup()
@@ -503,11 +505,10 @@ local function GrowConfirmPopup()
     local text = msg:GetText()
     local function grow()
         if not (popup:IsVisible() and msg:GetText() == text) then return end
-        local textH, current = msg:GetStringHeight() or 0, popup:GetHeight()
+        local textH = msg:GetStringHeight() or 0
         local isv = issecretvalue
-        if isv and (isv(textH) or isv(current) or isv(base)) then return end
-        local target = base + math.max(0, textH - 44)
-        if current < target then popup:SetHeight(target) end
+        if isv and (isv(textH) or isv(base)) then return end
+        popup:SetHeight(base + math.max(0, textH - 44))
     end
     grow()
     C_Timer.After(0, grow)
