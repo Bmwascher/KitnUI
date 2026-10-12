@@ -60,6 +60,10 @@
       <stop offset="0" stop-color="#ff008c" stop-opacity="0.22"/>
       <stop offset="1" stop-color="#ff008c" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="cornerGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff008c" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ff008c" stop-opacity="0"/>
+    </radialGradient>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
       <feGaussianBlur stdDeviation="18"/>
     </filter>
@@ -101,6 +105,16 @@
 
     <!-- Footer 968..1050 -->
     <rect id="footer" x="395" y="968" width="1005" height="82" fill="#1b0918"/>
+    <!-- Sidebar flare: a glow from the bottom-left corner, a dusting of stars
+         and a paw print constellation above the opacity slider. -->
+    <g id="sidebar-flare">
+      <circle cx="100" cy="1050" r="260" fill="url(#cornerGlow)"/>
+      <circle cx="367.0" cy="1030.7" r="0.7" fill="#ffd1ea" opacity="0.21"/><circle cx="193.9" cy="928.3" r="1.1" fill="#ffd1ea" opacity="0.25"/><circle cx="161.8" cy="940.0" r="0.9" fill="#ffd1ea" opacity="0.45"/><circle cx="360.5" cy="879.1" r="1.4" fill="#ffd1ea" opacity="0.37"/><circle cx="251.5" cy="992.2" r="1.1" fill="#ffd1ea" opacity="0.51"/><circle cx="165.6" cy="866.4" r="1.1" fill="#ffd1ea" opacity="0.46"/><circle cx="281.9" cy="1034.7" r="1.1" fill="#ffd1ea" opacity="0.43"/><circle cx="348.8" cy="1034.3" r="1.1" fill="#ffd1ea" opacity="0.46"/><circle cx="196.0" cy="875.4" r="1.4" fill="#ffd1ea" opacity="0.27"/><circle cx="243.3" cy="1002.5" r="0.9" fill="#ffd1ea" opacity="0.27"/><circle cx="158.0" cy="918.2" r="0.9" fill="#ffd1ea" opacity="0.43"/><circle cx="267.0" cy="1029.2" r="1.1" fill="#ffd1ea" opacity="0.53"/><circle cx="200.6" cy="926.5" r="1.1" fill="#ffd1ea" opacity="0.42"/><circle cx="358.5" cy="941.9" r="0.9" fill="#ffd1ea" opacity="0.30"/><circle cx="306.0" cy="1009.1" r="0.9" fill="#ffd1ea" opacity="0.33"/><circle cx="147.9" cy="994.2" r="0.7" fill="#ffd1ea" opacity="0.58"/><circle cx="154.8" cy="1035.5" r="0.7" fill="#ffd1ea" opacity="0.45"/><circle cx="218.1" cy="889.3" r="0.9" fill="#ffd1ea" opacity="0.47"/><circle cx="380.6" cy="1004.9" r="0.7" fill="#ffd1ea" opacity="0.42"/><circle cx="384.7" cy="994.8" r="1.1" fill="#ffd1ea" opacity="0.21"/><circle cx="328.7" cy="948.3" r="0.7" fill="#ffd1ea" opacity="0.23"/><circle cx="238.5" cy="895.4" r="1.4" fill="#ffd1ea" opacity="0.58"/><circle cx="168.5" cy="878.6" r="0.9" fill="#ffd1ea" opacity="0.48"/><circle cx="264.2" cy="903.0" r="0.7" fill="#ffd1ea" opacity="0.37"/>
+      <path d="M216 963 C207 950 222 938 234 942 C246 938 261 950 252 963 C246 973 222 973 216 963 Z" fill="#ff008c" fill-opacity="0.06" stroke="#ff4fb3" stroke-opacity="0.45" stroke-width="1.2" stroke-linejoin="round"/>
+      <circle cx="209" cy="927" r="6" fill="#ff008c" fill-opacity="0.07" stroke="#ff4fb3" stroke-opacity="0.4" stroke-width="1"/><circle cx="224" cy="915" r="6" fill="#ff008c" fill-opacity="0.07" stroke="#ff4fb3" stroke-opacity="0.4" stroke-width="1"/><circle cx="244" cy="915" r="6" fill="#ff008c" fill-opacity="0.07" stroke="#ff4fb3" stroke-opacity="0.4" stroke-width="1"/><circle cx="259" cy="927" r="6" fill="#ff008c" fill-opacity="0.07" stroke="#ff4fb3" stroke-opacity="0.4" stroke-width="1"/>
+      <circle cx="215.0" cy="951.0" r="2.6" fill="#ffd1ea" filter="url(#soft)"/><circle cx="215.0" cy="951.0" r="1.4" fill="#fff"/><circle cx="234.0" cy="942.0" r="2.6" fill="#ffd1ea" filter="url(#soft)"/><circle cx="234.0" cy="942.0" r="1.4" fill="#fff"/><circle cx="253.0" cy="951.0" r="2.6" fill="#ffd1ea" filter="url(#soft)"/><circle cx="253.0" cy="951.0" r="1.4" fill="#fff"/><circle cx="234.0" cy="969.0" r="2.6" fill="#ffd1ea" filter="url(#soft)"/><circle cx="234.0" cy="969.0" r="1.4" fill="#fff"/>
+      <circle cx="209.0" cy="927.0" r="3.2" fill="#ffd1ea" filter="url(#soft)"/><circle cx="209.0" cy="927.0" r="1.8" fill="#fff"/><circle cx="224.0" cy="915.0" r="3.2" fill="#ffd1ea" filter="url(#soft)"/><circle cx="224.0" cy="915.0" r="1.8" fill="#fff"/><circle cx="244.0" cy="915.0" r="3.2" fill="#ffd1ea" filter="url(#soft)"/><circle cx="244.0" cy="915.0" r="1.8" fill="#fff"/><circle cx="259.0" cy="927.0" r="3.2" fill="#ffd1ea" filter="url(#soft)"/><circle cx="259.0" cy="927.0" r="1.8" fill="#fff"/>
+    </g>
   </g>
 
   <g id="lines" inkscape:groupmode="layer" inkscape:label="Lines" fill="none" stroke-linecap="square">
