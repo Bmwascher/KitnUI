@@ -596,7 +596,7 @@ end
 -- The same GUARDS ApplyAccentColor bails on, plus the note. Not the same ORDER:
 -- that function peeks first and checks the host after, and this one is the other
 -- way round. Equivalent because all six are pure conjuncts and ns.EUIPeekSnap
--- never creates a per-profile record (Core.lua:321-330) -- reordering would only
+-- never creates a per-profile record (Core.lua, ns.EUIPeekSnap) -- reordering would only
 -- matter if one of them had a side effect, which is exactly why the peek and NOT
 -- ns.EUISnap belongs here.
 --
@@ -736,7 +736,7 @@ end)
 -- A veil is STATIC: it is built or not built at page build time and never
 -- re-evaluated. That is safe here: the accent rows are the only caller, and the
 -- master accent switch forces a full page rebuild through
--- ns.EUIRebuildForOwnership (Core.lua:479-496), so the accent rows are rebuilt
+-- ns.EUIRebuildForOwnership (Core.lua), so the accent rows are rebuilt
 -- every time the thing they depend on changes.
 --
 -- The veil marks an unfinished row, in KitnUI pink, and covers the
