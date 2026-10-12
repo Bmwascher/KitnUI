@@ -64,8 +64,18 @@ function Frame:GetHeight() return 0 end
 function Frame:GetStringWidth() return 0 end
 function Frame:GetStringHeight() return 0 end
 function Frame:GetFrameLevel() return 0 end
+function Frame:SetText(text) self.text = text end
+function Frame:GetText() return self.text end
+function Frame:SetWidth(width) self.width = width end
+function Frame:SetHeight(height) self.height = height end
 
-_G.CreateFrame = function() return newFrame() end
+-- Every frame and font the code builds, so a test can find one by what it holds.
+local frames, fonts = {}, {}
+_G.CreateFrame = function()
+    local frame = newFrame()
+    frames[#frames + 1] = frame
+    return frame
+end
 _G.UIParent = newFrame()
 _G.UISpecialFrames = {}
 _G.tinsert = table.insert
@@ -80,10 +90,18 @@ _G.SOUNDKIT = {}
 -- EllesmereUI discards on an accent change keeps its last one.
 local popups = {}
 _G.EllesmereUI = {
-    MakeFont = function() return newFrame() end,
+    MakeFont = function()
+        local font = newFrame()
+        fonts[#fonts + 1] = font
+        return font
+    end,
     MakeBorder = noop,
     SolidTex = noop,
-    MakeStyledButton = function() return newFrame(), newFrame(), newFrame() end,
+    MakeStyledButton = function()
+        local lbl = newFrame()
+        fonts[#fonts + 1] = lbl
+        return newFrame(), newFrame(), lbl
+    end,
     ShowConfirmPopup = function(_, opts) popups[#popups + 1] = opts end,
 }
 
@@ -354,6 +372,151 @@ do
     popups[#popups].onCancel()
     _G.EUIConfirmPopup = nil
     EUI.ShowConfirmPopup, _G.hooksecurefunc = realShow, realHook
+end
+
+---------------------------------------------------------------------------------
+-- The list draws a counted update
+---------------------------------------------------------------------------------
+
+local function fontWith(text)
+    for _, font in ipairs(fonts) do
+        if font.text == text then return font end
+    end
+end
+
+local function slotLabel(slot)
+    local b = wizard["Option" .. slot]
+    return b.shown and b._lbl.text or nil
+end
+
+do
+    local UF = { id = "uf", label = "Unit Frames" }
+    local CDM = { id = "cdm", label = "Cooldown Manager" }
+    local GEN = { id = "general", label = "General", sub = "fonts, colors, scale" }
+    local counts = { uf = 1, cdm = 0, general = 0 }
+    local Timer = _G.C_Timer
+    local realAfter, realDiff, realInputs = Timer.After, ns.EUIRowDiff, ns.EUIPageInputs
+    Timer.After = function(_, fn) fn() end
+    _G.debugprofilestop = function() return 0 end
+    ns.EUIPageInputs = function()
+        return { rows = { UF, CDM, GEN }, N = {}, O = {}, keyToFolder = {}, missing = {} }
+    end
+    local lastNames
+    ns.EUIRowDiff = function(_, _, _, _, opts)
+        lastNames = opts and opts.names
+        local result = {}
+        for id, n in pairs(counts) do result[id] = { count = n, groups = {} } end
+        return { prepared = true, units = 0, result = result, Step = function() return true end }
+    end
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF } } end
+    ns.EUIRestorable = function() return "restore" end
+    ns.EUI_UPDATE_TEXT.split = "%s is placed against %s, which keeps yours."
+    ns.EUI_UPDATE_TEXT.splitMore = " (+%d more)"
+    W:Show()
+
+    local drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws a counted update against the stubs", drawErr)
+    check(fontWith("KitnUI 2.2.0 changes 1 part of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes."),
+        "the intro reads one part at a count of one")
+    check(fontWith("MODULE") and fontWith("KITNUI 2.2.0"), "the column heads are uppercase")
+    check(fontWith("Cooldown Manager is placed against Unit Frames, which keeps yours."), "the notice names the split pair")
+    check(fontWith("Tick Unit Frames too"), "and offers to tick the part keeping the player's copy")
+    eq(slotLabel(1), "Update Profile", "everything ticked: the update button first")
+    eq(slotLabel(2), "Restore previous", "with Restore previous beside it")
+    eq(slotLabel(3), nil, "and no third button")
+
+    -- The walk's name lookups: nil without the game's functions or with a
+    -- secret answer, the name otherwise.
+    check(lastNames ~= nil, "the walk is handed the name lookups")
+    if lastNames then
+        eq(lastNames.spec(102), nil, "names: no spec name without GetSpecializationInfoByID")
+        eq(lastNames.spell(191034), nil, "names: no spell name without C_Spell")
+        _G.GetSpecializationInfoByID = function() return 102, "Balance", "", 0, "DAMAGER", "DRUID", "Druid" end
+        _G.C_Spell = { GetSpellName = function() return "Starfall" end }
+        eq(lastNames.spec(102), "Balance Druid", "names: the spec reads <spec> <class>")
+        eq(lastNames.spell(191034), "Starfall", "names: the spell reads its name")
+        _G.issecretvalue = function() return true end
+        eq(lastNames.spec(102), nil, "names: a secret spec name is not used")
+        eq(lastNames.spell(191034), nil, "names: a secret spell name is not used")
+        _G.issecretvalue, _G.GetSpecializationInfoByID, _G.C_Spell = nil, nil, nil
+    end
+
+    counts.cdm = 3
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws two changed parts", drawErr)
+    check(fontWith("KitnUI 2.2.0 changes 2 parts of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes."),
+        "the intro reads parts above one")
+    local ufRow
+    for _, frame in ipairs(frames) do
+        if frame.row == UF and frame.scripts.OnClick then ufRow = frame end
+    end
+    check(ufRow ~= nil, "the Unit Frames row is drawn")
+    -- A field the row does not carry reads as nil, not as the stubs' noop, so
+    -- a row built before the redraw fails these checks instead of erroring.
+    local function child(t, ...)
+        for i = 1, select("#", ...) do
+            if type(t) ~= "table" then return nil end
+            t = rawget(t, (select(i, ...)))
+        end
+        return t
+    end
+    -- The stubs carry no C_Texture, as a client without the atlas.
+    eq(child(ufRow, "box", "fill", "shown"), true, "a ticked box is filled")
+    eq(child(ufRow, "box", "mark", "shown"), false, "and without the atlas shows no mark")
+    eq(child(ufRow, "kitn", "badge", "height"), 12, "a badge is 2 px shorter than a short row")
+    if ufRow then ufRow.scripts.OnClick(ufRow) end
+    eq(slotLabel(1), "Update ticked (1)", "a part unticked: the button counts the ticks")
+    eq(slotLabel(2), "Restore previous", "Restore previous stays beside it")
+    eq(slotLabel(3), "Tick all", "and Tick all follows")
+    eq(wizard.Option3.width, 100, "Tick all is drawn narrow")
+
+    -- Restore's "switch" state is 240 wide; the row still fits the content column.
+    ns.EUIRestorable = function() return "switch" end
+    ns.EUI_UPDATE_TEXT.notRestorable = "Switch to your KitnUI profile first"
+    if ufRow then
+        ufRow.scripts.OnClick(ufRow)
+        ufRow.scripts.OnClick(ufRow)
+    end
+    eq(slotLabel(2), "Switch to your KitnUI profile first", "the switch state sits beside the update button")
+    eq(slotLabel(3), "Tick all", "with Tick all after it")
+    local rowW = (wizard.Option1.width or 0) + (wizard.Option2.width or 0) + (wizard.Option3.width or 0) + 20
+    check(rowW <= 520, "and the three buttons fit the 520 px content column", rowW)
+    ns.EUIRestorable = function() return "restore" end
+
+    -- Every font measurement secret: the list draws on its stand-ins.
+    _G.issecretvalue = function() return true end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    _G.issecretvalue = nil
+    check(drew, "the list draws when every measurement is secret", drawErr)
+    eq(slotLabel(1), "Update Profile", "and its buttons draw")
+
+    -- While counting: the walk's steps wait for the next frame, so the page
+    -- first draws with no counts.
+    local deferred = {}
+    Timer.After = function(_, fn) deferred[#deferred + 1] = fn end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws while counting", drawErr)
+    eq(child(ufRow, "kitn", "text", "text"), "...", "while counting a KitnUI cell reads ...")
+    eq(slotLabel(1), "Preparing...", "and the update button reads Preparing...")
+    Timer.After = function(_, fn) fn() end
+    for _, fn in ipairs(deferred) do fn() end
+    eq(child(ufRow, "kitn", "text", "text"), "changes 1 setting", "the count lands in the cell")
+
+    -- Up to date, the read-only page: no box, plain "up to date", Restore
+    -- previous alone in slot 1.
+    local realState = ns.EUIUpdateState
+    ns.EUIUpdateState = function() return "current" end
+    counts.uf, counts.cdm = 0, 0
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the up-to-date page draws", drawErr)
+    eq(child(ufRow, "box", "shown"), false, "up to date: no box")
+    eq(child(ufRow, "kitn", "text", "text"), "up to date", "up to date: the cell reads up to date")
+    eq(slotLabel(1), "Restore previous", "up to date: Restore previous in slot 1")
+    eq(slotLabel(2), nil, "up to date: and nothing beside it")
+    ns.EUIUpdateState = realState
+
+    Timer.After, ns.EUIRowDiff, ns.EUIPageInputs = realAfter, realDiff, realInputs
+    ns.EUIHideModuleList()
 end
 
 print(string.format("%d checks, %d failures", checks, failures))
