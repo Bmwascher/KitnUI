@@ -84,6 +84,13 @@
 
 ### Settings Tab
 
+- **NEW:** **Accent Source** picks where the accent color comes from:
+  KitnUI Pink, Rasta Amber, Custom, or **Match KitnEssentials**, which takes
+  KitnEssentials' theme color and follows it when it changes. The swatch
+  always shows the color in use and is editable on Custom
+- KitnUI Pink setups now match KitnEssentials. Its default theme is the
+  same pink, so the accent only changes if you picked another KitnEssentials
+  theme color. Rasta Amber and custom colors carry over
 - The KitnUI section registers through EllesmereUI's plugin support, so it
   keeps working as EllesmereUI updates and its settings show up in the
   options search. It needs EllesmereUI 9.4 or newer, and like other add-on

@@ -201,6 +201,11 @@ local DEFAULTS = {
         -- Cancel behave. A starting colour that is visibly not the pink fixes
         -- both. White means "you have not chosen yet".
         accentCustom            = { r = 1, g = 1, b = 1 },
+        -- Where the master's colour comes from: "pink", "rasta", "ke" or
+        -- "custom". Empty means the choice was never made, and the two keys above
+        -- decide it: Rasta and custom colours carry over, and the pink becomes
+        -- Match KitnEssentials, whose default theme is the same pink.
+        accentSource            = "",
         -- Nameplates. Keep npArrowColor in step with ns.KITN_PINK in
         -- Installer/Wizard.lua: that one is POSITIONAL and this one is KEYED,
         -- and a registered default has to be a literal.

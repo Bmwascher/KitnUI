@@ -469,7 +469,7 @@ do
         eq(gb, wb, "the named accent blue channel matches the installer chrome")
     end
 
-    check(generalSource:find("Use Rasta Amber", 1, true) ~= nil,
+    check(generalSource:find('rasta = "Rasta Amber"', 1, true) ~= nil,
         "the KitnUI page offers the alternate accent by name")
     check(generalSource:find("IsRastaAmber", 1, true) ~= nil,
         "the page can tell whether the stored accent is the alternate one")
@@ -585,9 +585,9 @@ do
     end
 end
 
--- The two named colour switches share one row. Built as full-width rows they
--- read as a list rather than a pair of alternatives, and pushed the swatch that
--- they both write down the page.
+-- One dropdown picks where the accent comes from, above the swatch that shows
+-- it. Named colours as switches turned each other off, which read as a list of
+-- independent options.
 do
     local generalFile = assert(io.open("KitnUI_EUI/General.lua", "rb"))
     local generalSource = generalFile:read("*a")
@@ -601,25 +601,27 @@ do
     if sectionStart and sectionEnd and sectionEnd > sectionStart then
         local section = generalSource:sub(sectionStart, sectionEnd)
 
-        local dualRows = 0
-        for _ in section:gmatch("W:DualRow") do dualRows = dualRows + 1 end
-        eq(dualRows, 1, "the accent section builds exactly one dual row")
+        local dropdowns = 0
+        for _ in section:gmatch("W:Dropdown%(") do dropdowns = dropdowns + 1 end
+        eq(dropdowns, 1, "the accent section builds exactly one dropdown")
 
-        local dualAt = section:find("W:DualRow", 1, true)
-        local pinkAt = section:find("Use KitnUI Pink", 1, true)
-        local amberAt = section:find("Use Rasta Amber", 1, true)
-        check(pinkAt ~= nil and amberAt ~= nil,
-            "both named colour switches are still on the page")
-        check(dualAt ~= nil and pinkAt ~= nil and amberAt ~= nil
-            and pinkAt > dualAt and amberAt > pinkAt,
-            "both named colour switches sit in the dual row, pink on the left")
+        local ddAt = section:find('W:Dropdown(parent, "Accent Source"', 1, true)
+        local swatchAt = section:find('W:ColorPicker(parent, "Accent Color"', 1, true)
+        check(ddAt ~= nil and swatchAt ~= nil and swatchAt > ddAt,
+            "the source dropdown sits above the swatch")
 
-        check(section:find('W:Toggle(parent, "Use ', 1, true) == nil,
-            "neither named colour switch is built as a full-width row")
+        for _, label in ipairs({ 'pink = "KitnUI Pink"', 'rasta = "Rasta Amber"',
+                                 'ke = "Match KitnEssentials"', 'custom = "Custom"' }) do
+            check(section:find(label, 1, true) ~= nil, "the dropdown offers " .. label)
+        end
+
+        check(section:find("W:DualRow", 1, true) == nil
+            and section:find('W:Toggle(parent, "Use ', 1, true) == nil,
+            "no named colour is built as a switch any more")
 
         local veils = 0
         for _ in section:gmatch("Veil%(") do veils = veils + 1 end
-        eq(veils, 2, "one veil covers the shared row and one covers the swatch")
+        eq(veils, 3, "master off veils both rows; a source other than Custom veils the swatch")
     end
 end
 
