@@ -515,14 +515,10 @@ local function GrowConfirmPopup()
     C_Timer.After(0, grow)
 end
 
--- KitnUI's confirms are grouped lines, which read left-aligned. EllesmereUI
--- centers the popup's message once, when it builds the popup, and sets the
--- message's text on every show, its own confirms' included, even one shown
--- over KitnUI's. So the message is hooked once to center on each new text,
--- and KitnUI's left alignment goes on after its own show. A popup EllesmereUI
--- rebuilds comes with a new message, which is hooked on its first use.
--- Without the hook nothing would center the message again, so the message
--- stays as drawn unless every piece is there.
+-- EllesmereUI centers the message only when it builds the popup, but sets its
+-- text on every show, its own confirms included. Hooking SetText re-centers
+-- each new text, so only KitnUI's grouped confirms read left-aligned; without
+-- every piece of that the message stays as EllesmereUI drew it.
 local function AlignConfirmLeft()
     local popup = ShowingConfirmPopup()
     local msg = popup and popup._msg

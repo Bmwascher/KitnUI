@@ -349,8 +349,7 @@ local function BuildRow(i)
     r.hover:SetPoint("BOTTOMRIGHT", 8, 0)
     r.hover:SetColorTexture(1, 1, 1, 0.06)
     r.hover:Hide()
-    -- The tick box: an accent fill and a white mark when ticked, an outline
-    -- when not. Without the atlas the fill alone shows the tick.
+    -- Without the check-mark atlas the accent fill alone shows the tick.
     r.box = CreateFrame("Frame", nil, r)
     r.box:SetSize(14, 14)
     r.box:SetPoint("LEFT", 0, 0)
@@ -561,7 +560,6 @@ local function DrawRows()
     list.colKitn:ClearAllPoints()
     list.colKitn:SetPoint("LEFT", kitnX, 0)
     list.colKitn:SetText(TEXT.colKitn:format(Version()))
-    -- What stands above the heads: the intro and, when it shows, the band.
     local above = 10 + Measure(list.intro:GetStringHeight(), INTRO_H_FALLBACK)
     list.head:ClearAllPoints()
     if list.noticeH > 0 then
@@ -636,7 +634,6 @@ local function DrawRows()
         r.reset:Hide()
         r:Show()
     end
-    -- The panel spans 6 px past the heads and the last row, 8 px either side.
     list.backing:ClearAllPoints()
     list.backing:SetPoint("TOPLEFT", list.head, "TOPLEFT", -8, 6)
     list.backing:SetPoint("BOTTOMRIGHT", list.head, "BOTTOMRIGHT", 8, y - 6)
@@ -679,7 +676,6 @@ local function DrawButtons()
         offerTickAll = view.mode == "updater"
     end
     f.Option1:SetWidth(width)
-    -- Restore previous beside the update button; Tick all after it.
     local slot = ns.EUIDrawRestoreSlot(2) and 3 or 2
     if offerTickAll then
         W:SetOption(slot, TEXT.tickAll, TickAll, 12)
