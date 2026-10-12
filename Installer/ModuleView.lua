@@ -50,6 +50,7 @@ local PANEL_INSET = 8
 local BADGES = {
     you = { fill = { 0.47, 0.67, 1, 0.20 }, text = { 0.71, 0.81, 1, 1 } },
     off = { fill = { 1, 1, 1, 0.09 }, text = { 1, 1, 1, 0.55 } },
+    differs = { fill = { 1, 1, 1, 0.09 }, text = { 1, 1, 1, 0.85 } },
 }
 
 local TEXT = {
@@ -69,7 +70,7 @@ local TEXT = {
     checking = "Checking...",
     yours = "Changed by You - %d",
     asInstalled = "As Installed",
-    differs = "Differs",
+    differs = "Differs - %d",
     matches = "Matches",
     reloadToCheck = "Reload to Check",
     refused = "-",
@@ -181,8 +182,8 @@ local function Tickable(row)
     return Changed(row)
 end
 
--- A cell's text and its kind: "kitn", "you", "amber" or "off" for a badge,
--- "plain" for grey text.
+-- A cell's text and its kind: "kitn", "you", "amber", "off" or "differs" for
+-- a badge, "plain" for grey text.
 local function KitnText(row)
     if row.off then return TEXT.off, "off" end
     local e = view.kitn and view.kitn[row.id]
@@ -203,7 +204,10 @@ local function YoursText(row)
     if settle == "pending" or settle == "due" then return TEXT.reloadToCheck, "plain" end
     local e = view.yours and view.yours[row.id]
     if not e then return TEXT.checking, "plain" end
-    if e.noBase then return e.count > 0 and TEXT.differs or TEXT.matches, "plain" end
+    if e.noBase then
+        if e.count > 0 then return TEXT.differs:format(e.count), "differs" end
+        return TEXT.matches, "plain"
+    end
     if e.count > 0 then return TEXT.yours:format(e.count), "you" end
     return TEXT.asInstalled, "plain"
 end

@@ -397,6 +397,7 @@ do
     local CDM = { id = "cdm", label = "Cooldown Manager" }
     local GEN = { id = "general", label = "General", sub = "fonts, colors, scale" }
     local counts = { uf = 1, cdm = 0, general = 0 }
+    local stubNoBase
     local Timer = _G.C_Timer
     local realAfter, realDiff, realInputs = Timer.After, ns.EUIRowDiff, ns.EUIPageInputs
     Timer.After = function(_, fn) fn() end
@@ -408,7 +409,7 @@ do
     ns.EUIRowDiff = function(_, _, _, _, opts)
         lastNames = opts and opts.names
         local result = {}
-        for id, n in pairs(counts) do result[id] = { count = n, groups = {} } end
+        for id, n in pairs(counts) do result[id] = { count = n, groups = {}, noBase = stubNoBase } end
         return { prepared = true, units = 0, result = result, Step = function() return true end }
     end
     ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = true } } end
@@ -619,6 +620,21 @@ do
     local modulesHeadAt = modulesHead and rawget(modulesHead, "point")
     eq(type(yoursHeadAt) == "table" and yoursHeadAt[2] or nil, 214, "Modules: the Your copy head starts 6 px into its column")
     eq(type(modulesHeadAt) == "table" and modulesHeadAt[2] or nil, 360, "Modules: the KitnUI head starts 6 px into its column")
+
+    -- With no record of the install, a differing part shows its count on a
+    -- badge, as the hoverable cells do; a matching part stays plain.
+    stubNoBase, counts.uf = true, 43
+    drew, drawErr = pcall(ns.EUIModulesPage)
+    check(drew, "the no-record Modules page draws", drawErr)
+    local cdmRow
+    for _, frame in ipairs(frames) do
+        if frame.row == CDM and frame.scripts.OnClick then cdmRow = frame end
+    end
+    eq(child(ufRow, "yours", "text", "text"), "Differs - 43", "no record: a differing part reads its count")
+    eq(child(ufRow, "yours", "badge", "shown"), true, "no record: on a badge")
+    eq(child(cdmRow, "yours", "text", "text"), "Matches", "no record: a matching part reads Matches")
+    eq(child(cdmRow, "yours", "badge", "shown"), false, "no record: as plain text")
+    stubNoBase = nil
 
     Timer.After, ns.EUIRowDiff, ns.EUIPageInputs = realAfter, realDiff, realInputs
     ns.EUIHideModuleList()
