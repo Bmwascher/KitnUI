@@ -62,6 +62,7 @@ read_globals = {
     "UIFrameFadeIn", "UIFrameFadeOut",
     "hooksecurefunc",
     "STANDARD_TEXT_FONT",
+    "C_Texture",  -- the part list's checkbox tests its check-mark atlas exists
 
     -- Static popups
     "StaticPopup_Show", "StaticPopup_Hide",
@@ -92,6 +93,7 @@ read_globals = {
     "C_SpecializationInfo",
     "GetSpecialization", "GetSpecializationInfo",
     "GetSpecializationInfoForClassID", "GetNumSpecializationsForClassID",
+    "GetSpecializationInfoByID",  -- the part list's tooltips name a Cooldown Manager spec
 
     -- Combat lockdown
     "InCombatLockdown",
@@ -162,6 +164,7 @@ read_globals = {
 
     -- Cooldown Manager
     "CooldownViewerSettings", "CooldownManagerLayout_GetName",
+    "C_CooldownViewer",  -- the part list's tooltips read a buff order entry's cooldown as its spell
 
     -- Timer, and the profiler clock the part list's count walk reports against
     "C_Timer", "debugprofilestop",

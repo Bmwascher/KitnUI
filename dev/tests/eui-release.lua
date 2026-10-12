@@ -64,8 +64,21 @@ function Frame:GetHeight() return 0 end
 function Frame:GetStringWidth() return 0 end
 function Frame:GetStringHeight() return 0 end
 function Frame:GetFrameLevel() return 0 end
+function Frame:SetText(text) self.text = text end
+function Frame:GetText() return self.text end
+function Frame:SetWidth(width) self.width = width end
+function Frame:SetHeight(height) self.height = height end
 
-_G.CreateFrame = function() return newFrame() end
+-- The last point set, so a test can read where a frame or font starts.
+function Frame:SetPoint(...) self.point = { ... } end
+
+-- Every frame and font the code builds, so a test can find one by what it holds.
+local frames, fonts = {}, {}
+_G.CreateFrame = function()
+    local frame = newFrame()
+    frames[#frames + 1] = frame
+    return frame
+end
 _G.UIParent = newFrame()
 _G.UISpecialFrames = {}
 _G.tinsert = table.insert
@@ -80,10 +93,18 @@ _G.SOUNDKIT = {}
 -- EllesmereUI discards on an accent change keeps its last one.
 local popups = {}
 _G.EllesmereUI = {
-    MakeFont = function() return newFrame() end,
+    MakeFont = function()
+        local font = newFrame()
+        fonts[#fonts + 1] = font
+        return font
+    end,
     MakeBorder = noop,
     SolidTex = noop,
-    MakeStyledButton = function() return newFrame(), newFrame(), newFrame() end,
+    MakeStyledButton = function()
+        local lbl = newFrame()
+        fonts[#fonts + 1] = lbl
+        return newFrame(), newFrame(), lbl
+    end,
     ShowConfirmPopup = function(_, opts) popups[#popups + 1] = opts end,
 }
 
@@ -284,6 +305,323 @@ do
     eq(heightFor(false, true), 232, "and so is an older popup grown from one")
     _G.EUIConfirmPopup = nil
     EUI.ShowConfirmPopup, Timer.After = realShow, realAfter
+end
+
+---------------------------------------------------------------------------------
+-- The confirm's button and alignment
+---------------------------------------------------------------------------------
+
+ns.EUI_UPDATE_TEXT.resetTitle = "Reset %s?"
+ns.EUIResetText = function() return "reset" end
+ns.EUIConfirmUpdate({ kind = "update", noBase = true, inputs = {} })
+eq(popups[#popups].confirmText, "Replace", "a confirm with no install record reads Replace")
+ns.EUIConfirmUpdate({ kind = "update", noBase = false, inputs = {} })
+eq(popups[#popups].confirmText, "Update", "an update reads Update")
+ns.EUIConfirmUpdate({ kind = "reset", row = { label = "Unit Frames" }, inputs = {} })
+eq(popups[#popups].confirmText, "Reset", "a reset reads Reset")
+
+do
+    -- The popup's message, and a show that sets its text, as EllesmereUI's
+    -- does on every show, its own confirms' included.
+    local msg = { justify = "CENTER" }
+    function msg:SetJustifyH(j) self.justify = j end
+    function msg:SetText(text) self.text = text end
+    local hooks = 0
+    local realHook = _G.hooksecurefunc
+    _G.hooksecurefunc = function(t, name, fn)
+        hooks = hooks + 1
+        local orig = t[name]
+        t[name] = function(...)
+            orig(...)
+            fn(...)
+        end
+    end
+    local EUI = _G.EllesmereUI
+    local realShow = EUI.ShowConfirmPopup
+    EUI.ShowConfirmPopup = function(self, opts)
+        realShow(self, opts)
+        local current = _G.EUIConfirmPopup
+        if current and current._msg and current._msg.SetText then current._msg:SetText(opts.message) end
+    end
+    local popup = { _msg = msg }
+    function popup:IsVisible() return true end
+    _G.EUIConfirmPopup = popup
+    ns.EUIConfirmUpdate(newPlan("aligned"))
+    eq(msg.justify, "LEFT", "a confirm's message is left-aligned while it shows")
+    EUI:ShowConfirmPopup({ message = "theirs" })
+    eq(msg.justify, "CENTER", "an EllesmereUI confirm shown over it reads centered")
+    ns.EUIConfirmUpdate(newPlan("aligned again"))
+    eq(msg.justify, "LEFT", "a second confirm is left-aligned too")
+    eq(hooks, 1, "with the message hooked once")
+    popups[#popups].onCancel()
+    EUI:ShowConfirmPopup({ message = "after a close" })
+    eq(msg.justify, "CENTER", "and EllesmereUI's next confirm after a close reads centered")
+
+    -- A message that cannot be hooked could never be centered again, so it is
+    -- left as EllesmereUI drew it.
+    local bare = { justify = "CENTER" }
+    function bare:SetJustifyH(j) self.justify = j end
+    popup = { _msg = bare }
+    function popup:IsVisible() return true end
+    _G.EUIConfirmPopup = popup
+    ns.EUIConfirmUpdate(newPlan("no SetText"))
+    eq(bare.justify, "CENTER", "a message that cannot be hooked keeps its centering")
+    popups[#popups].onCancel()
+    popup = {}
+    function popup:IsVisible() return true end
+    _G.EUIConfirmPopup = popup
+    local shownBare = pcall(ns.EUIConfirmUpdate, newPlan("no message"))
+    check(shownBare, "a popup without its message field shows without an error")
+    popups[#popups].onCancel()
+    _G.EUIConfirmPopup = nil
+    EUI.ShowConfirmPopup, _G.hooksecurefunc = realShow, realHook
+end
+
+---------------------------------------------------------------------------------
+-- The list draws a counted update
+---------------------------------------------------------------------------------
+
+local function fontWith(text)
+    for _, font in ipairs(fonts) do
+        if font.text == text then return font end
+    end
+end
+
+local function slotLabel(slot)
+    local b = wizard["Option" .. slot]
+    return b.shown and b._lbl.text or nil
+end
+
+do
+    local UF = { id = "uf", label = "Unit Frames" }
+    local CDM = { id = "cdm", label = "Cooldown Manager" }
+    local GEN = { id = "general", label = "General", sub = "fonts, colors, scale" }
+    local counts = { uf = 1, cdm = 0, general = 0 }
+    local Timer = _G.C_Timer
+    local realAfter, realDiff, realInputs = Timer.After, ns.EUIRowDiff, ns.EUIPageInputs
+    Timer.After = function(_, fn) fn() end
+    _G.debugprofilestop = function() return 0 end
+    ns.EUIPageInputs = function()
+        return { rows = { UF, CDM, GEN }, N = {}, O = {}, keyToFolder = {}, missing = {} }
+    end
+    local lastNames
+    ns.EUIRowDiff = function(_, _, _, _, opts)
+        lastNames = opts and opts.names
+        local result = {}
+        for id, n in pairs(counts) do result[id] = { count = n, groups = {} } end
+        return { prepared = true, units = 0, result = result, Step = function() return true end }
+    end
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = true } } end
+    ns.EUIRestorable = function() return "restore" end
+    ns.EUI_UPDATE_TEXT.split = "%s is anchored to %s. You're keeping your own %s, so %s may not line up."
+    ns.EUI_UPDATE_TEXT.splitSize = "%s is sized to match %s. You're keeping your own %s, so %s may not line up."
+    ns.EUI_UPDATE_TEXT.splitMore = " (+%d more)"
+    W:Show()
+
+    local drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws a counted update against the stubs", drawErr)
+    check(fontWith("KitnUI 2.2.0 changes 1 part of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes."),
+        "the intro reads one part at a count of one")
+    check(fontWith("MODULE") and fontWith("KITNUI 2.2.0"), "the column heads are uppercase")
+    check(fontWith("Cooldown Manager is anchored to Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up."),
+        "the notice names the split pair, the part keeping the player's copy twice")
+    check(fontWith("Tick Unit Frames too"), "and offers to tick the part keeping the player's copy")
+    eq(slotLabel(1), "Update Profile", "everything ticked: the update button first")
+    eq(slotLabel(2), "Restore previous", "with Restore previous beside it")
+    eq(slotLabel(3), nil, "and no third button")
+
+    -- The walk's name lookups: nil without the game's functions or with a
+    -- secret answer, the name otherwise.
+    check(lastNames ~= nil, "the walk is handed the name lookups")
+    if lastNames then
+        eq(lastNames.spec(102), nil, "names: no spec name without GetSpecializationInfoByID")
+        eq(lastNames.spell(191034), nil, "names: no spell name without C_Spell")
+        _G.GetSpecializationInfoByID = function() return 102, "Balance", "", 0, "DAMAGER", "DRUID", "Druid" end
+        _G.C_Spell = { GetSpellName = function() return "Starfall" end }
+        eq(lastNames.spec(102), "Balance Druid", "names: the spec reads <spec> <class>")
+        eq(lastNames.spell(191034), "Starfall", "names: the spell reads its name")
+        local asked = 0
+        _G.GetSpecializationInfoByID = function() asked = asked + 1 end
+        _G.C_Spell = { GetSpellName = function() asked = asked + 1 end }
+        for _, id in ipairs({ 0, -5, 2147483648, 102.5 }) do
+            eq(lastNames.spec(id), nil, "names: an out-of-range spec ID reads no name")
+            eq(lastNames.spell(id), nil, "names: an out-of-range spell ID reads no name")
+        end
+        eq(asked, 0, "names: an out-of-range ID never reaches the game")
+        _G.GetSpecializationInfoByID = function() return 102, "Balance", "", 0, "DAMAGER", "DRUID", "Druid" end
+        _G.C_Spell = { GetSpellName = function() return "Starfall" end }
+        _G.issecretvalue = function() return true end
+        eq(lastNames.spec(102), nil, "names: a secret spec name is not used")
+        eq(lastNames.spell(191034), nil, "names: a secret spell name is not used")
+        _G.issecretvalue, _G.GetSpecializationInfoByID, _G.C_Spell = nil, nil, nil
+
+        -- The cooldown lookup: a buff order entry's cooldown ID to its spell.
+        local cooldown = lastNames.cooldown or function() return "missing" end
+        eq(cooldown(42), nil, "names: no cooldown spell without C_CooldownViewer")
+        local cdAsked = 0
+        _G.C_CooldownViewer = { GetCooldownViewerCooldownInfo = function(id)
+            cdAsked = cdAsked + 1
+            if id == 42 then return { cooldownID = 42, spellID = 191034, overrideSpellID = 0 } end
+            if id == 43 then return { cooldownID = 43, spellID = 191034, overrideSpellID = 194223 } end
+            return nil
+        end }
+        eq(cooldown(42), 191034, "names: a cooldown reads its spell")
+        eq(cooldown(43), 194223, "names: a cooldown reads its override spell first")
+        eq(cooldown(44), nil, "names: a cooldown the game does not know reads no spell")
+        cdAsked = 0
+        for _, id in ipairs({ 0, -5, 2147483648, 102.5 }) do
+            eq(cooldown(id), nil, "names: an out-of-range cooldown ID reads no spell")
+        end
+        eq(cdAsked, 0, "names: an out-of-range cooldown ID never reaches the game")
+        _G.issecretvalue = function() return true end
+        eq(cooldown(42), nil, "names: a secret spell ID is not used")
+        _G.issecretvalue, _G.C_CooldownViewer = nil, nil
+    end
+
+    counts.cdm = 3
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws two changed parts", drawErr)
+    check(fontWith("KitnUI 2.2.0 changes 2 parts of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes."),
+        "the intro reads parts above one")
+    local ufRow
+    for _, frame in ipairs(frames) do
+        if frame.row == UF and frame.scripts.OnClick then ufRow = frame end
+    end
+    check(ufRow ~= nil, "the Unit Frames row is drawn")
+    -- A field the row does not carry reads as nil, not as the stubs' noop, so
+    -- a row built before the redraw fails these checks instead of erroring.
+    local function child(t, ...)
+        for i = 1, select("#", ...) do
+            if type(t) ~= "table" then return nil end
+            t = rawget(t, (select(i, ...)))
+        end
+        return t
+    end
+    -- The panel starts at the list's left edge, in line with the intro, the
+    -- band and the buttons: the heads, and the rows anchored to them, sit
+    -- 8 px inside it. The band is the panel's 536 px; its text has that less
+    -- 10 px before it, 8 px and the 80 px button after it, and 4 px at the end.
+    local rowAt = child(ufRow, "point")
+    local head = type(rowAt) == "table" and rowAt[2] or nil
+    local headAt = type(head) == "table" and rawget(head, "point") or nil
+    eq(type(headAt) == "table" and headAt[4] or nil, 8, "under the band, the heads and rows sit 8 px inside the panel")
+    local bandText = fontWith("Cooldown Manager is anchored to Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up.")
+    eq(bandText and rawget(bandText, "width"), 434, "the band's text takes the panel's width less its padding and the button")
+
+    -- A pair linked only by a size match reads as one; the anchored pair is
+    -- drawn again after it, so the checks below see the same page.
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = false } } end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws a size-only split", drawErr)
+    check(fontWith("Cooldown Manager is sized to match Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up."),
+        "the notice names a size-only link as a size match")
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = true } } end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws the anchored split again", drawErr)
+
+    -- The stubs carry no C_Texture, as a client without the atlas.
+    eq(child(ufRow, "box", "fill", "shown"), true, "a ticked box is filled")
+    eq(child(ufRow, "box", "mark", "shown"), false, "and without the atlas shows no mark")
+    eq(child(ufRow, "kitn", "badge", "height"), 12, "a badge is 2 px shorter than a short row")
+    if ufRow then ufRow.scripts.OnClick(ufRow) end
+    eq(slotLabel(1), "Update ticked (1)", "a part unticked: the button counts the ticks")
+    eq(slotLabel(2), "Restore previous", "Restore previous stays beside it")
+    eq(slotLabel(3), "Tick all", "and Tick all follows")
+    eq(wizard.Option3.width, 100, "Tick all is drawn narrow")
+
+    -- Restore's "switch" state is 240 wide; the row still fits the content column.
+    ns.EUIRestorable = function() return "switch" end
+    ns.EUI_UPDATE_TEXT.notRestorable = "Switch to your KitnUI profile first"
+    if ufRow then
+        ufRow.scripts.OnClick(ufRow)
+        ufRow.scripts.OnClick(ufRow)
+    end
+    eq(slotLabel(2), "Switch to your KitnUI profile first", "the switch state sits beside the update button")
+    eq(slotLabel(3), "Tick all", "with Tick all after it")
+    local rowW = (wizard.Option1.width or 0) + (wizard.Option2.width or 0) + (wizard.Option3.width or 0) + 20
+    check(rowW <= 520, "and the three buttons fit the 520 px content column", rowW)
+    ns.EUIRestorable = function() return "restore" end
+
+    -- Every font measurement secret: the list draws on its stand-ins.
+    _G.issecretvalue = function() return true end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    _G.issecretvalue = nil
+    check(drew, "the list draws when every measurement is secret", drawErr)
+    eq(slotLabel(1), "Update Profile", "and its buttons draw")
+    local cellW = child(ufRow, "kitn", "_w")
+    check(type(cellW) == "number" and cellW > 16, "the KitnUI cell carries its width", cellW)
+    eq(child(ufRow, "kitn", "badge", "width"), cellW, "a secret text width gives the badge its cell's width")
+    eq(child(ufRow, "kitn", "badge", "height"), 18, "a secret list height gives rows room for full-height badges")
+
+    -- While counting: the walk's steps wait for the next frame, so the page
+    -- first draws with no counts.
+    local deferred = {}
+    Timer.After = function(_, fn) deferred[#deferred + 1] = fn end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws while counting", drawErr)
+    eq(child(ufRow, "kitn", "text", "text"), "...", "while counting a KitnUI cell reads ...")
+    eq(slotLabel(1), "Preparing...", "and the update button reads Preparing...")
+    Timer.After = function(_, fn) fn() end
+    for _, fn in ipairs(deferred) do fn() end
+    eq(child(ufRow, "kitn", "text", "text"), "Changes 1 Setting", "the count lands in the cell")
+
+    -- Up to date, the read-only page: no box, plain "Up to Date", Restore
+    -- previous alone in slot 1. Plain text starts 6 px into its cell, where a
+    -- badge's text starts, and the KitnUI head starts on that line too.
+    local realState = ns.EUIUpdateState
+    ns.EUIUpdateState = function() return "current" end
+    counts.uf, counts.cdm = 0, 0
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the up-to-date page draws", drawErr)
+    eq(child(ufRow, "box", "shown"), false, "up to date: no box")
+    eq(child(ufRow, "kitn", "text", "text"), "Up to Date", "up to date: the cell reads Up to Date")
+    local plainAt = child(ufRow, "kitn", "text", "point")
+    eq(type(plainAt) == "table" and plainAt[2] or nil, 6, "up to date: plain text starts 6 px into its cell, as a badge's text does")
+    local updaterHead = fontWith("KITNUI 2.2.0")
+    local updaterHeadAt = updaterHead and rawget(updaterHead, "point")
+    eq(type(updaterHeadAt) == "table" and updaterHeadAt[2] or nil, 396, "Profile Update: the KitnUI head starts 6 px into its column")
+    eq(child(ufRow, "kitn", "_w"), 130, "Profile Update: the KitnUI cell keeps its 130 px")
+    local plainRowAt = child(ufRow, "point")
+    local plainHead = type(plainRowAt) == "table" and plainRowAt[2] or nil
+    local plainHeadAt = type(plainHead) == "table" and rawget(plainHead, "point") or nil
+    eq(type(plainHeadAt) == "table" and plainHeadAt[4] or nil, 8, "with no band, the heads and rows sit 8 px inside the panel")
+    eq(slotLabel(1), "Restore previous", "up to date: Restore previous in slot 1")
+    eq(slotLabel(2), nil, "up to date: and nothing beside it")
+    ns.EUIUpdateState = realState
+
+    -- The Modules page with a four-digit count: every badge stays inside its
+    -- column. Your copy (list x 208, 140 wide) ends before the KitnUI column
+    -- (354), and the KitnUI badge (128 wide) before Reset (484). The heads
+    -- start 6 px into their columns, on the line the cells' text starts on.
+    local realStringWidth = Frame.GetStringWidth
+    Frame.GetStringWidth = function() return 200 end
+    Frame.GetUnboundedStringWidth = function() return 200 end
+    ns.EUIReadPlayer = function()
+        return { rows = { UF, CDM, GEN }, P = {}, O = {}, N = {}, keyToFolder = {}, missing = {} }
+    end
+    ns.EUIPlayerContext = function() return { held = {}, defaults = {}, unlock = {} } end
+    counts.uf = 1228
+    drew, drawErr = pcall(ns.EUIModulesPage)
+    Frame.GetStringWidth, Frame.GetUnboundedStringWidth = realStringWidth, nil
+    check(drew, "the Modules page draws a four-digit count", drawErr)
+    eq(child(ufRow, "yours", "text", "text"), "Changed by You - 1228", "Modules: the Your copy cell reads the player's count")
+    local yoursAt, kitnAt = child(ufRow, "yours", "point"), child(ufRow, "kitn", "point")
+    eq(type(yoursAt) == "table" and yoursAt[4] or nil, 208, "Modules: the Your copy column starts at list x 208")
+    eq(type(kitnAt) == "table" and kitnAt[4] or nil, 354, "Modules: the KitnUI column starts at list x 354")
+    eq(child(ufRow, "yours", "_w"), 140, "Modules: the Your copy cell is 140 wide")
+    eq(child(ufRow, "kitn", "_w"), 128, "Modules: the KitnUI cell is 128 wide, 2 px short of Reset")
+    local yoursW = child(ufRow, "yours", "badge", "width")
+    check(type(yoursW) == "number" and 208 + yoursW <= 354, "Modules: a long Your copy badge ends left of the KitnUI column", yoursW)
+    local kitnW = child(ufRow, "kitn", "badge", "width")
+    check(type(kitnW) == "number" and 354 + kitnW <= 484, "Modules: a long KitnUI badge ends before Reset", kitnW)
+    local yoursHead, modulesHead = fontWith("YOUR COPY"), fontWith("KITNUI 2.2.0")
+    local yoursHeadAt = yoursHead and rawget(yoursHead, "point")
+    local modulesHeadAt = modulesHead and rawget(modulesHead, "point")
+    eq(type(yoursHeadAt) == "table" and yoursHeadAt[2] or nil, 214, "Modules: the Your copy head starts 6 px into its column")
+    eq(type(modulesHeadAt) == "table" and modulesHeadAt[2] or nil, 360, "Modules: the KitnUI head starts 6 px into its column")
+
+    Timer.After, ns.EUIRowDiff, ns.EUIPageInputs = realAfter, realDiff, realInputs
+    ns.EUIHideModuleList()
 end
 
 print(string.format("%d checks, %d failures", checks, failures))

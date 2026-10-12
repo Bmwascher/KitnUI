@@ -69,7 +69,7 @@ eq(rows[5].label, "Resource & Cast Bars", "rows: the roster's name wins")
 eq(rows[1].label, "Action Bars", "rows: the map's name is the fallback")
 eq(rows[6].label, "Top Bar", "rows: the Top Bar row's label")
 eq(rows[6].sub, "KitnUI", "rows: the Top Bar row's sub")
-eq(rows[7].sub, "fonts, colours, scale", "rows: the General row's sub")
+eq(rows[7].sub, "fonts, colors, scale", "rows: the General row's sub")
 eq(rows[8].sub, "all or nothing", "rows: the Spec Overrides row's sub")
 
 nAddons[TOP_BAR] = nil
@@ -670,8 +670,8 @@ for _, g in ipairs(manyEntry.groups) do
 end
 eq(manyGroup and manyGroup.n, 500, "record: and every one in its group's total")
 eq(manyGroup and #manyGroup.items, 8, "record: but only the eight the tooltip shows are kept")
-eq(manyGroup and manyGroup.items[1], "s 001", "record: the first by name")
-eq(manyGroup and manyGroup.items[8], "s 008", "record: in order")
+eq(manyGroup and manyGroup.items[1], "s 001 (many)", "record: the first by name, with the key it sits under")
+eq(manyGroup and manyGroup.items[8], "s 008 (many)", "record: in order")
 
 -- The setup is work too: General's seeding scans every root key of both sides
 -- (an unknown root key is General's), and the held set is parsed path by path.
@@ -806,6 +806,182 @@ group, item = ns.EUISettingLabel("uiScale", { id = "general" })
 eq(group, "General", "label: the scale's group")
 eq(item, "ui scale", "label: the scale")
 
+group = ns.EUISettingLabel("customColors.class", { id = "general" })
+eq(group, "Colors", "label: the color group in American spelling")
+group = ns.EUISettingLabel("euiAccent.r", { id = "general" })
+eq(group, "Accent Color", "label: the accent group in American spelling")
+
+local named = {
+    spec = function(id) return id == 102 and "Balance Druid" or nil end,
+    spell = function(id) return id == 191034 and "Starfall" or nil end,
+}
+group, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.assignedSpells.[2]", { id = CDM }, named, 191034)
+eq(group, "Balance Druid", "label: a Cooldown Manager spec is named")
+eq(item, "Starfall (Buffs)", "label: a list entry is its spell, with its bar")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[1]", { id = CDM }, named, -(2000000000 + 191034))
+eq(item, "Starfall (Cooldowns)", "label: a hosted buff marker is its spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -6)
+eq(item, "Waist (Cooldowns)", "label: an equipment-slot entry names its slot")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -13)
+eq(item, "Trinket 1 (Cooldowns)", "label: the first trinket slot is named")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, nil, -14)
+eq(item, "Trinket 2 (Cooldowns)", "label: a slot is named without lookups")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -18)
+eq(item, "#3 (Cooldowns)", "label: slot 18, which EllesmereUI leaves out, keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -20)
+eq(item, "#3 (Cooldowns)", "label: a value past the slots keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -150)
+eq(item, "#3 (Cooldowns)", "label: an item entry keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[4]", { id = CDM }, named, -(3000000000 + 191034))
+eq(item, "#4 (Cooldowns)", "label: a cooldown claim marker without a cooldown lookup keeps its position")
+local claimNamed = {
+    spell = named.spell,
+    cooldown = function(id) return id == 42 and 191034 or nil end,
+}
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[4]", { id = CDM }, claimNamed, -(3000000000 + 42))
+eq(item, "Starfall (Cooldowns)", "label: a cooldown claim marker is its cooldown's spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[4]", { id = CDM }, claimNamed, -(3000000000 + 99))
+eq(item, "#4 (Cooldowns)", "label: a claim marker whose cooldown does not resolve keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.customSpellIDs.[191034]", { id = CDM }, named, true)
+eq(item, "Starfall (Buffs)", "label: a custom spell is named by its key")
+group, item = ns.EUISettingLabel("cdmSpells.1473.barSpells.buffs.assignedSpells.[1]", { id = CDM }, nil, 1234)
+eq(group, "Spec 1473", "label: without a name the spec reads its ID")
+eq(item, "spell 1234 (Buffs)", "label: and the spell its ID")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.barSettings.iconSize", { id = CDM }, named, 30)
+eq(item, "icon size (Buffs)", "label: a bar setting carries its bar")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.spellDurations.[191034]", { id = CDM }, named, 12)
+eq(item, "Starfall (Buffs)", "label: a spell duration entry is its spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.spellDurations.[191034]", { id = CDM }, nil, 12)
+eq(item, "#191034 (Buffs)", "label: a spell duration entry without names keeps its ID")
+
+-- A buff order entry is "s<spellID>" or "c<cooldownID>"; a cooldown resolves
+-- to its spell through the cooldown lookup.
+local orderNamed = {
+    spec = named.spec,
+    spell = named.spell,
+    cooldown = function(id) return id == 42 and 191034 or nil end,
+}
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[1]", { id = CDM }, orderNamed, "s191034")
+eq(item, "Starfall (Buffs)", "label: a buff order spell entry is its spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[2]", { id = CDM }, orderNamed, "c42")
+eq(item, "Starfall (Buffs)", "label: a buff order cooldown entry is its cooldown's spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[3]", { id = CDM }, orderNamed, "c99")
+eq(item, "#3 (Buffs)", "label: a cooldown that does not resolve keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[4]", { id = CDM }, nil, "s191034")
+eq(item, "spell 191034 (Buffs)", "label: a buff order spell entry without names reads its ID")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[5]", { id = CDM }, nil, "c42")
+eq(item, "#5 (Buffs)", "label: a cooldown entry without names keeps its position")
+
+-- Aura lists keyed by spell ID read by the spell's name.
+group, item = ns.EUISettingLabel("addons." .. UF .. ".boss.debuffExclude.[1305361]", { id = UF },
+    { spell = function(id) return id == 1305361 and "Shadowflame" or nil end })
+eq(group, "Boss Frames", "label: an aura list's group is unchanged")
+eq(item, "debuff exclude: Shadowflame", "label: a debuff exclude entry is its spell")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".boss.debuffExclude.[1305361]", { id = UF })
+eq(item, "debuff exclude #1305361", "label: a debuff exclude entry without names keeps its ID")
+local pabPath = "addons." .. UF .. ".playerAuraBars.pabFilters.list.[2].spells.[102543]"
+_, item = ns.EUISettingLabel(pabPath, { id = UF }, {
+    spell = function(id) return id == 102543 and "Berserk" or nil end,
+    names = { ["addons." .. UF .. ".playerAuraBars.pabFilters.list.[2]"] = "Offensive CDs" },
+})
+eq(item, "spells: Berserk (pab filters, Offensive CDs)", "label: a buff filter's spell is named, with its filter")
+_, item = ns.EUISettingLabel(pabPath, { id = UF })
+eq(item, "spells #102543 (pab filters, list #2)", "label: a buff filter's spell without names keeps its ID")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".playerAuraBars.bars.[1].spells.[3]", { id = UF },
+    { spell = function() return "Starfall" end })
+eq(item, "spells #3 (bars #1)", "label: a spells list outside the buff filters names no spell")
+local rfPath = "addons.EllesmereUIRaidFrames.bm2.filters.list.[3].spells.[774]"
+_, item = ns.EUISettingLabel(rfPath, { id = "EllesmereUIRaidFrames" }, {
+    spell = function(id) return id == 774 and "Rejuvenation" or nil end,
+    names = { ["addons.EllesmereUIRaidFrames.bm2.filters.list.[3]"] = "Healer HoTs" },
+})
+eq(item, "spells: Rejuvenation (filters, Healer HoTs)", "label: a Raid Frames filter's spell is named, with its filter")
+_, item = ns.EUISettingLabel(rfPath, { id = "EllesmereUIRaidFrames" })
+eq(item, "spells #774 (filters, list #3)", "label: a Raid Frames filter's spell without names keeps its ID")
+
+group, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbOff.clock", { id = TOP_BAR })
+eq(group, "Top Bar", "label: a Top Bar setting is in the Top Bar group")
+eq(item, "Hidden elements (clock)", "label: named, with what lies below it")
+_, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbIconSize", { id = TOP_BAR })
+eq(item, "Icon size", "label: a Top Bar key without a table name reads its tidied name")
+_, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbAccent", { id = TOP_BAR })
+eq(item, "Custom accent color", "label: the accent color stem is named")
+group, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".bite", { id = TOP_BAR })
+eq(group, "General", "label: a switch state in KitnUI's folder keeps its old group")
+eq(item, "bite", "label: and its old item")
+
+-- The keys between a group and its setting stay with the item as context.
+_, item = ns.EUISettingLabel("addons." .. AB .. ".barPositions.MainBar.x", { id = AB })
+eq(item, "x (Action Bar 1)", "label: a middle key a table names reads by that name")
+_, item = ns.EUISettingLabel("addons." .. AB .. ".barPositions.MainBar.[2].x", { id = AB })
+eq(item, "x (Action Bar 1 #2)", "label: an indexed middle key keeps its table name")
+group, item = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColors.[1]", { id = RB })
+eq(group, "Class Resource", "label: the group is unchanged")
+eq(item, "buff colors #1 (threshold specs #2)", "label: an index folds into the key it numbers")
+local firstEntry, secondEntry
+_, firstEntry = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[1].buffColorEnabled", { id = RB })
+_, secondEntry = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColorEnabled", { id = RB })
+eq(firstEntry, "buff color enabled (threshold specs #1)", "label: one entry's setting names its entry")
+check(firstEntry ~= secondEntry, "label: two entries' settings read apart", secondEntry)
+_, item = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColorEnabled", { id = RB },
+    { names = { ["addons." .. RB .. ".secondary.thresholdSpecs.[2]"] = "Balance" } })
+eq(item, "buff color enabled (Balance)", "label: a named entry reads by its name")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".someGroup.inner.deeper.leaf", { id = UF })
+eq(item, "leaf (inner, deeper)", "label: several middle keys, outermost first")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".someList.[3]", { id = UF })
+eq(item, "#3", "label: an index under the group itself stays a position")
+
+-- The walk's lookups: one per ID, each charged one unit of the budget.
+do
+    local cdmRows = { { id = CDM, label = "Cooldown Manager" } }
+    local function spells(list)
+        return { cdmSpells = { ["102"] = { barSpells = { buffs = { assignedSpells = list } } } } }
+    end
+    local calls = { spec = 0, spell = 0 }
+    local names = {
+        spec = function(id)
+            calls.spec = calls.spec + 1
+            return id == 102 and "Balance Druid" or nil
+        end,
+        spell = function(id)
+            calls.spell = calls.spell + 1
+            return id == 191034 and "Starfall" or nil
+        end,
+    }
+    local A, B = spells({ 1, 2 }), spells({ 191034, 191034 })
+    local plainWalk = ns.EUIRowDiff(A, B, cdmRows, {}, {})
+    plainWalk:Step(math.huge)
+    local namedWalk = ns.EUIRowDiff(A, B, cdmRows, {}, { names = names })
+    namedWalk:Step(math.huge)
+    local e = namedWalk.result[CDM]
+    eq(e and e.count, 2, "names: both changed entries count")
+    eq(e and e.groups[1] and e.groups[1].name, "Balance Druid", "names: the walk names the spec")
+    eq(e and e.groups[1] and e.groups[1].items[1], "Starfall (Buffs)", "names: and the spell")
+    eq(calls.spec, 1, "names: one lookup per spec")
+    eq(calls.spell, 1, "names: one lookup per spell")
+    eq(namedWalk.units - plainWalk.units, 2, "names: each lookup is one unit of the walk's budget")
+end
+
+-- A cooldown ID costs one cooldown lookup, however often it is counted.
+do
+    local cdmRows = { { id = CDM, label = "Cooldown Manager" } }
+    local function order(list)
+        return { cdmSpells = { ["102"] = { barSpells = { buffs = { buffDisplayOrder = list } } } } }
+    end
+    local cooldownCalls = 0
+    local walk = ns.EUIRowDiff(order({ "s1", "s2" }), order({ "c42", "c42" }), cdmRows, {}, { names = {
+        spell = function(id) return id == 191034 and "Starfall" or nil end,
+        cooldown = function(id)
+            cooldownCalls = cooldownCalls + 1
+            return id == 42 and 191034 or nil
+        end,
+    } })
+    walk:Step(math.huge)
+    local e = walk.result[CDM]
+    eq(e and e.groups[1] and e.groups[1].items[1], "Starfall (Buffs)", "names: the walk names a cooldown entry by its spell")
+    eq(cooldownCalls, 1, "names: one cooldown lookup per cooldown ID")
+end
+
 local many = { groups = {} }
 for gi = 1, 8 do
     local items = {}
@@ -818,7 +994,8 @@ for _, line in ipairs(tipLines) do
     if line.header then headers = headers + 1 end
 end
 eq(headers, 6, "tooltip: at most six groups")
-eq(tipLines[10].text, "+2 more", "tooltip: at most eight settings a group")
+eq(tipLines[1].text, "G1 (10)", "tooltip: a group listing fewer settings than it holds shows its total")
+eq(tipLines[10].text, "G2", "tooltip: with no +N more line of its own")
 eq(tipLines[#tipLines].text, "+2 more", "tooltip: the settings of the groups left out are counted")
 
 ---------------------------------------------------------------------------------
@@ -848,6 +1025,28 @@ splits = ns.EUISplitLinks(splitN, splitRows, { [RB] = true }, splitK2F)
 eq(#splits, 2, "split: one reset row against every part keeping the player's copy, an off target left out")
 check(splits[1] and splits[1].target.id == UF and splits[2].target.id == CDM, "split: in row order")
 eq(#ns.EUISplitLinks(splitN, splitRows, { [UF] = true, [RB] = true, [CDM] = true }, splitK2F), 0, "split: nothing when both ends are ticked")
+
+-- A pair is anchored when any of its links is an anchor; a pair linked only
+-- by a size match is not.
+splits = ns.EUISplitLinks(splitN, splitRows, { [UF] = true }, splitK2F)
+eq(splits[1] and splits[1].anchored, true, "split: an anchors pair is anchored")
+splits = ns.EUISplitLinks(splitN, splitRows, { [RB] = true }, splitK2F)
+eq(splits[1] and splits[1].anchored, false, "split: a widthMatch-only pair is not anchored")
+eq(splits[2] and splits[2].anchored, true, "split: beside it, an anchors pair is")
+local bothN = { unlockLayout = {
+    anchors = { ERB_Power = { target = "UF_Player" } },
+    widthMatch = { ERB_Health = "UF_Player" },
+} }
+local bothK2F = { UF_Player = UF, ERB_Health = RB, ERB_Power = RB }
+splits = ns.EUISplitLinks(bothN, splitRows, { [RB] = true }, bothK2F)
+eq(#splits, 1, "split: a pair with an anchor and a size match is one entry")
+eq(splits[1] and splits[1].anchored, true, "split: and it is anchored")
+local realMaps = ns.EUI_LAYOUT_MAPS
+ns.EUI_LAYOUT_MAPS = { "widthMatch", "heightMatch", "anchors" }
+splits = ns.EUISplitLinks(bothN, splitRows, { [RB] = true }, bothK2F)
+ns.EUI_LAYOUT_MAPS = realMaps
+eq(#splits, 1, "split: met through a size match first, still one entry")
+eq(splits[1] and splits[1].anchored, true, "split: and an anchor met later makes it anchored")
 
 local capP = {
     specOverrides = { { values = { default = { [UF .. "\31player\30height"] = 1 } } } },

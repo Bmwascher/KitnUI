@@ -81,7 +81,7 @@ function ns.EUIRows(map, roster, nAddons, disableList)
     if nAddons[TOP_BAR] ~= nil then
         rows[#rows + 1] = { id = TOP_BAR, label = "Top Bar", sub = "KitnUI" }
     end
-    rows[#rows + 1] = { id = "general", label = "General", sub = "fonts, colours, scale" }
+    rows[#rows + 1] = { id = "general", label = "General", sub = "fonts, colors, scale" }
     rows[#rows + 1] = { id = "overrides", label = "Spec Overrides", sub = "all or nothing" }
     return rows
 end
@@ -343,7 +343,7 @@ local GROUP_NAMES = {
     StanceBar = "Stance Bar", PetBar = "Pet Bar",
     health = "Health Bar", primary = "Primary Resource", secondary = "Class Resource", castBar = "Cast Bar",
     spec = "Spec Layouts", healerMana = "Healer Mana", palettes = "Palettes",
-    fonts = "Fonts", customColors = "Colours", darkMode = "Dark Mode", euiAccent = "Accent Colour",
+    fonts = "Fonts", customColors = "Colors", darkMode = "Dark Mode", euiAccent = "Accent Color",
 }
 
 local function tidy(key)
@@ -357,9 +357,162 @@ end
 
 local function capital(s) return (s:gsub("^%l", string.upper)) end
 
+-- EllesmereUI stores a buff placed on a cooldown bar as -(base + spellID) in
+-- the bar's assignedSpells, beside plain spell IDs. A cooldown claim marker,
+-- -(claim base + cooldownID), lies past every hosted marker and names its
+-- cooldown, read as a spell through the cooldown lookup.
+local CDM_HOSTED_BASE, CDM_CLAIM_BASE = 2000000000, 3000000000
+
+-- An equipment-slot entry in assignedSpells is -(inventory slot). EllesmereUI
+-- leaves slot 18 out, so -18 is no slot.
+local CDM_SLOT_NAMES = {
+    [1] = "Head", [2] = "Neck", [3] = "Shoulder", [4] = "Shirt", [5] = "Chest", [6] = "Waist",
+    [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Ring 1", [12] = "Ring 2",
+    [13] = "Trinket 1", [14] = "Trinket 2", [15] = "Back", [16] = "Main Hand", [17] = "Off Hand",
+    [19] = "Tabard",
+}
+
+-- An answer from the walk's lookups (EUIRowDiff, opts.names), or nil: a name
+-- from spec and spell, a spell ID from cooldown. Each answer is kept, so an ID
+-- costs one lookup, and one unit of the walk's budget, however often it is
+-- named.
+local function lookup(labels, kind, id)
+    local fn = labels[kind]
+    if type(fn) ~= "function" or type(id) ~= "number" then return nil end
+    local memoKey = kind .. "Memo"
+    local memo = labels[memoKey]
+    if not memo then
+        memo = {}
+        labels[memoKey] = memo
+    end
+    local found = memo[id]
+    if found == nil then
+        if labels.tick then labels.tick() end
+        found = fn(id)
+        local usable
+        if kind == "cooldown" then
+            usable = type(found) == "number" and found > 0
+        else
+            usable = type(found) == "string" and found ~= ""
+        end
+        if not usable then found = false end
+        memo[id] = found
+    end
+    return found or nil
+end
+
+-- The spell one bar list entry names, or nil and, for an equipment-slot
+-- entry, the slot's name. assignedSpells holds spell IDs, slots and markers as
+-- values; customSpellIDs and spellDurations are keyed by spell ID;
+-- buffDisplayOrder holds "s<spellID>" or "c<cooldownID>". A cooldown is read
+-- as its spell through the cooldown lookup.
+local function cdmSpellID(list, key, value, labels)
+    if list == "assignedSpells" and key:match("^%[%d+%]$") and type(value) == "number" then
+        if value > 0 then return value end
+        if value < 0 and value > -20 then return nil, CDM_SLOT_NAMES[-value] end
+        if value <= -CDM_HOSTED_BASE and value > -CDM_CLAIM_BASE then return -value - CDM_HOSTED_BASE end
+        if value <= -CDM_CLAIM_BASE then return lookup(labels, "cooldown", -value - CDM_CLAIM_BASE) end
+    elseif list == "customSpellIDs" or list == "spellDurations" then
+        local id = tonumber(key:match("^%[(%d+)%]$") or "")
+        if id and id > 0 then return id end
+    elseif list == "buffDisplayOrder" and key:match("^%[%d+%]$") and type(value) == "string" then
+        local prefix, digits = value:match("^([sc])(%d+)$")
+        local id = tonumber(digits or "")
+        if id and id > 0 then
+            if prefix == "s" then return id end
+            return lookup(labels, "cooldown", id)
+        end
+    end
+    return nil
+end
+
+-- Top Bar settings the tidied key would misname. Any other tb key reads as
+-- its tidied name without the prefix: "tbIconSize" is "Icon size".
+local TOP_BAR_NAMES = {
+    tbOff = "Hidden elements", tbOrder = "Element order", tbPos = "Bar position",
+    tbSysPos = "FPS and latency position", tbSysSize = "FPS / MS size", tbUse24h = "24-hour clock",
+    tbHideSerious = "Hide in keystones, raids and rated PvP", tbAccent = "Custom accent color",
+    tbEnabled = "Top Bar on",
+}
+
+-- A Cooldown Manager path, cdmSpells.<specID>.<rest>: the spec is the group,
+-- a spell list's entry is its spell or its slot, and anything under a bar
+-- names the bar. An unnamed duration entry keeps its key, "#<spellID>".
+local function cdmLabel(parts, labels, value)
+    local specID = tonumber(parts[2]:match("^%[?(%d+)%]?$") or "")
+    local group = lookup(labels, "spec", specID) or ("Spec " .. (specID and tostring(specID) or parts[2]))
+    local bar = parts[3] == "barSpells" and parts[4] and capital(tidy(parts[4])) or nil
+    local last = #parts
+    while last > 2 and CHANNELS[parts[last]] do last = last - 1 end
+    local item
+    if bar and last == 6 then
+        local spellID, slotName = cdmSpellID(parts[5], parts[6], value, labels)
+        if spellID then
+            item = lookup(labels, "spell", spellID)
+            if not item and parts[5] ~= "spellDurations" then item = "spell " .. spellID end
+        end
+        item = item or slotName
+    end
+    item = item or (labels.names and labels.names[table.concat(parts, ".", 1, last)]) or tidy(parts[last])
+    if bar then item = item .. " (" .. bar .. ")" end
+    return group, item
+end
+
+-- A Top Bar setting: its name, then what lies below it, as "Hidden elements (clock)".
+local function topBarItem(parts)
+    local last = #parts
+    while last > 3 and CHANNELS[parts[last]] do last = last - 1 end
+    local key = parts[3]
+    local item = TOP_BAR_NAMES[key] or capital(tidy(key:sub(3)))
+    if last > 3 then
+        local below = {}
+        for j = 4, last do below[#below + 1] = tidy(parts[j]) end
+        item = item .. " (" .. table.concat(below, " ") .. ")"
+    end
+    return item
+end
+
+-- Aura lists keyed by spell ID: the Tracked Auras include and exclude sets,
+-- and a filter library's spells, list[n].spells under the Player Aura Bars'
+-- pabFilters or the Raid Frames' filters.
+local SPELL_SETS = {
+    debuffInclude = true, debuffExclude = true, debuffIncludeAnyCaster = true, debuffIncludeMine = true,
+}
+
+local function spellSet(parts, k)
+    if SPELL_SETS[parts[k]] then return true end
+    local library = parts[k - 3]
+    return parts[k] == "spells" and (library == "pabFilters" or library == "filters")
+end
+
+-- The keys parts[from..to] between a group and its setting, outermost first:
+-- each reads by the name the walk found for it, a table name, its Unlock Mode
+-- label, or tidied, and an index folds into the key it numbers.
+local function labelContext(parts, from, to, unlock, names)
+    local out = {}
+    local j = from
+    while j <= to do
+        local key = parts[j]
+        local name = names[table.concat(parts, ".", 1, j)] or GROUP_NAMES[key] or unlock[key] or tidy(key)
+        if j < to and parts[j + 1]:match("^%[%d+%]$") then
+            out[#out + 1] = names[table.concat(parts, ".", 1, j + 1)] or (name .. " " .. tidy(parts[j + 1]))
+            j = j + 2
+        else
+            out[#out + 1] = name
+            j = j + 1
+        end
+    end
+    return out
+end
+
 -- (group, item) for one counted path. labels.unlock: element key -> Unlock
--- Mode label; labels.names: list-entry path -> that entry's name field.
-function ns.EUISettingLabel(path, row, labels)
+-- Mode label; labels.names: list-entry path -> that entry's name field;
+-- labels.spec, labels.spell and labels.cooldown: the walk's lookups. value:
+-- the setting's own value, which names a Cooldown Manager list entry. The
+-- keys between the group and the setting follow the item as context:
+-- "x (Action Bar 1)", "buff colors #1 (threshold specs #2)". An entry of a
+-- spell-keyed aura list reads by its spell: "debuff exclude: <spell>".
+function ns.EUISettingLabel(path, row, labels, value)
     labels = labels or {}
     local unlock, names = labels.unlock or {}, labels.names or {}
     if path == "uiScale" then return "General", "ui scale" end
@@ -369,8 +522,12 @@ function ns.EUISettingLabel(path, row, labels)
 
     local parts = {}
     for part in path:gmatch("[^.]+") do parts[#parts + 1] = part end
+    if parts[1] == "cdmSpells" and parts[2] then return cdmLabel(parts, labels, value) end
+    if parts[1] == "addons" and parts[2] == TOP_BAR and parts[3] and parts[3]:sub(1, 2) == "tb" then
+        return "Top Bar", topBarItem(parts)
+    end
     local i = 1
-    if parts[1] == "addons" then i = 3 elseif parts[1] == "cdmSpells" then i = 2 end
+    if parts[1] == "addons" then i = 3 end
     while parts[i] and GROUP_WRAPPERS[parts[i]] and parts[i + 1] do i = i + 1 end
     local group
     if i >= #parts then
@@ -381,14 +538,31 @@ function ns.EUISettingLabel(path, row, labels)
     end
     local last = #parts
     while last > i and CHANNELS[parts[last]] do last = last - 1 end
-    return group, names[table.concat(parts, ".", 1, last)] or tidy(parts[last])
+    local item = names[table.concat(parts, ".", 1, last)]
+    local contextEnd = last - 1
+    if not item then
+        local index = parts[last]:match("^%[(%d+)%]$")
+        if index and last - 1 > i then
+            local parent = tidy(parts[last - 1])
+            local spellName = spellSet(parts, last - 1) and lookup(labels, "spell", tonumber(index))
+            item = spellName and (parent .. ": " .. spellName) or (parent .. " #" .. index)
+            contextEnd = last - 2
+        else
+            item = tidy(parts[last])
+        end
+    end
+    local context = labelContext(parts, i + 1, contextEnd, unlock, names)
+    if #context > 0 then item = item .. " (" .. table.concat(context, ", ") .. ")" end
+    return group, item
 end
 
 local TIP_GROUPS, TIP_ITEMS = 6, 8
 
--- The hover list: { text, header } lines, capped, with "+N more" tails. A
--- group's `n` and the entry's `count` are the totals behind the capped lists
--- the walk keeps; without them the lists' own lengths are the totals.
+-- The hover list: { text, header } lines, capped. A group listing fewer
+-- settings than it holds shows its total in its heading, and the settings of
+-- the groups left out are counted in a last "+N more" line. A group's `n` and
+-- the entry's `count` are the totals behind the capped lists the walk keeps;
+-- without them the lists' own lengths are the totals.
 function ns.EUITooltipLines(entry)
     local lines = {}
     local groups = isTable(entry) and entry.groups or {}
@@ -398,10 +572,10 @@ function ns.EUITooltipLines(entry)
     for gi = 1, math.min(#groups, TIP_GROUPS) do
         local g = groups[gi]
         local n = g.n or #g.items
+        local listed = math.min(#g.items, TIP_ITEMS)
         shown = shown + n
-        lines[#lines + 1] = { text = g.name, header = true }
-        for ii = 1, math.min(#g.items, TIP_ITEMS) do lines[#lines + 1] = { text = g.items[ii] } end
-        if n > TIP_ITEMS then lines[#lines + 1] = { text = "+" .. (n - TIP_ITEMS) .. " more" } end
+        lines[#lines + 1] = { text = n > listed and (g.name .. " (" .. n .. ")") or g.name, header = true }
+        for ii = 1, listed do lines[#lines + 1] = { text = g.items[ii] } end
     end
     if total > shown then lines[#lines + 1] = { text = "+" .. (total - shown) .. " more" } end
     return lines
@@ -475,10 +649,10 @@ end
 -- A part keeps its total, each group's total, and only the first groups and
 -- settings by name, as many as the tooltip shows. A recorded setting costs the
 -- same however many came before it, and nothing is left to sort at the end.
-local function record(w, row, path)
+local function record(w, row, path, value)
     local e = entryFor(w, row.id)
     e.count = e.count + 1
-    local group, item = ns.EUISettingLabel(path, row, w.labels)
+    local group, item = ns.EUISettingLabel(path, row, w.labels, value)
     local g = w.byName[row.id][group]
     if not g then
         g = { name = group, items = {}, n = 0 }
@@ -619,7 +793,11 @@ local function visit(w, a, b, d, path, row, hasDefaults, n)
     local descend = (ta or tb) and (ta or a == nil) and (tb or b == nil)
         and not isColour(a) and not isColour(b)
     if not descend then
-        if differs(w, a, b, d, hasDefaults) and replaced(w, b, n, d, hasDefaults) then record(w, row, path) end
+        if differs(w, a, b, d, hasDefaults) and replaced(w, b, n, d, hasDefaults) then
+            local value = b
+            if value == nil then value = a end
+            record(w, row, path, value)
+        end
         return
     end
     if ta then
@@ -799,10 +977,13 @@ end
 -- and returns true once every row is counted. result[id] = { count,
 -- groups = { {name, n, items} }, noBase }, groups and items capped
 -- at what the tooltip shows. opts: player, noBase, missing, fallback, held,
--- defaults, unlock, against (KitnUI's side, for a reset's count). Building
--- the walker reads no table: the first Step does the setup, under the budget.
+-- defaults, unlock, against (KitnUI's side, for a reset's count), names
+-- ({ spec = fn(id), spell = fn(id), cooldown = fn(id) }, the tooltip's
+-- lookups; cooldown gives a cooldown's spell ID). Building the walker reads
+-- no table: the first Step does the setup, under the budget.
 function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
     opts = opts or {}
+    local lookups = isTable(opts.names) and opts.names or {}
     local w = setmetatable({
         A = A, B = B, rows = rows or {}, keyToFolder = keyToFolder or {}, opts = opts,
         result = {}, byName = {}, top = 0, done = false, prepared = false, units = 0, budget = math.huge,
@@ -811,9 +992,13 @@ function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
         player = opts.player and true or false,
         held = opts.held or {},
         heldFkeys = {}, heldAnchors = {}, heldAny = false,
-        labels = { unlock = opts.unlock or {}, names = {} },
+        labels = {
+            unlock = opts.unlock or {}, names = {},
+            spec = lookups.spec, spell = lookups.spell, cooldown = lookups.cooldown,
+        },
     }, Walker)
     w.tickFn = function() tick(w) end
+    w.labels.tick = w.tickFn
     return w
 end
 
@@ -896,7 +1081,9 @@ end
 ---------------------------------------------------------------------------------
 
 -- Every link whose child's row is ticked and whose target's row keeps the
--- player's copy, one per pair of rows, in row order.
+-- player's copy, one per pair of rows, in row order. A pair is anchored when
+-- any of its links comes from the anchors map; a pair linked only by a size
+-- match (widthMatch, heightMatch) is not, whichever map is walked first.
 function ns.EUISplitLinks(N, rows, ticked, keyToFolder)
     local ul = isTable(N) and N.unlockLayout
     if not isTable(ul) then return {} end
@@ -907,18 +1094,22 @@ function ns.EUISplitLinks(N, rows, ticked, keyToFolder)
     end
     local out, seen = {}, {}
     for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
+        local anchors = map == "anchors"
         for child, entry in pairs(isTable(ul[map]) and ul[map] or {}) do
             local target = entry
-            if map == "anchors" then target = isTable(entry) and entry.target or nil end
+            if anchors then target = isTable(entry) and entry.target or nil end
             local childRow = rowById[keyToFolder[child]]
             local targetRow = type(target) == "string" and rowById[keyToFolder[target]] or nil
             if childRow and targetRow and childRow ~= targetRow and ticked[childRow.id]
                 and not ticked[targetRow.id] and not targetRow.off then
                 local pair = childRow.id .. "\31" .. targetRow.id
-                if not seen[pair] then
-                    seen[pair] = true
-                    out[#out + 1] = { child = childRow, target = targetRow }
+                local split = seen[pair]
+                if not split then
+                    split = { child = childRow, target = targetRow, anchored = false }
+                    seen[pair] = split
+                    out[#out + 1] = split
                 end
+                if anchors then split.anchored = true end
             end
         end
     end

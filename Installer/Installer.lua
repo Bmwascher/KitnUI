@@ -472,10 +472,11 @@ local function InstallEUIProfile()
     end)
 end
 
--- The popup on screen, reached by name because ShowConfirmPopup returns
--- nothing. EllesmereUI rebuilds the popup under the same names whenever its
--- accent is applied, as an import does, and the globals keep the discarded
--- frames; the showing popup is then found under its dimmer, a child of UIParent.
+-- The popup on screen, reached by name because ShowConfirmPopup returns a
+-- request handle, not the frame. EllesmereUI rebuilds the popup under the
+-- same names whenever its accent is applied, as an import does, and the
+-- globals keep the discarded frames; the showing popup is then found under its
+-- dimmer, a child of UIParent.
 local function ShowingConfirmPopup()
     local popup = _G.EUIConfirmPopup
     if popup and popup.IsVisible and popup:IsVisible() then return popup end
@@ -512,6 +513,21 @@ local function GrowConfirmPopup()
     end
     grow()
     C_Timer.After(0, grow)
+end
+
+-- EllesmereUI centers the message only when it builds the popup, but sets its
+-- text on every show, its own confirms included. Hooking SetText re-centers
+-- each new text, so only KitnUI's grouped confirms read left-aligned; without
+-- every piece of that the message stays as EllesmereUI drew it.
+local function AlignConfirmLeft()
+    local popup = ShowingConfirmPopup()
+    local msg = popup and popup._msg
+    if not (msg and msg.SetJustifyH and msg.SetText and type(hooksecurefunc) == "function") then return end
+    if not msg._kitnCenters then
+        msg._kitnCenters = true
+        hooksecurefunc(msg, "SetText", function(m) m:SetJustifyH("CENTER") end)
+    end
+    msg:SetJustifyH("LEFT")
 end
 
 local function RedrawEUIPage()
@@ -578,7 +594,7 @@ ConfirmEUIUpdate = function(plan)
     EllesmereUI:ShowConfirmPopup({
         title = reset and T.resetTitle:format(plan.row.label) or "Update profile?",
         message = reset and ns.EUIResetText(plan) or ns.EUIConfirmText(plan),
-        confirmText = reset and "Reset" or (plan.noBase and "Update (replaces your changes)" or "Update"),
+        confirmText = reset and "Reset" or (plan.noBase and "Replace" or "Update"),
         cancelText = "Cancel",
         onConfirm = function()
             local taken = box.plan
@@ -588,6 +604,7 @@ ConfirmEUIUpdate = function(plan)
         -- Escape and a click outside fall back to this as well.
         onCancel = function() box.plan = nil end,
     })
+    AlignConfirmLeft()
     GrowConfirmPopup()
 end
 ns.EUIConfirmUpdate = ConfirmEUIUpdate

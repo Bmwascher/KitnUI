@@ -15,35 +15,68 @@ local _, ns = ... ---@type string, KitnUINS
 -- nothing runs while no list is showing.
 local EUI_DIFF_STEPS = 900
 
-local ROW_H, ROW_H_MIN = 20, 14
--- The list ends above the split line, which sits on the action row.
-local LIST_TOP, LIST_BOTTOM = -70, 150
+local ROW_H_MAX, ROW_H_MIN = 26, 14
+-- The intro starts on the line Desc1 uses, below the header rule in the art;
+-- the list ends 10 px above the action buttons.
+local LIST_TOP, LIST_BOTTOM = -116, 132
 local CONTENT_X, CONTENT_W = 200, 520
-local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 230, 350, 260
+local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 208, 354, 390
+-- Each cell is as wide as its column's room, and its badge never grows past
+-- it: Your copy stops a gap short of the KitnUI column, and on the Modules
+-- page the KitnUI cell stops 2 px before Reset, shown on hover at the row's
+-- right edge. On the Profile Update page it runs to the list's edge.
+local COLUMN_GAP, RESET_W = 6, 36
+local YOURS_W = KITN_X_MODULES - YOURS_X - COLUMN_GAP
+local KITN_W_MODULES = CONTENT_W - KITN_X_MODULES - RESET_W - 2
+local KITN_W_UPDATER = CONTENT_W - KITN_X_UPDATER
 local MODULES_TITLE = "EllesmereUI Modules"
 local AMBER = { 1, 0.8, 0.2 }
+-- Stand-ins for a measurement that cannot be read: the list's height (the
+-- wizard's 560 less both ends), a two-line intro, one line of the notice.
+local LIST_H_FALLBACK, INTRO_H_FALLBACK, NOTICE_LINE_H = 312, 36, 16
+local NOTICE_MIN_H, NOTICE_GAP = 28, 8
+-- A badge is 18 high, or 2 px shorter than its row, so adjacent badges never touch.
+local BADGE_H, BADGE_PAD = 18, 6
+-- Tick all is drawn narrow. Beside Restore's 240 px "switch" state the update
+-- button narrows too, so the three fit the 520 px content column.
+local TICK_ALL_W, UPDATE_W_BESIDE_SWITCH = 100, 160
+local BACKING_FILL = { 0.03, 0.01, 0.02, 0.80 }
+-- The panel reaches this far past the heads and rows on each side. They sit
+-- this far right of the list's edge, so the panel starts in line with the
+-- intro, the band and the action buttons.
+local PANEL_INSET = 8
+-- The badges with a color of their own; "kitn" follows the accent and
+-- "amber" the warning amber, both read on each draw.
+local BADGES = {
+    you = { fill = { 0.47, 0.67, 1, 0.20 }, text = { 0.71, 0.81, 1, 1 } },
+    off = { fill = { 1, 1, 1, 0.09 }, text = { 1, 1, 1, 0.55 } },
+}
 
 local TEXT = {
     introUpdate = "KitnUI %s changes %d parts of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes.",
+    introUpdateOne = "KitnUI %s changes 1 part of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes.",
     introCurrent = "Each part of EllesmereUI on its own.",
     introModulesUpdate = "Each part of EllesmereUI on its own. Tick what you want to take from KitnUI; the rest stays as you have it.",
     introModulesCurrent = "Each part of EllesmereUI on its own. Tick a skipped part to take its update. Hover a row to reset it to KitnUI's version.",
-    changesOne = "changes 1 setting",
-    changesMany = "changes %d settings",
-    noChanges = "no changes",
-    replaces = "replaces yours",
-    off = "off - Plater chosen",
-    waiting = "skipped - %d waiting",
-    upToDate = "up to date",
+    changesOne = "Changes 1 Setting",
+    changesMany = "Changes %d Settings",
+    noChanges = "No Changes",
+    replaces = "Replaces Yours",
+    off = "Off - Plater Chosen",
+    waiting = "Skipped - %d Waiting",
+    upToDate = "Up to Date",
     counting = "...",
-    checking = "checking...",
-    yours = "changed by you - %d",
-    asInstalled = "as installed",
-    differs = "differs",
-    matches = "matches",
-    reloadToCheck = "reload to check",
+    checking = "Checking...",
+    yours = "Changed by You - %d",
+    asInstalled = "As Installed",
+    differs = "Differs",
+    matches = "Matches",
+    reloadToCheck = "Reload to Check",
     refused = "-",
     tipTitle = "%s - changes %d settings",
+    tipTitleOne = "%s - changes 1 setting",
+    tipYours = "%s - %d changed by you",
+    tipDiffers = "%s - differs",
     tipSkipped = "Skipped in KitnUI %s",
     updateAll = "Update Profile",
     updateAllNoBase = "Update (replaces your changes)",
@@ -53,9 +86,9 @@ local TEXT = {
     takeSkipped = "Take skipped (%d)",
     tickToo = "Tick %s too",
     reset = "Reset",
-    colModule = "Module",
-    colYours = "Your copy",
-    colKitn = "KitnUI %s",
+    colModule = "MODULE",
+    colYours = "YOUR COPY",
+    colKitn = "KITNUI %s",
 }
 
 local list
@@ -76,6 +109,54 @@ end
 local function Version()
     return ns.DisplayVersion and ns.DisplayVersion() or tostring(ns.version)
 end
+
+-- A font measurement, or the stand-in when it is secret or not a number.
+local function Measure(value, fallback)
+    local isv = issecretvalue
+    if (isv and isv(value)) or type(value) ~= "number" then return fallback end
+    return value
+end
+
+-- A name the game gave, or nil when it is missing, secret or empty.
+local function UsableName(name)
+    local isv = issecretvalue
+    if (isv and isv(name)) or type(name) ~= "string" or name == "" then return nil end
+    return name
+end
+
+-- An ID the game's lookups accept. The IDs come from saved profile data, and
+-- an out-of-range one would stop the count walk with an error.
+local function ValidID(id)
+    return type(id) == "number" and id >= 1 and id < 2147483648 and id % 1 == 0
+end
+
+-- The count walks' name lookups (ModuleRows.lua, EUIRowDiff opts.names).
+local NAMES = {
+    spec = function(id)
+        if not ValidID(id) or type(GetSpecializationInfoByID) ~= "function" then return nil end
+        local _, name, _, _, _, _, className = GetSpecializationInfoByID(id)
+        name, className = UsableName(name), UsableName(className)
+        if name and className then return name .. " " .. className end
+        return name
+    end,
+    spell = function(id)
+        if not ValidID(id) or not (C_Spell and C_Spell.GetSpellName) then return nil end
+        return UsableName(C_Spell.GetSpellName(id))
+    end,
+    -- A buff order entry's cooldown, as the spell it shows: its override
+    -- spell when it has one, else its spell.
+    cooldown = function(id)
+        local cv = C_CooldownViewer
+        if not ValidID(id) or not (cv and cv.GetCooldownViewerCooldownInfo) then return nil end
+        local info = cv.GetCooldownViewerCooldownInfo(id)
+        if type(info) ~= "table" then return nil end
+        local isv = issecretvalue
+        local spellID = info.overrideSpellID
+        if (isv and isv(spellID)) or not ValidID(spellID) then spellID = info.spellID end
+        if (isv and isv(spellID)) or not ValidID(spellID) then return nil end
+        return spellID
+    end,
+}
 
 ---------------------------------------------------------------------------------
 -- What a row says
@@ -100,28 +181,31 @@ local function Tickable(row)
     return Changed(row)
 end
 
+-- A cell's text and its kind: "kitn", "you", "amber" or "off" for a badge,
+-- "plain" for grey text.
 local function KitnText(row)
-    if row.off then return TEXT.off end
+    if row.off then return TEXT.off, "off" end
     local e = view.kitn and view.kitn[row.id]
-    if not e then return TEXT.counting end
-    if e.noBase then return TEXT.replaces end
+    if not e then return TEXT.counting, "plain" end
+    if e.noBase then return TEXT.replaces, "amber" end
     if view.state == "current" then
-        return e.count > 0 and TEXT.waiting:format(e.count) or TEXT.upToDate
+        if e.count > 0 then return TEXT.waiting:format(e.count), "amber" end
+        return TEXT.upToDate, "plain"
     end
-    if e.count == 1 then return TEXT.changesOne end
-    if e.count > 1 then return TEXT.changesMany:format(e.count) end
-    return TEXT.noChanges
+    if e.count == 1 then return TEXT.changesOne, "kitn" end
+    if e.count > 1 then return TEXT.changesMany:format(e.count), "kitn" end
+    return TEXT.noChanges, "plain"
 end
 
 local function YoursText(row)
-    if row.off or view.yours == false then return TEXT.refused end
+    if row.off or view.yours == false then return TEXT.refused, "plain" end
     local settle = ns.EUIPartSettle and ns.EUIPartSettle(row.id)
-    if settle == "pending" or settle == "due" then return TEXT.reloadToCheck end
+    if settle == "pending" or settle == "due" then return TEXT.reloadToCheck, "plain" end
     local e = view.yours and view.yours[row.id]
-    if not e then return TEXT.checking end
-    if e.noBase then return e.count > 0 and TEXT.differs or TEXT.matches end
-    if e.count > 0 then return TEXT.yours:format(e.count) end
-    return TEXT.asInstalled
+    if not e then return TEXT.checking, "plain" end
+    if e.noBase then return e.count > 0 and TEXT.differs or TEXT.matches, "plain" end
+    if e.count > 0 then return TEXT.yours:format(e.count), "you" end
+    return TEXT.asInstalled, "plain"
 end
 
 local function ChangedCount()
@@ -143,7 +227,9 @@ local function IntroText()
     end
     if view.state == "current" then return TEXT.introCurrent end
     if not view.kitn then return T.preparing end
-    return TEXT.introUpdate:format(Version(), ChangedCount())
+    local changed = ChangedCount()
+    if changed == 1 then return TEXT.introUpdateOne:format(Version()) end
+    return TEXT.introUpdate:format(Version(), changed)
 end
 
 ---------------------------------------------------------------------------------
@@ -237,57 +323,120 @@ end
 
 local function Cell(r, width)
     local cell = CreateFrame("Button", nil, r)
-    cell:SetSize(width, ROW_H)
-    cell.text = Font(cell, 12, 0.85)
+    cell:SetSize(width, ROW_H_MIN)
+    cell._w = width
+    cell.badge = cell:CreateTexture(nil, "BACKGROUND")
+    cell.badge:SetPoint("LEFT")
+    cell.badge:SetHeight(BADGE_H)
+    cell.badge:Hide()
+    cell.text = Font(cell, 12, 1)
     cell.text:SetPoint("LEFT")
     cell.text:SetJustifyH("LEFT")
+    cell.text:SetWordWrap(false)
     cell:SetScript("OnLeave", function() RowLeave(r) end)
     return cell
 end
 
+-- A cell's text in its kind: on a badge sized to the text, or plain grey.
+-- Either way the text starts BADGE_PAD into the cell, so plain text lines up
+-- with a badge's text and with the column head. Both stay inside the cell: a
+-- text wider than its room is cut with an ellipsis, so no badge reaches the
+-- next column.
+local function PaintCell(cell, text, kind)
+    local t, badge = cell.text, cell.badge
+    t:SetText(text)
+    t:ClearAllPoints()
+    if kind == "kitn" then
+        local a = ns.Wizard:Accent()
+        badge:SetColorTexture(a[1], a[2], a[3], 0.26)
+        t:SetTextColor(a[1] + (1 - a[1]) * 0.56, a[2] + (1 - a[2]) * 0.56, a[3] + (1 - a[3]) * 0.56, 1)
+    elseif kind == "amber" then
+        local f, c = ns.WARN_AMBER, ns.WARN_TEXT
+        badge:SetColorTexture(f[1], f[2], f[3], 0.20)
+        t:SetTextColor(c[1], c[2], c[3], 1)
+    elseif BADGES[kind] then
+        local b = BADGES[kind]
+        badge:SetColorTexture(b.fill[1], b.fill[2], b.fill[3], b.fill[4])
+        t:SetTextColor(b.text[1], b.text[2], b.text[3], b.text[4])
+    else
+        badge:Hide()
+        t:SetTextColor(1, 1, 1, 0.62)
+        t:SetPoint("LEFT", BADGE_PAD, 0)
+        t:SetWidth(cell._w - 2 * BADGE_PAD)
+        return
+    end
+    local room = cell._w - 2 * BADGE_PAD
+    t:SetPoint("LEFT", BADGE_PAD, 0)
+    t:SetWidth(room)
+    badge:SetWidth(math.min(Measure(t:GetUnboundedStringWidth(), room), room) + 2 * BADGE_PAD)
+    badge:Show()
+end
+
 local function BuildRow(i)
     local r = CreateFrame("Button", nil, list)
+    r.stripe = r:CreateTexture(nil, "BACKGROUND", nil, -1)
+    r.stripe:SetPoint("TOPLEFT", -PANEL_INSET, 0)
+    r.stripe:SetPoint("BOTTOMRIGHT", PANEL_INSET, 0)
+    r.stripe:SetColorTexture(1, 1, 1, 0.035)
     r.hover = r:CreateTexture(nil, "BACKGROUND")
-    r.hover:SetAllPoints()
-    r.hover:SetColorTexture(1, 1, 1, 0.05)
+    r.hover:SetPoint("TOPLEFT", -PANEL_INSET, 0)
+    r.hover:SetPoint("BOTTOMRIGHT", PANEL_INSET, 0)
+    r.hover:SetColorTexture(1, 1, 1, 0.06)
     r.hover:Hide()
-    r.box = r:CreateTexture(nil, "ARTWORK")
+    -- Without the check-mark atlas the accent fill alone shows the tick.
+    r.box = CreateFrame("Frame", nil, r)
     r.box:SetSize(14, 14)
     r.box:SetPoint("LEFT", 0, 0)
-    r.box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
-    r.check = r:CreateTexture(nil, "OVERLAY")
-    r.check:SetSize(14, 14)
-    r.check:SetPoint("CENTER", r.box)
-    r.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-    r.name = Font(r, 13, 1)
+    r.box.fill = r.box:CreateTexture(nil, "BACKGROUND")
+    r.box.fill:SetAllPoints()
+    r.box.fill:Hide()
+    if EllesmereUI.MakeBorder then
+        r.box.border = EllesmereUI.MakeBorder(r.box, 1, 1, 1, 0.5, EllesmereUI.PanelPP)
+    end
+    r.box.mark = r.box:CreateTexture(nil, "OVERLAY")
+    r.box.mark:SetSize(12, 12)
+    r.box.mark:SetPoint("CENTER")
+    r.box.markOk = C_Texture ~= nil and C_Texture.GetAtlasInfo ~= nil
+        and C_Texture.GetAtlasInfo("checkmark-minimal") ~= nil
+    if r.box.markOk then
+        r.box.mark:SetAtlas("checkmark-minimal")
+        r.box.mark:SetDesaturated(true)
+        r.box.mark:SetVertexColor(1, 1, 1, 1)
+    end
+    r.box.mark:Hide()
+    r.name = Font(r, 15, 1)
     r.name:SetPoint("LEFT", 22, 0)
     r.sub = Font(r, 11, 0.45)
     r.sub:SetPoint("LEFT", r.name, "RIGHT", 6, 0)
     r.sub:SetJustifyH("LEFT")
     r.sub:SetWordWrap(false)
 
-    r.yours = Cell(r, 115)
+    r.yours = Cell(r, YOURS_W)
     r.yours:SetPoint("LEFT", r, "LEFT", YOURS_X, 0)
     r.yours:SetScript("OnEnter", function(cell)
         RowEnter(r)
         local row = r.row
         local entry = row and view.yours and view.yours[row.id]
         if entry and entry.count > 0 and YoursText(row) ~= TEXT.reloadToCheck then
-            ShowTip(cell, row.label .. " - " .. YoursText(row), entry)
+            local title = entry.noBase and TEXT.tipDiffers:format(row.label)
+                or TEXT.tipYours:format(row.label, entry.count)
+            ShowTip(cell, title, entry)
         end
     end)
-    r.kitn = Cell(r, 120)
+    r.kitn = Cell(r, KITN_W_UPDATER)
     r.kitn:SetScript("OnEnter", function(cell)
         RowEnter(r)
         local row = r.row
         local entry = row and view.kitn and view.kitn[row.id]
         if not (entry and entry.count > 0) then return end
         local rec = ns.EUIRowRecord(ns.db and ns.db.euiRowAt, row.id)
-        ShowTip(cell, TEXT.tipTitle:format(row.label, entry.count), entry, rec and rec.kitn)
+        local title = entry.count == 1 and TEXT.tipTitleOne:format(row.label)
+            or TEXT.tipTitle:format(row.label, entry.count)
+        ShowTip(cell, title, entry, rec and rec.kitn)
     end)
 
     r.reset = CreateFrame("Button", nil, r)
-    r.reset:SetSize(50, ROW_H)
+    r.reset:SetSize(RESET_W, ROW_H_MIN)
     r.reset:SetPoint("RIGHT", r, "RIGHT", 0, 0)
     r.reset.text = Font(r.reset, 12, 0.9)
     r.reset.text:SetPoint("RIGHT")
@@ -327,32 +476,30 @@ local function BuildList()
     end)
     list:SetScript("OnShow", function() Resume() end)
 
-    list.intro = Font(list, 13, 0.9)
+    list.intro = Font(list, 14, 0.92)
     list.intro:SetPoint("TOPLEFT")
     list.intro:SetWidth(CONTENT_W)
     list.intro:SetJustifyH("LEFT")
 
-    list.head = CreateFrame("Frame", nil, list)
-    list.head:SetSize(CONTENT_W, 16)
-    list.head:SetPoint("TOPLEFT", list.intro, "BOTTOMLEFT", 0, -10)
-    list.colModule = Font(list.head, 11, 0.5)
-    list.colModule:SetPoint("LEFT", 22, 0)
-    list.colModule:SetText(TEXT.colModule)
-    list.colYours = Font(list.head, 11, 0.5)
-    list.colYours:SetPoint("LEFT", YOURS_X, 0)
-    list.colYours:SetText(TEXT.colYours)
-    list.colKitn = Font(list.head, 11, 0.5)
-
-    list.sep = list:CreateTexture(nil, "ARTWORK")
-    list.sep:SetColorTexture(1, 1, 1, 0.12)
-    list.sep:SetHeight(1)
-    list.sep:SetWidth(CONTENT_W)
-
-    list.split = Font(list, 12, 1)
-    list.split:SetTextColor(AMBER[1], AMBER[2], AMBER[3])
-    list.split:SetJustifyH("LEFT")
-    list.split:SetPoint("BOTTOMLEFT", f.Option1, "TOPLEFT", 0, 10)
-    list.splitButton = CreateFrame("Button", nil, list)
+    -- The split-link notice: an amber band under the intro, holding the button
+    -- that ticks the part which keeps the player's copy.
+    local warn, warnText = ns.WARN_AMBER, ns.WARN_TEXT
+    list.notice = CreateFrame("Frame", nil, list)
+    list.notice:SetPoint("TOPLEFT", list.intro, "BOTTOMLEFT", 0, -10)
+    list.notice:SetSize(CONTENT_W + 2 * PANEL_INSET, NOTICE_MIN_H)
+    local noticeFill = list.notice:CreateTexture(nil, "BACKGROUND")
+    noticeFill:SetAllPoints()
+    noticeFill:SetColorTexture(warn[1], warn[2], warn[3], 0.12)
+    if EllesmereUI.MakeBorder then
+        EllesmereUI.MakeBorder(list.notice, warn[1], warn[2], warn[3], 0.45, EllesmereUI.PanelPP)
+    end
+    list.noticeText = Font(list.notice, 12, 1)
+    list.noticeText:SetTextColor(warnText[1], warnText[2], warnText[3], 1)
+    list.noticeText:SetJustifyH("LEFT")
+    list.noticeText:SetWordWrap(true)
+    list.noticeText:SetMaxLines(3)
+    list.noticeText:SetPoint("LEFT", list.notice, "LEFT", 10, 0)
+    list.splitButton = CreateFrame("Button", nil, list.notice)
     list.splitButton:SetSize(120, 20)
     ns.Wizard:StyleButton(list.splitButton, "", 12, function()
         local target = list.splitButton._target
@@ -361,8 +508,40 @@ local function BuildList()
             Redraw()
         end
     end)
-    list.splitButton:SetPoint("LEFT", list.split, "RIGHT", 8, 0)
-    SetVariant(list.splitButton, "selectable")
+    list.splitButton:SetPoint("RIGHT", list.notice, "RIGHT", -4, 0)
+    SetVariant(list.splitButton, "warn")
+    list.notice:Hide()
+    list.noticeH = 0
+
+    -- The dark panel behind the heads and rows, so they read on the art. It
+    -- sits at the list's own level, under the rows, from the list's left edge
+    -- to PANEL_INSET past the rows' right edge.
+    list.backing = CreateFrame("Frame", nil, list)
+    list.backing:SetFrameLevel(list:GetFrameLevel())
+    local backingFill = list.backing:CreateTexture(nil, "BACKGROUND")
+    backingFill:SetAllPoints()
+    backingFill:SetColorTexture(BACKING_FILL[1], BACKING_FILL[2], BACKING_FILL[3], BACKING_FILL[4])
+    if EllesmereUI.MakeBorder then
+        list.backingBorder = EllesmereUI.MakeBorder(list.backing, 1, 1, 1, 0.16, EllesmereUI.PanelPP)
+    end
+    list.backing:Hide()
+
+    list.head = CreateFrame("Frame", nil, list)
+    list.head:SetSize(CONTENT_W, 16)
+    list.colModule = Font(list.head, 10, 0.55)
+    list.colModule:SetPoint("LEFT", 22, 0)
+    list.colModule:SetText(TEXT.colModule)
+    list.colYours = Font(list.head, 10, 0.55)
+    -- The status heads start on their column's text line, BADGE_PAD in.
+    list.colYours:SetPoint("LEFT", YOURS_X + BADGE_PAD, 0)
+    list.colYours:SetText(TEXT.colYours)
+    list.colKitn = Font(list.head, 10, 0.55)
+
+    -- On the heads' frame, so the panel at the list's level never covers it.
+    list.sep = list.head:CreateTexture(nil, "ARTWORK")
+    list.sep:SetColorTexture(1, 1, 1, 0.12)
+    list.sep:SetHeight(1)
+    list.sep:SetWidth(CONTENT_W)
     list:Hide()
 end
 
@@ -370,15 +549,63 @@ end
 -- Drawing
 ---------------------------------------------------------------------------------
 
+-- The band goes in before the rows: its height moves the heads and the row
+-- height.
+local function DrawNotice()
+    local band, b = list.notice, list.splitButton
+    band:Hide()
+    list.noticeH = 0
+    if not (view.ticked and view.inputs) or ReadOnly() then return end
+    local inputs = view.inputs
+    local splits = ns.EUISplitLinks(inputs.N, inputs.rows, view.ticked, inputs.keyToFolder)
+    local first = splits[1]
+    if not first then return end
+    local T = ns.EUI_UPDATE_TEXT
+    local room = CONTENT_W + 2 * PANEL_INSET - 10 - 4
+    if Tickable(first.target) then
+        b._target = first.target.id
+        local w = 80
+        if type(b._lbl) == "table" then
+            b._lbl:SetText(TEXT.tickToo:format(first.target.label))
+            w = math.max(80, Measure(b._lbl:GetStringWidth(), 150) + 16)
+        end
+        b:SetWidth(w)
+        b:Show()
+        room = room - 8 - w
+    else
+        b:Hide()
+    end
+    -- Shown before its text is set: text set in a hidden frame can measure as
+    -- the previous text until the frame lays out.
+    band:Show()
+    local t = list.noticeText
+    t:SetWidth(room)
+    t:SetText((first.anchored and T.split or T.splitSize):format(first.child.label, first.target.label,
+        first.target.label, first.child.label)
+        .. (#splits > 1 and T.splitMore:format(#splits - 1) or ""))
+    list.noticeH = math.max(NOTICE_MIN_H, Measure(t:GetStringHeight(), NOTICE_LINE_H) + 10)
+    band:SetHeight(list.noticeH)
+end
+
 local function DrawRows()
     for _, r in ipairs(rowPool) do r:Hide() end
     list.sep:Hide()
+    list.backing:Hide()
     local modules = view.mode == "modules"
     local kitnX = modules and KITN_X_MODULES or KITN_X_UPDATER
+    local kitnW = modules and KITN_W_MODULES or KITN_W_UPDATER
     list.colYours:SetShown(modules)
     list.colKitn:ClearAllPoints()
-    list.colKitn:SetPoint("LEFT", kitnX, 0)
+    list.colKitn:SetPoint("LEFT", kitnX + BADGE_PAD, 0)
     list.colKitn:SetText(TEXT.colKitn:format(Version()))
+    local above = 10 + Measure(list.intro:GetStringHeight(), INTRO_H_FALLBACK)
+    list.head:ClearAllPoints()
+    if list.noticeH > 0 then
+        list.head:SetPoint("TOPLEFT", list.notice, "BOTTOMLEFT", PANEL_INSET, -NOTICE_GAP)
+        above = above + list.noticeH + NOTICE_GAP
+    else
+        list.head:SetPoint("TOPLEFT", list.intro, "BOTTOMLEFT", PANEL_INSET, -10)
+    end
     if not view.inputs then
         list.head:Hide()
         return
@@ -386,9 +613,12 @@ local function DrawRows()
     list.head:Show()
 
     local rows = view.inputs.rows
-    -- Every row fits the content height: 20 px down to 14 when there are many.
-    local room = list:GetHeight() - list.intro:GetStringHeight() - 10 - list.head:GetHeight() - 8
-    local rowH = math.max(ROW_H_MIN, math.min(ROW_H, math.floor(room / math.max(#rows, 1))))
+    -- Every row fits the room under the heads (18) and the General gap (6):
+    -- 26 px down to 14 when there are many.
+    local room = Measure(list:GetHeight(), LIST_H_FALLBACK) - above - 18 - 6
+    local rowH = math.max(ROW_H_MIN, math.min(ROW_H_MAX, math.floor(room / math.max(#rows, 1))))
+    local badgeH = math.min(BADGE_H, rowH - 2)
+    local accent = ns.Wizard:Accent()
     local y = -2
     for i, row in ipairs(rows) do
         local r = rowPool[i] or BuildRow(i)
@@ -406,47 +636,50 @@ local function DrawRows()
 
         local tickable = Tickable(row)
         r._tickable = tickable
+        local ticked = tickable and view.ticked[row.id] == true
         r.box:SetShown(tickable)
-        r.check:SetShown(tickable and view.ticked[row.id] == true)
+        if ticked then
+            r.box.fill:SetColorTexture(accent[1], accent[2], accent[3], 1)
+            r.box.fill:Show()
+        else
+            r.box.fill:Hide()
+        end
+        if type(r.box.border) == "table" and r.box.border.SetColor then
+            if ticked then
+                r.box.border:SetColor(accent[1], accent[2], accent[3], 1)
+            else
+                r.box.border:SetColor(1, 1, 1, 0.5)
+            end
+        end
+        r.box.mark:SetShown(ticked and r.box.markOk)
+        r.stripe:SetShown(i % 2 == 0)
         r.name:SetText(row.label)
         r.sub:SetText(row.sub or "")
-        local subRoom = (modules and YOURS_X or kitnX) - 22 - r.name:GetStringWidth() - 12
+        local subRoom = (modules and YOURS_X or kitnX) - 22 - Measure(r.name:GetStringWidth(), CONTENT_W) - 12
         r.sub:SetWidth(math.max(1, subRoom))
         r.sub:SetShown(row.sub ~= nil and subRoom > 20)
         r.yours:SetShown(modules)
-        r.yours.text:SetText(modules and YoursText(row) or "")
+        r.yours:SetHeight(rowH)
+        r.yours.badge:SetHeight(badgeH)
+        if modules then PaintCell(r.yours, YoursText(row)) end
         r.kitn:ClearAllPoints()
         r.kitn:SetPoint("LEFT", r, "LEFT", kitnX, 0)
-        r.kitn.text:SetText(KitnText(row))
+        r.kitn:SetSize(kitnW, rowH)
+        r.kitn._w = kitnW
+        r.kitn.badge:SetHeight(badgeH)
+        PaintCell(r.kitn, KitnText(row))
+        r.reset:SetHeight(rowH)
         r.hover:Hide()
         r.reset:Hide()
-        local faint = row.off or (modules and view.state == "current" and view.ticked ~= nil and not tickable)
-        r:SetAlpha(faint and 0.45 or 1)
         r:Show()
     end
-end
-
-local function DrawSplit()
-    list.split:Hide()
-    list.splitButton:Hide()
-    if not (view.ticked and view.inputs) or ReadOnly() then return end
-    local inputs = view.inputs
-    local splits = ns.EUISplitLinks(inputs.N, inputs.rows, view.ticked, inputs.keyToFolder)
-    local first = splits[1]
-    if not first then return end
-    local T = ns.EUI_UPDATE_TEXT
-    list.split:SetText(T.split:format(first.child.label, first.target.label)
-        .. (#splits > 1 and T.splitMore:format(#splits - 1) or ""))
-    list.split:Show()
-    if Tickable(first.target) then
-        local b = list.splitButton
-        b._target = first.target.id
-        if b._lbl then
-            b._lbl:SetText(TEXT.tickToo:format(first.target.label))
-            b:SetWidth(math.max(80, b._lbl:GetStringWidth() + 16))
-        end
-        b:Show()
+    list.backing:ClearAllPoints()
+    list.backing:SetPoint("TOPLEFT", list.head, "TOPLEFT", -PANEL_INSET, 6)
+    list.backing:SetPoint("BOTTOMRIGHT", list.head, "BOTTOMRIGHT", PANEL_INSET, y - 6)
+    if type(list.backingBorder) == "table" and list.backingBorder.SetColor then
+        list.backingBorder:SetColor(accent[1], accent[2], accent[3], 0.16)
     end
+    list.backing:Show()
 end
 
 local function DrawButtons()
@@ -468,31 +701,34 @@ local function DrawButtons()
         if view.ticked[row.id] then ticked = ticked + 1 end
     end
     local noBase = view.inputs.O == nil
-    local slot = 2
+    local width, offerTickAll = 200, false
     if view.state == "current" then
         W:SetOption(1, TEXT.takeSkipped:format(ticked), OnUpdateClick, 12)
         SetVariant(f.Option1, ticked > 0 and "primary" or "ghost")
     elseif changed == 0 or (view.mode == "updater" and ticked == changed) then
         W:SetOption(1, noBase and TEXT.updateAllNoBase or TEXT.updateAll, OnUpdateClick, 12)
         SetVariant(f.Option1, "primary")
+        if noBase then width = 240 end
     else
         W:SetOption(1, (noBase and TEXT.replaceTicked or TEXT.updateTicked):format(ticked), OnUpdateClick, 12)
         SetVariant(f.Option1, "primary")
-        if view.mode == "updater" then
-            W:SetOption(2, TEXT.tickAll, TickAll, 12)
-            SetVariant(f.Option2, "selectable")
-            slot = 3
-        end
+        offerTickAll = view.mode == "updater"
     end
-    f.Option1:SetWidth(200)
-    ns.EUIDrawRestoreSlot(slot)
+    f.Option1:SetWidth(width)
+    local slot = ns.EUIDrawRestoreSlot(2) and 3 or 2
+    if offerTickAll then
+        W:SetOption(slot, TEXT.tickAll, TickAll, 12)
+        f["Option" .. slot]:SetWidth(TICK_ALL_W)
+        SetVariant(f["Option" .. slot], "selectable")
+        if ns.EUIRestorable and ns.EUIRestorable() == "switch" then f.Option1:SetWidth(UPDATE_W_BESIDE_SWITCH) end
+    end
 end
 
 Redraw = function()
     if not (list and list:IsShown()) then return end
     list.intro:SetText(IntroText())
+    DrawNotice()
     DrawRows()
-    DrawSplit()
     DrawButtons()
 end
 
@@ -557,6 +793,7 @@ local function StartPlayerRead()
             held = held,
             defaults = view.context.defaults,
             unlock = view.context.unlock,
+            names = NAMES,
         })
         if t0 then
             print(ns.title .. (" player read: %.1f ms"):format(debugprofilestop() - t0))
@@ -573,6 +810,7 @@ local function StartKitnWalk()
     local walker = ns.EUIRowDiff(inputs.O, inputs.N, inputs.rows, inputs.keyToFolder, {
         missing = inputs.missing,
         unlock = ns.EUIUnlockLabels(),
+        names = NAMES,
     })
     Pump(walker, view.gen, function(result)
         view.kitn = result

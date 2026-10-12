@@ -44,6 +44,15 @@ for _, file in ipairs({ "Installer/Merge.lua", "Installer/MergeInputs.lua", "Ins
     chunk("KitnUI", ns)
 end
 
+-- The confirms color each run of text; the checks read the words alone, and
+-- the color checks read the raw text.
+local function plain(s)
+    return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+local rawConfirmText, rawResetText = ns.EUIConfirmText, ns.EUIResetText
+ns.EUIConfirmText = function(p) return plain(rawConfirmText(p)) end
+ns.EUIResetText = function(p) return plain(rawResetText(p)) end
+
 local SHIPPED = "2026.09.19"
 local calls = {}
 local function bump(name) calls[name] = (calls[name] or 0) + 1 end
@@ -549,7 +558,7 @@ eq(plan.backupExists, false, "click: no backup yet")
 eq(plan.warnMoved, false, "click: nothing moves to the backup")
 
 local text = ns.EUIConfirmText(plan)
-check(text:find("1 of your changes will be replaced", 1, true), "confirm: the count line", text)
+check(text:find("1 of your changes is replaced", 1, true), "confirm: the count line", text)
 check(text:find("KitnUI's version is used", 1, true), "confirm: the promise line")
 check(not text:find("previous backup", 1, true), "confirm: no backup line without a backup")
 check(not text:find("Spec Overrides", 1, true), "confirm: no override line when no side carries one")
@@ -560,7 +569,8 @@ plan = ns.EUIPrepareUpdate()
 eq(plan.noBase, true, "click: no base plan")
 eq(plan.merged.addons[F].y, 2, "click: no base replaces the player's change")
 text = ns.EUIConfirmText(plan)
-check(text:find("replaces your changes", 1, true), "confirm: the no-base line")
+check(text:find("so the parts you tick replace yours.", 1, true), "confirm: the no-base lead", text)
+check(not text:find("of your changes", 1, true), "confirm: and no total", text)
 check(text:find(F .. ": replaces yours", 1, true), "confirm: with no base a ticked part replaces the player's changes", text)
 check(not text:find("none of yours", 1, true), "confirm: and no part claims none of theirs is replaced", text)
 
@@ -590,6 +600,30 @@ eq(plan.willLock, true, "click: assigned elsewhere locks")
 text = ns.EUIConfirmText(plan)
 check(text:find("Your previous backup will be replaced.", 1, true), "confirm: the backup line")
 check(text:find("keybind", 1, true), "confirm: the moved line")
+
+-- The confirm's groups and colors, on the one-conflict update: the player's
+-- live font against KitnUI's.
+freshInstall()
+ns.EUIStartDecodes()
+E.live = { fonts = { global = "Live" } }
+plan = ns.EUIPrepareUpdate()
+eq(#plan.report.conflicts, 1, "confirm: the color fixture has one conflict")
+local raw = rawConfirmText(plan)
+check(raw:find("|cffffffff" .. F .. "|r", 1, true), "confirm: a part's name is white", raw)
+check(raw:find("|cffE6B24C1|r", 1, true), "confirm: the total's count is amber", raw)
+text = ns.EUIConfirmText(plan)
+eq(text:find("Your changes are kept and KitnUI's come in.", 1, true), 1, "confirm: the lead comes first")
+check(text:find("\n\n", 1, true), "confirm: groups are set apart by a blank line", text)
+check(text:find("Restore previous puts back your profile as it is now.", 1, true),
+    "confirm: a visit's first change promises the profile as it is now", text)
+local function totalLine(conflicts)
+    return ns.EUIConfirmText({ inputs = { rows = {}, missing = {} }, ticked = {}, byRow = {},
+        report = { conflicts = conflicts }, noBase = false })
+end
+check(totalLine({}):find("None of your changes are replaced.", 1, true), "confirm: the zero total")
+check(totalLine({ "a", "b" }):find("2 of your changes are replaced because", 1, true), "confirm: the plural total")
+check(not ns.EUI_UPDATE_TEXT.health:find("colour", 1, true) and ns.EUI_UPDATE_TEXT.health:find("class color", 1, true),
+    "text: the health line in American spelling")
 
 -- Match extras through the click. O, N and P share one width link whose
 -- endpoints the meta places, and P carries an extra on it. These prove what
@@ -626,7 +660,7 @@ do
     local moved = prepareExtras("target")
     eq(moved.merged.unlockLayout.widthMatch.player_cb, "target", "extras: Kitn's re-pointed link is taken")
     eq(moved.merged.unlockLayout.widthMatchExtra.player_cb, nil, "extras: the player's extra is dropped with the link")
-    check(ns.EUIConfirmText(moved):find("1 of your changes will be replaced", 1, true),
+    check(ns.EUIConfirmText(moved):find("1 of your changes is replaced", 1, true),
         "extras: the confirm counts the dropped extra")
     eq(moved.byRow[F], 1, "extras: the dropped extra counts under the part that owns the bar")
     -- Unticked, the part keeps the player's link and the extra beside it, and
@@ -642,6 +676,35 @@ do
     eq(extrasReset and extrasReset.merged.unlockLayout.widthMatchExtra.player_cb, nil, "extras: and KitnUI's extra, not the player's")
     eq(extrasReset and extrasReset.yours, 2, "extras: the reset's count holds the player's change and the extra")
     resetExtras()
+end
+
+-- Quickdraw left out of KitnUI's string: the update hands the importer no
+-- Quickdraw folder, which the importer inherits from the player's profile,
+-- and the part list has no row for it. These prove what the update hands the
+-- importer, not what the importer stores.
+do
+    local QD = "EllesmereUIQuickdraw"
+    E._ADDON_DB_MAP[#E._ADDON_DB_MAP + 1] = { folder = QD }
+    strings.O.data.addons[QD] = { size = 30 }
+    freshInstall()
+    db.profiles.KitnUI.addons[QD] = { size = 40 }
+    ns.EUIStartDecodes()
+    local qdPlan, qdWhy = ns.EUIPrepareUpdate()
+    check(qdPlan ~= nil, "quickdraw: a plan is produced", qdWhy)
+    eq(qdPlan and qdPlan.merged.addons[QD], nil, "quickdraw: no Quickdraw folder goes to the importer")
+    check(qdPlan and qdPlan.merged.addons[F] ~= nil, "quickdraw: while a folder KitnUI's string carries does")
+    local qdConflict = false
+    for _, path in ipairs(qdPlan and qdPlan.report.conflicts or {}) do
+        if path:find(QD, 1, true) then qdConflict = true end
+    end
+    eq(qdConflict, false, "quickdraw: nothing of the player's Quickdraw is counted")
+    local qdRow = false
+    for _, row in ipairs(qdPlan and qdPlan.inputs.rows or {}) do
+        if row.id == QD then qdRow = true end
+    end
+    eq(qdRow, false, "quickdraw: the part list has no Quickdraw row")
+    strings.O.data.addons[QD] = nil
+    E._ADDON_DB_MAP[#E._ADDON_DB_MAP] = nil
 end
 
 ---------------------------------------------------------------------------------
@@ -678,7 +741,9 @@ eq(ns.db.euiUpdateReport.kept, plan.report.kept, "apply: the report is stored")
 eq(calls.complete, 1, "apply: CompleteSetup ran")
 eq(calls.refresh, 1, "apply: refresh ran")
 eq(calls.apply, 1, "apply: the module set was re-applied")
-eq(ns.EUIUpdateToast(plan), "Profile updated. 1 of your changes were replaced.", "apply: the toast counts")
+eq(ns.EUIUpdateToast(plan), "Profile updated. 1 of your changes was replaced.", "apply: the toast counts")
+eq(ns.EUIUpdateToast({ report = { conflicts = { "a", "b" } } }), "Profile updated. 2 of your changes were replaced.",
+    "apply: the plural toast")
 eq(ns.EUIUpdateToast({ report = { conflicts = {} } }), "Profile updated.", "apply: the zero toast")
 eq(ns.EUIUpdateState(), "current", "apply: the page reads current")
 eq(ns.EUIRestorable(), "restore", "apply: restore is offered")
@@ -1051,6 +1116,7 @@ eq(takePlan.merged.fonts.global, "G", "take: the waiting row takes KitnUI's chan
 local takeText = ns.EUIConfirmText(takePlan)
 check(not takeText:find("Your previous backup will be replaced.", 1, true), "visit: the scratch path replaces no backup", takeText)
 check(takeText:find("are removed; set them again in EllesmereUI", 1, true), "visit: the scratch path warns the keybind is removed", takeText)
+check(takeText:find(ns.EUI_UPDATE_TEXT.restoreEarlier, 1, true), "visit: the take promises the backup taken earlier in the visit", takeText)
 local backupProfile, backupRec = db.profiles[ns.EUIBackupName], ns.db.euiBackup
 calls = {}
 local takeOk, takeErr = ns.EUIApplyUpdate(takePlan)
@@ -1168,8 +1234,10 @@ eq(resetPlan.yours, 1, "reset: the player's changes to the row are counted")
 eq(resetPlan.captured, false, "reset: no Spec Overrides capture the row")
 eq(#resetPlan.splits, 0, "reset: no split link")
 local resetText = ns.EUIResetText(resetPlan)
-check(resetText:find(F .. " goes back to KitnUI's version. Your 1 changes to " .. F .. " will be replaced. Your other parts are not touched.", 1, true),
+check(resetText:find(F .. " goes back to KitnUI's version. Your 1 change to " .. F .. " will be replaced. Your other parts are not touched.", 1, true),
     "reset: the confirm's first line", resetText)
+check(rawResetText(resetPlan):find("|cffE6B24CYour 1 change to " .. F .. " will be replaced.|r", 1, true),
+    "reset: the count sentence is amber")
 check(resetText:find("Restore previous puts back your profile as it is now.", 1, true), "reset: the visit's first change promises the profile as it is now", resetText)
 check(not resetText:find("before this visit", 1, true), "reset: never the profile from before the visit, which a full reset may have replaced", resetText)
 check(not resetText:find("Spec Overrides also hold", 1, true), "reset: no capture line", resetText)
@@ -1208,6 +1276,18 @@ check(linkReset ~= nil, "reset: a plan is produced beside a link the filter remo
 eq(linkReset and linkReset.warnLinks, true, "reset: the removed link is noticed")
 check(linkReset and ns.EUIResetText(linkReset):find(ns.EUI_UPDATE_TEXT.links, 1, true),
     "reset: the removed link is named in the confirm")
+
+-- The reset confirm's split note names the link's kind.
+local function splitPlan(anchored)
+    return { row = { id = F, label = F }, yours = 0,
+        splits = { { child = { label = "Resource Bars" }, target = { label = "Unit Frames" }, anchored = anchored } } }
+end
+local sizeSplitText = ns.EUIResetText(splitPlan(false))
+check(sizeSplitText:find("Resource Bars is sized to match Unit Frames. You're keeping your own Unit Frames, so Resource Bars may not line up.", 1, true),
+    "reset: a size-only split reads as a size match", sizeSplitText)
+local anchorSplitText = ns.EUIResetText(splitPlan(true))
+check(anchorSplitText:find("Resource Bars is anchored to Unit Frames. You're keeping your own Unit Frames, so Resource Bars may not line up.", 1, true),
+    "reset: an anchored split reads as an anchor", anchorSplitText)
 
 freshInstall()
 db.profiles.KitnUI.addons[F].x = 5
@@ -1420,8 +1500,8 @@ do
         eq(#snPlan.report.conflicts, 1, "settled: the confirm counts a value EllesmereUI rewrote as the player's")
         local snText = ns.EUIConfirmText(snPlan)
         check(snText:find("General: 1 of yours replaced", 1, true), "settled: in the confirm's part line", snText)
-        check(snText:find("1 of your changes will be replaced", 1, true), "settled: and its total", snText)
-        eq(ns.EUIUpdateToast(snPlan), "Profile updated. 1 of your changes were replaced.", "settled: and the toast")
+        check(snText:find("1 of your changes is replaced", 1, true), "settled: and its total", snText)
+        eq(ns.EUIUpdateToast(snPlan), "Profile updated. 1 of your changes was replaced.", "settled: and the toast")
     end
     local snReset = ns.EUIPrepareReset("general", ctx)
     eq(snReset and snReset.yours, 1, "settled: a Reset counts from KitnUI's string")
