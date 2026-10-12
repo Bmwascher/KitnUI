@@ -454,7 +454,10 @@ local function AccentSource()
     if src == "pink" or src == "rasta" or src == "ke" or src == "custom" then return src end
     if AccentUsesDefault() then return "pink" end
     local c = s.accentCustom
-    if type(c) == "table" and IsRastaAmber(c.r, c.g, c.b) then return "rasta" end
+    if type(c) == "table" and type(c.r) == "number" and type(c.g) == "number"
+       and type(c.b) == "number" and IsRastaAmber(c.r, c.g, c.b) then
+        return "rasta"
+    end
     return "custom"
 end
 
@@ -477,9 +480,10 @@ local function AccentColor()
 end
 
 -- What the swatch shows: the forced colour, or the live accent when there is
--- none to force.
+-- none to force or the master is off and the player's own accent is back.
 local function ShownAccentColor()
-    local r, g, b = AccentColor()
+    local r, g, b
+    if ns.EUISettings().accentPink then r, g, b = AccentColor() end
     if r then return r, g, b end
     local EUI = _G.EllesmereUI
     if EUI and EUI.GetAccentColor then return EUI.GetAccentColor() end
