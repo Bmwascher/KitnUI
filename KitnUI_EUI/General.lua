@@ -483,17 +483,6 @@ local function AccentColor()
     return ACCENT_R, ACCENT_G, ACCENT_B
 end
 
--- What the swatch shows: the forced colour while the master is on, and the live
--- accent while it is off and the player's own accent is back.
-local function ShownAccentColor()
-    local r, g, b
-    if ns.EUISettings().accentPink then r, g, b = AccentColor() end
-    if r then return r, g, b end
-    local EUI = _G.EllesmereUI
-    if EUI and EUI.GetAccentColor then return EUI.GetAccentColor() end
-    return ACCENT_R, ACCENT_G, ACCENT_B
-end
-
 -- Read and write the switch directly on the settings table, never through a
 -- sub-table: in that shape it was the only switch that did not survive a reload.
 -- See the DEFAULTS comment in Core.lua.
@@ -689,6 +678,15 @@ local function AccentColorHeld()
     return saved ~= nil and saved.prev ~= nil
 end
 
+-- What the swatch shows: the forced colour while KitnUI holds the accent, and
+-- the live accent otherwise, so it always matches the screen.
+local function ShownAccentColor()
+    if AccentColorHeld() then return AccentColor() end
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.GetAccentColor then return EUI.GetAccentColor() end
+    return ACCENT_R, ACCENT_G, ACCENT_B
+end
+
 -- Said by both setters whenever a colour change stored fine but could not reach
 -- the screen. Every forcing control in this addon says when it refused; a colour
 -- row that quietly does nothing is the same defect wearing a different hat.
@@ -753,8 +751,7 @@ local function FollowKE()
     if keFollowing or AccentSource() ~= "ke" then return end
     local KE = KEApi()
     if not KE then return end
-    keFollowing = true
-    pcall(KE.RegisterThemeCallback, KE, OnKEThemeChanged)
+    keFollowing = pcall(KE.RegisterThemeCallback, KE, OnKEThemeChanged)
 end
 
 -- Wrapped rather than registered bare. A bare registration would hand the
