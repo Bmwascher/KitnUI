@@ -609,7 +609,7 @@ local function AccentColorHeld()
     -- The write is guarded on this too (General.lua:418), so a host missing it
     -- skips the write while every other guard passes -- a silent failure, which is
     -- the exact thing this predicate exists to catch. Reachable: the tab's
-    -- capability gate asks only for RegisterModule (Core.lua:985).
+    -- capability gate asks only for RegisterModule (Core.lua, the login handler).
     --
     -- Truthiness, matching the write exactly rather than type-checking here and
     -- not there. A predicate STRICTER than the write would report a refusal that

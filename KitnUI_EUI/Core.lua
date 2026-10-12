@@ -1014,7 +1014,9 @@ boot:SetScript("OnEvent", function(self)
     -- is registered first, at KitnUI load time.
     MigrateSettingsForward()
 
-    -- RegisterModule only, NOT Widgets: EllesmereUI 8.8 moved the widget
+    -- RegisterModule stands for EllesmereUI's config panel: the switches below
+    -- need the panel, not the plugin API, so an EllesmereUI without that API
+    -- still runs them. NOT Widgets: EllesmereUI 8.8 moved the widget
     -- factory into its LoadOnDemand EllesmereUIOptions addon, so
     -- EllesmereUI.Widgets is nil at login and appears only when the panel
     -- first opens (EnsureOptionsLoaded). The page builders read it at build
@@ -1103,6 +1105,8 @@ KitnCommands["options"] = function()
     local EUI = _G.EllesmereUI
     if EUI and EUI.IsPluginRegistered and EUI.IsPluginRegistered(PLUGIN_ID) and EUI.OpenPlugin then
         EUI.OpenPlugin(PLUGIN_ID)
+    elseif EUI and EUI.RegisterModule then
+        print(ns.title .. ": The KitnUI tab needs EllesmereUI 9.4 or newer.")
     else
         print(ns.title .. ": EllesmereUI's config panel is unavailable.")
     end

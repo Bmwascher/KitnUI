@@ -33,7 +33,8 @@ end
 local core = { title = "KitnUI", profileName = "KitnUI", data = {}, db = { profiles = {} } }
 _G.KitnUI_Shared = core
 _G.InCombatLockdown = function() return false end
-_G.hooksecurefunc = function() end
+local hooked = {}
+_G.hooksecurefunc = function(_, name) hooked[name] = true end
 _G.C_Timer = { After = function() end }
 _G.EllesmereUIDB = { profiles = {} }
 
@@ -62,6 +63,7 @@ local function newEUI(plugins)
     E.RefreshPage = function() log("RefreshPage") end
     E.GetActiveModule = function() return E.activeModule end
     E.GetActivePage = function() return E.activePage end
+    E.SwitchProfile = function() end
     if plugins then
         E.registered = {}
         E.RegisterPlugin = function(id, spec)
@@ -92,11 +94,11 @@ end
 -- Loads Core.lua against `E` and fires login. Returns the tab's namespace.
 local function boot(E)
     _G.EllesmereUI = E
-    loginHandlers, printed = {}, {}
+    loginHandlers, printed, hooked = {}, {}, {}
     local ns = {}
     local chunk, err = loadfile("KitnUI_EUI/Core.lua")
     if not chunk then
-        print("FAIL  could not load KitnUI_EUI/Core.lua: " .. tostring(err))
+        io.write("FAIL  could not load KitnUI_EUI/Core.lua: " .. tostring(err) .. "\n")
         os.exit(1)
     end
     chunk("KitnUI_EUI", ns)
@@ -161,10 +163,11 @@ E = newEUI(false)
 boot(E)
 eq(count(E, "RegisterModule"), 0, "an EllesmereUI without the plugin API registers nothing")
 eq(#E.ADDON_GROUPS, 0, "and writes nothing into its sidebar")
+eq(hooked.SwitchProfile, true, "but the switches' login work still runs there")
 E.calls = {}
 _G.KitnCommands.options()
 eq(count(E, "ShowModule"), 0, "/kitn options opens nothing there")
-eq(#printed, 1, "and says the panel is unavailable")
+check(printed[1] and printed[1]:find("needs EllesmereUI 9.4", 1, true), "and says the tab needs a newer EllesmereUI", printed[1])
 
 io.write(string.format("%d checks, %d failures\n", checks, failures))
 os.exit(failures == 0 and 0 or 1)
