@@ -1281,7 +1281,7 @@ end
 --
 -- GuildCount stays direct: GetNumGuildMembers returns two numbers, no structs,
 -- so there is nothing to throttle.
-local BADGE_WALK_WINDOW = 10
+local BADGE_WALK_WINDOW = 30
 local friendsBadgePending
 
 local function RequestFriendsBadgeUpdate()
