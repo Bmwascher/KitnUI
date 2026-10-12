@@ -20,14 +20,18 @@ local function DB() return _G.EllesmereUIDB end
 -- Every sentence the flow shows. The design's sentences are reproduced
 -- verbatim; the rest are this file's.
 ns.EUI_UPDATE_TEXT = {
-    promise = "Update keeps everything you changed and brings in everything KitnUI changed. Where you both changed the same thing, KitnUI's version is used.",
-    replaces = "%d of your changes will be replaced because KitnUI changed the same things.",
-    noBase = "KitnUI has no record of the profile you installed, so this update replaces your changes.",
+    promise = "Your changes are kept and KitnUI's come in. Where you both changed the same thing, ",
+    promiseKey = "KitnUI's version is used",
+    replacedTail = " of your changes are replaced because KitnUI changed the same things.",
+    replacedTailOne = " of your changes is replaced because KitnUI changed the same things.",
+    replacedNone = "None of your changes are replaced.",
+    noBase = "KitnUI has no record of the profile you installed, so the parts you tick ",
+    noBaseKey = "replace yours",
     backupReplaced = "Your previous backup will be replaced.",
     overridesKept = "Your Spec Overrides are kept.",
     overridesTaken = "KitnUI's Spec Overrides replace yours. KitnUI's saved layouts may also replace bar and element positions, sizes and links you changed.",
     links = "Links from updated bars to modules KitnUI disables, to modules with no Unlock Mode checkbox, or that EllesmereUI cannot identify will be removed. These are not included in the count.",
-    health = "Your custom health bar colour will be reset to the class colour. This is not included in the count.",
+    health = "Your custom health bar color will be reset to the class color. This is not included in the count.",
     moved = "Your profile keybind and sync-group membership move to the backup. Restore previous brings them back.",
     combat = "Cannot update in combat",
     notActive = "Switch to your KitnUI profile to update it.",
@@ -47,20 +51,22 @@ ns.EUI_UPDATE_TEXT = {
     needsNewer = "Update needs a newer EllesmereUI.",
     updated = "Profile updated.",
     updatedReplaced = "Profile updated. %d of your changes were replaced.",
+    updatedReplacedOne = "Profile updated. 1 of your changes was replaced.",
 }
 local T = ns.EUI_UPDATE_TEXT
 
 -- The per-part view's sentences.
 T.noneTicked = "Tick at least one part first."
-T.rowReplaced = "%s: %d of yours replaced"
-T.rowNone = "%s: none of yours"
-T.rowReplaces = "%s: replaces yours"
+T.rowReplaced = "%d of yours replaced"
+T.rowNone = "none of yours"
+T.rowReplaces = "replaces yours"
 T.skipped = "Skipped: %s -- take them any time from /kitn install, EllesmereUI > Modules."
 T.movedScratch = "Your profile keybind and sync-group membership are removed; set them again in EllesmereUI."
 T.scratchFail = "Could not move your profile aside for the update. Nothing was imported."
 T.resetTitle = "Reset %s?"
 T.resetBody = "%s goes back to KitnUI's version."
 T.resetYours = "Your %d changes to %s will be replaced."
+T.resetYoursOne = "Your 1 change to %s will be replaced."
 T.resetNone = "You have no changes to %s."
 T.resetOthers = "Your other parts are not touched."
 T.resetCaptured = "Your Spec Overrides also hold settings for %s; they apply again when you change spec."
@@ -806,67 +812,106 @@ function ns.EUIPrepareReset(rowId, context)
     return buildResetPlan(inputs, predictLock(scratch), row, context or ns.EUIPlayerContext(), scratch)
 end
 
--- The confirm's message, one sentence per line.
+-- The confirms' colors, as WoW color codes. Every run of text carries its
+-- own code and none nests, because a run's |r ends whatever color is open.
+local C_BASE, C_PART, C_COUNT, C_QUIET = "cccccc", "ffffff", "E6B24C", "8c8c8c"
+
+local function paint(color, text)
+    return "|cff" .. color .. text .. "|r"
+end
+
+-- One string from groups of lines, a blank line between groups; an empty
+-- group adds nothing.
+local function joinGroups(groups)
+    local out = {}
+    for _, lines in ipairs(groups) do
+        if #lines > 0 then out[#out + 1] = table.concat(lines, "\n") end
+    end
+    return table.concat(out, "\n\n")
+end
+
+-- The confirm's message: the lead, a line per ticked part, the total, then
+-- the notes, warnings in amber.
 function ns.EUIConfirmText(plan)
-    local lines = { T.promise }
+    local lead
+    if plan.noBase then
+        lead = paint(C_BASE, T.noBase) .. paint(C_PART, T.noBaseKey) .. paint(C_BASE, ".")
+    else
+        lead = paint(C_BASE, T.promise) .. paint(C_PART, T.promiseKey) .. paint(C_BASE, ".")
+    end
     -- A part with no base of its own has no count of the player's changes:
     -- each setting KitnUI's string holds there replaces theirs, as the part's
     -- list cell says.
+    local parts = {}
     local missing = plan.inputs.missing or {}
     for _, row in ipairs(plan.inputs.rows) do
         if plan.ticked[row.id] then
             local k = plan.byRow[row.id] or 0
+            local tail
             if plan.noBase or missing[row.id] then
-                lines[#lines + 1] = T.rowReplaces:format(row.label)
+                tail = paint(C_COUNT, T.rowReplaces)
             elseif k > 0 then
-                lines[#lines + 1] = T.rowReplaced:format(row.label, k)
+                tail = paint(C_COUNT, T.rowReplaced:format(k))
             else
-                lines[#lines + 1] = T.rowNone:format(row.label)
+                tail = paint(C_QUIET, T.rowNone)
             end
+            parts[#parts + 1] = paint(C_PART, row.label) .. paint(C_BASE, ": ") .. tail
         end
     end
-    if plan.noBase then
-        lines[#lines + 1] = T.noBase
-    else
-        lines[#lines + 1] = T.replaces:format(#plan.report.conflicts)
+    local total = {}
+    if not plan.noBase then
+        local n = #plan.report.conflicts
+        if n == 0 then
+            total[1] = paint(C_BASE, T.replacedNone)
+        else
+            total[1] = paint(C_COUNT, tostring(n)) .. paint(C_BASE, n == 1 and T.replacedTailOne or T.replacedTail)
+        end
     end
-    if plan.backupExists and not plan.scratch then lines[#lines + 1] = T.backupReplaced end
+    local notes = {}
+    if plan.backupExists and not plan.scratch then notes[#notes + 1] = paint(C_COUNT, T.backupReplaced) end
     if plan.report.overrideSet == "kitn" then
-        lines[#lines + 1] = T.overridesTaken
+        notes[#notes + 1] = paint(C_COUNT, T.overridesTaken)
     elseif plan.report.overrideSet == "player" then
-        lines[#lines + 1] = T.overridesKept
+        notes[#notes + 1] = paint(C_QUIET, T.overridesKept)
     end
-    if plan.warnLinks then lines[#lines + 1] = T.links end
-    if plan.warnHealth then lines[#lines + 1] = T.health end
-    if plan.warnMoved then lines[#lines + 1] = plan.scratch and T.movedScratch or T.moved end
-    return table.concat(lines, "\n")
+    if plan.warnLinks then notes[#notes + 1] = paint(C_COUNT, T.links) end
+    if plan.warnHealth then notes[#notes + 1] = paint(C_COUNT, T.health) end
+    if plan.warnMoved then notes[#notes + 1] = paint(C_COUNT, plan.scratch and T.movedScratch or T.moved) end
+    -- What Restore will put back, by the rule a reset follows below.
+    notes[#notes + 1] = paint(C_QUIET, plan.scratch and T.restoreEarlier or T.restoreNow)
+    return joinGroups({ { lead }, parts, total, notes })
 end
 
 function ns.EUIResetText(plan)
     local label = plan.row.label
-    local lines = {
-        T.resetBody:format(label) .. " "
-            .. (plan.yours > 0 and T.resetYours:format(plan.yours, label) or T.resetNone:format(label))
-            .. " " .. T.resetOthers,
-    }
-    if plan.captured then lines[#lines + 1] = T.resetCaptured:format(label) end
+    local yours
+    if plan.yours == 1 then
+        yours = paint(C_COUNT, T.resetYoursOne:format(label))
+    elseif plan.yours > 1 then
+        yours = paint(C_COUNT, T.resetYours:format(plan.yours, label))
+    else
+        yours = paint(C_BASE, T.resetNone:format(label))
+    end
+    local lead = paint(C_BASE, T.resetBody:format(label) .. " ") .. yours .. paint(C_BASE, " " .. T.resetOthers)
+    local notes = {}
+    if plan.captured then notes[#notes + 1] = paint(C_QUIET, T.resetCaptured:format(label)) end
     local first = plan.splits[1]
     if first then
-        lines[#lines + 1] = T.split:format(first.child.label, first.target.label)
-            .. (#plan.splits > 1 and T.splitMore:format(#plan.splits - 1) or "")
+        notes[#notes + 1] = paint(C_COUNT, T.split:format(first.child.label, first.target.label)
+            .. (#plan.splits > 1 and T.splitMore:format(#plan.splits - 1) or ""))
     end
-    if plan.row.id == "overrides" then lines[#lines + 1] = T.overridesTaken end
+    if plan.row.id == "overrides" then notes[#notes + 1] = paint(C_COUNT, T.overridesTaken) end
     -- A reset imports the whole profile, so the final layout filter can remove
     -- a link in a part the reset leaves alone.
-    if plan.warnLinks then lines[#lines + 1] = T.links end
-    if plan.warnHealth then lines[#lines + 1] = T.health end
-    if plan.backupExists and not plan.scratch then lines[#lines + 1] = T.backupReplaced end
-    if plan.warnMoved then lines[#lines + 1] = plan.scratch and T.movedScratch or T.moved end
+    if plan.warnLinks then notes[#notes + 1] = paint(C_COUNT, T.links) end
+    if plan.warnHealth then notes[#notes + 1] = paint(C_COUNT, T.health) end
+    if plan.backupExists and not plan.scratch then notes[#notes + 1] = paint(C_COUNT, T.backupReplaced) end
+    if plan.warnMoved then notes[#notes + 1] = paint(C_COUNT, plan.scratch and T.movedScratch or T.moved) end
     -- What Restore will put back: the backup this reset takes, or the one an
     -- earlier change took. A full reset takes none, so a promise of the
     -- profile from before the visit would be false after one began it.
-    lines[#lines + 1] = plan.scratch and T.restoreEarlier or T.restoreNow
-    return table.concat(lines, "\n")
+    notes[#notes + 1] = paint(C_QUIET, plan.scratch and T.restoreEarlier or T.restoreNow)
+    return joinGroups({ { lead }, notes })
 end
 
 -- The rows an update leaves waiting: changed and not taken.
@@ -1126,6 +1171,7 @@ end
 function ns.EUIUpdateToast(plan)
     if plan.kind == "reset" then return T.resetDone:format(plan.row.label) end
     local n = #plan.report.conflicts
+    if n == 1 then return T.updatedReplacedOne end
     if n > 0 then return T.updatedReplaced:format(n) end
     return T.updated
 end
