@@ -538,9 +538,14 @@ local function FriendsCount()
         and C_FriendList.GetNumOnlineFriends()) or 0
     local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
     local subAccounts = Get("tbFriendsSubAccounts", ns.EUI_DEFAULTS.tbFriendsSubAccounts) and true or false
+    if not BNGetNumFriends then return wowOnline end
+    local numBNet, numBNetOnline = BNGetNumFriends()
+    -- With both options off a friend counts when online at all, which is the
+    -- game's own online count, so the walk and its per-friend structs are
+    -- skipped.
+    if not (inGameOnly or subAccounts) then return wowOnline + (numBNetOnline or 0) end
     local bnetOnline = 0
-    local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
-    for i = 1, numBNet do
+    for i = 1, numBNet or 0 do
         local _, list = BNetFriendAccounts(i, inGameOnly, subAccounts)
         if list then bnetOnline = bnetOnline + #list end
     end
