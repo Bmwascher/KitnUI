@@ -359,8 +359,18 @@ local function capital(s) return (s:gsub("^%l", string.upper)) end
 
 -- EllesmereUI stores a buff placed on a cooldown bar as -(base + spellID) in
 -- the bar's assignedSpells, beside plain spell IDs. A cooldown claim marker,
--- -(claim base + cooldownID), lies past every hosted marker and names no spell.
+-- -(claim base + cooldownID), lies past every hosted marker and names its
+-- cooldown, read as a spell through the cooldown lookup.
 local CDM_HOSTED_BASE, CDM_CLAIM_BASE = 2000000000, 3000000000
+
+-- An equipment-slot entry in assignedSpells is -(inventory slot). EllesmereUI
+-- leaves slot 18 out, so -18 is no slot.
+local CDM_SLOT_NAMES = {
+    [1] = "Head", [2] = "Neck", [3] = "Shoulder", [4] = "Shirt", [5] = "Chest", [6] = "Waist",
+    [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Ring 1", [12] = "Ring 2",
+    [13] = "Trinket 1", [14] = "Trinket 2", [15] = "Back", [16] = "Main Hand", [17] = "Off Hand",
+    [19] = "Tabard",
+}
 
 -- An answer from the walk's lookups (EUIRowDiff, opts.names), or nil: a name
 -- from spec and spell, a spell ID from cooldown. Each answer is kept, so an ID
@@ -391,14 +401,17 @@ local function lookup(labels, kind, id)
     return found or nil
 end
 
--- The spell one bar list entry names, or nil. assignedSpells holds spell IDs
--- as values; customSpellIDs and spellDurations are keyed by spell ID;
--- buffDisplayOrder holds "s<spellID>" or "c<cooldownID>", a cooldown read as
--- its spell through the cooldown lookup.
+-- The spell one bar list entry names, or nil and, for an equipment-slot
+-- entry, the slot's name. assignedSpells holds spell IDs, slots and markers as
+-- values; customSpellIDs and spellDurations are keyed by spell ID;
+-- buffDisplayOrder holds "s<spellID>" or "c<cooldownID>". A cooldown is read
+-- as its spell through the cooldown lookup.
 local function cdmSpellID(list, key, value, labels)
     if list == "assignedSpells" and key:match("^%[%d+%]$") and type(value) == "number" then
         if value > 0 then return value end
+        if value < 0 and value > -20 then return nil, CDM_SLOT_NAMES[-value] end
         if value <= -CDM_HOSTED_BASE and value > -CDM_CLAIM_BASE then return -value - CDM_HOSTED_BASE end
+        if value <= -CDM_CLAIM_BASE then return lookup(labels, "cooldown", -value - CDM_CLAIM_BASE) end
     elseif list == "customSpellIDs" or list == "spellDurations" then
         local id = tonumber(key:match("^%[(%d+)%]$") or "")
         if id and id > 0 then return id end
@@ -423,8 +436,8 @@ local TOP_BAR_NAMES = {
 }
 
 -- A Cooldown Manager path, cdmSpells.<specID>.<rest>: the spec is the group,
--- a spell list's entry is its spell, and anything under a bar names the bar.
--- An unnamed duration entry keeps its key, "#<spellID>".
+-- a spell list's entry is its spell or its slot, and anything under a bar
+-- names the bar. An unnamed duration entry keeps its key, "#<spellID>".
 local function cdmLabel(parts, labels, value)
     local specID = tonumber(parts[2]:match("^%[?(%d+)%]?$") or "")
     local group = lookup(labels, "spec", specID) or ("Spec " .. (specID and tostring(specID) or parts[2]))
@@ -433,11 +446,12 @@ local function cdmLabel(parts, labels, value)
     while last > 2 and CHANNELS[parts[last]] do last = last - 1 end
     local item
     if bar and last == 6 then
-        local spellID = cdmSpellID(parts[5], parts[6], value, labels)
+        local spellID, slotName = cdmSpellID(parts[5], parts[6], value, labels)
         if spellID then
             item = lookup(labels, "spell", spellID)
             if not item and parts[5] ~= "spellDurations" then item = "spell " .. spellID end
         end
+        item = item or slotName
     end
     item = item or (labels.names and labels.names[table.concat(parts, ".", 1, last)]) or tidy(parts[last])
     if bar then item = item .. " (" .. bar .. ")" end
@@ -458,14 +472,17 @@ local function topBarItem(parts)
     return item
 end
 
--- Unit frame aura lists keyed by spell ID: the Tracked Auras include and
--- exclude sets, and a buff filter's spells (playerAuraBars.pabFilters.list).
+-- Aura lists keyed by spell ID: the Tracked Auras include and exclude sets,
+-- and a filter library's spells, list[n].spells under the Player Aura Bars'
+-- pabFilters or the Raid Frames' filters.
 local SPELL_SETS = {
     debuffInclude = true, debuffExclude = true, debuffIncludeAnyCaster = true, debuffIncludeMine = true,
 }
 
 local function spellSet(parts, k)
-    return SPELL_SETS[parts[k]] or (parts[k] == "spells" and parts[k - 3] == "pabFilters")
+    if SPELL_SETS[parts[k]] then return true end
+    local library = parts[k - 3]
+    return parts[k] == "spells" and (library == "pabFilters" or library == "filters")
 end
 
 -- The keys parts[from..to] between a group and its setting, outermost first:

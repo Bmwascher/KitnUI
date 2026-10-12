@@ -821,9 +821,27 @@ eq(item, "Starfall (Buffs)", "label: a list entry is its spell, with its bar")
 _, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[1]", { id = CDM }, named, -(2000000000 + 191034))
 eq(item, "Starfall (Cooldowns)", "label: a hosted buff marker is its spell")
 _, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -6)
-eq(item, "#3 (Cooldowns)", "label: an item or slot entry keeps its position")
+eq(item, "Waist (Cooldowns)", "label: an equipment-slot entry names its slot")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -13)
+eq(item, "Trinket 1 (Cooldowns)", "label: the first trinket slot is named")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, nil, -14)
+eq(item, "Trinket 2 (Cooldowns)", "label: a slot is named without lookups")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -18)
+eq(item, "#3 (Cooldowns)", "label: slot 18, which EllesmereUI leaves out, keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -20)
+eq(item, "#3 (Cooldowns)", "label: a value past the slots keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[3]", { id = CDM }, named, -150)
+eq(item, "#3 (Cooldowns)", "label: an item entry keeps its position")
 _, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[4]", { id = CDM }, named, -(3000000000 + 191034))
-eq(item, "#4 (Cooldowns)", "label: a cooldown claim marker is no hosted spell")
+eq(item, "#4 (Cooldowns)", "label: a cooldown claim marker without a cooldown lookup keeps its position")
+local claimNamed = {
+    spell = named.spell,
+    cooldown = function(id) return id == 42 and 191034 or nil end,
+}
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[4]", { id = CDM }, claimNamed, -(3000000000 + 42))
+eq(item, "Starfall (Cooldowns)", "label: a cooldown claim marker is its cooldown's spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.cooldowns.assignedSpells.[4]", { id = CDM }, claimNamed, -(3000000000 + 99))
+eq(item, "#4 (Cooldowns)", "label: a claim marker whose cooldown does not resolve keeps its position")
 _, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.customSpellIDs.[191034]", { id = CDM }, named, true)
 eq(item, "Starfall (Buffs)", "label: a custom spell is named by its key")
 group, item = ns.EUISettingLabel("cdmSpells.1473.barSpells.buffs.assignedSpells.[1]", { id = CDM }, nil, 1234)
@@ -872,6 +890,14 @@ eq(item, "spells #102543 (pab filters, list #2)", "label: a buff filter's spell 
 _, item = ns.EUISettingLabel("addons." .. UF .. ".playerAuraBars.bars.[1].spells.[3]", { id = UF },
     { spell = function() return "Starfall" end })
 eq(item, "spells #3 (bars #1)", "label: a spells list outside the buff filters names no spell")
+local rfPath = "addons.EllesmereUIRaidFrames.bm2.filters.list.[3].spells.[774]"
+_, item = ns.EUISettingLabel(rfPath, { id = "EllesmereUIRaidFrames" }, {
+    spell = function(id) return id == 774 and "Rejuvenation" or nil end,
+    names = { ["addons.EllesmereUIRaidFrames.bm2.filters.list.[3]"] = "Healer HoTs" },
+})
+eq(item, "spells: Rejuvenation (filters, Healer HoTs)", "label: a Raid Frames filter's spell is named, with its filter")
+_, item = ns.EUISettingLabel(rfPath, { id = "EllesmereUIRaidFrames" })
+eq(item, "spells #774 (filters, list #3)", "label: a Raid Frames filter's spell without names keeps its ID")
 
 group, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbOff.clock", { id = TOP_BAR })
 eq(group, "Top Bar", "label: a Top Bar setting is in the Top Bar group")
