@@ -67,14 +67,15 @@ end
 
 -- Baked installer background art: a ~1.36:1 panel inside a black margin.
 -- ART_CROP drops the margin so the panel fills the frame with no stretch, and
--- PANEL_W/PANEL_H match that aspect. Retune both together if the art changes.
+-- PANEL_W/PANEL_H match that aspect. dev/art/build_installer_art.py draws the
+-- art at this size and prints the crop; retune all three together.
 local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background.png"
 -- Characters on the alternate look get this one instead. It carries the same
 -- geometry -- panel rectangle, sidebar divider and header band all land on the
 -- same pixels -- so the crop and the overlay positions below serve both.
 local ART_PATH_ALT = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Rasta.png"
-local ART_CROP = { 0.065, 0.940, 0.099, 0.916 }  -- left, right, top, bottom (0..1)
-local PANEL_W, PANEL_H = 760, 560                 -- 1.357:1, matches the cropped panel
+local ART_CROP = { 0.0395, 0.9605, 0.0696, 0.9304 }  -- left, right, top, bottom (0..1)
+local PANEL_W, PANEL_H = 800, 590                     -- 1.356:1, matches the cropped panel
 local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI_Icon.tga"
 
 -- Layout: the baked art already draws the sidebar column, logo, header band and
@@ -644,8 +645,8 @@ end
 local function variantColours(variant)
     local P, D = accent, STEP_DONE
     if variant == "primary" then
-        return { bg  = { P[1], P[2], P[3], 0.80 }, bgOn  = { P[1], P[2], P[3], 1 },
-                 brd = { P[1], P[2], P[3], 1 },    brdOn = { 1, 1, 1, 0.55 },
+        return { bg  = { P[1], P[2], P[3], 0.55 }, bgOn  = { P[1], P[2], P[3], 0.75 },
+                 brd = { P[1], P[2], P[3], 0.9 },  brdOn = { 1, 1, 1, 0.55 },
                  -- White rather than near-black: dark text on a saturated accent
                  -- vibrates, and every other emphasis already labels in white.
                  txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }

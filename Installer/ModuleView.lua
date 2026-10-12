@@ -19,8 +19,8 @@ local ROW_H_MAX, ROW_H_MIN = 26, 14
 -- The intro starts on the line Desc1 uses, below the header rule in the art;
 -- the list ends 10 px above the action buttons.
 local LIST_TOP, LIST_BOTTOM = -116, 132
-local CONTENT_X, CONTENT_W = 200, 520
-local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 208, 354, 390
+local CONTENT_X, CONTENT_W = 200, 560
+local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 208, 364, 400
 -- Each cell is as wide as its column's room, and its badge never grows past
 -- it: Your copy stops a gap short of the KitnUI column, and on the Modules
 -- page the KitnUI cell stops 2 px before Reset, shown on hover at the row's
@@ -32,15 +32,18 @@ local KITN_W_UPDATER = CONTENT_W - KITN_X_UPDATER
 local MODULES_TITLE = "EllesmereUI Modules"
 local AMBER = { 1, 0.8, 0.2 }
 -- Stand-ins for a measurement that cannot be read: the list's height (the
--- wizard's 560 less both ends), a two-line intro, one line of the notice.
-local LIST_H_FALLBACK, INTRO_H_FALLBACK, NOTICE_LINE_H = 312, 36, 16
+-- wizard's 590 less both ends), a two-line intro, one line of the notice.
+local LIST_H_FALLBACK, INTRO_H_FALLBACK, NOTICE_LINE_H = 342, 36, 16
 local NOTICE_MIN_H, NOTICE_GAP = 28, 8
 -- A badge is 18 high, or 2 px shorter than its row, so adjacent badges never touch.
 local BADGE_H, BADGE_PAD = 18, 6
 -- Tick all is drawn narrow. Beside Restore's 240 px "switch" state the update
--- button narrows too, so the three fit the 520 px content column.
+-- button narrows too, so the three fit the 560 px content column.
 local TICK_ALL_W, UPDATE_W_BESIDE_SWITCH = 100, 160
 local BACKING_FILL = { 0.03, 0.01, 0.02, 0.80 }
+local BOX = 16
+local CHECK_TEX = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI-Check.png"
+local CROSS_TEX = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI-Cross.png"
 -- The panel reaches this far past the heads and rows on each side. They sit
 -- this far right of the list's edge, so the panel starts in line with the
 -- intro, the band and the action buttons.
@@ -387,27 +390,19 @@ local function BuildRow(i)
     r.hover:SetPoint("BOTTOMRIGHT", PANEL_INSET, 0)
     r.hover:SetColorTexture(1, 1, 1, 0.06)
     r.hover:Hide()
-    -- Without the check-mark atlas the accent fill alone shows the tick.
+    -- Ticked: a full accent square with a check. Unticked: a dim one with a cross.
     r.box = CreateFrame("Frame", nil, r)
-    r.box:SetSize(14, 14)
+    r.box:SetSize(BOX, BOX)
     r.box:SetPoint("LEFT", 0, 0)
     r.box.fill = r.box:CreateTexture(nil, "BACKGROUND")
     r.box.fill:SetAllPoints()
-    r.box.fill:Hide()
     if EllesmereUI.MakeBorder then
         r.box.border = EllesmereUI.MakeBorder(r.box, 1, 1, 1, 0.5, EllesmereUI.PanelPP)
     end
     r.box.mark = r.box:CreateTexture(nil, "OVERLAY")
-    r.box.mark:SetSize(12, 12)
-    r.box.mark:SetPoint("CENTER")
-    r.box.markOk = C_Texture ~= nil and C_Texture.GetAtlasInfo ~= nil
-        and C_Texture.GetAtlasInfo("checkmark-minimal") ~= nil
-    if r.box.markOk then
-        r.box.mark:SetAtlas("checkmark-minimal")
-        r.box.mark:SetDesaturated(true)
-        r.box.mark:SetVertexColor(1, 1, 1, 1)
-    end
-    r.box.mark:Hide()
+    r.box.mark:SetAllPoints()
+    r.box.mark:SetTexelSnappingBias(0)
+    r.box.mark:SetSnapToPixelGrid(false)
     r.name = Font(r, 15, 1)
     r.name:SetPoint("LEFT", 22, 0)
     r.sub = Font(r, 11, 0.45)
@@ -642,12 +637,7 @@ local function DrawRows()
         r._tickable = tickable
         local ticked = tickable and view.ticked[row.id] == true
         r.box:SetShown(tickable)
-        if ticked then
-            r.box.fill:SetColorTexture(accent[1], accent[2], accent[3], 1)
-            r.box.fill:Show()
-        else
-            r.box.fill:Hide()
-        end
+        r.box.fill:SetColorTexture(accent[1], accent[2], accent[3], ticked and 1 or 0.4)
         if type(r.box.border) == "table" and r.box.border.SetColor then
             if ticked then
                 r.box.border:SetColor(accent[1], accent[2], accent[3], 1)
@@ -655,7 +645,8 @@ local function DrawRows()
                 r.box.border:SetColor(1, 1, 1, 0.5)
             end
         end
-        r.box.mark:SetShown(ticked and r.box.markOk)
+        r.box.mark:SetTexture(ticked and CHECK_TEX or CROSS_TEX)
+        r.box.mark:SetAlpha(ticked and 1 or 0.8)
         r.stripe:SetShown(i % 2 == 0)
         r.name:SetText(row.label)
         r.sub:SetText(row.sub or "")
