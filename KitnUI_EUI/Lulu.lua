@@ -98,6 +98,17 @@ local MINIMAP_KEYS = {
 -- EXPORTS list, so it stays invisible to KitnUI itself.
 ns.LuluMinimapKeys = MINIMAP_KEYS
 
+local MINIMAP_BY_SNAP = {}
+for i = 1, #MINIMAP_KEYS do
+    local entry = MINIMAP_KEYS[i]
+    MINIMAP_BY_SNAP[entry.snap or entry.key] = entry.key
+end
+
+ns.EUIRegisterHeld("lulu", function(noteKey, _, add)
+    local key = MINIMAP_BY_SNAP[noteKey]
+    if key then add("addons.EllesmereUIMinimap.minimap." .. key) end
+end)
+
 -- The minimap is the only part of Lulu Mode that applies without a reload, so it
 -- is the only part that snapshots. The other two are reversed by re-enabling the
 -- addon and re-activating the standard layout.

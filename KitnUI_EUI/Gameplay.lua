@@ -434,6 +434,42 @@ local function ApplyBeginner(on, claiming)
     ApplyActionBars(on, claiming)
 end
 
+-- Every field ApplyModeStored writes: a visibility note holds all of them.
+local VISIBILITY_FIELDS = {
+    "barVisibility", "alwaysHidden", "mouseoverEnabled", "mouseoverAlpha",
+    "_savedBarAlpha", "combatHideEnabled", "combatShowEnabled",
+}
+
+-- A Cooldown Manager note names its bar by key, or "#<index>" for a bar with
+-- none; the export path needs the index.
+local function CdmBarIndex(barKey)
+    local n = barKey:match("^#(%d+)$")
+    if n then return tonumber(n) end
+    local bars = CdmBars()
+    for i = 1, bars and #bars or 0 do
+        if type(bars[i]) == "table" and bars[i].key == barKey then return i end
+    end
+    return nil
+end
+
+ns.EUIRegisterHeld("beginner", function(noteKey, _, add)
+    local barKey, setting = noteKey:match("^(.-)\31(.+)$")
+    if not barKey then return end
+    if BAR_SNAP_KEYS[noteKey] then
+        local base = "addons." .. ACTION_BARS .. ".bars." .. barKey .. "."
+        if setting == "hideKeybind" then
+            add(base .. "hideKeybind")
+        else
+            for _, field in ipairs(VISIBILITY_FIELDS) do add(base .. field) end
+        end
+        return
+    end
+    local index = CdmBarIndex(barKey)
+    if index then
+        add(ns.EUIJoinPath("addons." .. CDM .. ".cdmBars.bars", index) .. "." .. setting)
+    end
+end)
+
 -- Off is stored as an explicit false, never by deleting the key. Under the
 -- registered defaults in KitnUI_EUI/Core.lua an absent key means "restore me to
 -- the default", so a deleted key would come back ON after a reload, and

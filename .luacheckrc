@@ -163,8 +163,8 @@ read_globals = {
     -- Cooldown Manager
     "CooldownViewerSettings", "CooldownManagerLayout_GetName",
 
-    -- Timer
-    "C_Timer",
+    -- Timer, and the profiler clock the part list's count walk reports against
+    "C_Timer", "debugprofilestop",
 
     -- Encoding (JSON serialize/deserialize, 12.0)
     "C_EncodingUtil",

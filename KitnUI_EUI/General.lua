@@ -377,6 +377,21 @@ local ACCENT_KEYS = {
     { folder = "EllesmereUIFriends",      sub = "friends",      key = "useAccentTab",     refresh = "_EFR_ApplyFriends"},
 }
 
+local ACCENT_PATHS = {}
+for _, entry in ipairs(ACCENT_KEYS) do
+    ACCENT_PATHS[entry.folder .. "." .. entry.key] = "addons." .. entry.folder
+        .. (entry.sub and ("." .. entry.sub) or "") .. "." .. entry.key
+end
+
+-- The scope note nests one record per key under keys["<folder>.<key>"].
+ns.EUIRegisterHeld("accent", function(noteKey, _, add, slot)
+    if noteKey == "color" then
+        add("euiAccent")
+    elseif noteKey == "scope" and slot and ACCENT_PATHS[slot] then
+        add(ACCENT_PATHS[slot])
+    end
+end)
+
 -- FF008C, the same pink ns.Color uses for the chat prefix. A literal, and it has
 -- to be: accentCustom defaults to WHITE, so the registered defaults no longer carry
 -- this colour anywhere it could be read back from. Keep it in step with

@@ -314,6 +314,24 @@ for i = 1, #DARK_CAST_BAR_KEYS do
     DARK_CAST_FKEYS[i] = ERB_FOLDER .. FS .. "castBar" .. PS .. DARK_CAST_BAR_KEYS[i]
 end
 
+-- The export paths a held note covers, for the per-part count. A note keyed
+-- "<key>\31<slot>" holds that key in an override slot.
+local function DescribeResourceKeys(section, path, keys)
+    local owned = {}
+    for i = 1, #keys do owned[keys[i]] = true end
+    ns.EUIRegisterHeld(section, function(noteKey, _, add)
+        local key = noteKey:match("^([^\31]+)\31") or noteKey
+        if not owned[key] then return end
+        if key == noteKey then
+            add("addons." .. ERB_FOLDER .. "." .. path .. "." .. key)
+        else
+            add(ns.EUI_HELD_FKEY .. ERB_FOLDER .. FS .. path .. PS .. key)
+        end
+    end)
+end
+
+DescribeResourceKeys(DARK_SECTION, "castBar", DARK_CAST_BAR_KEYS)
+
 -- claiming is true only on a user click. A re-apply must never create a
 -- record, because only at the click can this addon honestly say what the
 -- value was before it touched anything.
@@ -537,6 +555,8 @@ for i = 1, #GAP_KEYS do
     GAP_FKEYS[i] = ERB_FOLDER .. FS .. GAP_PATH .. PS .. GAP_KEYS[i]
 end
 
+DescribeResourceKeys(GAP_SECTION, GAP_PATH, GAP_KEYS)
+
 -- Every reason this claim must be refused, gathered for the switch on the
 -- General page: it has to answer before EllesmereUI's own dark switch is
 -- written, and that write cannot be taken back.
@@ -631,6 +651,19 @@ end
 
 local CAST_KEY, POWER_KEY = "ERB_CastBar", "ERB_Power"
 local REPOSITIONED_KEYS = { CAST_KEY, POWER_KEY }
+
+-- darkWasOn remembers a switch state, not a setting, so it holds no path.
+ns.EUIRegisterHeld(BITE_SECTION, function(noteKey, _, add)
+    if noteKey == "showSpellText" then
+        add("addons." .. ERB_FOLDER .. ".castBar.showSpellText")
+    elseif noteKey:match("^spellText\31") then
+        add(ns.EUI_HELD_FKEY .. SPELL_TEXT_FKEY)
+    elseif noteKey == CAST_KEY or noteKey == POWER_KEY then
+        add("unlockLayout.anchors." .. noteKey)
+    elseif noteKey == "override:" .. CAST_KEY or noteKey == "override:" .. POWER_KEY then
+        add("unlockOverrideAnchors." .. noteKey:sub(#"override:" + 1))
+    end
+end)
 
 local function AnchorDB()
     local db = _G.EllesmereUIDB

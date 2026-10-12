@@ -16,7 +16,9 @@ local FLOAT_TOLERANCE = 1e-4
 local function isTable(v) return type(v) == "table" end
 local function isInteger(v) return type(v) == "number" and math.floor(v) == v end
 
-local function same(a, b)
+-- `tick`, when given, is called once per key read, so a caller can bound the
+-- work between two calls (the per-part count walk does).
+local function same(a, b, tick)
     if a == b then return true end
     local ta, tb = type(a), type(b)
     if ta == "number" and tb == "number" then
@@ -25,19 +27,24 @@ local function same(a, b)
     end
     if ta ~= "table" or tb ~= "table" then return false end
     for k, v in pairs(a) do
-        if not same(v, b[k]) then return false end
+        if tick then tick() end
+        if not same(v, b[k], tick) then return false end
     end
     for k in pairs(b) do
+        if tick then tick() end
         if a[k] == nil then return false end
     end
     return true
 end
 ns.EUISame = same
 
-local function deepCopy(v)
+local function deepCopy(v, tick)
     if not isTable(v) then return v end
     local c = {}
-    for k, x in pairs(v) do c[k] = deepCopy(x) end
+    for k, x in pairs(v) do
+        if tick then tick() end
+        c[k] = deepCopy(x, tick)
+    end
     return c
 end
 ns.EUIDeepCopy = deepCopy
@@ -47,6 +54,8 @@ local function joinPath(path, k)
     if path == "" then return part end
     return path .. "." .. part
 end
+-- ModuleRows.lua names the same paths, so it joins them the same way.
+ns.EUIJoinPath = joinPath
 
 -- The keys the importer takes as one set. Decided whole, never walked.
 local OV_KEYS = {
@@ -70,6 +79,7 @@ local SPECIAL = {
     overridesIncluded = true, overridesExcluded = true, partialImport = true,
 }
 for _, key in ipairs(OV_KEYS) do SPECIAL[key] = true end
+ns.EUI_SPECIAL_KEYS = SPECIAL
 
 -- Levels whose children the importer takes or inherits whole and never deletes.
 local ROOT_UNITS = { fonts = true, customColors = true, darkMode = true, euiAccent = true }
@@ -79,6 +89,8 @@ local UNIT_PARENTS = { addons = true, cdmSpells = true }
 -- import with Resource Bars loaded; excluded from the count then.
 local HEALTH_PATH = "^addons%.EllesmereUIResourceBars%.health%.(%w+)$"
 local HEALTH_LEAVES = { customColored = true, fillR = true, fillG = true, fillB = true }
+ns.EUI_HEALTH_PATH = HEALTH_PATH
+ns.EUI_HEALTH_LEAVES = HEALTH_LEAVES
 
 -- Dense numeric-keyed tables whose index carries meaning: a slot another
 -- setting points at, a colour's channels, a group number, or a map keyed by a
@@ -249,6 +261,9 @@ local function extraOf(d, map, child)
     return extras[child]
 end
 
+-- The part walk reads an extra by the same rule.
+ns.EUIExtraOf = extraOf
+
 -- Layout entries are leaves compared whole, walked last, over children whose
 -- owner is present in merged.addons; the root, its four maps and the two
 -- extras maps always exist. An extra follows the link the leaf wrote, and a
@@ -309,7 +324,7 @@ local BASELINE_LINKS = { anchors = true, widthMatch = true, heightMatch = true,
 local COUNTERS = { specOverrideNextId = true, condOverrideNextId = true }
 local UNLOCK_STORES = { specUnlockOverrides = true, condUnlockOverrides = true }
 
-local function maskedSet(d)
+local function maskedSet(d, tick)
     local set = {}
     for _, key in ipairs(OV_KEYS) do
         local v = d and d[key]
@@ -318,11 +333,13 @@ local function maskedSet(d)
         elseif LAYER_STORES[key] and isTable(v) then
             local c = {}
             for k2, v2 in pairs(v) do
+                if tick then tick() end
                 if k2 ~= "active" then c[k2] = v2 end
             end
             if key == "specUnlockOverrides" and isTable(c.baselineLayout) then
                 local b = {}
                 for k3, v3 in pairs(c.baselineLayout) do
+                    if tick then tick() end
                     if not BASELINE_LINKS[k3] then b[k3] = v3 end
                 end
                 c.baselineLayout = b
@@ -335,21 +352,37 @@ local function maskedSet(d)
 end
 ns.EUIMaskedOverrideSet = maskedSet
 
+-- The keys of two tables, each read counted.
+local function unionTicked(a, b, tick)
+    local keys = {}
+    for k in pairs(a) do
+        if tick then tick() end
+        keys[k] = true
+    end
+    for k in pairs(b) do
+        if tick then tick() end
+        keys[k] = true
+    end
+    return keys
+end
+
 -- An unlock layer's element entries carry live sizes and exist only for the
 -- elements the character registers, so two sets are compared over the
 -- elements both hold, sizes ignored; positions and everything else compare.
 -- An entry banked raw (`rawPos`) holds a stored offset where the other form
 -- holds an on-screen one, so a raw entry against the other form is the same.
-local function elemsSame(a, b)
+local function elemsSame(a, b, tick)
     if not (isTable(a) and isTable(b)) then return true end
     for key, ea in pairs(a) do
+        if tick then tick() end
         local eb = b[key]
         if eb ~= nil then
             if not (isTable(ea) and isTable(eb)) then
-                if not same(ea, eb) then return false end
+                if not same(ea, eb, tick) then return false end
             elseif (ea.rawPos == true) == (eb.rawPos == true) then
-                for k in pairs(unionKeys(ea, eb)) do
-                    if k ~= "w" and k ~= "h" and not same(ea[k], eb[k]) then return false end
+                for k in pairs(unionTicked(ea, eb, tick)) do
+                    if tick then tick() end
+                    if k ~= "w" and k ~= "h" and not same(ea[k], eb[k], tick) then return false end
                 end
             end
         end
@@ -362,41 +395,44 @@ end
 local LAYER_EXTRAS = { widthMatchExtra = true, heightMatchExtra = true }
 local NO_EXTRAS = {}
 
-local function layerSame(a, b)
-    if not (isTable(a) and isTable(b)) then return same(a, b) end
-    for k in pairs(unionKeys(a, b)) do
+local function layerSame(a, b, tick)
+    if not (isTable(a) and isTable(b)) then return same(a, b, tick) end
+    for k in pairs(unionTicked(a, b, tick)) do
+        if tick then tick() end
         if k == "elems" then
-            if not elemsSame(a.elems, b.elems) then return false end
+            if not elemsSame(a.elems, b.elems, tick) then return false end
         elseif LAYER_EXTRAS[k] then
-            if not same(a[k] or NO_EXTRAS, b[k] or NO_EXTRAS) then return false end
-        elseif not same(a[k], b[k]) then
+            if not same(a[k] or NO_EXTRAS, b[k] or NO_EXTRAS, tick) then return false end
+        elseif not same(a[k], b[k], tick) then
             return false
         end
     end
     return true
 end
 
-local function unlockStoreSame(a, b)
-    if not (isTable(a) and isTable(b)) then return same(a, b) end
-    for k in pairs(unionKeys(a, b)) do
+local function unlockStoreSame(a, b, tick)
+    if not (isTable(a) and isTable(b)) then return same(a, b, tick) end
+    for k in pairs(unionTicked(a, b, tick)) do
+        if tick then tick() end
         if k == "baselineLayout" then
-            if not layerSame(a[k], b[k]) then return false end
+            if not layerSame(a[k], b[k], tick) then return false end
         elseif k == "layouts" and isTable(a[k]) and isTable(b[k]) then
-            for gid in pairs(unionKeys(a[k], b[k])) do
-                if not layerSame(a[k][gid], b[k][gid]) then return false end
+            for gid in pairs(unionTicked(a[k], b[k], tick)) do
+                if tick then tick() end
+                if not layerSame(a[k][gid], b[k][gid], tick) then return false end
             end
-        elseif not same(a[k], b[k]) then
+        elseif not same(a[k], b[k], tick) then
             return false
         end
     end
     return true
 end
 
-local function setsSame(a, b)
+local function setsSame(a, b, tick)
     for _, key in ipairs(OV_KEYS) do
         if UNLOCK_STORES[key] then
-            if not unlockStoreSame(a[key], b[key]) then return false end
-        elseif not same(a[key], b[key]) then
+            if not unlockStoreSame(a[key], b[key], tick) then return false end
+        elseif not same(a[key], b[key], tick) then
             return false
         end
     end
@@ -425,6 +461,7 @@ local function decideOverrides(ctx, O, N, P, merged)
 end
 
 local SCALE_MIN, SCALE_MAX = 0.40, 1.15
+ns.EUI_SCALE_RANGE = { SCALE_MIN, SCALE_MAX }
 
 local function specialKeys(ctx, O, N, P, merged)
     merged.assignedSpecs = deepCopy(P and P.assignedSpecs)

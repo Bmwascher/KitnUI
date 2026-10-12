@@ -44,6 +44,7 @@ end
 local ns = {
     EUI_INERT = false,
     EUIRegisterReapply = function() end,
+    EUIRegisterHeld = function() end,
 }
 
 local chunk = assert(loadfile("KitnUI_EUI/Lulu.lua"))

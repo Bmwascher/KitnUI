@@ -172,9 +172,12 @@ function W:Build()
     tinsert(UISpecialFrames, "KitnUIWizard")
 
     -- Esc and the close button both end here; a decode started for a page
-    -- must not report into a window that is gone.
-    f:SetScript("OnHide", function()
+    -- must not report into a window that is gone, and the part list lets go
+    -- of what it read. Hidden with the whole UI, the window keeps its shown
+    -- flag, and the list keeps what it read to restart from.
+    f:SetScript("OnHide", function(frame)
         if ns.EUICancelDecodes then ns.EUICancelDecodes() end
+        if not frame:IsShown() and ns.EUIHideModuleList then ns.EUIHideModuleList() end
     end)
 
     -- Title: left-aligned in the content column, inside the baked header band.
@@ -198,6 +201,20 @@ function W:Build()
     f.Skip:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 0.45, 0.45) end)
     f.Skip:SetScript("OnLeave", function(b) b._lbl:SetTextColor(SKIP_R, SKIP_G, SKIP_B) end)
     f.Skip:Hide()
+
+    -- Leaving a sub-page redraws the step the rail still marks. ASCII "<",
+    -- because the font lacks the arrow glyphs.
+    f.SubBack = CreateFrame("Button", nil, f)
+    f.SubBack:SetHeight(20)
+    f.SubBack:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
+    f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 13, "", 1, 1, 1, 0.7)
+    f.SubBack._lbl:SetPoint("LEFT")
+    f.SubBack._lbl:SetText("< Back to EllesmereUI")
+    f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
+    f.SubBack:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 1, 1, 1) end)
+    f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(1, 1, 1, 0.7) end)
+    f.SubBack:SetScript("OnClick", function() W:SetPage(W.page) end)
+    f.SubBack:Hide()
 
     -- Optional brand icon in the header band, left of the title. Hidden unless a
     -- page opts in via W:SetTitleIcon (KitnUI/Welcome/Finish pages).
@@ -850,6 +867,8 @@ end
 function W:SetPage(n)
     if not (W.pages and W.pages[n]) then return end
     W.page = n
+    W.subPage = nil
+    W.frame.SubBack:Hide()
     W:HideOptions()
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
@@ -871,6 +890,27 @@ function W:SetPage(n)
     if tw > 0 then W.frame.progFill:SetWidth(math.max(1, tw * frac)) end
     W.frame.progLabel:SetText(("Step %d of %d"):format(n, total))
     W.pages[n]()
+end
+
+-- A page inside a step: cleared the way SetPage clears a page, but W.page and
+-- the rail stay, so Back, Next and the rail leave it the way they leave the
+-- step. ResetExtras cancels the step's decodes; the sub-page starts its own.
+function W:ShowSubPage(title, draw)
+    if not W.frame then return end
+    local f = W.frame
+    W:HideOptions()
+    if W.ResetExtras then W.ResetExtras() end
+    W:HideStatusHeader()
+    W:SetTitleIcon(false)
+    f.Skip:Hide()
+    W:SetButtonVariant(f.Next, "ghost")
+    f.Desc1:SetText("")
+    f.Desc2:SetText("")
+    f.Desc3:SetText("")
+    W.subPage = draw
+    f.SubTitle:SetText(title)
+    f.SubBack:Show()
+    draw()
 end
 
 -- Repaint the window in whichever theme is now in force. The page is rendered
