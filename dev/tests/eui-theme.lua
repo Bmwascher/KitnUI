@@ -84,6 +84,8 @@ end
 local mainFrame = {
     GetFrameLevel = function() return 20 end,
 }
+-- Every surface of the panel hangs under its body, which a collapse hides.
+local panelBody = {}
 
 local EUI = {
     THEME_PRESETS = {
@@ -91,6 +93,7 @@ local EUI = {
     },
     THEME_ORDER = { "EllesmereUI", "Dark" },
     _mainFrame = mainFrame,
+    _panelBody = panelBody,
     GetActiveTheme = function() return activeTheme end,
     SetActiveTheme = function(theme) activeTheme = theme end,
     RefreshAccent = function() appliedAccentTheme = activeTheme end,
@@ -135,7 +138,8 @@ if themeChunk then
     if onShow then onShow() end
     check(overlay ~= nil, "opening the panel creates the background overlay")
     if overlay then
-        eq(overlay.parent, mainFrame, "overlay belongs to the EUI panel")
+        eq(overlay.parent, panelBody, "overlay hangs under the panel body, so a collapse hides it")
+        eq(overlay.allPoints, mainFrame, "overlay covers the whole panel")
         eq(overlay.frameLevel, 21, "overlay sits above the native background")
         eq(overlay.mouseEnabled, false, "overlay cannot intercept input")
         eq(overlay.shown, false, "overlay stays hidden for another theme")

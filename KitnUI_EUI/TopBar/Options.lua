@@ -61,7 +61,8 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
           tooltip = "Draws the KitnUI top bar. Off by default: running /install turns it on, because that is you asking for the KitnUI look.",
           getValue = function() return ns.TopBar.Enabled() end,
           setValue = function(v) ns.TopBar.SetEnabled(v) end },
-        { type = "button", text = "Reset Positions",
+        -- A labeled button: a bare button half carries no tooltip.
+        { type = "labeledButton", text = "Reset Positions", buttonText = "Reset", width = 100,
           tooltip = "Puts the bar and the FPS readout back where they started. Use this if either has ended up off-screen after a UI scale change.",
           onClick = function() ns.TopBar.ResetPositions() end }
     );                                                                             y = y - h

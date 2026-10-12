@@ -955,6 +955,7 @@ local function backupRecord(assigned, scaleTaken)
         euiSettlePending = ns.EUIDeepCopy(ns.db.euiSettlePending),
         assignedSpecs = assigned,
         colorsPullFrom = d.colorsPullFrom or false,
+        colorsSectionPullFrom = ns.EUIDeepCopy(d.colorsSectionPullFrom) or false,
         ppUIScale = d.ppUIScale,
         ppUIScaleAuto = d.ppUIScaleAuto,
         scaleTaken = scaleTaken,
@@ -975,12 +976,16 @@ local function freeScratchName()
 end
 
 -- The scratch profile goes once the import has landed. Its delete drops every
--- note filed under it, so the notes move to the new profile first; a colour
--- source still naming it would dangle, so it moves too.
+-- note filed under it, so the notes move to the new profile first; a color
+-- source still naming it would be cleared by the delete, so it moves too.
 local function finishScratch(scratchName)
     local e, d = E(), DB()
     if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(scratchName, NAME) end
-    if d.colorsPullFrom == scratchName then d.colorsPullFrom = NAME end
+    if e.ColorSourcesProfileRenamed then
+        e.ColorSourcesProfileRenamed(scratchName, NAME)
+    elseif d.colorsPullFrom == scratchName then
+        d.colorsPullFrom = NAME
+    end
     if d.profiles[scratchName] then e.DeleteProfile(scratchName) end
 end
 
@@ -1102,8 +1107,12 @@ function ns.EUIApplyUpdate(plan)
     if status == "spec_locked" then
         e.SetProfile(NAME)
         if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate, nil, from, rec) end
-        if plan.merged.customColors and d.colorsApplyToAllProfiles ~= false then
-            d.colorsPullFrom = NAME
+        if plan.merged.customColors then
+            if e.PointColorSectionsAt then
+                e.PointColorSectionsAt(NAME)
+            elseif d.colorsApplyToAllProfiles ~= false then
+                d.colorsPullFrom = NAME
+            end
         end
     end
 
@@ -1136,6 +1145,14 @@ function ns.EUIRestorePrevious()
     if active ~= BACKUP and ns.EUISharesSyncGroup(d.syncedModules, active, BACKUP) then
         return false, T.sync
     end
+    -- A record from before the section sources existed holds none, so the
+    -- current ones are kept through the delete, which would clear a source
+    -- naming the profile it removes; one naming the backup follows the rename.
+    local sections = rec.colorsSectionPullFrom
+    if sections == nil and isTable(d.colorsSectionPullFrom) then
+        sections = {}
+        for s, n in pairs(d.colorsSectionPullFrom) do sections[s] = n == BACKUP and NAME or n end
+    end
     e.SetProfile(BACKUP)
     if d.activeProfile ~= BACKUP then return false, T.switchFail end
     if d.profiles[NAME] then e.DeleteProfile(NAME) end
@@ -1145,6 +1162,7 @@ function ns.EUIRestorePrevious()
         assignSpec(spec)
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
+    if sections ~= nil then d.colorsSectionPullFrom = sections or nil end
     if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
     local scaled = restoreScale(rec)
     ns.db.euiBase = rec.base

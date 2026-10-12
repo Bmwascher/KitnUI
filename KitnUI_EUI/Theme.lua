@@ -83,10 +83,12 @@ local function SyncOverlay()
     local EUI = _G.EllesmereUI
     if not EUI then return end
 
+    -- Under the panel body when there is one: folding the panel to its mini
+    -- window hides the body while the main frame stays shown.
     local mainFrame = EUI._mainFrame
     if mainFrame and not overlay then
         if not (mainFrame.GetFrameLevel and CreateFrame) then return end
-        overlay = CreateFrame("Frame", nil, mainFrame)
+        overlay = CreateFrame("Frame", nil, EUI._panelBody or mainFrame)
         overlay:SetAllPoints(mainFrame)
         overlay:SetFrameLevel(mainFrame:GetFrameLevel() + 1)
         overlay:EnableMouse(false)

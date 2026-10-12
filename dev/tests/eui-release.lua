@@ -244,5 +244,47 @@ shown = popups[#popups]
 if shown.onCancel then shown.onCancel() end
 check(not reaches("fresh"), "until it too is answered")
 
+---------------------------------------------------------------------------------
+-- The confirm's height fits its message once
+---------------------------------------------------------------------------------
+
+-- A message 100 tall in a popup whose base affords 44. A popup that sizes
+-- itself grows by the overflow when shown; the older one keeps its base. A
+-- stale first measurement reads 200, the previous message's height, until
+-- the next frame.
+do
+    local msg = { measure = 100 }
+    function msg:GetStringHeight() return self.measure end
+    function msg:GetText() return self.text end
+    local popup = { _baseH = 176, h = 176, _msg = msg }
+    function popup:IsVisible() return true end
+    function popup:GetHeight() return self.h end
+    function popup:SetHeight(h) self.h = h end
+    local growsItself
+    local EUI, Timer = _G.EllesmereUI, _G.C_Timer
+    local realShow, realAfter = EUI.ShowConfirmPopup, Timer.After
+    EUI.ShowConfirmPopup = function(_, opts)
+        msg.text = opts.message
+        popup.h = popup._baseH + (growsItself and math.max(0, msg.measure - 44) or 0)
+    end
+    local deferred = {}
+    Timer.After = function(_, fn) deferred[#deferred + 1] = fn end
+    _G.EUIConfirmPopup = popup
+    local function heightFor(selfSizing, stale)
+        growsItself, deferred = selfSizing, {}
+        msg.measure = stale and 200 or 100
+        ns.EUIConfirmUpdate(newPlan("height"))
+        msg.measure = 100
+        for _, fn in ipairs(deferred) do fn() end
+        return popup.h
+    end
+    eq(heightFor(true), 232, "a popup that grew itself for the message is not grown again")
+    eq(heightFor(false), 232, "an older popup grows by the overflow")
+    eq(heightFor(true, true), 232, "a popup sized from a stale measurement is corrected on the next frame")
+    eq(heightFor(false, true), 232, "and so is an older popup grown from one")
+    _G.EUIConfirmPopup = nil
+    EUI.ShowConfirmPopup, Timer.After = realShow, realAfter
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

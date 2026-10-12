@@ -87,6 +87,8 @@ local function resetDB()
         profileKeybinds = {},
         colorsPullFrom = nil,
         colorsApplyToAllProfiles = nil,
+        colorsSectionPullFrom = nil,
+        colorsSectionApplyAll = nil,
         ppUIScale = 0.9,
         ppUIScaleAuto = false,
     }
@@ -144,6 +146,43 @@ E.ExportProfile = function(name)
     end
     return encode("export:" .. name, { version = 3, type = "full", data = ns.EUIDeepCopy(stored) })
 end
+-- The per-section color sources (class, power, class resource), each with
+-- its own pointer or reading the shared one. Installed only by
+-- freshInstall({ colors94 = true }); without them the stub has the single
+-- shared pointer of the older EllesmereUI.
+local COLOR_SECTIONS = { "class", "power", "classResource" }
+local function sectionApplyAll(s)
+    local own = db.colorsSectionApplyAll and db.colorsSectionApplyAll[s]
+    if own ~= nil then return own end
+    return db.colorsApplyToAllProfiles ~= false
+end
+local colors94 = {
+    PointColorSectionsAt = function(name)
+        local t, sharedUsed = db.colorsSectionPullFrom, false
+        for _, s in ipairs(COLOR_SECTIONS) do
+            if sectionApplyAll(s) then
+                if t and t[s] ~= nil then t[s] = name else sharedUsed = true end
+            end
+        end
+        if sharedUsed then db.colorsPullFrom = name end
+    end,
+    ColorSourcesProfileRemoved = function(name)
+        if db.colorsPullFrom == name then db.colorsPullFrom = nil end
+        for s, n in pairs(db.colorsSectionPullFrom or {}) do
+            if n == name then db.colorsSectionPullFrom[s] = nil end
+        end
+    end,
+    ColorSourcesProfileRenamed = function(old, new)
+        if db.colorsPullFrom == old then db.colorsPullFrom = new end
+        for s, n in pairs(db.colorsSectionPullFrom or {}) do
+            if n == old then db.colorsSectionPullFrom[s] = new end
+        end
+    end,
+}
+local function setColors94(on)
+    for k, fn in pairs(colors94) do E[k] = on and fn or nil end
+end
+
 E.RenameProfile = function(old, new)
     bump("rename")
     if E.renameFails then return end
@@ -153,6 +192,7 @@ E.RenameProfile = function(old, new)
     for spec, name in pairs(db.specProfiles) do
         if name == old then db.specProfiles[spec] = new end
     end
+    if E.ColorSourcesProfileRenamed then E.ColorSourcesProfileRenamed(old, new) end
 end
 E.DeleteProfile = function(name)
     bump("delete")
@@ -160,7 +200,11 @@ E.DeleteProfile = function(name)
     for spec, n in pairs(db.specProfiles) do
         if n == name then db.specProfiles[spec] = nil end
     end
-    if db.colorsPullFrom == name then db.colorsPullFrom = nil end
+    if E.ColorSourcesProfileRemoved then
+        E.ColorSourcesProfileRemoved(name)
+    elseif db.colorsPullFrom == name then
+        db.colorsPullFrom = nil
+    end
     if db.activeProfile == name then db.activeProfile = "Default" end
 end
 E.SetProfile = function(name)
@@ -235,7 +279,13 @@ E.ImportProfile = function(payload, name)
     if E.importMode == "throw_stored" then error("boom after store") end
     if E.importMode == "spec_locked" then return true, nil, "spec_locked" end
     db.activeProfile = name
-    if payload.data.customColors and db.colorsApplyToAllProfiles ~= false then db.colorsPullFrom = name end
+    if payload.data.customColors then
+        if E.PointColorSectionsAt then
+            E.PointColorSectionsAt(name)
+        elseif db.colorsApplyToAllProfiles ~= false then
+            db.colorsPullFrom = name
+        end
+    end
     if E.importMode == "throw_active" then error("boom in the tail") end
     return true
 end
@@ -268,6 +318,7 @@ ns.data.EllesmereUI = N_STR
 local function freshInstall(opts)
     opts = opts or {}
     resetDB()
+    setColors94(opts.colors94)
     calls = {}
     E.live = nil
     E.importMode = "activate"
@@ -1475,6 +1526,71 @@ do
 
     E.DecodeImportStringAsync = keepAsync
     E.asyncMode, E.pending = "sync", nil
+end
+
+---------------------------------------------------------------------------------
+-- Per-section color sources
+---------------------------------------------------------------------------------
+
+do
+    freshInstall({ colors94 = true })
+    db.profiles.Other = base()
+    db.colorsSectionPullFrom = { class = "KitnUI", power = "Other" }
+    db.colorsPullFrom = "Other"
+    nData.customColors = { a = 1 }
+    ns.EUIStartDecodes()
+    local secOk, secErr = ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+    eq(secOk, true, "sections: the update applies", secErr)
+    secOk, secErr = ns.EUIRestorePrevious()
+    eq(secOk, true, "sections: Restore succeeds", secErr)
+    eq(db.colorsSectionPullFrom and db.colorsSectionPullFrom.class, "KitnUI", "sections: Restore puts back a section that pulled from KitnUI")
+    eq(db.colorsSectionPullFrom and db.colorsSectionPullFrom.power, "Other", "sections: and one that pulled from another profile")
+    eq(db.colorsPullFrom, "Other", "sections: and the shared source")
+
+    -- A record written before the section sources existed keeps the
+    -- player's current ones through the delete and the rename.
+    freshInstall({ colors94 = true })
+    db.profiles.Other = base()
+    ns.EUIStartDecodes()
+    ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+    ns.db.euiBackup.colorsSectionPullFrom = nil
+    db.colorsSectionPullFrom = { class = "KitnUI", power = "Other", classResource = ns.EUIBackupName }
+    ns.EUIRestorePrevious()
+    local kept = db.colorsSectionPullFrom or {}
+    eq(kept.class, "KitnUI", "sections: an older record keeps a current section that pulls from KitnUI")
+    eq(kept.power, "Other", "sections: and one that pulls from another profile")
+    eq(kept.classResource, "KitnUI", "sections: and one that pulled from the backup follows it to its name")
+    nData.customColors = nil
+
+    -- The scratch path: the section follows the profile back to its name
+    -- rather than going with the scratch profile's delete.
+    freshInstall({ colors94 = true })
+    ns.EUIStartDecodes()
+    ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+    db.colorsSectionPullFrom = { class = "KitnUI" }
+    ns.EUIStartDecodes()
+    local scrOk, scrErr = ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ general = true }))
+    eq(scrOk, true, "sections: a later change of the visit applies", scrErr)
+    eq(db.profiles[ns.EUIScratchName], nil, "sections: through the scratch path")
+    eq(db.colorsSectionPullFrom.class, "KitnUI", "sections: a section that pulled from KitnUI still does")
+
+    -- spec_locked: the importer points nothing, so the update points every
+    -- section that applies to all profiles, its own source or the shared one.
+    freshInstall({ colors94 = true })
+    db.profiles.Other = base()
+    db.specProfiles[71] = "Other"
+    db.colorsApplyToAllProfiles = false
+    db.colorsSectionApplyAll = { class = true }
+    db.colorsSectionPullFrom = { class = "Other" }
+    nData.customColors = { a = 1 }
+    ns.EUIStartDecodes()
+    local lockPlan = ns.EUIPrepareUpdate()
+    E.importMode = "spec_locked"
+    local lockOk, lockErr = ns.EUIApplyUpdate(lockPlan)
+    eq(lockOk, true, "sections: spec_locked applies", lockErr)
+    eq(db.colorsSectionPullFrom.class, "KitnUI", "sections: spec_locked points a section that applies to all")
+    eq(db.colorsPullFrom, nil, "sections: and leaves the shared source when no section reads it")
+    nData.customColors = nil
 end
 
 
