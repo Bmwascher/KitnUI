@@ -596,7 +596,7 @@ end
 -- The same GUARDS ApplyAccentColor bails on, plus the note. Not the same ORDER:
 -- that function peeks first and checks the host after, and this one is the other
 -- way round. Equivalent because all six are pure conjuncts and ns.EUIPeekSnap
--- never creates a per-profile record (Core.lua:321-330) -- reordering would only
+-- never creates a per-profile record (Core.lua, ns.EUIPeekSnap) -- reordering would only
 -- matter if one of them had a side effect, which is exactly why the peek and NOT
 -- ns.EUISnap belongs here.
 --
@@ -606,10 +606,9 @@ local function AccentColorHeld()
     if not AccentEnabled() then return false end
     local EUI = _G.EllesmereUI
     if not EUI then return false end
-    -- The write is guarded on this too (General.lua:418), so a host missing it
+    -- The write is guarded on this too (ApplyAccentColor), so a host missing it
     -- skips the write while every other guard passes -- a silent failure, which is
-    -- the exact thing this predicate exists to catch. Reachable: the tab's
-    -- capability gate asks only for RegisterModule (Core.lua:985).
+    -- the exact thing this predicate exists to catch.
     --
     -- Truthiness, matching the write exactly rather than type-checking here and
     -- not there. A predicate STRICTER than the write would report a refusal that
@@ -736,7 +735,7 @@ end)
 -- A veil is STATIC: it is built or not built at page build time and never
 -- re-evaluated. That is safe here: the accent rows are the only caller, and the
 -- master accent switch forces a full page rebuild through
--- ns.EUIRebuildForOwnership (Core.lua:479-496), so the accent rows are rebuilt
+-- ns.EUIRebuildForOwnership (Core.lua), so the accent rows are rebuilt
 -- every time the thing they depend on changes.
 --
 -- The veil marks an unfinished row, in KitnUI pink, and covers the
@@ -747,6 +746,9 @@ end)
 -- anyway: losing the border must cost a border, not the page.
 local function Veil(row, text)
     if not row then return end
+    -- The search's hidden build hands back stand-in rows that cannot parent a
+    -- frame, and a veil holds nothing to index.
+    if EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild() then return end
 
     local veil = CreateFrame("Frame", nil, row)
     veil:SetAllPoints(row)
