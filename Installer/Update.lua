@@ -955,6 +955,7 @@ local function backupRecord(assigned, scaleTaken)
         euiSettlePending = ns.EUIDeepCopy(ns.db.euiSettlePending),
         assignedSpecs = assigned,
         colorsPullFrom = d.colorsPullFrom or false,
+        colorsSectionPullFrom = ns.EUIDeepCopy(d.colorsSectionPullFrom) or false,
         ppUIScale = d.ppUIScale,
         ppUIScaleAuto = d.ppUIScaleAuto,
         scaleTaken = scaleTaken,
@@ -976,11 +977,15 @@ end
 
 -- The scratch profile goes once the import has landed. Its delete drops every
 -- note filed under it, so the notes move to the new profile first; a colour
--- source still naming it would dangle, so it moves too.
+-- source still naming it would be cleared by the delete, so it moves too.
 local function finishScratch(scratchName)
     local e, d = E(), DB()
     if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(scratchName, NAME) end
-    if d.colorsPullFrom == scratchName then d.colorsPullFrom = NAME end
+    if e.ColorSourcesProfileRenamed then
+        e.ColorSourcesProfileRenamed(scratchName, NAME)
+    elseif d.colorsPullFrom == scratchName then
+        d.colorsPullFrom = NAME
+    end
     if d.profiles[scratchName] then e.DeleteProfile(scratchName) end
 end
 
@@ -1102,8 +1107,12 @@ function ns.EUIApplyUpdate(plan)
     if status == "spec_locked" then
         e.SetProfile(NAME)
         if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate, nil, from, rec) end
-        if plan.merged.customColors and d.colorsApplyToAllProfiles ~= false then
-            d.colorsPullFrom = NAME
+        if plan.merged.customColors then
+            if e.PointColorSectionsAt then
+                e.PointColorSectionsAt(NAME)
+            elseif d.colorsApplyToAllProfiles ~= false then
+                d.colorsPullFrom = NAME
+            end
         end
     end
 
@@ -1145,6 +1154,8 @@ function ns.EUIRestorePrevious()
         assignSpec(spec)
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
+    -- A record from before the section sources existed holds none.
+    if rec.colorsSectionPullFrom ~= nil then d.colorsSectionPullFrom = rec.colorsSectionPullFrom or nil end
     if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
     local scaled = restoreScale(rec)
     ns.db.euiBase = rec.base
