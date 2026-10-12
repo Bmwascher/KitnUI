@@ -17,6 +17,7 @@
 - **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
 - **FIXED:** EllesmereUI 9.4 fixes. **Update Profile** and **Restore previous** keep the "Pull Colors From" profile each color section can now pick on its own. The update's confirm no longer opens with a blank band under its text. The KitnUI options background now folds away with the panel when you collapse it, and the Top Bar page's **Reset Positions** shows its tooltip again
 - The EllesmereUI, BigWigs, Northern Sky Raid Tools, Edit Mode, BuffReminders and Baganator profiles are refreshed. The EllesmereUI profile no longer carries Quickdraw, so an update leaves your Quickdraw settings as they are
+- The KitnUI and KitnUI Rasta backgrounds for the EllesmereUI options are redrawn for EllesmereUI 9.4's title bar, so the new collapse button and the close button sit on their own boxes again, and the folded mini window shows the KitnUI cat
 - The KitnUI section in the EllesmereUI options now registers through EllesmereUI's own plugin support, so it keeps working as EllesmereUI updates, and its settings show up in the options search. It needs EllesmereUI 9.4 or newer; like other add-on sections, it is locked while you edit Spec Overrides
 
 ## v2.1.6
