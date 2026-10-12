@@ -1145,6 +1145,14 @@ function ns.EUIRestorePrevious()
     if active ~= BACKUP and ns.EUISharesSyncGroup(d.syncedModules, active, BACKUP) then
         return false, T.sync
     end
+    -- A record from before the section sources existed holds none, so the
+    -- current ones are kept through the delete, which would clear a source
+    -- naming the profile it removes; one naming the backup follows the rename.
+    local sections = rec.colorsSectionPullFrom
+    if sections == nil and isTable(d.colorsSectionPullFrom) then
+        sections = {}
+        for s, n in pairs(d.colorsSectionPullFrom) do sections[s] = n == BACKUP and NAME or n end
+    end
     e.SetProfile(BACKUP)
     if d.activeProfile ~= BACKUP then return false, T.switchFail end
     if d.profiles[NAME] then e.DeleteProfile(NAME) end
@@ -1154,8 +1162,7 @@ function ns.EUIRestorePrevious()
         assignSpec(spec)
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
-    -- A record from before the section sources existed holds none.
-    if rec.colorsSectionPullFrom ~= nil then d.colorsSectionPullFrom = rec.colorsSectionPullFrom or nil end
+    if sections ~= nil then d.colorsSectionPullFrom = sections or nil end
     if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
     local scaled = restoreScale(rec)
     ns.db.euiBase = rec.base

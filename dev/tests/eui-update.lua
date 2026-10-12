@@ -1547,16 +1547,19 @@ do
     eq(db.colorsSectionPullFrom and db.colorsSectionPullFrom.power, "Other", "sections: and one that pulled from another profile")
     eq(db.colorsPullFrom, "Other", "sections: and the shared source")
 
-    -- A record written before the section sources existed leaves the
-    -- player's current ones alone.
+    -- A record written before the section sources existed keeps the
+    -- player's current ones through the delete and the rename.
     freshInstall({ colors94 = true })
     db.profiles.Other = base()
     ns.EUIStartDecodes()
     ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
     ns.db.euiBackup.colorsSectionPullFrom = nil
-    db.colorsSectionPullFrom = { power = "Other" }
+    db.colorsSectionPullFrom = { class = "KitnUI", power = "Other", classResource = ns.EUIBackupName }
     ns.EUIRestorePrevious()
-    eq(db.colorsSectionPullFrom and db.colorsSectionPullFrom.power, "Other", "sections: an older record keeps the current section sources")
+    local kept = db.colorsSectionPullFrom or {}
+    eq(kept.class, "KitnUI", "sections: an older record keeps a current section that pulls from KitnUI")
+    eq(kept.power, "Other", "sections: and one that pulls from another profile")
+    eq(kept.classResource, "KitnUI", "sections: and one that pulled from the backup follows it to its name")
     nData.customColors = nil
 
     -- The scratch path: the section follows the profile back to its name
