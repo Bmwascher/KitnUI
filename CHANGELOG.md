@@ -2,325 +2,537 @@
 
 ## v2.2.0
 
-### Interface
-- **NEW:** **Update Profile** on the EllesmereUI step keeps your changes. When KitnUI ships a newer profile, the step now updates the profile you changed instead of replacing it: everything you changed is kept, everything KitnUI changed comes in, and where you both changed the same thing KitnUI's version is used, with the count shown before you confirm. Your previous profile is kept as a backup, and **Restore previous** puts it back. **Reset to KitnUI's profile** is still there for a clean start
-- **NEW:** **Modules** on the EllesmereUI step lists each part of your profile on its own: Action Bars, Unit Frames, Resource & Cast Bars, the Top Bar and the rest. Each row shows whether you have changed that part since KitnUI installed it and what KitnUI's next update would change, and hovering a row names the settings. An update can now leave parts out: untick a part to keep yours as it is, and take it any time later from Modules. Hovering a row also offers **Reset**, which puts just that part back to KitnUI's version; **Restore previous** undoes it. Right after an install or an update a part reads "reload to check" until your next reload, so values EllesmereUI adjusts on load are not counted as your changes
-- The EllesmereUI step's update page and Modules page are redrawn for easier reading: a dark panel behind the list, taller rows, colored badges such as "Changed by You - 12" and "Replaces Yours", and nothing dimmed. A part placed against or sized to another part you are keeping now gets a plain warning band with a button to take both, and **Restore previous** sits beside the update button. Hovering a count names Cooldown Manager specs, spells and trinket slots, Top Bar settings, and the spells in Unit Frames and Raid Frames aura lists instead of bare IDs. The update and reset confirms group their parts and counts, and a confirm that would replace your changes says **Replace**
-- When KitnUI has no record of what it installed, a part that differs from KitnUI's profile now shows how many settings differ on a badge, such as "Differs - 18", and hovering it lists them
-- The EllesmereUI step now plays a sound and repeats every message in chat, where it stays after the popup fades. A failed update keeps its message short and puts the error on its own line for bug reports, a failure that changed your UI scale tells you to `/reload`, and `/kitn reset` tells you where your profile from before the last update went
-- **NEW:** An installer step whose profile you have not installed yet, or that has an update waiting, now has a **Skip until next update** button (Blizzard Cooldown Manager layouts excepted). A skipped profile stops showing up in the login reminder, the update popup and `/kitn update` until KitnUI ships a newer version of it. The step list marks it in amber and the finish page lists it on its own. `/kitn install` still offers every step if you want it sooner, and installing it clears the skip
-- **Load All** in `/kitn load` now takes you straight to the finish page when every profile loads, instead of leaving you on the first page to click through a list of steps that are already done. If something fails to load it keeps you where you are, so the step you need is still in reach
-- `/kitn load` now has a **Blizzard Cooldown Manager** step, since every character needs its own copy of the layouts. When a layout cannot be imported, or the Cooldown Manager is switched off, Load All takes you to that step instead of the finish page, so the retry or the setting to enable is right in front of you
-- **FIXED:** The login prompts ("KitnUI has been updated" and "Load your installed profiles onto this character?") only take **Later** or **No** as an answer. Pressing Escape, or a prompt that never reached the screen because the game had no dialog free, used to count as a No and could silence the prompt for good; now it simply asks again next login
-- **FIXED:** **Update Profile** and **Restore previous** work again on EllesmereUI 9.2.9. The EllesmereUI step said "Update needs a newer EllesmereUI" on the newest EllesmereUI and only offered a full reset
-- **FIXED:** **Update Profile** keeps the Extra Width and Extra Height you set on size-matched elements in EllesmereUI 9.2.9. It used to clear them on every update. When KitnUI's update re-points a link you had tuned, the extra goes with the old link and counts as one of your changes replaced. Spec Overrides saved by EllesmereUI 9.2.9 no longer read as changed by you when you have not touched them
-- **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
-- **FIXED:** EllesmereUI 9.4 fixes. **Update Profile** and **Restore previous** keep the "Pull Colors From" profile each color section can now pick on its own. The update's confirm no longer opens with a blank band under its text. The KitnUI options background now folds away with the panel when you collapse it, and the Top Bar page's **Reset Positions** shows its tooltip again
-- The EllesmereUI, BigWigs, Northern Sky Raid Tools, Edit Mode, BuffReminders and Baganator profiles are refreshed. The EllesmereUI profile no longer carries Quickdraw, so an update leaves your Quickdraw settings as they are
-- The KitnUI and KitnUI Rasta backgrounds for the EllesmereUI options are redrawn for EllesmereUI 9.4's title bar, so the new collapse button and the close button sit on their own boxes again, and the folded mini window shows the KitnUI cat
-- The installer's KitnUI and KitnUI Rasta backgrounds are redrawn to match
-- The installer window is a little larger, so long counts such as "Changes 483 Settings" fit their column on the Update and Modules pages. The Modules list's tick boxes show a check or a cross, the update button's label is larger, the filled buttons are a little softer, and the **Modules** button sits beside the profile status, clear of the description
-- The KitnUI section in the EllesmereUI options now registers through EllesmereUI's own plugin support, so it keeps working as EllesmereUI updates, and its settings show up in the options search. It needs EllesmereUI 9.4 or newer; like other add-on sections, it is locked while you edit Spec Overrides
+### EllesmereUI Profile Update
+
+- **NEW:** **Update Profile** keeps your changes. A newer KitnUI profile
+  comes in on top of what you changed; where you both changed the same
+  setting KitnUI's version is used, and the confirm shows how many
+- **NEW:** **Restore previous** puts back the profile you had before the
+  last update, and sits beside the update button. **Reset to KitnUI's
+  profile** is still there for a clean start
+- A part placed against or sized to a part you are keeping shows a warning
+  band, with a button to take both
+- The update and reset confirms group their parts and counts, and a confirm
+  that would replace your changes says **Replace**
+- Every message plays a sound and repeats in chat. A failed update keeps
+  its message short with the error on its own line, a failure that changed
+  your UI scale tells you to `/reload`, and `/kitn reset` says where your
+  previous profile went
+- Works again on EllesmereUI 9.2.9, which said "Update needs a newer
+  EllesmereUI" and offered only a full reset
+- Keeps the Extra Width and Extra Height you set on size-matched elements
+  instead of clearing them. When KitnUI re-points a link you had tuned,
+  your extra goes with the old link and counts as one of your changes
+  replaced
+- Spec Overrides saved by EllesmereUI 9.2.9 no longer read as changed by
+  you when you have not touched them
+- Keeps the "Pull Colors From" profile each color section can pick in
+  EllesmereUI 9.4, and the confirm no longer opens with a blank band
+
+### EllesmereUI Modules
+
+- **NEW:** **Modules** on the EllesmereUI step lists each part of your
+  profile on its own: Action Bars, Unit Frames, Resource & Cast Bars, the
+  Top Bar and the rest
+- Each row shows whether you changed that part since KitnUI installed it
+  and what KitnUI's next update would change; hover a count to see the
+  settings
+- **NEW:** Untick a part to keep yours through an update, and take it any
+  time later from Modules
+- **NEW:** **Reset** on a row puts just that part back to KitnUI's
+  version; **Restore previous** undoes it
+- Right after an install or an update a part reads "Reload to Check" until
+  your next reload, so values EllesmereUI adjusts on load don't count as
+  your changes
+- With no record of what KitnUI installed, a part that differs shows how
+  many settings differ, such as "Differs - 18", and hovering lists them
+- Hover lists name Cooldown Manager specs, spells and trinket slots, Top
+  Bar settings and the spells in aura lists instead of bare IDs
+- The update and Modules pages are redrawn: a dark panel behind the list,
+  taller rows, colored badges such as "Changed by You - 12", tick boxes
+  with a check or a cross, and nothing dimmed
+
+### Installer
+
+- **NEW:** **Skip until next update** on a step whose profile is new or
+  has an update waiting (Blizzard Cooldown Manager excepted). A skipped
+  profile stays out of the login reminder, the update popup and
+  `/kitn update` until KitnUI ships a newer one; installing it clears the
+  skip
+- The step list marks a skipped step in amber, and the finish page lists
+  it on its own
+- **Load All** in `/kitn load` goes straight to the finish page when every
+  profile loads, and stays on the failing step when one doesn't
+- `/kitn load` has a **Blizzard Cooldown Manager** step, since each
+  character needs its own copy of the layouts
+- The login prompts take only **Later** or **No** as an answer. Escape, or
+  a prompt that never reached the screen, used to count as No and could
+  silence it for good
+- The window is a little larger so long counts fit their column, the
+  filled buttons are softer, and the **Modules** button sits beside the
+  profile status
+- New KitnUI and KitnUI Rasta backgrounds with a constellation cat
+
+### Top Bar
+
+- After teleporting home from the housing dashboard, the Home button
+  offers **Return to Previous Location** again, and keeps it across a
+  reload and after you hearth away
+- **Reset Positions** shows its tooltip again
+- The friends badge refreshes every 30 seconds and reads far less of your
+  friends list, so a large list no longer piles up memory
+
+### Settings Tab
+
+- The KitnUI section registers through EllesmereUI's plugin support, so it
+  keeps working as EllesmereUI updates and its settings show up in the
+  options search. It needs EllesmereUI 9.4 or newer, and like other add-on
+  sections it is locked while you edit Spec Overrides
+- The KitnUI and KitnUI Rasta options backgrounds are redrawn for
+  EllesmereUI 9.4's title bar and fold away with the panel, and the folded
+  mini window shows the KitnUI cat
+
+### Profiles
+
+- EllesmereUI, BigWigs, Northern Sky Raid Tools, Edit Mode, BuffReminders
+  and Baganator profiles refreshed
+- The EllesmereUI profile no longer carries Quickdraw, so an update leaves
+  your Quickdraw settings alone
+
+---
 
 ## v2.1.6
 
-Two new switches on the KitnUI page. Bite Mode rearranges the cast bar and
-power bar for the specializations that use an emphasized cast bar, and Dark
-Cast Bar darkens the cast bar on its own. Dark Class Resource Bar now also
-lights the seams between the bar's segments, which used to sit black on a
-black bar.
+### Settings Tab
 
-Everything these switches change is recorded when you turn one on and handed
-straight back when you turn it off, including the values your specialization
-overrides have captured. None of them needs a reload.
+- **NEW:** **Bite Mode** swaps your cast bar and power bar on the specs
+  that use an emphasized cast bar, darkens the cast bar and hides its spell
+  name. Other specs take only the cast bar changes. It needs no reload, and
+  switching it off hands everything back
+- **NEW:** **Dark Cast Bar** darkens the cast bar on its own, without
+  touching the class resource bar, unit frames or raid frames. Bite Mode
+  turns it on and then leaves it to you
+- **NEW:** **Dark Class Resource Bar** lights the seams between the bar's
+  segments instead of leaving them black; switching it off gives your own
+  spacing color back
+- Turning off EllesmereUI's own Dark Mode for the class resource bar hands
+  the seam color back at once. A color you set yourself while KitnUI held
+  it is left alone
 
-### Interface
-- **NEW:** **Bite Mode**, on the KitnUI page, swaps your cast bar and power bar on the specs that use an emphasized cast bar, darkens the cast bar and hides its spell name. Specs without one keep their layout and take the cast bar changes only. Everything it changes is recorded and handed straight back when you switch it off, and it needs no reload
-- **NEW:** **Dark Cast Bar** is its own switch under Dark Class Resource Bar, for darkening the cast bar on its own without touching the class resource bar, the unit frames or the raid frames. Bite Mode turns it on and then leaves it under your control
-- **NEW:** **Dark Class Resource Bar** now lights the seams between the bar's segments instead of leaving them black on a black bar. Turning it off gives your own spacing colour straight back
-- Turning EllesmereUI's own Dark Mode switch off for the class resource bar now hands the seam colour straight back, instead of waiting for a profile or specialization change. A colour you set yourself while KitnUI was still holding it is left alone
-- The BuffReminders and KitnEssentials profiles are refreshed, along with 21 Cooldown Manager layouts across Warrior, Paladin, Hunter, Priest, Death Knight, Druid, Demon Hunter and Evoker
-- KitnUI downloads about 2 MB smaller and takes up roughly 7 MB less on disk. The installer and options-panel artwork now ships in a more efficient format, and two old texture files that nothing used have been dropped from the download. The artwork itself is unchanged, pixel for pixel
+### Profiles
+
+- BuffReminders and KitnEssentials profiles refreshed, plus 21 Cooldown
+  Manager layouts across Warrior, Paladin, Hunter, Priest, Death Knight,
+  Druid, Demon Hunter and Evoker
+
+### General
+
+- About 2 MB smaller to download and about 7 MB smaller on disk. The
+  artwork is unchanged, and two unused texture files are gone
+
+---
 
 ## v2.1.5
 
-KitnUI now includes its own EllesmereUI options-panel themes, with custom artwork
-and a matching pink accent. Installing the EllesmereUI profile selects one
-automatically, while the normal theme dropdown remains available afterward.
+### Options Themes
 
-The installer itself has had a pass of its own. Buttons keep their highlight,
-pages that are already up to date say so and send you to the next step, the
-Cooldown Manager page marks every specialization at a glance, and Chat Setup no
-longer leaves Trade and Services sitting on the General tab.
+- **NEW:** **KitnUI** and **KitnUI Rasta** themes sit under EllesmereUI in
+  the Options Theme dropdown. They differ in artwork only and both keep the
+  KitnUI pink accent
+- **NEW:** **Use Rasta Amber**, in the Accents section, sets the accent to
+  the amber the Rasta artwork is built around
+- Each character is matched to one theme. Your first install applies that
+  match to the account; later installs leave the theme alone, so a theme
+  you pick yourself stays
 
-### Interface
-- **NEW:** Two KitnUI themes, **KitnUI** and **KitnUI Rasta**, sit directly under EllesmereUI in the Options Theme dropdown. They differ in artwork only and both keep the KitnUI pink accent, so changing the picture never changes your colours
-- **NEW:** **Use Rasta Amber**, in the Accents section of the KitnUI page, sets the accent to the warm amber the Rasta artwork is built around. It is the same colour the swatch below it could already reach, offered by name so it is one click
-- Every character is matched to one of the two themes and always gets the same one. Your first install applies that character's match to the account, and every install after that leaves the theme alone, so a theme you pick yourself is kept
-- On the characters that get the Rasta artwork, the installer window matches it: the progress bar, the buttons, the side rail and its own text all use the warm amber instead of the pink. Chat messages stay KitnUI pink
-- The installer window follows the character you are on rather than the account, so an alt matched to the Rasta artwork shows it even while the account sits on the other theme
-- **NEW:** The Welcome page lets you pick either installer theme for the character you are on, overriding the one it was matched to. The whole window repaints straight away, and the choice is remembered per character
-- **NEW:** Every page that is already up to date opens with its Install button finished and quiet, and points you at **Next** instead. A profile with a newer version waiting reads **Update** rather than Install
-- **NEW:** The Cooldown Manager page marks each specialization with a tick, a warning or a cross, matching the words above it, and shows your specialization icons in both places. **Import All Specs** is wider and is the highlighted action until every layout is in
-- The EllesmereUI page now keeps **Dark** and **Colored** on their own row under an **APPEARANCE** heading that names the look you are on, so the appearance choice no longer sits beside the Install button as an equal
-- **FIXED:** Buttons lost their highlight the first time the mouse passed over them, which left the main action on every page looking like an ordinary button and hid which appearance preset was selected
-- **FIXED:** **Chat Setup** left the Trade and Services channels on the General tab as well as moving them to their own tab. General now carries only General and LocalDefense. Channels you joined yourself are untouched
+### Installer
+
+- **NEW:** The Welcome page lets you pick either installer theme for the
+  character you are on; the window repaints at once and the choice is
+  remembered
+- On Rasta characters the installer uses the warm amber for its progress
+  bar, buttons, side rail and text. Chat messages stay KitnUI pink
+- The installer window follows the character you are on, not the account
+- **NEW:** A page that is already up to date shows its Install button as
+  done and points you at **Next**. A profile with a newer version waiting
+  reads **Update**
+- **NEW:** The Cooldown Manager page marks each specialization with a
+  tick, a warning or a cross and shows your spec icons, and **Import All
+  Specs** stays highlighted until every layout is in
+- The EllesmereUI page keeps **Dark** and **Colored** on their own row
+  under an **APPEARANCE** heading
+- Buttons no longer lose their highlight the first time the mouse passes
+  over them
+- **Chat Setup** no longer leaves Trade and Services on the General tab.
+  General carries only General and LocalDefense; channels you joined
+  yourself are untouched
+
+---
 
 ## v2.1.4
 
-The Top Bar can bring you back from a housing visit, and KitnUI's labels and
-branding are clearer and more consistent.
-
 ### Top Bar
-- After teleporting to housing, the Home button changes its left click to **Return to Previous Location**. It follows the return trip offered by the game even when the Housing Dashboard started the teleport or selected a different owned house
 
-### Interface
-- The General page now labels its Dark, Colored and Custom preset as **Unit Frame Appearance**, making it clear that the setting primarily controls player, target, focus, party and raid frames
-- The Edit Mode warning now describes KitnUI's Cooldown Manager **configuration** rather than calling the whole setup a layout
-- The installer and both AddOns-list entries now use the same purple cat icon as KitnEssentials, and the `_EUI` suffix is white to match the rest of the addon name
+- After teleporting to housing, the Home button's left click becomes
+  **Return to Previous Location**, even when the Housing Dashboard started
+  the teleport or picked another of your houses
+
+### Settings Tab
+
+- The Dark, Colored and Custom preset is labeled **Unit Frame Appearance**
+- The Edit Mode warning describes KitnUI's Cooldown Manager
+  **configuration** rather than calling it a layout
+
+### General
+
+- The installer and both AddOns-list entries use the same purple cat icon
+  as KitnEssentials, and the `_EUI` suffix is white
+
+---
 
 ## v2.1.3
 
-Every spec gets the layouts it was supposed to have, the Top Bar can drop its
-clock and become a plain micro bar, and three profiles are refreshed.
-
 ### Installer
-- **NEW:** KitnUI now notices when the specialization you are playing is not using its Edit Mode layout, or its Cooldown Manager layout, and offers to switch. The game remembers those layouts **per specialization**, and the installer only ever set the one you were playing at the time, so every other spec has been quietly sitting on a Blizzard preset since the day you installed. The prompt names the spec, asks before it changes anything, and carries a **Never for this spec** button for a spec you deliberately run differently
-- The Edit Mode half applies straight away. The Cooldown Manager half needs a reload to redraw, and the prompt says so before you accept
-- Nothing is said on a character you have never set up, so an alt is left alone until you load profiles onto it. Declining the load offer does not start it either
-- Answering **No** stays quiet for that spec until your next login. Closing the prompt with Escape is not an answer, so it asks again the next time you switch to that spec
-- With Lulu Mode on, the prompt names the Lulu layout rather than the standard one, because that is the one it will switch you to
-- Loading the Edit Mode layout is now refused during a fight instead of being attempted. Switching layouts moves your action bars, which the game does not allow an addon to do mid-fight. KitnUI says so in chat and you can run the loader again when you are out
-- EllesmereUI's Data Bars module is now switched off at install. The Edit Mode profile already places Blizzard's own experience and reputation bar, so the two were stacking up as duplicates
+
+- **NEW:** KitnUI notices when the spec you are playing isn't using its
+  Edit Mode or Cooldown Manager layout and offers to switch. The game keeps
+  these per spec, and the installer only ever set the one you were on
+- The prompt names the spec, asks before it changes anything, and has a
+  **Never for this spec** button
+- The Edit Mode switch applies at once; the Cooldown Manager switch needs a
+  reload, and the prompt says so
+- It stays quiet on a character you have never set up
+- **No** stays quiet for that spec until your next login. Escape is not an
+  answer, so it asks again the next time you switch to that spec
+- With Lulu Mode on, the prompt names the Lulu layout
+- Loading the Edit Mode layout is refused during a fight instead of
+  attempted, with a note in chat
+- EllesmereUI's Data Bars module is switched off at install, since the Edit
+  Mode profile already places Blizzard's experience and reputation bar
 
 ### Top Bar
-- **NEW:** **Show Clock**, in the Clock section, turns the bar's clock off. The two halves of the bar then close up into one unbroken run of icons with a thin dimmed divider at the centre, and your minimap gets its own clock back, the same way switching the FPS readout off already gives you back the minimap's. Turn it off for an improved micro bar and nothing else
-- Clock Size, 24-Hour Clock and Server Time grey out while the clock is off, since none of them control anything then
-- **NEW:** **Accent Opacity**, in the Appearance section, sets how solid the accent line along the bottom of the bar is. Set it to zero and turn Panel Backdrop off to leave the bar with no background of its own
-- Fixed an error when opening the dungeon portal flyout during a fight, an encounter, a keystone or a rated match. The cooldown swipe now reads the cooldown in the one way the game allows an addon to read it under those restrictions
+
+- **NEW:** **Show Clock** turns the bar's clock off. The two halves close
+  into one run of icons with a dimmed divider, and the minimap gets its own
+  clock back
+- Clock Size, 24-Hour Clock and Server Time gray out while the clock is off
+- **NEW:** **Accent Opacity** sets how solid the accent line along the
+  bottom is; at zero, with Panel Backdrop off, the bar has no background
+- Opening the dungeon portal flyout during a fight, an encounter, a
+  keystone or a rated match no longer errors
 
 ### Profiles
-- The Lulu Edit Mode layout moves the pet ability bar and a couple of the side action bars, so they stop clipping other parts of the UI
+
+- The Lulu Edit Mode layout moves the pet bar and a couple of side bars so
+  they stop clipping other parts of the UI
 - KitnEssentials and Northern Sky Raid Tools profiles refreshed
+
+---
 
 ## v2.1.2
 
-Loading profiles on an alt now finishes in one pass, and every character gets
-its own Cooldown Manager layouts.
-
 ### Installer
-- Loading profiles on an alt no longer has to be done twice. **Load All** now applies everything the character is owed the moment it works, so a reload asked for by another addon cannot lose your place. Before this the login prompt came back after the reload and the whole loader had to be run again, taking the EllesmereUI module set, the minimap icon sweep and Chat Setup with it
-- **NEW:** **Load All** also imports the Cooldown Manager layouts for the class you are on. Those layouts belong to the character rather than the account, so an alt never had them however many times its class was set up elsewhere
-- **NEW:** When Blizzard's limit of five layouts per character blocks an import, KitnUI names the specs it could not fit. It says so in chat and in a popup after the reload, with the spec icon and the reminder to delete layouts you do not use and run `/kitn cdm`
-- Cooldown Manager layouts are now named **KitnUI - <spec>** instead of **KUI - <spec>**. An existing layout under either name is replaced, so no character is left holding both and losing a slot to the old one
-- The wizard no longer reports success over a Cooldown Manager step that did nothing. Switching the Cooldown Manager off in Blizzard's settings used to leave "All profiles loaded!" on screen with nothing imported
+
+- Loading profiles on an alt finishes in one pass. **Load All** applies
+  everything as it goes, so a reload asked for by another addon no longer
+  loses your place
+- **NEW:** **Load All** also imports the Cooldown Manager layouts for your
+  class, which belong to each character rather than the account
+- **NEW:** When Blizzard's five-layout limit blocks an import, KitnUI names
+  the specs it could not fit, in chat and in a popup after the reload, and
+  reminds you to delete unused layouts and run `/kitn cdm`
+- Cooldown Manager layouts are named like **KitnUI - Frost** instead of
+  **KUI - Frost**, and a layout under either name is replaced
+- The wizard no longer reports success over a Cooldown Manager step that
+  did nothing because the Cooldown Manager was switched off
+
+---
 
 ## v2.1.1
 
-Three settings that no profile export can carry, set for you at install:
-BetterFriendlist's whole look, BigWigs' boss debuffs, and the lock on Northern
-Sky Raid Tools' reminder frames.
-
 ### Installer
-- **NEW:** BetterFriendlist is set up for you. The installer applies the Legacy interface style, the Dark theme, the General display options and the Expressway fonts, and marks that addon's own look picker as done so it does not ask you to choose again. Everything it writes is saved first, so `/kitn reset` gives your old settings back
+
+- **NEW:** BetterFriendlist is set up for you: the Legacy style, the Dark
+  theme, the General display options and the Expressway fonts, with its own
+  look picker marked done. Your old settings are saved first, so
+  `/kitn reset` brings them back
 
 ### Profiles
-- BigWigs profiles refreshed, including its per-boss settings, and KitnEssentials
-- **NEW:** The BigWigs profile now turns off **Boss debuffs on you**. BigWigs cannot put that setting in an export string, so the installer writes it into KitnUI's own BigWigs profile
-- **NEW:** Northern Sky Raid Tools reminder frames arrive locked. Their lock state is not part of an NSRT export, which is why every import used to leave a resize grip floating over the world
+
+- BigWigs profiles refreshed, including per-boss settings, and
+  KitnEssentials
+- **NEW:** The BigWigs profile turns off **Boss debuffs on you**, which a
+  BigWigs export cannot carry
+- **NEW:** Northern Sky Raid Tools reminder frames arrive locked instead of
+  leaving a resize grip floating over the world
+
+---
 
 ## v2.1.0
 
-Every bundled profile refreshed for 12.1, accents you can choose yourself, a
-Tweaks section in the settings tab, richer Top Bar tooltips, and a set of fixes
-for switches that said they were holding a setting when they were not.
-
 ### Settings Tab
-- **NEW:** Pick your own accent colour. The pink switch became two rows: **KitnUI Accent Coloring** decides whether KitnUI colours your accent at all, and **Use KitnUI Pink** decides which colour it uses. Turn the second one off and a colour swatch appears; the places KitnUI colours, and the places it deliberately leaves alone, stay exactly the same
-- **NEW:** A **Tweaks** section on the General page, holding Dark Class Resource Bar, Lulu Mode and a **Bite Mode** row marked Coming Soon
-- The General page is now three labelled blocks: Appearance, Accents and Tweaks. Accent settings sit inside Appearance instead of standing alone
-- The KitnUI pink accent now colours the quest tracker header instead of skipping the tracker entirely
-- A colour change that cannot take effect now says so in chat instead of appearing to work. This happens on a profile copied from another one, where the switch travelled but the record of your original colour did not
-- Dark and Colored now also set the power text colour on the unit frames. Dark puts the unit's own power colour on the number over the power bar; Colored makes it white, because the bar behind it already carries that colour
 
-### Fixes
-- Fixed a Cooldown Manager error that could clear your active layout and import nothing. Reimporting a CDM layout for a spec whose layout was already active made Blizzard's Cooldown Manager redraw inside KitnUI's call stack, which the game refuses.
-- A switch that is ON no longer hands you KitnUI's own value back as though it were your original. Copying an EllesmereUI profile carried the switch but not the record of what was there before, and a re-apply then recorded KitnUI's forced value as yours. Only a real user action can write that record now
-- Four forcing switches say on hover whether KitnUI is really holding your setting, or is only switched on. Nothing on screen distinguished those two states before
-- **Lulu Mode** now holds the whole round minimap layout instead of the shape alone, and hands all of it back when you switch it off. On an upgrade it asks before claiming the extra settings
-- The installer no longer reports success over a step that did nothing. A step that cannot import or load prints why, and the wizard counts it
-- The installer now opens by itself on a first install. It was opening during login and the game closed it again a moment later, so a fresh setup saw no wizard at all, with nothing in chat to say why
-
-### Top Bar
-- **NEW:** Mouse-button pictures in the hearthstone and clock tooltips, so left, middle and right click are shown rather than described
-- Right clicking the clock now opens EllesmereUI's settings instead of the stopwatch and alarm window. Left click still opens the calendar and middle click still reloads
-- The clock tooltip drops its title and lays the three clicks out in two columns: which button on the left, what it opens on the right
-- **NEW:** The clock tooltip lists your saved raid lockouts and the daily and weekly reset clocks
-- **NEW:** Mythic+ portals on cooldown count down in the flyout, reading `8h`, `45m` or `30s`
-- The portal flyout carries its own list of this season's eight dungeons
-- Portal icons now light up correctly for account-wide teleports, which sit in the General spellbook
-- The random hearthstone is rolled after you click, not before, so it cannot be spoiled by a tooltip. Fixed-destination stones are kept out of the roll
-- The hearthstone tooltip no longer prints a raw item number while a stone's name is still loading
-- The clock tooltip shows the clock the face is not showing, rather than repeating it
-- The friends and guild counts walk the friends list once per update instead of once per event
-
-### Profiles
-- Every bundled profile refreshed for this release: EllesmereUI, BigWigs and its per-boss settings, BuffReminders, Northern Sky Raid Tools, KitnEssentials, Blizzard Edit Mode (both the normal and Lulu layouts) and all 40 Cooldown Manager layouts
-- Edit Mode layouts rebuilt on the 12.1 format, which adds new frames the old layout did not know about
+- **NEW:** Pick your own accent color. **KitnUI Accent Coloring** decides
+  whether KitnUI colors your accent, and **Use KitnUI Pink** decides which
+  color; turn the second off for a color swatch
+- **NEW:** A **Tweaks** section on the General page, with Dark Class
+  Resource Bar, Lulu Mode and a Bite Mode row marked Coming Soon
+- The General page is three labeled blocks: Appearance, Accents and Tweaks
+- The KitnUI pink accent colors the quest tracker header
+- A color change that cannot take effect says so in chat instead of
+  appearing to work
+- Dark and Colored also set the power text color on the unit frames
+- A switch that is on no longer hands back KitnUI's own value as your
+  original after a profile copy
+- Four forcing switches say on hover whether KitnUI is really holding your
+  setting or is only switched on
+- **Lulu Mode** holds the whole round minimap layout, not just the shape,
+  and hands all of it back when you switch it off
 
 ### Installer
-- **NEW:** A nickname box on the Northern Sky Raid Tools step, on every one of its pages
-- **NEW:** Dark and Colored buttons appear on the EllesmereUI step once the profile is imported
-- Step names in the sidebar moved closer to the panel edge, with a smaller tick to make room
-- The version number is printed once, through one helper, and is never stale
-- The Baganator step now installs the whole Baganator profile, not the category groups alone. Bag and bank widths, icon corners, sorting, the skin and the junk plugin come with it. Window positions deliberately do not, so Baganator places its frames where it normally would
+
+- **NEW:** A nickname box on the Northern Sky Raid Tools step
+- **NEW:** Dark and Colored buttons on the EllesmereUI step once the
+  profile is imported
+- The installer opens by itself on a first install; it used to close again
+  a moment after login
+- A step that cannot import or load says why instead of reporting success
+- Reimporting a Cooldown Manager layout for a spec whose layout was already
+  active no longer clears it and imports nothing
+- The Baganator step installs the whole Baganator profile, not just the
+  category groups; window positions are left to Baganator
+- Step names sit closer to the panel edge, with a smaller tick
+
+### Top Bar
+
+- **NEW:** Mouse-button pictures in the hearthstone and clock tooltips
+- Right-clicking the clock opens EllesmereUI's settings; left click still
+  opens the calendar and middle click still reloads
+- The clock tooltip lays the three clicks out in two columns and shows the
+  clock the face is not showing
+- **NEW:** The clock tooltip lists your saved raid lockouts and the daily
+  and weekly reset timers
+- **NEW:** Mythic+ portals on cooldown count down in the flyout, as `8h`,
+  `45m` or `30s`
+- The portal flyout carries this season's eight dungeons, and account-wide
+  teleports light up correctly
+- The random hearthstone is rolled after you click, so a tooltip can't
+  spoil it, and fixed-destination stones stay out of the roll
+- The hearthstone tooltip no longer shows a raw item number while a stone's
+  name loads
+- The friends and guild counts read the friends list once per update
+  instead of once per event
+
+### Profiles
+
+- Every bundled profile refreshed for 12.1: EllesmereUI, BigWigs with its
+  per-boss settings, BuffReminders, Northern Sky Raid Tools,
+  KitnEssentials, both Edit Mode layouts and all 40 Cooldown Manager
+  layouts
+- Edit Mode layouts rebuilt on the 12.1 format, with the new frames it adds
+
+---
 
 ## v2.0.1
 
-A compatibility release: EllesmereUI 8.8 and the newest Northern Sky Raid Tools
-both changed underneath v2.0.0, and this fixes what those breaks took with them.
+### Settings Tab
 
-### Fixes
-- Restored the KitnUI tab in EllesmereUI's settings panel on EllesmereUI v8.8+, which moved its options window into a load-on-demand addon. The same break also silently disabled KitnUI's entry in EllesmereUI's profile export list and the re-apply of KitnUI's settings switches after a profile or spec change; both are restored.
-- Restored the nameplate arrows' untrusted-layout insurance (its version check died with EllesmereUI 8.8) and retired leftover EllesmereUIBasics handling in the installer
-- Fixed the Northern Sky Raid Tools import failing with a decode error: newer NSRT versions export in a new format and keep their own profiles, so the installer now imports through NSRT's own profile import, and `/kitn load` puts alts on the KitnUI profile instead of doing nothing
-- KitnUI now loads without EllesmereUI and says what to install, enable or update, instead of silently never loading - new users get a login prompt, users with an existing install get a chat line
-- Having KitnUI Lite enabled alongside KitnUI no longer hijacks the /kitn commands, and a login prompt offers to disable Lite for you
+- The KitnUI tab is back in EllesmereUI's settings on EllesmereUI 8.8 and
+  newer, along with its entry in the profile export list and the re-apply
+  of KitnUI's switches after a profile or spec change
+- The nameplate arrows' layout safeguard works again on EllesmereUI 8.8
+
+### Installer
+
+- The Northern Sky Raid Tools import no longer fails with a decode error;
+  it goes through NSRT's own profile import, and `/kitn load` puts alts on
+  the KitnUI profile
+- KitnUI loads without EllesmereUI and says what to install, enable or
+  update: new users get a login prompt, existing installs a chat line
+- With KitnUI Lite enabled too, the `/kitn` commands stay KitnUI's, and a
+  login prompt offers to disable Lite
+
+---
 
 ## v2.0.0
 
 ### EllesmereUI Rework
-- **NEW:** KitnUI now installs **EllesmereUI** profiles instead of ElvUI — EllesmereUI is the required dependency and the base UI it imports
-- **NEW:** One profile instead of a set — every spec, healer included, is baked into a single import, and the **Dark** / **Colored** looks are a preset you switch in KitnUI's own tab
-- **NEW:** Rebuilt the installer as a single-window, EllesmereUI-skinned wizard on custom KitnUI background art, replacing the old page-by-page flow
-- Trimmed the companion set to BuffReminders, BigWigs, Northern Sky Raid Tools, KitnEssentials, Baganator, Blizzard Edit Mode, and per-spec Blizzard CDM (dropped Details, WarpDeplete, MRT, Ayije CDM)
-- BigWigs now imports its per-boss settings alongside the main profile
-- Plater is dormant, not removed — no Plater profile is offered, but `/kitn load` still reactivates one installed by an earlier version
+
+- **NEW:** KitnUI installs **EllesmereUI** profiles instead of ElvUI.
+  EllesmereUI is required and is the base UI
+- **NEW:** One profile instead of a set: every spec, healers included, is
+  in one import, and **Dark** and **Colored** are a preset in KitnUI's tab
+- **NEW:** A single-window installer in EllesmereUI's style, on KitnUI
+  background art
+- The companion set is BuffReminders, BigWigs, Northern Sky Raid Tools,
+  KitnEssentials, Baganator, Blizzard Edit Mode and per-spec Blizzard
+  Cooldown Manager; Details, WarpDeplete, MRT and Ayije CDM are dropped
+- BigWigs imports its per-boss settings with the main profile
+- Plater is dormant: no Plater profile is offered, but `/kitn load` still
+  reactivates one installed by an earlier version
 
 ### Top Bar
-- **NEW:** KitnUI now draws its own top bar, with a clock, an FPS/latency readout, and a row of one-click launchers down each side (Group Finder, Encounter Journal, Achievements, Collections, Toy Box, Character, Spellbook, Talents, Professions, Volume, EllesmereUI settings, KitnEssentials, Game Menu, and more)
-- **NEW:** Hearthstone launcher with independent left/middle/right-click stones — pick a specific stone or let it roll one at random, bag items and Toy Box entries both supported
-- **NEW:** Mythic+ portal flyout for the current season's dungeon teleports
+
+- **NEW:** KitnUI draws its own top bar: a clock, an FPS and latency
+  readout, and one-click launchers down each side (Group Finder, Encounter
+  Journal, Achievements, Collections, Toy Box, Character, Spellbook,
+  Talents, Professions, Volume, EllesmereUI settings, KitnEssentials, Game
+  Menu and more)
+- **NEW:** A hearthstone launcher with its own stone on left, middle and
+  right click, a fixed stone or a random roll, from bags or the Toy Box
+- **NEW:** A Mythic+ portal flyout for this season's dungeon teleports
 - **NEW:** Live friend and guild online counts and Great Vault progress
-- Off by default — running the installer turns it on for you
-- Configurable visibility: hide the bar in combat, pet battles, vehicles, or in keystones, raids and rated PvP
-- Optional mouseover fade, resting the bar at low visibility until your mouse moves over it
-- Draggable anywhere on screen from EllesmereUI's Unlock Mode
+- Off by default; the installer turns it on
+- Hide it in combat, pet battles, vehicles, keystones, raids or rated PvP
+- An optional mouseover fade rests the bar at low visibility
+- Drag it anywhere from EllesmereUI's Unlock Mode
 
 ### Settings Tab
-- **NEW:** A KitnUI tab inside EllesmereUI's config panel, with four pages: General, Gameplay, Nameplates and Top Bar
-- **NEW:** **Lulu Mode** — an alternate layout with a round minimap, Blizzard's own action bars, and its own Edit Mode layout; it asks first, then reloads, and hands everything back when you switch it off
-- **NEW:** **Beginner Mode** — tooltips, keybinds and key-press highlights on the Cooldown Manager, with Action Bars 1, 2, 3 and 5 always visible
-- **NEW:** KitnUI target arrows for nameplates, with an optional additive glow
-- **NEW:** Optional KitnUI pink accent for EllesmereUI, kept off the quest tracker, Mythic+ timer, damage meter and Friends tab
-- Combat tooltip hiding, either for every tooltip or for Cooldown Manager tooltips alone
+
+- **NEW:** A KitnUI tab in EllesmereUI's settings with four pages:
+  General, Gameplay, Nameplates and Top Bar
+- **NEW:** **Lulu Mode**: an alternate layout with a round minimap,
+  Blizzard's own action bars and its own Edit Mode layout. It asks first,
+  reloads, and hands everything back when you switch it off
+- **NEW:** **Beginner Mode**: tooltips, keybinds and key-press highlights
+  on the Cooldown Manager, with Action Bars 1, 2, 3 and 5 always visible
+- **NEW:** KitnUI target arrows for nameplates, with an optional glow
+- **NEW:** An optional KitnUI pink accent for EllesmereUI, kept off the
+  quest tracker, Mythic+ timer, damage meter and Friends tab
+- Hide tooltips in combat: all of them, or the Cooldown Manager's only
 
 ### Installer
-- **NEW:** Clickable step sidebar with real per-profile import state (green check = actually imported) and a highlighted current step — click any step to jump straight to it and (re)install a single profile
-- **NEW:** Active-variant indicator marks which EllesmereUI look is currently live
-- **NEW:** Extras page — optional one-click chat setup, KitnEssentials settings optimization, and companion minimap-icon cleanup
-- **NEW:** Finish summary recaps which profiles were imported, which were skipped, and which extras were run
-- CDM layouts are now tracked per spec by content, not by a single version number — editing one spec's layout no longer prompts you to reimport the rest, and a layout imported by an older version is reported as untracked rather than up to date
-- Traffic-light status (Imported / Update available / Not Imported) backed by date-based profile versioning
-- A step that cannot import or load now says so instead of reporting success — Load All reports how many profiles it could not load, and a Baganator profile whose category data is missing or unreadable is refused outright rather than written half-formed
-- Esc closes the installer; the `/kitn` command set gains `/kitn options`
+
+- **NEW:** A clickable step sidebar showing what is really imported, with
+  the current step highlighted; click a step to install one profile again
+- **NEW:** A marker shows which EllesmereUI look is live
+- **NEW:** An Extras page: chat setup, KitnEssentials optimization and
+  minimap icon cleanup, one click each
+- **NEW:** A finish summary of what was imported, skipped and run
+- Cooldown Manager layouts are tracked per spec, so editing one spec's
+  layout no longer asks you to reimport the rest
+- Each step reads Imported, Update available or Not Imported
+- A step that cannot import or load says so instead of reporting success
+- Escape closes the installer, and `/kitn options` is new
 
 ---
 
 ## v1.0.8 (never released)
 
-Written but never tagged. Everything below shipped in v2.0.0 instead; the
-Baganator payload it describes is the one v2.0.0 restored.
+### Baganator
 
-### New Addon Support
+- Written but never tagged; everything here shipped in v2.0.0 instead
+- **NEW:** Baganator profile import, with the category view and the
+  welcome popup dismissed, saved as a "KitnUI" profile so your changes
+  persist
+- `/kitn version` lists Baganator and BuffReminders
 
-- Added Baganator profile import (category view, welcome popup dismissal)
-- Creates a named "KitnUI" profile in BAGANATOR_CONFIG — user changes persist across reloads (avoids AUI's reset-on-reload behavior)
-- Added Baganator and BuffReminders to `/kitn version` output (BuffReminders was missing)
+---
 
 ## v1.0.7
 
-### Bug Fix & Data Updates
+### Profiles
 
-- Fixed MRT profile font and texture paths (single backslashes → double backslashes)
-- Updated KitnEssentials profile data
-- Removed redundant "v" prefix from version display in help text
-- Added .luacheckrc and CLAUDE.md to .gitignore
+- MRT profile fonts and textures load again
+- KitnEssentials profile refreshed
+
+### Slash Commands
+
+- The help text no longer prints a doubled "v" before the version
+
+---
 
 ## v1.0.6
 
-### Bug Fix & Data Updates
+### Profiles
 
-- Fixed ElvUI private profile (Parchment Remover) not applying by setting profileKey before SetProfile
-- Updated KitnEssentials profile data (new modules)
-- Updated BuffReminders profile data
+- The ElvUI private profile (Parchment Remover) applies again
+- KitnEssentials profile refreshed with its new modules, and BuffReminders
+  refreshed
+
+---
 
 ## v1.0.5
 
-### Import Improvements & Bug Fixes
+### Installer
 
-- Fixed Details ImportProfile arguments to properly import auto-run scripts
-- Added Details on_zonechanged auto-run script (auto-switches display in dungeons vs raids)
-- Updated Details profile data
-- Added Edit Mode layout limit check (max 5 custom layouts)
-- Added Blizzard CDM max layout check and deferred activation
-- Edit Mode and Blizzard CDM now show red error toast when layout limit is reached
-- Import success toasts now use colored addon name styling
-- SetupAddon returns success/failure for Edit Mode and Blizzard CDM
+- Details imports its auto-run scripts, including one that switches the
+  display between dungeons and raids
+- Edit Mode and Blizzard Cooldown Manager check the five-layout limit and
+  show a red error when it is reached
+- Import success messages show the addon name in color
+
+### Profiles
+
+- Details profile refreshed
+
+---
 
 ## v1.0.4
 
-### Bug Fixes
+### Installer
 
-- Fixed KitnEssentials import creating duplicate profiles on reinstall
-- KitnEssentials now decodes and writes directly to SavedVariable (nuke-and-replace)
-- Update popup "Later" button now suppresses popup until next version update
-- Updated KitnEssentials profile data
+- Reinstalling KitnEssentials no longer creates a duplicate profile
+- **Later** on the update popup holds it until the next version
+
+### Profiles
+
+- KitnEssentials profile refreshed
+
+---
 
 ## v1.0.3
 
-### New Addon & Improvements
+### Installer
 
-- Added BuffReminders profile import and loading support
-- Detect newly available addon profiles in update flow (not just outdated ones)
-- Update popup and chat messages now distinguish "Updated" vs "New" addons
-- Fixed double-v prefix in version update popup text
-- Dev-mode fallback for update popup when running from source
-- BuffReminders shown in install list even when not loaded
+- **NEW:** BuffReminders profile import and loading
+- The update flow offers newly supported addons, not only outdated ones,
+  and its popup and chat say "Updated" or "New"
+- BuffReminders shows in the install list even when it isn't loaded
+- The update popup no longer prints a doubled "v"
+
+---
 
 ## v1.0.2
 
-### Bug Fix
+### Profiles
 
-- Fixed ElvUI private profileKey to always use base profile name
+- The ElvUI private profile always uses the base profile name
+
+---
 
 ## v1.0.1
 
-### Bug Fixes & Data Updates
+### Profiles
 
-- Fixed ElvUI profiles not applying correctly (Table export wrapper artifact)
-- Fixed ElvUI Private settings not applying (same wrapper issue)
-- Implemented KitnEssentials import via API (was a placeholder)
-- Added CopyTable to ElvUI data decode to prevent shared references
-- Added ElvUI aurawatch (class aura indicators) to Global import
-- Switched Plater to full-DB import for consistent nameplate settings
-- Removed redundant ElvUI_Anchor overwrite (data now embedded in profiles)
-- Removed RefreshLayout call in Blizzard CDM to prevent taint errors
-- Updated all ElvUI profile data (Dark, Color, Healer Dark, Healer Color, Private)
-- Updated Plater profile data (full DB export)
-- Added Ayije CDM Bite profile
+- ElvUI profiles and ElvUI Private settings apply correctly
+- **NEW:** KitnEssentials import (it was a placeholder)
+- ElvUI class aura indicators are part of the global import
+- Plater imports its full settings for consistent nameplates
+- All ElvUI profiles (Dark, Color, Healer Dark, Healer Color, Private) and
+  the Plater profile refreshed
+- **NEW:** Ayije CDM Bite profile
+
+### Installer
+
+- The Blizzard Cooldown Manager import no longer causes taint errors
+
+---
 
 ## v1.0.0
 
 ### Initial Release
 
 - ElvUI profile installer with step-by-step guided setup
-- Dark and Color UI variants with DPS and Healer layouts
-- Addon profiles: Details, Plater, BigWigs, WarpDeplete, MRT, Edit Mode, Ayije CDM, KitnEssentials
-- Class-specific Blizzard CDM profiles (40 specs)
-- Multiple installer flows: Install, Update (outdated-only), Load (profile activation), CDM-only
-- Per-addon version tracking with smart update detection
-- Alt-detection with profile load prompt on new characters
-- Minimap icon cleanup for Details, BigWigs, Plater, SimulationCraft, Wago, MRT
-- 1440p UI scale auto-forcing
-- `/kitn install`, `/kitn update`, `/kitn load`, `/kitn cdm`, `/kitn version`, `/kitn reset` commands
+- Dark and Color variants with DPS and Healer layouts
+- Profiles for Details, Plater, BigWigs, WarpDeplete, MRT, Edit Mode, Ayije
+  CDM and KitnEssentials
+- Blizzard Cooldown Manager layouts for all 40 specs
+- Install, Update, Load and Cooldown Manager flows
+- Per-addon version tracking that knows what needs an update
+- Offers to load profiles on a new character
+- Minimap icon cleanup for Details, BigWigs, Plater, SimulationCraft, Wago
+  and MRT
+- 1440p UI scale set for you
+- `/kitn install`, `/kitn update`, `/kitn load`, `/kitn cdm`,
+  `/kitn version` and `/kitn reset`

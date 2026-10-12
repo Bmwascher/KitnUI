@@ -538,9 +538,19 @@ local function FriendsCount()
         and C_FriendList.GetNumOnlineFriends()) or 0
     local inGameOnly = Get("tbFriendsInGameOnly", ns.EUI_DEFAULTS.tbFriendsInGameOnly) and true or false
     local subAccounts = Get("tbFriendsSubAccounts", ns.EUI_DEFAULTS.tbFriendsSubAccounts) and true or false
+    if not BNGetNumFriends then return wowOnline end
+    local numBNet, numBNetOnline, numFav, numFavOnline = BNGetNumFriends()
+    numBNet, numBNetOnline = numBNet or 0, numBNetOnline or 0
+    -- With both options off a friend counts when online at all, which is the
+    -- game's own online count, so the walk and its per-friend structs are
+    -- skipped.
+    if not (inGameOnly or subAccounts) then return wowOnline + numBNetOnline end
+    -- The list runs favorites (online and offline), then online friends, then
+    -- offline ones, so the walk stops where the offline block starts.
+    local last = numBNet
+    if numFav and numFavOnline then last = math.min(numBNet, numFav + numBNetOnline - numFavOnline) end
     local bnetOnline = 0
-    local numBNet = (BNGetNumFriends and BNGetNumFriends()) or 0
-    for i = 1, numBNet do
+    for i = 1, last do
         local _, list = BNetFriendAccounts(i, inGameOnly, subAccounts)
         if list then bnetOnline = bnetOnline + #list end
     end
@@ -1271,7 +1281,7 @@ end
 --
 -- GuildCount stays direct: GetNumGuildMembers returns two numbers, no structs,
 -- so there is nothing to throttle.
-local BADGE_WALK_WINDOW = 10
+local BADGE_WALK_WINDOW = 30
 local friendsBadgePending
 
 local function RequestFriendsBadgeUpdate()
