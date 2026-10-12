@@ -19,6 +19,7 @@
 - The EllesmereUI, BigWigs, Northern Sky Raid Tools, Edit Mode, BuffReminders and Baganator profiles are refreshed. The EllesmereUI profile no longer carries Quickdraw, so an update leaves your Quickdraw settings as they are
 - The KitnUI and KitnUI Rasta backgrounds for the EllesmereUI options are redrawn for EllesmereUI 9.4's title bar, so the new collapse button and the close button sit on their own boxes again, and the folded mini window shows the KitnUI cat
 - The installer's KitnUI and KitnUI Rasta backgrounds are redrawn to match
+- The installer window is a little larger, so long counts such as "Changes 483 Settings" fit their column on the Update and Modules pages. The Modules list's tick boxes show a check or a cross, the update button's label is larger, the filled buttons are a little softer, and the **Modules** button sits beside the profile status, clear of the description
 - The KitnUI section in the EllesmereUI options now registers through EllesmereUI's own plugin support, so it keeps working as EllesmereUI updates, and its settings show up in the options search. It needs EllesmereUI 9.4 or newer; like other add-on sections, it is locked while you edit Spec Overrides
 
 ## v2.1.6

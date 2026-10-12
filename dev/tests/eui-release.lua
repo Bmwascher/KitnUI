@@ -68,6 +68,7 @@ function Frame:SetText(text) self.text = text end
 function Frame:GetText() return self.text end
 function Frame:SetWidth(width) self.width = width end
 function Frame:SetHeight(height) self.height = height end
+function Frame:SetTexture(path) self.texture = path end
 
 -- The last point set, so a test can read where a frame or font starts.
 function Frame:SetPoint(...) self.point = { ... } end
@@ -507,7 +508,7 @@ do
     local headAt = type(head) == "table" and rawget(head, "point") or nil
     eq(type(headAt) == "table" and headAt[4] or nil, 8, "under the band, the heads and rows sit 8 px inside the panel")
     local bandText = fontWith("Cooldown Manager is anchored to Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up.")
-    eq(bandText and rawget(bandText, "width"), 434, "the band's text takes the panel's width less its padding and the button")
+    eq(bandText and rawget(bandText, "width"), 474, "the band's text takes the panel's width less its padding and the button")
 
     -- A pair linked only by a size match reads as one; the anchored pair is
     -- drawn again after it, so the checks below see the same page.
@@ -520,12 +521,13 @@ do
     drew, drawErr = pcall(ns.EUIUpdaterPage)
     check(drew, "the list draws the anchored split again", drawErr)
 
-    -- The stubs carry no C_Texture, as a client without the atlas.
-    eq(child(ufRow, "box", "fill", "shown"), true, "a ticked box is filled")
-    eq(child(ufRow, "box", "mark", "shown"), false, "and without the atlas shows no mark")
+    eq(child(ufRow, "box", "mark", "texture"), "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI-Check.png",
+        "a ticked box shows the check")
     eq(child(ufRow, "kitn", "badge", "height"), 12, "a badge is 2 px shorter than a short row")
     if ufRow then ufRow.scripts.OnClick(ufRow) end
     eq(slotLabel(1), "Update ticked (1)", "a part unticked: the button counts the ticks")
+    eq(child(ufRow, "box", "mark", "texture"), "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI-Cross.png",
+        "an unticked box shows the cross")
     eq(slotLabel(2), "Restore previous", "Restore previous stays beside it")
     eq(slotLabel(3), "Tick all", "and Tick all follows")
     eq(wizard.Option3.width, 100, "Tick all is drawn narrow")
@@ -580,8 +582,8 @@ do
     eq(type(plainAt) == "table" and plainAt[2] or nil, 6, "up to date: plain text starts 6 px into its cell, as a badge's text does")
     local updaterHead = fontWith("KITNUI 2.2.0")
     local updaterHeadAt = updaterHead and rawget(updaterHead, "point")
-    eq(type(updaterHeadAt) == "table" and updaterHeadAt[2] or nil, 396, "Profile Update: the KitnUI head starts 6 px into its column")
-    eq(child(ufRow, "kitn", "_w"), 130, "Profile Update: the KitnUI cell keeps its 130 px")
+    eq(type(updaterHeadAt) == "table" and updaterHeadAt[2] or nil, 406, "Profile Update: the KitnUI head starts 6 px into its column")
+    eq(child(ufRow, "kitn", "_w"), 160, "Profile Update: the KitnUI cell keeps its 160 px")
     local plainRowAt = child(ufRow, "point")
     local plainHead = type(plainRowAt) == "table" and plainRowAt[2] or nil
     local plainHeadAt = type(plainHead) == "table" and rawget(plainHead, "point") or nil
@@ -591,8 +593,8 @@ do
     ns.EUIUpdateState = realState
 
     -- The Modules page with a four-digit count: every badge stays inside its
-    -- column. Your copy (list x 208, 140 wide) ends before the KitnUI column
-    -- (354), and the KitnUI badge (128 wide) before Reset (484). The heads
+    -- column. Your copy (list x 208, 150 wide) ends before the KitnUI column
+    -- (364), and the KitnUI badge (158 wide) before Reset (524). The heads
     -- start 6 px into their columns, on the line the cells' text starts on.
     local realStringWidth = Frame.GetStringWidth
     Frame.GetStringWidth = function() return 200 end
@@ -608,18 +610,18 @@ do
     eq(child(ufRow, "yours", "text", "text"), "Changed by You - 1228", "Modules: the Your copy cell reads the player's count")
     local yoursAt, kitnAt = child(ufRow, "yours", "point"), child(ufRow, "kitn", "point")
     eq(type(yoursAt) == "table" and yoursAt[4] or nil, 208, "Modules: the Your copy column starts at list x 208")
-    eq(type(kitnAt) == "table" and kitnAt[4] or nil, 354, "Modules: the KitnUI column starts at list x 354")
-    eq(child(ufRow, "yours", "_w"), 140, "Modules: the Your copy cell is 140 wide")
-    eq(child(ufRow, "kitn", "_w"), 128, "Modules: the KitnUI cell is 128 wide, 2 px short of Reset")
+    eq(type(kitnAt) == "table" and kitnAt[4] or nil, 364, "Modules: the KitnUI column starts at list x 364")
+    eq(child(ufRow, "yours", "_w"), 150, "Modules: the Your copy cell is 150 wide")
+    eq(child(ufRow, "kitn", "_w"), 158, "Modules: the KitnUI cell is 158 wide, 2 px short of Reset")
     local yoursW = child(ufRow, "yours", "badge", "width")
-    check(type(yoursW) == "number" and 208 + yoursW <= 354, "Modules: a long Your copy badge ends left of the KitnUI column", yoursW)
+    check(type(yoursW) == "number" and 208 + yoursW <= 364, "Modules: a long Your copy badge ends left of the KitnUI column", yoursW)
     local kitnW = child(ufRow, "kitn", "badge", "width")
-    check(type(kitnW) == "number" and 354 + kitnW <= 484, "Modules: a long KitnUI badge ends before Reset", kitnW)
+    check(type(kitnW) == "number" and 364 + kitnW <= 524, "Modules: a long KitnUI badge ends before Reset", kitnW)
     local yoursHead, modulesHead = fontWith("YOUR COPY"), fontWith("KITNUI 2.2.0")
     local yoursHeadAt = yoursHead and rawget(yoursHead, "point")
     local modulesHeadAt = modulesHead and rawget(modulesHead, "point")
     eq(type(yoursHeadAt) == "table" and yoursHeadAt[2] or nil, 214, "Modules: the Your copy head starts 6 px into its column")
-    eq(type(modulesHeadAt) == "table" and modulesHeadAt[2] or nil, 360, "Modules: the KitnUI head starts 6 px into its column")
+    eq(type(modulesHeadAt) == "table" and modulesHeadAt[2] or nil, 370, "Modules: the KitnUI head starts 6 px into its column")
 
     -- With no record of the install, a differing part shows its count on a
     -- badge, as the hoverable cells do; a matching part stays plain.
