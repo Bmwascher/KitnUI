@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/Core.lua                                         ║
--- ║  Purpose: Inject a KitnUI category into EllesmereUI's config ║
+-- ║  Purpose: Register KitnUI's section in EllesmereUI's config  ║
 -- ║           panel and provide the machinery its pages share.   ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
@@ -25,11 +25,14 @@ if not core then
 end
 setmetatable(ns, { __index = core })
 
--- Used as the sidebar row key, the info-table key, and RegisterModule's folder
--- argument. It does not have to match KitnUI's real addon folder: alwaysLoaded
--- short-circuits the IsAddonLoaded check the sidebar would otherwise run. It
--- does have to be identical at all four sites.
-ns.EUI_MODULE_KEY = "KitnUI"
+-- The plugin id and its one module's key. EllesmereUI files the module under a
+-- key of its own, which ModuleKey asks it for.
+local PLUGIN_ID, PLUGIN_MODULE = "KitnUI", "Options"
+
+local function ModuleKey()
+    local EUI = _G.EllesmereUI
+    return EUI and EUI.GetPluginModuleKey and EUI.GetPluginModuleKey(PLUGIN_ID, PLUGIN_MODULE)
+end
 
 -- Page files register themselves here rather than Core listing them, so adding
 -- a page never edits this file. Order is separate because the router is keyed.
@@ -546,9 +549,11 @@ end
 -- takes the cold-build path. RefreshPage handles the panel-closed case itself.
 function ns.EUIRebuildForOwnership(page)
     if not _G.EllesmereUI then return end
+    local key = ModuleKey()
+    if not key then return end
 
     if EllesmereUI.InvalidateModulePageCache then
-        pcall(EllesmereUI.InvalidateModulePageCache, EllesmereUI, ns.EUI_MODULE_KEY)
+        pcall(EllesmereUI.InvalidateModulePageCache, EllesmereUI, key)
     end
 
     if page then
@@ -556,7 +561,7 @@ function ns.EUIRebuildForOwnership(page)
         local okM, mod = pcall(EllesmereUI.GetActiveModule, EllesmereUI)
         local okP, pg = pcall(EllesmereUI.GetActivePage, EllesmereUI)
         if not (okM and okP) then return end
-        if mod ~= ns.EUI_MODULE_KEY or pg ~= page then return end
+        if mod ~= key or pg ~= page then return end
     end
 
     if EllesmereUI.RefreshPage then
@@ -832,71 +837,6 @@ end
 -- Registration
 ---------------------------------------------------------------------------------
 
--- EllesmereUI:RegisterModule whitelists its callers: it reads debugstack, pulls
--- the "AddOns/<folder>/" segment out of the caller's path, and drops the call
--- unless that folder is one of its own. The guard fails OPEN when no folder can
--- be extracted, and a loadstring chunk has no file path, so the call lands.
---
--- This is a deliberate bypass of a deliberate gate. EllesmereUI can close it in
--- one line, which is why every step is guarded and why losing the tab must never
--- break the installer.
-local function RegisterModule(config)
-    if not (_G.EllesmereUI and EllesmereUI.RegisterModule) then return end
-
-    local ok = false
-    if type(loadstring) == "function" then
-        _G.__KitnUI_pendingReg = { key = ns.EUI_MODULE_KEY, config = config }
-        local trampoline = loadstring([[
-            local r = _G.__KitnUI_pendingReg
-            if r and EllesmereUI and EllesmereUI.RegisterModule then
-                EllesmereUI:RegisterModule(r.key, r.config)
-            end
-        ]], "KitnUI-register")
-        if trampoline then ok = pcall(trampoline) end
-        _G.__KitnUI_pendingReg = nil
-    end
-
-    -- Without loadstring the direct call still runs. The whitelist rejects it
-    -- silently, which costs the tab and nothing else.
-    if not ok then
-        pcall(function() EllesmereUI:RegisterModule(ns.EUI_MODULE_KEY, config) end)
-    end
-end
-
--- Registering supplies page CONTENT. The sidebar ROW comes from two private
--- tables EllesmereUI builds from its own hardcoded roster, so the row has to be
--- inserted separately. The panel is built lazily on first open, so login is
--- early enough.
-local function InjectSidebar()
-    local EUI = _G.EllesmereUI
-    if not EUI then return end
-
-    -- alwaysLoaded hides the per-addon power toggle and marks the row enabled.
-    -- KitnUI is not an EllesmereUI module the user can switch off from here.
-    EUI._addonInfoByFolder = EUI._addonInfoByFolder or {}
-    EUI._addonInfoByFolder[ns.EUI_MODULE_KEY] = EUI._addonInfoByFolder[ns.EUI_MODULE_KEY] or {
-        folder       = ns.EUI_MODULE_KEY,
-        display      = "KitnUI",
-        search_name  = "KitnUI Kitn",
-        alwaysLoaded = true,
-    }
-
-    -- No cross-module profile sync icon: KitnUI has nothing to sync.
-    EUI._syncExempt = EUI._syncExempt or {}
-    EUI._syncExempt[ns.EUI_MODULE_KEY] = true
-
-    -- Guard against double insertion on /reload.
-    EUI.ADDON_GROUPS = EUI.ADDON_GROUPS or {}
-    for _, group in ipairs(EUI.ADDON_GROUPS) do
-        if group.key == "kitnui" then return end
-    end
-    table.insert(EUI.ADDON_GROUPS, 1, {
-        key     = "kitnui",
-        label   = "KitnUI",
-        members = { ns.EUI_MODULE_KEY },
-    })
-end
-
 -- Export and import walk EllesmereUI's own _ADDON_DB_MAP rather than the db
 -- registry, so a companion addon is invisible to them without this. The UI reads
 -- the map live, so a login-time insert is picked up.
@@ -1084,8 +1024,6 @@ boot:SetScript("OnEvent", function(self)
     -- every 8.8+ install.
     if not (_G.EllesmereUI and EllesmereUI.RegisterModule) then return end
 
-    InjectSidebar()
-
     -- Registration first, injection second. GetAddonProfile resolves a map entry
     -- through Lite._dbRegistry, so a map entry with no registered db reads
     -- "Ready" in the export list and exports nothing.
@@ -1123,7 +1061,11 @@ boot:SetScript("OnEvent", function(self)
     -- EllesmereUI's own login work.
     ns.EUIQueueReapply()
 
-    RegisterModule({
+    -- The tab is a plugin section, above EllesmereUI's own. An EllesmereUI
+    -- without the plugin API shows no tab; everything above still runs.
+    if not EUI.RegisterPlugin then return end
+    local module = {
+        key         = PLUGIN_MODULE,
         title       = "KitnUI",
         description = "Profile installer for the EllesmereUI suite.",
         pages       = ns.EUIPageOrder,
@@ -1148,7 +1090,8 @@ boot:SetScript("OnEvent", function(self)
                 ns.TopBar.PreviewRestore()
             end
         end,
-    })
+    }
+    EUI.RegisterPlugin(PLUGIN_ID, { label = "KitnUI", position = "top", modules = { module } })
 end)
 
 ---------------------------------------------------------------------------------
@@ -1157,8 +1100,9 @@ end)
 
 KitnCommands = KitnCommands or {}
 KitnCommands["options"] = function()
-    if _G.EllesmereUI and EllesmereUI.ShowModule then
-        EllesmereUI:ShowModule(ns.EUI_MODULE_KEY)
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.IsPluginRegistered and EUI.IsPluginRegistered(PLUGIN_ID) and EUI.OpenPlugin then
+        EUI.OpenPlugin(PLUGIN_ID)
     else
         print(ns.title .. ": EllesmereUI's config panel is unavailable.")
     end
