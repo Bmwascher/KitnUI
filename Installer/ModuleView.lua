@@ -20,12 +20,15 @@ local ROW_H_MAX, ROW_H_MIN = 26, 14
 -- the list ends 10 px above the action buttons.
 local LIST_TOP, LIST_BOTTOM = -116, 132
 local CONTENT_X, CONTENT_W = 200, 520
-local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 252, 372, 390
--- Reset, shown on hover at the row's right edge on the Modules page, keeps a
--- region of its own: there the KitnUI cell's hover area ends 4 px before it.
--- The cell's badge and text still draw at their full width.
-local KITN_W, RESET_W = 120, 50
+local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 185, 330, 390
+-- Each cell is as wide as its column's room, and its badge never grows past
+-- it: Your copy stops a gap short of the KitnUI column, and on the Modules
+-- page the KitnUI cell stops 4 px before Reset, shown on hover at the row's
+-- right edge. On the Profile Update page it runs to the list's edge.
+local COLUMN_GAP, RESET_W = 8, 50
+local YOURS_W = KITN_X_MODULES - YOURS_X - COLUMN_GAP
 local KITN_W_MODULES = CONTENT_W - KITN_X_MODULES - RESET_W - 4
+local KITN_W_UPDATER = CONTENT_W - KITN_X_UPDATER
 local MODULES_TITLE = "EllesmereUI Modules"
 local AMBER = { 1, 0.8, 0.2 }
 -- Stand-ins for a measurement that cannot be read: the list's height (the
@@ -311,11 +314,14 @@ local function Cell(r, width)
     cell.text = Font(cell, 12, 1)
     cell.text:SetPoint("LEFT")
     cell.text:SetJustifyH("LEFT")
+    cell.text:SetWordWrap(false)
     cell:SetScript("OnLeave", function() RowLeave(r) end)
     return cell
 end
 
 -- A cell's text in its kind: on a badge sized to the text, or plain grey.
+-- Both stay inside the cell: a text wider than its room is cut with an
+-- ellipsis, so no badge reaches the next column.
 local function PaintCell(cell, text, kind)
     local t, badge = cell.text, cell.badge
     t:SetText(text)
@@ -336,10 +342,13 @@ local function PaintCell(cell, text, kind)
         badge:Hide()
         t:SetTextColor(1, 1, 1, 0.62)
         t:SetPoint("LEFT")
+        t:SetWidth(cell._w)
         return
     end
+    local room = cell._w - 2 * BADGE_PAD
     t:SetPoint("LEFT", BADGE_PAD, 0)
-    badge:SetWidth(Measure(t:GetStringWidth(), cell._w - 2 * BADGE_PAD) + 2 * BADGE_PAD)
+    t:SetWidth(room)
+    badge:SetWidth(math.min(Measure(t:GetUnboundedStringWidth(), room), room) + 2 * BADGE_PAD)
     badge:Show()
 end
 
@@ -382,7 +391,7 @@ local function BuildRow(i)
     r.sub:SetJustifyH("LEFT")
     r.sub:SetWordWrap(false)
 
-    r.yours = Cell(r, 115)
+    r.yours = Cell(r, YOURS_W)
     r.yours:SetPoint("LEFT", r, "LEFT", YOURS_X, 0)
     r.yours:SetScript("OnEnter", function(cell)
         RowEnter(r)
@@ -394,7 +403,7 @@ local function BuildRow(i)
             ShowTip(cell, title, entry)
         end
     end)
-    r.kitn = Cell(r, KITN_W)
+    r.kitn = Cell(r, KITN_W_UPDATER)
     r.kitn:SetScript("OnEnter", function(cell)
         RowEnter(r)
         local row = r.row
@@ -561,6 +570,7 @@ local function DrawRows()
     list.backing:Hide()
     local modules = view.mode == "modules"
     local kitnX = modules and KITN_X_MODULES or KITN_X_UPDATER
+    local kitnW = modules and KITN_W_MODULES or KITN_W_UPDATER
     list.colYours:SetShown(modules)
     list.colKitn:ClearAllPoints()
     list.colKitn:SetPoint("LEFT", kitnX, 0)
@@ -631,7 +641,8 @@ local function DrawRows()
         if modules then PaintCell(r.yours, YoursText(row)) end
         r.kitn:ClearAllPoints()
         r.kitn:SetPoint("LEFT", r, "LEFT", kitnX, 0)
-        r.kitn:SetSize(modules and KITN_W_MODULES or KITN_W, rowH)
+        r.kitn:SetSize(kitnW, rowH)
+        r.kitn._w = kitnW
         r.kitn.badge:SetHeight(badgeH)
         PaintCell(r.kitn, KitnText(row))
         r.reset:SetHeight(rowH)

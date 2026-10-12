@@ -529,6 +529,26 @@ do
     eq(slotLabel(2), nil, "up to date: and nothing beside it")
     ns.EUIUpdateState = realState
 
+    -- The Modules page with a four-digit count: every badge stays inside its
+    -- column. Your copy (list x 185) ends before the KitnUI column (330), and
+    -- the KitnUI badge before Reset (470).
+    local realStringWidth = Frame.GetStringWidth
+    Frame.GetStringWidth = function() return 200 end
+    Frame.GetUnboundedStringWidth = function() return 200 end
+    ns.EUIReadPlayer = function()
+        return { rows = { UF, CDM, GEN }, P = {}, O = {}, N = {}, keyToFolder = {}, missing = {} }
+    end
+    ns.EUIPlayerContext = function() return { held = {}, defaults = {}, unlock = {} } end
+    counts.uf = 1228
+    drew, drawErr = pcall(ns.EUIModulesPage)
+    Frame.GetStringWidth, Frame.GetUnboundedStringWidth = realStringWidth, nil
+    check(drew, "the Modules page draws a four-digit count", drawErr)
+    eq(child(ufRow, "yours", "text", "text"), "changed by you - 1228", "Modules: the Your copy cell reads the player's count")
+    local yoursW = child(ufRow, "yours", "badge", "width")
+    check(type(yoursW) == "number" and 185 + yoursW <= 330, "Modules: a long Your copy badge ends left of the KitnUI column", yoursW)
+    local kitnW = child(ufRow, "kitn", "badge", "width")
+    check(type(kitnW) == "number" and 330 + kitnW <= 470, "Modules: a long KitnUI badge ends before Reset", kitnW)
+
     Timer.After, ns.EUIRowDiff, ns.EUIPageInputs = realAfter, realDiff, realInputs
     ns.EUIHideModuleList()
 end
