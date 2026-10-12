@@ -116,18 +116,23 @@ local function UsableName(name)
     return name
 end
 
--- The count walks' name lookups (ModuleRows.lua, EUIRowDiff opts.names). Both
--- take IDs read from saved profile data.
+-- An ID the game's lookups accept. The IDs come from saved profile data, and
+-- an out-of-range one would stop the count walk with an error.
+local function ValidID(id)
+    return type(id) == "number" and id >= 1 and id < 2147483648 and id % 1 == 0
+end
+
+-- The count walks' name lookups (ModuleRows.lua, EUIRowDiff opts.names).
 local NAMES = {
     spec = function(id)
-        if type(GetSpecializationInfoByID) ~= "function" then return nil end
+        if not ValidID(id) or type(GetSpecializationInfoByID) ~= "function" then return nil end
         local _, name, _, _, _, _, className = GetSpecializationInfoByID(id)
         name, className = UsableName(name), UsableName(className)
         if name and className then return name .. " " .. className end
         return name
     end,
     spell = function(id)
-        if not (C_Spell and C_Spell.GetSpellName) then return nil end
+        if not ValidID(id) or not (C_Spell and C_Spell.GetSpellName) then return nil end
         return UsableName(C_Spell.GetSpellName(id))
     end,
 }
@@ -539,13 +544,13 @@ local function DrawNotice()
     else
         b:Hide()
     end
-    -- Shown before it is measured: text set in a hidden frame can measure as
+    -- Shown before its text is set: text set in a hidden frame can measure as
     -- the previous text until the frame lays out.
+    band:Show()
     local t = list.noticeText
     t:SetWidth(room)
     t:SetText(T.split:format(first.child.label, first.target.label)
         .. (#splits > 1 and T.splitMore:format(#splits - 1) or ""))
-    band:Show()
     list.noticeH = math.max(NOTICE_MIN_H, Measure(t:GetStringHeight(), NOTICE_LINE_H) + 10)
     band:SetHeight(list.noticeH)
 end
