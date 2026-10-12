@@ -445,14 +445,15 @@ local function KEAccent()
     end
 end
 
--- A saved choice wins. Without one, the two older keys decide exactly as they
--- did before the choice existed: pink unless switched off, and a custom colour
--- that is byte-identically the amber reads as the amber.
+-- A saved choice wins. Without one, the two older keys decide: a custom colour
+-- that is byte-identically the amber reads as the amber, any other custom colour
+-- stays custom, and the pink becomes Match KitnEssentials, whose own default
+-- theme is that same pink.
 local function AccentSource()
     local s = ns.EUISettings()
     local src = s.accentSource
     if src == "pink" or src == "rasta" or src == "ke" or src == "custom" then return src end
-    if AccentUsesDefault() then return "pink" end
+    if AccentUsesDefault() then return "ke" end
     local c = s.accentCustom
     if type(c) == "table" and type(c.r) == "number" and type(c.g) == "number"
        and type(c.b) == "number" and IsRastaAmber(c.r, c.g, c.b) then
@@ -461,14 +462,17 @@ local function AccentSource()
     return "custom"
 end
 
--- The colour the master switch forces right now. Nil when Match KitnEssentials
--- has nothing to read, so the accent stays as it is rather than jumping to pink.
--- A custom colour that is not three numbers falls back to the shipped pink, so a
+-- The colour the master switch forces right now. Match KitnEssentials with
+-- nothing to read gives the pink, KitnEssentials' own default theme colour. A
+-- custom colour that is not three numbers falls back to the pink too, so a
 -- hand-edited saved variable cannot make SetAccentColor throw.
 local function AccentColor()
     local src = AccentSource()
     if src == "rasta" then return RASTA_R, RASTA_G, RASTA_B end
-    if src == "ke" then return KEAccent() end
+    if src == "ke" then
+        local r, g, b = KEAccent()
+        if r then return r, g, b end
+    end
     if src == "custom" then
         local c = ns.EUISettings().accentCustom
         if type(c) == "table" and type(c.r) == "number"
@@ -479,8 +483,8 @@ local function AccentColor()
     return ACCENT_R, ACCENT_G, ACCENT_B
 end
 
--- What the swatch shows: the forced colour, or the live accent when there is
--- none to force or the master is off and the player's own accent is back.
+-- What the swatch shows: the forced colour while the master is on, and the live
+-- accent while it is off and the player's own accent is back.
 local function ShownAccentColor()
     local r, g, b
     if ns.EUISettings().accentPink then r, g, b = AccentColor() end
@@ -904,8 +908,9 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- step.
     --
     -- Match KitnEssentials is offered only where it can work, unless it is
-    -- already the saved choice: the dropdown has no way to grey out one entry,
-    -- and a saved choice missing from the list would show a blank button.
+    -- already the current choice: the dropdown has no way to grey out one
+    -- entry, and a current choice missing from the list would show a blank
+    -- button.
     local sourceOrder = { "pink", "rasta" }
     if KEApi() or AccentSource() == "ke" then sourceOrder[#sourceOrder + 1] = "ke" end
     sourceOrder[#sourceOrder + 1] = "custom"
@@ -922,7 +927,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
             ns.EUIRebuildForOwnership()
         end,
         sourceOrder,
-        "Where the accent color comes from. Rasta Amber is the warm amber the Rasta artwork is built around. Match KitnEssentials takes KitnEssentials' theme color and follows it when that changes; it is listed once a KitnEssentials version that shares its theme color is installed. Custom uses the swatch below.");
+        "Where the accent color comes from. Rasta Amber is the warm amber the Rasta artwork is built around. Match KitnEssentials takes KitnEssentials' theme color and follows it when that changes; until a KitnEssentials version that shares its theme color is installed, it shows KitnUI pink. Custom uses the swatch below.");
                                                                                    y = y - h
 
     -- Shows the colour that is ACTIVE, not the one that is stored, so the swatch
