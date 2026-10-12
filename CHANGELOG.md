@@ -13,6 +13,7 @@
 - **FIXED:** **Update Profile** and **Restore previous** work again on EllesmereUI 9.2.9. The EllesmereUI step said "Update needs a newer EllesmereUI" on the newest EllesmereUI and only offered a full reset
 - **FIXED:** **Update Profile** keeps the Extra Width and Extra Height you set on size-matched elements in EllesmereUI 9.2.9. It used to clear them on every update. When KitnUI's update re-points a link you had tuned, the extra goes with the old link and counts as one of your changes replaced. Spec Overrides saved by EllesmereUI 9.2.9 no longer read as changed by you when you have not touched them
 - **FIXED:** The Top Bar's Home button now offers **Return to Previous Location** after you teleport home from the housing dashboard. It used to stay stuck on Teleport Home, so the trip back was unavailable, which mattered most in a raid or dungeon where the Top Bar is hidden and the dashboard is the only way to teleport. The button also keeps up across a reload and after you hearth away
+- **FIXED:** EllesmereUI 9.4 fixes. **Update Profile** and **Restore previous** keep the "Pull Colors From" profile each color section can now pick on its own. The update's confirm no longer opens with a blank band under its text. The KitnUI options background now folds away with the panel when you collapse it, and the Top Bar page's **Reset Positions** shows its tooltip again
 
 ## v2.1.6
 
