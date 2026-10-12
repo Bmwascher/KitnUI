@@ -452,6 +452,28 @@ do
         eq(lastNames.spec(102), nil, "names: a secret spec name is not used")
         eq(lastNames.spell(191034), nil, "names: a secret spell name is not used")
         _G.issecretvalue, _G.GetSpecializationInfoByID, _G.C_Spell = nil, nil, nil
+
+        -- The cooldown lookup: a buff order entry's cooldown ID to its spell.
+        local cooldown = lastNames.cooldown or function() return "missing" end
+        eq(cooldown(42), nil, "names: no cooldown spell without C_CooldownViewer")
+        local cdAsked = 0
+        _G.C_CooldownViewer = { GetCooldownViewerCooldownInfo = function(id)
+            cdAsked = cdAsked + 1
+            if id == 42 then return { cooldownID = 42, spellID = 191034, overrideSpellID = 0 } end
+            if id == 43 then return { cooldownID = 43, spellID = 191034, overrideSpellID = 194223 } end
+            return nil
+        end }
+        eq(cooldown(42), 191034, "names: a cooldown reads its spell")
+        eq(cooldown(43), 194223, "names: a cooldown reads its override spell first")
+        eq(cooldown(44), nil, "names: a cooldown the game does not know reads no spell")
+        cdAsked = 0
+        for _, id in ipairs({ 0, -5, 2147483648, 102.5 }) do
+            eq(cooldown(id), nil, "names: an out-of-range cooldown ID reads no spell")
+        end
+        eq(cdAsked, 0, "names: an out-of-range cooldown ID never reaches the game")
+        _G.issecretvalue = function() return true end
+        eq(cooldown(42), nil, "names: a secret spell ID is not used")
+        _G.issecretvalue, _G.C_CooldownViewer = nil, nil
     end
 
     counts.cdm = 3

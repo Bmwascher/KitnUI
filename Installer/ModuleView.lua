@@ -139,6 +139,19 @@ local NAMES = {
         if not ValidID(id) or not (C_Spell and C_Spell.GetSpellName) then return nil end
         return UsableName(C_Spell.GetSpellName(id))
     end,
+    -- A buff order entry's cooldown, as the spell it shows: its override
+    -- spell when it has one, else its spell.
+    cooldown = function(id)
+        local cv = C_CooldownViewer
+        if not ValidID(id) or not (cv and cv.GetCooldownViewerCooldownInfo) then return nil end
+        local info = cv.GetCooldownViewerCooldownInfo(id)
+        if type(info) ~= "table" then return nil end
+        local isv = issecretvalue
+        local spellID = info.overrideSpellID
+        if (isv and isv(spellID)) or not ValidID(spellID) then spellID = info.spellID end
+        if (isv and isv(spellID)) or not ValidID(spellID) then return nil end
+        return spellID
+    end,
 }
 
 ---------------------------------------------------------------------------------

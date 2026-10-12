@@ -362,16 +362,53 @@ local function capital(s) return (s:gsub("^%l", string.upper)) end
 -- -(claim base + cooldownID), lies past every hosted marker and names no spell.
 local CDM_HOSTED_BASE, CDM_CLAIM_BASE = 2000000000, 3000000000
 
+-- An answer from the walk's lookups (EUIRowDiff, opts.names), or nil: a name
+-- from spec and spell, a spell ID from cooldown. Each answer is kept, so an ID
+-- costs one lookup, and one unit of the walk's budget, however often it is
+-- named.
+local function lookup(labels, kind, id)
+    local fn = labels[kind]
+    if type(fn) ~= "function" or type(id) ~= "number" then return nil end
+    local memoKey = kind .. "Memo"
+    local memo = labels[memoKey]
+    if not memo then
+        memo = {}
+        labels[memoKey] = memo
+    end
+    local found = memo[id]
+    if found == nil then
+        if labels.tick then labels.tick() end
+        found = fn(id)
+        local usable
+        if kind == "cooldown" then
+            usable = type(found) == "number" and found > 0
+        else
+            usable = type(found) == "string" and found ~= ""
+        end
+        if not usable then found = false end
+        memo[id] = found
+    end
+    return found or nil
+end
+
 -- The spell one bar list entry names, or nil. assignedSpells holds spell IDs
--- as values; customSpellIDs is a set keyed by spell ID. The other lists there
--- hold durations.
-local function cdmSpellID(list, key, value)
+-- as values; customSpellIDs and spellDurations are keyed by spell ID;
+-- buffDisplayOrder holds "s<spellID>" or "c<cooldownID>", a cooldown read as
+-- its spell through the cooldown lookup.
+local function cdmSpellID(list, key, value, labels)
     if list == "assignedSpells" and key:match("^%[%d+%]$") and type(value) == "number" then
         if value > 0 then return value end
         if value <= -CDM_HOSTED_BASE and value > -CDM_CLAIM_BASE then return -value - CDM_HOSTED_BASE end
-    elseif list == "customSpellIDs" then
+    elseif list == "customSpellIDs" or list == "spellDurations" then
         local id = tonumber(key:match("^%[(%d+)%]$") or "")
         if id and id > 0 then return id end
+    elseif list == "buffDisplayOrder" and key:match("^%[%d+%]$") and type(value) == "string" then
+        local prefix, digits = value:match("^([sc])(%d+)$")
+        local id = tonumber(digits or "")
+        if id and id > 0 then
+            if prefix == "s" then return id end
+            return lookup(labels, "cooldown", id)
+        end
     end
     return nil
 end
@@ -385,30 +422,9 @@ local TOP_BAR_NAMES = {
     tbEnabled = "Top Bar on",
 }
 
--- A name from the walk's lookups (EUIRowDiff, opts.names), or nil. Each
--- answer is kept, so an ID costs one lookup, and one unit of the walk's
--- budget, however often it is named.
-local function lookup(labels, kind, id)
-    local fn = labels[kind]
-    if type(fn) ~= "function" or type(id) ~= "number" then return nil end
-    local memoKey = kind .. "Memo"
-    local memo = labels[memoKey]
-    if not memo then
-        memo = {}
-        labels[memoKey] = memo
-    end
-    local name = memo[id]
-    if name == nil then
-        if labels.tick then labels.tick() end
-        name = fn(id)
-        if type(name) ~= "string" or name == "" then name = false end
-        memo[id] = name
-    end
-    return name or nil
-end
-
 -- A Cooldown Manager path, cdmSpells.<specID>.<rest>: the spec is the group,
 -- a spell list's entry is its spell, and anything under a bar names the bar.
+-- An unnamed duration entry keeps its key, "#<spellID>".
 local function cdmLabel(parts, labels, value)
     local specID = tonumber(parts[2]:match("^%[?(%d+)%]?$") or "")
     local group = lookup(labels, "spec", specID) or ("Spec " .. (specID and tostring(specID) or parts[2]))
@@ -417,8 +433,11 @@ local function cdmLabel(parts, labels, value)
     while last > 2 and CHANNELS[parts[last]] do last = last - 1 end
     local item
     if bar and last == 6 then
-        local spellID = cdmSpellID(parts[5], parts[6], value)
-        if spellID then item = lookup(labels, "spell", spellID) or ("spell " .. spellID) end
+        local spellID = cdmSpellID(parts[5], parts[6], value, labels)
+        if spellID then
+            item = lookup(labels, "spell", spellID)
+            if not item and parts[5] ~= "spellDurations" then item = "spell " .. spellID end
+        end
     end
     item = item or (labels.names and labels.names[table.concat(parts, ".", 1, last)]) or tidy(parts[last])
     if bar then item = item .. " (" .. bar .. ")" end
@@ -437,6 +456,16 @@ local function topBarItem(parts)
         item = item .. " (" .. table.concat(below, " ") .. ")"
     end
     return item
+end
+
+-- Unit frame aura lists keyed by spell ID: the Tracked Auras include and
+-- exclude sets, and a buff filter's spells (playerAuraBars.pabFilters.list).
+local SPELL_SETS = {
+    debuffInclude = true, debuffExclude = true, debuffIncludeAnyCaster = true, debuffIncludeMine = true,
+}
+
+local function spellSet(parts, k)
+    return SPELL_SETS[parts[k]] or (parts[k] == "spells" and parts[k - 3] == "pabFilters")
 end
 
 -- The keys parts[from..to] between a group and its setting, outermost first:
@@ -461,10 +490,11 @@ end
 
 -- (group, item) for one counted path. labels.unlock: element key -> Unlock
 -- Mode label; labels.names: list-entry path -> that entry's name field;
--- labels.spec and labels.spell: the walk's name lookups. value: the setting's
--- own value, which names a Cooldown Manager list entry. The keys between the
--- group and the setting follow the item as context: "x (Action Bar 1)",
--- "buff colors #1 (threshold specs #2)".
+-- labels.spec, labels.spell and labels.cooldown: the walk's lookups. value:
+-- the setting's own value, which names a Cooldown Manager list entry. The
+-- keys between the group and the setting follow the item as context:
+-- "x (Action Bar 1)", "buff colors #1 (threshold specs #2)". An entry of a
+-- spell-keyed aura list reads by its spell: "debuff exclude: <spell>".
 function ns.EUISettingLabel(path, row, labels, value)
     labels = labels or {}
     local unlock, names = labels.unlock or {}, labels.names or {}
@@ -494,8 +524,11 @@ function ns.EUISettingLabel(path, row, labels, value)
     local item = names[table.concat(parts, ".", 1, last)]
     local contextEnd = last - 1
     if not item then
-        if parts[last]:match("^%[%d+%]$") and last - 1 > i then
-            item = tidy(parts[last - 1]) .. " " .. tidy(parts[last])
+        local index = parts[last]:match("^%[(%d+)%]$")
+        if index and last - 1 > i then
+            local parent = tidy(parts[last - 1])
+            local spellName = spellSet(parts, last - 1) and lookup(labels, "spell", tonumber(index))
+            item = spellName and (parent .. ": " .. spellName) or (parent .. " #" .. index)
             contextEnd = last - 2
         else
             item = tidy(parts[last])
@@ -928,8 +961,9 @@ end
 -- groups = { {name, n, items} }, noBase }, groups and items capped
 -- at what the tooltip shows. opts: player, noBase, missing, fallback, held,
 -- defaults, unlock, against (KitnUI's side, for a reset's count), names
--- ({ spec = fn(id), spell = fn(id) }, the tooltip's name lookups). Building
--- the walker reads no table: the first Step does the setup, under the budget.
+-- ({ spec = fn(id), spell = fn(id), cooldown = fn(id) }, the tooltip's
+-- lookups; cooldown gives a cooldown's spell ID). Building the walker reads
+-- no table: the first Step does the setup, under the budget.
 function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
     opts = opts or {}
     local lookups = isTable(opts.names) and opts.names or {}
@@ -941,7 +975,10 @@ function ns.EUIRowDiff(A, B, rows, keyToFolder, opts)
         player = opts.player and true or false,
         held = opts.held or {},
         heldFkeys = {}, heldAnchors = {}, heldAny = false,
-        labels = { unlock = opts.unlock or {}, names = {}, spec = lookups.spec, spell = lookups.spell },
+        labels = {
+            unlock = opts.unlock or {}, names = {},
+            spec = lookups.spec, spell = lookups.spell, cooldown = lookups.cooldown,
+        },
     }, Walker)
     w.tickFn = function() tick(w) end
     w.labels.tick = w.tickFn

@@ -164,6 +164,7 @@ read_globals = {
 
     -- Cooldown Manager
     "CooldownViewerSettings", "CooldownManagerLayout_GetName",
+    "C_CooldownViewer",  -- the part list's tooltips read a buff order entry's cooldown as its spell
 
     -- Timer, and the profiler clock the part list's count walk reports against
     "C_Timer", "debugprofilestop",

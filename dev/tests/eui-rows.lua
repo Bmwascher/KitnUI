@@ -832,7 +832,46 @@ eq(item, "spell 1234 (Buffs)", "label: and the spell its ID")
 _, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.barSettings.iconSize", { id = CDM }, named, 30)
 eq(item, "icon size (Buffs)", "label: a bar setting carries its bar")
 _, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.spellDurations.[191034]", { id = CDM }, named, 12)
-eq(item, "#191034 (Buffs)", "label: a list that holds durations names no spell")
+eq(item, "Starfall (Buffs)", "label: a spell duration entry is its spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.spellDurations.[191034]", { id = CDM }, nil, 12)
+eq(item, "#191034 (Buffs)", "label: a spell duration entry without names keeps its ID")
+
+-- A buff order entry is "s<spellID>" or "c<cooldownID>"; a cooldown resolves
+-- to its spell through the cooldown lookup.
+local orderNamed = {
+    spec = named.spec,
+    spell = named.spell,
+    cooldown = function(id) return id == 42 and 191034 or nil end,
+}
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[1]", { id = CDM }, orderNamed, "s191034")
+eq(item, "Starfall (Buffs)", "label: a buff order spell entry is its spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[2]", { id = CDM }, orderNamed, "c42")
+eq(item, "Starfall (Buffs)", "label: a buff order cooldown entry is its cooldown's spell")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[3]", { id = CDM }, orderNamed, "c99")
+eq(item, "#3 (Buffs)", "label: a cooldown that does not resolve keeps its position")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[4]", { id = CDM }, nil, "s191034")
+eq(item, "spell 191034 (Buffs)", "label: a buff order spell entry without names reads its ID")
+_, item = ns.EUISettingLabel("cdmSpells.102.barSpells.buffs.buffDisplayOrder.[5]", { id = CDM }, nil, "c42")
+eq(item, "#5 (Buffs)", "label: a cooldown entry without names keeps its position")
+
+-- Aura lists keyed by spell ID read by the spell's name.
+group, item = ns.EUISettingLabel("addons." .. UF .. ".boss.debuffExclude.[1305361]", { id = UF },
+    { spell = function(id) return id == 1305361 and "Shadowflame" or nil end })
+eq(group, "Boss Frames", "label: an aura list's group is unchanged")
+eq(item, "debuff exclude: Shadowflame", "label: a debuff exclude entry is its spell")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".boss.debuffExclude.[1305361]", { id = UF })
+eq(item, "debuff exclude #1305361", "label: a debuff exclude entry without names keeps its ID")
+local pabPath = "addons." .. UF .. ".playerAuraBars.pabFilters.list.[2].spells.[102543]"
+_, item = ns.EUISettingLabel(pabPath, { id = UF }, {
+    spell = function(id) return id == 102543 and "Berserk" or nil end,
+    names = { ["addons." .. UF .. ".playerAuraBars.pabFilters.list.[2]"] = "Offensive CDs" },
+})
+eq(item, "spells: Berserk (pab filters, Offensive CDs)", "label: a buff filter's spell is named, with its filter")
+_, item = ns.EUISettingLabel(pabPath, { id = UF })
+eq(item, "spells #102543 (pab filters, list #2)", "label: a buff filter's spell without names keeps its ID")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".playerAuraBars.bars.[1].spells.[3]", { id = UF },
+    { spell = function() return "Starfall" end })
+eq(item, "spells #3 (bars #1)", "label: a spells list outside the buff filters names no spell")
 
 group, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbOff.clock", { id = TOP_BAR })
 eq(group, "Top Bar", "label: a Top Bar setting is in the Top Bar group")
@@ -895,6 +934,26 @@ do
     eq(calls.spec, 1, "names: one lookup per spec")
     eq(calls.spell, 1, "names: one lookup per spell")
     eq(namedWalk.units - plainWalk.units, 2, "names: each lookup is one unit of the walk's budget")
+end
+
+-- A cooldown ID costs one cooldown lookup, however often it is counted.
+do
+    local cdmRows = { { id = CDM, label = "Cooldown Manager" } }
+    local function order(list)
+        return { cdmSpells = { ["102"] = { barSpells = { buffs = { buffDisplayOrder = list } } } } }
+    end
+    local cooldownCalls = 0
+    local walk = ns.EUIRowDiff(order({ "s1", "s2" }), order({ "c42", "c42" }), cdmRows, {}, { names = {
+        spell = function(id) return id == 191034 and "Starfall" or nil end,
+        cooldown = function(id)
+            cooldownCalls = cooldownCalls + 1
+            return id == 42 and 191034 or nil
+        end,
+    } })
+    walk:Step(math.huge)
+    local e = walk.result[CDM]
+    eq(e and e.groups[1] and e.groups[1].items[1], "Starfall (Buffs)", "names: the walk names a cooldown entry by its spell")
+    eq(cooldownCalls, 1, "names: one cooldown lookup per cooldown ID")
 end
 
 local many = { groups = {} }
