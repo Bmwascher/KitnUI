@@ -20,14 +20,14 @@ local ROW_H_MAX, ROW_H_MIN = 26, 14
 -- the list ends 10 px above the action buttons.
 local LIST_TOP, LIST_BOTTOM = -116, 132
 local CONTENT_X, CONTENT_W = 200, 520
-local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 185, 343, 390
+local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 208, 354, 390
 -- Each cell is as wide as its column's room, and its badge never grows past
 -- it: Your copy stops a gap short of the KitnUI column, and on the Modules
--- page the KitnUI cell stops 4 px before Reset, shown on hover at the row's
+-- page the KitnUI cell stops 2 px before Reset, shown on hover at the row's
 -- right edge. On the Profile Update page it runs to the list's edge.
-local COLUMN_GAP, RESET_W = 8, 42
+local COLUMN_GAP, RESET_W = 6, 36
 local YOURS_W = KITN_X_MODULES - YOURS_X - COLUMN_GAP
-local KITN_W_MODULES = CONTENT_W - KITN_X_MODULES - RESET_W - 4
+local KITN_W_MODULES = CONTENT_W - KITN_X_MODULES - RESET_W - 2
 local KITN_W_UPDATER = CONTENT_W - KITN_X_UPDATER
 local MODULES_TITLE = "EllesmereUI Modules"
 local AMBER = { 1, 0.8, 0.2 }
@@ -36,7 +36,7 @@ local AMBER = { 1, 0.8, 0.2 }
 local LIST_H_FALLBACK, INTRO_H_FALLBACK, NOTICE_LINE_H = 312, 36, 16
 local NOTICE_MIN_H, NOTICE_GAP = 28, 8
 -- A badge is 18 high, or 2 px shorter than its row, so adjacent badges never touch.
-local BADGE_H, BADGE_PAD = 18, 8
+local BADGE_H, BADGE_PAD = 18, 6
 -- Tick all is drawn narrow. Beside Restore's 240 px "switch" state the update
 -- button narrows too, so the three fit the 520 px content column.
 local TICK_ALL_W, UPDATE_W_BESIDE_SWITCH = 100, 160

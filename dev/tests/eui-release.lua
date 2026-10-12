@@ -542,7 +542,7 @@ do
     eq(child(ufRow, "kitn", "text", "text"), "Changes 1 Setting", "the count lands in the cell")
 
     -- Up to date, the read-only page: no box, plain "Up to Date", Restore
-    -- previous alone in slot 1. Plain text starts 8 px into its cell, where a
+    -- previous alone in slot 1. Plain text starts 6 px into its cell, where a
     -- badge's text starts, and the KitnUI head starts on that line too.
     local realState = ns.EUIUpdateState
     ns.EUIUpdateState = function() return "current" end
@@ -552,18 +552,19 @@ do
     eq(child(ufRow, "box", "shown"), false, "up to date: no box")
     eq(child(ufRow, "kitn", "text", "text"), "Up to Date", "up to date: the cell reads Up to Date")
     local plainAt = child(ufRow, "kitn", "text", "point")
-    eq(type(plainAt) == "table" and plainAt[2] or nil, 8, "up to date: plain text starts 8 px into its cell, as a badge's text does")
+    eq(type(plainAt) == "table" and plainAt[2] or nil, 6, "up to date: plain text starts 6 px into its cell, as a badge's text does")
     local updaterHead = fontWith("KITNUI 2.2.0")
     local updaterHeadAt = updaterHead and rawget(updaterHead, "point")
-    eq(type(updaterHeadAt) == "table" and updaterHeadAt[2] or nil, 398, "Profile Update: the KitnUI head starts 8 px into its column")
+    eq(type(updaterHeadAt) == "table" and updaterHeadAt[2] or nil, 396, "Profile Update: the KitnUI head starts 6 px into its column")
+    eq(child(ufRow, "kitn", "_w"), 130, "Profile Update: the KitnUI cell keeps its 130 px")
     eq(slotLabel(1), "Restore previous", "up to date: Restore previous in slot 1")
     eq(slotLabel(2), nil, "up to date: and nothing beside it")
     ns.EUIUpdateState = realState
 
     -- The Modules page with a four-digit count: every badge stays inside its
-    -- column. Your copy (list x 185) ends before the KitnUI column (343), and
-    -- the KitnUI badge before Reset (478). The heads start 8 px into their
-    -- columns, on the line the cells' text starts on.
+    -- column. Your copy (list x 208, 140 wide) ends before the KitnUI column
+    -- (354), and the KitnUI badge (128 wide) before Reset (484). The heads
+    -- start 6 px into their columns, on the line the cells' text starts on.
     local realStringWidth = Frame.GetStringWidth
     Frame.GetStringWidth = function() return 200 end
     Frame.GetUnboundedStringWidth = function() return 200 end
@@ -576,15 +577,20 @@ do
     Frame.GetStringWidth, Frame.GetUnboundedStringWidth = realStringWidth, nil
     check(drew, "the Modules page draws a four-digit count", drawErr)
     eq(child(ufRow, "yours", "text", "text"), "Changed by You - 1228", "Modules: the Your copy cell reads the player's count")
+    local yoursAt, kitnAt = child(ufRow, "yours", "point"), child(ufRow, "kitn", "point")
+    eq(type(yoursAt) == "table" and yoursAt[4] or nil, 208, "Modules: the Your copy column starts at list x 208")
+    eq(type(kitnAt) == "table" and kitnAt[4] or nil, 354, "Modules: the KitnUI column starts at list x 354")
+    eq(child(ufRow, "yours", "_w"), 140, "Modules: the Your copy cell is 140 wide")
+    eq(child(ufRow, "kitn", "_w"), 128, "Modules: the KitnUI cell is 128 wide, 2 px short of Reset")
     local yoursW = child(ufRow, "yours", "badge", "width")
-    check(type(yoursW) == "number" and 185 + yoursW <= 343, "Modules: a long Your copy badge ends left of the KitnUI column", yoursW)
+    check(type(yoursW) == "number" and 208 + yoursW <= 354, "Modules: a long Your copy badge ends left of the KitnUI column", yoursW)
     local kitnW = child(ufRow, "kitn", "badge", "width")
-    check(type(kitnW) == "number" and 343 + kitnW <= 478, "Modules: a long KitnUI badge ends before Reset", kitnW)
+    check(type(kitnW) == "number" and 354 + kitnW <= 484, "Modules: a long KitnUI badge ends before Reset", kitnW)
     local yoursHead, modulesHead = fontWith("YOUR COPY"), fontWith("KITNUI 2.2.0")
     local yoursHeadAt = yoursHead and rawget(yoursHead, "point")
     local modulesHeadAt = modulesHead and rawget(modulesHead, "point")
-    eq(type(yoursHeadAt) == "table" and yoursHeadAt[2] or nil, 193, "Modules: the Your copy head starts 8 px into its column")
-    eq(type(modulesHeadAt) == "table" and modulesHeadAt[2] or nil, 351, "Modules: the KitnUI head starts 8 px into its column")
+    eq(type(yoursHeadAt) == "table" and yoursHeadAt[2] or nil, 214, "Modules: the Your copy head starts 6 px into its column")
+    eq(type(modulesHeadAt) == "table" and modulesHeadAt[2] or nil, 360, "Modules: the KitnUI head starts 6 px into its column")
 
     Timer.After, ns.EUIRowDiff, ns.EUIPageInputs = realAfter, realDiff, realInputs
     ns.EUIHideModuleList()
