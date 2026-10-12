@@ -435,6 +435,16 @@ do
         _G.C_Spell = { GetSpellName = function() return "Starfall" end }
         eq(lastNames.spec(102), "Balance Druid", "names: the spec reads <spec> <class>")
         eq(lastNames.spell(191034), "Starfall", "names: the spell reads its name")
+        local asked = 0
+        _G.GetSpecializationInfoByID = function() asked = asked + 1 end
+        _G.C_Spell = { GetSpellName = function() asked = asked + 1 end }
+        for _, id in ipairs({ 0, -5, 2147483648, 102.5 }) do
+            eq(lastNames.spec(id), nil, "names: an out-of-range spec ID reads no name")
+            eq(lastNames.spell(id), nil, "names: an out-of-range spell ID reads no name")
+        end
+        eq(asked, 0, "names: an out-of-range ID never reaches the game")
+        _G.GetSpecializationInfoByID = function() return 102, "Balance", "", 0, "DAMAGER", "DRUID", "Druid" end
+        _G.C_Spell = { GetSpellName = function() return "Starfall" end }
         _G.issecretvalue = function() return true end
         eq(lastNames.spec(102), nil, "names: a secret spec name is not used")
         eq(lastNames.spell(191034), nil, "names: a secret spell name is not used")
@@ -489,6 +499,10 @@ do
     _G.issecretvalue = nil
     check(drew, "the list draws when every measurement is secret", drawErr)
     eq(slotLabel(1), "Update Profile", "and its buttons draw")
+    local cellW = child(ufRow, "kitn", "_w")
+    check(type(cellW) == "number" and cellW > 16, "the KitnUI cell carries its width", cellW)
+    eq(child(ufRow, "kitn", "badge", "width"), cellW, "a secret text width gives the badge its cell's width")
+    eq(child(ufRow, "kitn", "badge", "height"), 18, "a secret list height gives rows room for full-height badges")
 
     -- While counting: the walk's steps wait for the next frame, so the page
     -- first draws with no counts.
