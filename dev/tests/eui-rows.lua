@@ -670,8 +670,8 @@ for _, g in ipairs(manyEntry.groups) do
 end
 eq(manyGroup and manyGroup.n, 500, "record: and every one in its group's total")
 eq(manyGroup and #manyGroup.items, 8, "record: but only the eight the tooltip shows are kept")
-eq(manyGroup and manyGroup.items[1], "s 001", "record: the first by name")
-eq(manyGroup and manyGroup.items[8], "s 008", "record: in order")
+eq(manyGroup and manyGroup.items[1], "s 001 (many)", "record: the first by name, with the key it sits under")
+eq(manyGroup and manyGroup.items[8], "s 008 (many)", "record: in order")
 
 -- The setup is work too: General's seeding scans every root key of both sides
 -- (an unknown root key is General's), and the held set is parsed path by path.
@@ -844,6 +844,25 @@ eq(item, "Custom accent color", "label: the accent color stem is named")
 group, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".bite", { id = TOP_BAR })
 eq(group, "General", "label: a switch state in KitnUI's folder keeps its old group")
 eq(item, "bite", "label: and its old item")
+
+-- The keys between a group and its setting stay with the item as context.
+_, item = ns.EUISettingLabel("addons." .. AB .. ".barPositions.MainBar.x", { id = AB })
+eq(item, "x (Action Bar 1)", "label: a middle key a table names reads by that name")
+group, item = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColors.[1]", { id = RB })
+eq(group, "Class Resource", "label: the group is unchanged")
+eq(item, "buff colors #1 (threshold specs #2)", "label: an index folds into the key it numbers")
+local firstEntry, secondEntry
+_, firstEntry = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[1].buffColorEnabled", { id = RB })
+_, secondEntry = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColorEnabled", { id = RB })
+eq(firstEntry, "buff color enabled (threshold specs #1)", "label: one entry's setting names its entry")
+check(firstEntry ~= secondEntry, "label: two entries' settings read apart", secondEntry)
+_, item = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColorEnabled", { id = RB },
+    { names = { ["addons." .. RB .. ".secondary.thresholdSpecs.[2]"] = "Balance" } })
+eq(item, "buff color enabled (Balance)", "label: a named entry reads by its name")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".someGroup.inner.deeper.leaf", { id = UF })
+eq(item, "leaf (inner, deeper)", "label: several middle keys, outermost first")
+_, item = ns.EUISettingLabel("addons." .. UF .. ".someList.[3]", { id = UF })
+eq(item, "#3", "label: an index under the group itself stays a position")
 
 -- The walk's lookups: one per ID, each charged one unit of the budget.
 do

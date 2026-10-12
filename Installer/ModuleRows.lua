@@ -439,10 +439,31 @@ local function topBarItem(parts)
     return item
 end
 
+-- The keys parts[from..to] between a group and its setting, outermost first:
+-- each reads by the name the walk found for it, a table name, its Unlock Mode
+-- label, or tidied, and an index folds into the key it numbers.
+local function labelContext(parts, from, to, unlock, names)
+    local out = {}
+    local j = from
+    while j <= to do
+        local key = parts[j]
+        if j < to and parts[j + 1]:match("^%[%d+%]$") then
+            out[#out + 1] = names[table.concat(parts, ".", 1, j + 1)] or (tidy(key) .. " " .. tidy(parts[j + 1]))
+            j = j + 2
+        else
+            out[#out + 1] = names[table.concat(parts, ".", 1, j)] or GROUP_NAMES[key] or unlock[key] or tidy(key)
+            j = j + 1
+        end
+    end
+    return out
+end
+
 -- (group, item) for one counted path. labels.unlock: element key -> Unlock
 -- Mode label; labels.names: list-entry path -> that entry's name field;
 -- labels.spec and labels.spell: the walk's name lookups. value: the setting's
--- own value, which names a Cooldown Manager list entry.
+-- own value, which names a Cooldown Manager list entry. The keys between the
+-- group and the setting follow the item as context: "x (Action Bar 1)",
+-- "buff colors #1 (threshold specs #2)".
 function ns.EUISettingLabel(path, row, labels, value)
     labels = labels or {}
     local unlock, names = labels.unlock or {}, labels.names or {}
@@ -469,7 +490,19 @@ function ns.EUISettingLabel(path, row, labels, value)
     end
     local last = #parts
     while last > i and CHANNELS[parts[last]] do last = last - 1 end
-    return group, names[table.concat(parts, ".", 1, last)] or tidy(parts[last])
+    local item = names[table.concat(parts, ".", 1, last)]
+    local contextEnd = last - 1
+    if not item then
+        if parts[last]:match("^%[%d+%]$") and last - 1 > i then
+            item = tidy(parts[last - 1]) .. " " .. tidy(parts[last])
+            contextEnd = last - 2
+        else
+            item = tidy(parts[last])
+        end
+    end
+    local context = labelContext(parts, i + 1, contextEnd, unlock, names)
+    if #context > 0 then item = item .. " (" .. table.concat(context, ", ") .. ")" end
+    return group, item
 end
 
 local TIP_GROUPS, TIP_ITEMS = 6, 8
