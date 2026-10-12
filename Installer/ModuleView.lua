@@ -20,12 +20,12 @@ local ROW_H_MAX, ROW_H_MIN = 26, 14
 -- the list ends 10 px above the action buttons.
 local LIST_TOP, LIST_BOTTOM = -116, 132
 local CONTENT_X, CONTENT_W = 200, 520
-local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 185, 330, 390
+local YOURS_X, KITN_X_MODULES, KITN_X_UPDATER = 185, 343, 390
 -- Each cell is as wide as its column's room, and its badge never grows past
 -- it: Your copy stops a gap short of the KitnUI column, and on the Modules
 -- page the KitnUI cell stops 4 px before Reset, shown on hover at the row's
 -- right edge. On the Profile Update page it runs to the list's edge.
-local COLUMN_GAP, RESET_W = 8, 50
+local COLUMN_GAP, RESET_W = 8, 42
 local YOURS_W = KITN_X_MODULES - YOURS_X - COLUMN_GAP
 local KITN_W_MODULES = CONTENT_W - KITN_X_MODULES - RESET_W - 4
 local KITN_W_UPDATER = CONTENT_W - KITN_X_UPDATER
@@ -54,24 +54,25 @@ local TEXT = {
     introCurrent = "Each part of EllesmereUI on its own.",
     introModulesUpdate = "Each part of EllesmereUI on its own. Tick what you want to take from KitnUI; the rest stays as you have it.",
     introModulesCurrent = "Each part of EllesmereUI on its own. Tick a skipped part to take its update. Hover a row to reset it to KitnUI's version.",
-    changesOne = "changes 1 setting",
-    changesMany = "changes %d settings",
-    noChanges = "no changes",
-    replaces = "replaces yours",
-    off = "off - Plater chosen",
-    waiting = "skipped - %d waiting",
-    upToDate = "up to date",
+    changesOne = "Changes 1 Setting",
+    changesMany = "Changes %d Settings",
+    noChanges = "No Changes",
+    replaces = "Replaces Yours",
+    off = "Off - Plater Chosen",
+    waiting = "Skipped - %d Waiting",
+    upToDate = "Up to Date",
     counting = "...",
-    checking = "checking...",
-    yours = "changed by you - %d",
-    asInstalled = "as installed",
-    differs = "differs",
-    matches = "matches",
-    reloadToCheck = "reload to check",
+    checking = "Checking...",
+    yours = "Changed by You - %d",
+    asInstalled = "As Installed",
+    differs = "Differs",
+    matches = "Matches",
+    reloadToCheck = "Reload to Check",
     refused = "-",
     tipTitle = "%s - changes %d settings",
     tipTitleOne = "%s - changes 1 setting",
     tipYours = "%s - %d changed by you",
+    tipDiffers = "%s - differs",
     tipSkipped = "Skipped in KitnUI %s",
     updateAll = "Update Profile",
     updateAllNoBase = "Update (replaces your changes)",
@@ -320,8 +321,10 @@ local function Cell(r, width)
 end
 
 -- A cell's text in its kind: on a badge sized to the text, or plain grey.
--- Both stay inside the cell: a text wider than its room is cut with an
--- ellipsis, so no badge reaches the next column.
+-- Either way the text starts BADGE_PAD into the cell, so plain text lines up
+-- with a badge's text and with the column head. Both stay inside the cell: a
+-- text wider than its room is cut with an ellipsis, so no badge reaches the
+-- next column.
 local function PaintCell(cell, text, kind)
     local t, badge = cell.text, cell.badge
     t:SetText(text)
@@ -341,8 +344,8 @@ local function PaintCell(cell, text, kind)
     else
         badge:Hide()
         t:SetTextColor(1, 1, 1, 0.62)
-        t:SetPoint("LEFT")
-        t:SetWidth(cell._w)
+        t:SetPoint("LEFT", BADGE_PAD, 0)
+        t:SetWidth(cell._w - 2 * BADGE_PAD)
         return
     end
     local room = cell._w - 2 * BADGE_PAD
@@ -398,7 +401,7 @@ local function BuildRow(i)
         local row = r.row
         local entry = row and view.yours and view.yours[row.id]
         if entry and entry.count > 0 and YoursText(row) ~= TEXT.reloadToCheck then
-            local title = entry.noBase and (row.label .. " - " .. TEXT.differs)
+            local title = entry.noBase and TEXT.tipDiffers:format(row.label)
                 or TEXT.tipYours:format(row.label, entry.count)
             ShowTip(cell, title, entry)
         end
@@ -511,7 +514,8 @@ local function BuildList()
     list.colModule:SetPoint("LEFT", 22, 0)
     list.colModule:SetText(TEXT.colModule)
     list.colYours = Font(list.head, 10, 0.55)
-    list.colYours:SetPoint("LEFT", YOURS_X, 0)
+    -- The status heads start on their column's text line, BADGE_PAD in.
+    list.colYours:SetPoint("LEFT", YOURS_X + BADGE_PAD, 0)
     list.colYours:SetText(TEXT.colYours)
     list.colKitn = Font(list.head, 10, 0.55)
 
@@ -573,7 +577,7 @@ local function DrawRows()
     local kitnW = modules and KITN_W_MODULES or KITN_W_UPDATER
     list.colYours:SetShown(modules)
     list.colKitn:ClearAllPoints()
-    list.colKitn:SetPoint("LEFT", kitnX, 0)
+    list.colKitn:SetPoint("LEFT", kitnX + BADGE_PAD, 0)
     list.colKitn:SetText(TEXT.colKitn:format(Version()))
     local above = 10 + Measure(list.intro:GetStringHeight(), INTRO_H_FALLBACK)
     list.head:ClearAllPoints()
