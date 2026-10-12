@@ -41,6 +41,10 @@ local BADGE_H, BADGE_PAD = 18, 6
 -- button narrows too, so the three fit the 520 px content column.
 local TICK_ALL_W, UPDATE_W_BESIDE_SWITCH = 100, 160
 local BACKING_FILL = { 0.03, 0.01, 0.02, 0.80 }
+-- The panel reaches this far past the heads and rows on each side. They sit
+-- this far right of the list's edge, so the panel starts in line with the
+-- intro, the band and the action buttons.
+local PANEL_INSET = 8
 -- The badges with a color of their own; "kitn" follows the accent and
 -- "amber" the warning amber, both read on each draw.
 local BADGES = {
@@ -371,12 +375,12 @@ end
 local function BuildRow(i)
     local r = CreateFrame("Button", nil, list)
     r.stripe = r:CreateTexture(nil, "BACKGROUND", nil, -1)
-    r.stripe:SetPoint("TOPLEFT", -8, 0)
-    r.stripe:SetPoint("BOTTOMRIGHT", 8, 0)
+    r.stripe:SetPoint("TOPLEFT", -PANEL_INSET, 0)
+    r.stripe:SetPoint("BOTTOMRIGHT", PANEL_INSET, 0)
     r.stripe:SetColorTexture(1, 1, 1, 0.035)
     r.hover = r:CreateTexture(nil, "BACKGROUND")
-    r.hover:SetPoint("TOPLEFT", -8, 0)
-    r.hover:SetPoint("BOTTOMRIGHT", 8, 0)
+    r.hover:SetPoint("TOPLEFT", -PANEL_INSET, 0)
+    r.hover:SetPoint("BOTTOMRIGHT", PANEL_INSET, 0)
     r.hover:SetColorTexture(1, 1, 1, 0.06)
     r.hover:Hide()
     -- Without the check-mark atlas the accent fill alone shows the tick.
@@ -482,7 +486,7 @@ local function BuildList()
     local warn, warnText = ns.WARN_AMBER, ns.WARN_TEXT
     list.notice = CreateFrame("Frame", nil, list)
     list.notice:SetPoint("TOPLEFT", list.intro, "BOTTOMLEFT", 0, -10)
-    list.notice:SetSize(CONTENT_W, NOTICE_MIN_H)
+    list.notice:SetSize(CONTENT_W + 2 * PANEL_INSET, NOTICE_MIN_H)
     local noticeFill = list.notice:CreateTexture(nil, "BACKGROUND")
     noticeFill:SetAllPoints()
     noticeFill:SetColorTexture(warn[1], warn[2], warn[3], 0.12)
@@ -493,7 +497,7 @@ local function BuildList()
     list.noticeText:SetTextColor(warnText[1], warnText[2], warnText[3], 1)
     list.noticeText:SetJustifyH("LEFT")
     list.noticeText:SetWordWrap(true)
-    list.noticeText:SetMaxLines(2)
+    list.noticeText:SetMaxLines(3)
     list.noticeText:SetPoint("LEFT", list.notice, "LEFT", 10, 0)
     list.splitButton = CreateFrame("Button", nil, list.notice)
     list.splitButton:SetSize(120, 20)
@@ -510,7 +514,8 @@ local function BuildList()
     list.noticeH = 0
 
     -- The dark panel behind the heads and rows, so they read on the art. It
-    -- sits at the list's own level, under the rows.
+    -- sits at the list's own level, under the rows, from the list's left edge
+    -- to PANEL_INSET past the rows' right edge.
     list.backing = CreateFrame("Frame", nil, list)
     list.backing:SetFrameLevel(list:GetFrameLevel())
     local backingFill = list.backing:CreateTexture(nil, "BACKGROUND")
@@ -556,7 +561,7 @@ local function DrawNotice()
     local first = splits[1]
     if not first then return end
     local T = ns.EUI_UPDATE_TEXT
-    local room = CONTENT_W - 10 - 4
+    local room = CONTENT_W + 2 * PANEL_INSET - 10 - 4
     if Tickable(first.target) then
         b._target = first.target.id
         local w = 80
@@ -575,7 +580,7 @@ local function DrawNotice()
     band:Show()
     local t = list.noticeText
     t:SetWidth(room)
-    t:SetText(T.split:format(first.child.label, first.target.label)
+    t:SetText(T.split:format(first.child.label, first.target.label, first.target.label, first.child.label)
         .. (#splits > 1 and T.splitMore:format(#splits - 1) or ""))
     list.noticeH = math.max(NOTICE_MIN_H, Measure(t:GetStringHeight(), NOTICE_LINE_H) + 10)
     band:SetHeight(list.noticeH)
@@ -595,10 +600,10 @@ local function DrawRows()
     local above = 10 + Measure(list.intro:GetStringHeight(), INTRO_H_FALLBACK)
     list.head:ClearAllPoints()
     if list.noticeH > 0 then
-        list.head:SetPoint("TOPLEFT", list.notice, "BOTTOMLEFT", 0, -NOTICE_GAP)
+        list.head:SetPoint("TOPLEFT", list.notice, "BOTTOMLEFT", PANEL_INSET, -NOTICE_GAP)
         above = above + list.noticeH + NOTICE_GAP
     else
-        list.head:SetPoint("TOPLEFT", list.intro, "BOTTOMLEFT", 0, -10)
+        list.head:SetPoint("TOPLEFT", list.intro, "BOTTOMLEFT", PANEL_INSET, -10)
     end
     if not view.inputs then
         list.head:Hide()
@@ -668,8 +673,8 @@ local function DrawRows()
         r:Show()
     end
     list.backing:ClearAllPoints()
-    list.backing:SetPoint("TOPLEFT", list.head, "TOPLEFT", -8, 6)
-    list.backing:SetPoint("BOTTOMRIGHT", list.head, "BOTTOMRIGHT", 8, y - 6)
+    list.backing:SetPoint("TOPLEFT", list.head, "TOPLEFT", -PANEL_INSET, 6)
+    list.backing:SetPoint("BOTTOMRIGHT", list.head, "BOTTOMRIGHT", PANEL_INSET, y - 6)
     if type(list.backingBorder) == "table" and list.backingBorder.SetColor then
         list.backingBorder:SetColor(accent[1], accent[2], accent[3], 0.16)
     end

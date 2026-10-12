@@ -413,7 +413,7 @@ do
     end
     ns.EUISplitLinks = function() return { { child = CDM, target = UF } } end
     ns.EUIRestorable = function() return "restore" end
-    ns.EUI_UPDATE_TEXT.split = "%s is placed against %s, which keeps yours."
+    ns.EUI_UPDATE_TEXT.split = "%s is anchored to %s. You're keeping your own %s, so %s may not line up."
     ns.EUI_UPDATE_TEXT.splitMore = " (+%d more)"
     W:Show()
 
@@ -422,7 +422,8 @@ do
     check(fontWith("KitnUI 2.2.0 changes 1 part of EllesmereUI. Everything is ticked; untick a part to keep it as you have it. Hover a count to see what changes."),
         "the intro reads one part at a count of one")
     check(fontWith("MODULE") and fontWith("KITNUI 2.2.0"), "the column heads are uppercase")
-    check(fontWith("Cooldown Manager is placed against Unit Frames, which keeps yours."), "the notice names the split pair")
+    check(fontWith("Cooldown Manager is anchored to Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up."),
+        "the notice names the split pair, the part keeping the player's copy twice")
     check(fontWith("Tick Unit Frames too"), "and offers to tick the part keeping the player's copy")
     eq(slotLabel(1), "Update Profile", "everything ticked: the update button first")
     eq(slotLabel(2), "Restore previous", "with Restore previous beside it")
@@ -495,6 +496,17 @@ do
         end
         return t
     end
+    -- The panel starts at the list's left edge, in line with the intro, the
+    -- band and the buttons: the heads, and the rows anchored to them, sit
+    -- 8 px inside it. The band is the panel's 536 px; its text has that less
+    -- 10 px before it, 8 px and the 80 px button after it, and 4 px at the end.
+    local rowAt = child(ufRow, "point")
+    local head = type(rowAt) == "table" and rowAt[2] or nil
+    local headAt = type(head) == "table" and rawget(head, "point") or nil
+    eq(type(headAt) == "table" and headAt[4] or nil, 8, "under the band, the heads and rows sit 8 px inside the panel")
+    local bandText = fontWith("Cooldown Manager is anchored to Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up.")
+    eq(bandText and rawget(bandText, "width"), 434, "the band's text takes the panel's width less its padding and the button")
+
     -- The stubs carry no C_Texture, as a client without the atlas.
     eq(child(ufRow, "box", "fill", "shown"), true, "a ticked box is filled")
     eq(child(ufRow, "box", "mark", "shown"), false, "and without the atlas shows no mark")
@@ -557,6 +569,10 @@ do
     local updaterHeadAt = updaterHead and rawget(updaterHead, "point")
     eq(type(updaterHeadAt) == "table" and updaterHeadAt[2] or nil, 396, "Profile Update: the KitnUI head starts 6 px into its column")
     eq(child(ufRow, "kitn", "_w"), 130, "Profile Update: the KitnUI cell keeps its 130 px")
+    local plainRowAt = child(ufRow, "point")
+    local plainHead = type(plainRowAt) == "table" and plainRowAt[2] or nil
+    local plainHeadAt = type(plainHead) == "table" and rawget(plainHead, "point") or nil
+    eq(type(plainHeadAt) == "table" and plainHeadAt[4] or nil, 8, "with no band, the heads and rows sit 8 px inside the panel")
     eq(slotLabel(1), "Restore previous", "up to date: Restore previous in slot 1")
     eq(slotLabel(2), nil, "up to date: and nothing beside it")
     ns.EUIUpdateState = realState
