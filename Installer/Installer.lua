@@ -472,10 +472,11 @@ local function InstallEUIProfile()
     end)
 end
 
--- The popup on screen, reached by name because ShowConfirmPopup returns
--- nothing. EllesmereUI rebuilds the popup under the same names whenever its
--- accent is applied, as an import does, and the globals keep the discarded
--- frames; the showing popup is then found under its dimmer, a child of UIParent.
+-- The popup on screen, reached by name because ShowConfirmPopup returns a
+-- request handle, not the frame. EllesmereUI rebuilds the popup under the
+-- same names whenever its accent is applied, as an import does, and the
+-- globals keep the discarded frames; the showing popup is then found under its
+-- dimmer, a child of UIParent.
 local function ShowingConfirmPopup()
     local popup = _G.EUIConfirmPopup
     if popup and popup.IsVisible and popup:IsVisible() then return popup end
@@ -512,6 +513,25 @@ local function GrowConfirmPopup()
     end
     grow()
     C_Timer.After(0, grow)
+end
+
+-- KitnUI's confirms are grouped lines, which read left-aligned. EllesmereUI
+-- centers the popup's message once, when it builds the popup, and sets the
+-- message's text on every show, its own confirms' included, even one shown
+-- over KitnUI's. So the message is hooked once to center on each new text,
+-- and KitnUI's left alignment goes on after its own show. A popup EllesmereUI
+-- rebuilds comes with a new message, which is hooked on its first use.
+-- Without the hook nothing would center the message again, so the message
+-- stays as drawn unless every piece is there.
+local function AlignConfirmLeft()
+    local popup = ShowingConfirmPopup()
+    local msg = popup and popup._msg
+    if not (msg and msg.SetJustifyH and msg.SetText and type(hooksecurefunc) == "function") then return end
+    if not msg._kitnCenters then
+        msg._kitnCenters = true
+        hooksecurefunc(msg, "SetText", function(m) m:SetJustifyH("CENTER") end)
+    end
+    msg:SetJustifyH("LEFT")
 end
 
 local function RedrawEUIPage()
@@ -578,7 +598,7 @@ ConfirmEUIUpdate = function(plan)
     EllesmereUI:ShowConfirmPopup({
         title = reset and T.resetTitle:format(plan.row.label) or "Update profile?",
         message = reset and ns.EUIResetText(plan) or ns.EUIConfirmText(plan),
-        confirmText = reset and "Reset" or (plan.noBase and "Update (replaces your changes)" or "Update"),
+        confirmText = reset and "Reset" or (plan.noBase and "Replace" or "Update"),
         cancelText = "Cancel",
         onConfirm = function()
             local taken = box.plan
@@ -588,6 +608,7 @@ ConfirmEUIUpdate = function(plan)
         -- Escape and a click outside fall back to this as well.
         onCancel = function() box.plan = nil end,
     })
+    AlignConfirmLeft()
     GrowConfirmPopup()
 end
 ns.EUIConfirmUpdate = ConfirmEUIUpdate

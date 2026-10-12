@@ -286,5 +286,75 @@ do
     EUI.ShowConfirmPopup, Timer.After = realShow, realAfter
 end
 
+---------------------------------------------------------------------------------
+-- The confirm's button and alignment
+---------------------------------------------------------------------------------
+
+ns.EUI_UPDATE_TEXT.resetTitle = "Reset %s?"
+ns.EUIResetText = function() return "reset" end
+ns.EUIConfirmUpdate({ kind = "update", noBase = true, inputs = {} })
+eq(popups[#popups].confirmText, "Replace", "a confirm with no install record reads Replace")
+ns.EUIConfirmUpdate({ kind = "update", noBase = false, inputs = {} })
+eq(popups[#popups].confirmText, "Update", "an update reads Update")
+ns.EUIConfirmUpdate({ kind = "reset", row = { label = "Unit Frames" }, inputs = {} })
+eq(popups[#popups].confirmText, "Reset", "a reset reads Reset")
+
+do
+    -- The popup's message, and a show that sets its text, as EllesmereUI's
+    -- does on every show, its own confirms' included.
+    local msg = { justify = "CENTER" }
+    function msg:SetJustifyH(j) self.justify = j end
+    function msg:SetText(text) self.text = text end
+    local hooks = 0
+    local realHook = _G.hooksecurefunc
+    _G.hooksecurefunc = function(t, name, fn)
+        hooks = hooks + 1
+        local orig = t[name]
+        t[name] = function(...)
+            orig(...)
+            fn(...)
+        end
+    end
+    local EUI = _G.EllesmereUI
+    local realShow = EUI.ShowConfirmPopup
+    EUI.ShowConfirmPopup = function(self, opts)
+        realShow(self, opts)
+        local current = _G.EUIConfirmPopup
+        if current and current._msg and current._msg.SetText then current._msg:SetText(opts.message) end
+    end
+    local popup = { _msg = msg }
+    function popup:IsVisible() return true end
+    _G.EUIConfirmPopup = popup
+    ns.EUIConfirmUpdate(newPlan("aligned"))
+    eq(msg.justify, "LEFT", "a confirm's message is left-aligned while it shows")
+    EUI:ShowConfirmPopup({ message = "theirs" })
+    eq(msg.justify, "CENTER", "an EllesmereUI confirm shown over it reads centered")
+    ns.EUIConfirmUpdate(newPlan("aligned again"))
+    eq(msg.justify, "LEFT", "a second confirm is left-aligned too")
+    eq(hooks, 1, "with the message hooked once")
+    popups[#popups].onCancel()
+    EUI:ShowConfirmPopup({ message = "after a close" })
+    eq(msg.justify, "CENTER", "and EllesmereUI's next confirm after a close reads centered")
+
+    -- A message that cannot be hooked could never be centered again, so it is
+    -- left as EllesmereUI drew it.
+    local bare = { justify = "CENTER" }
+    function bare:SetJustifyH(j) self.justify = j end
+    popup = { _msg = bare }
+    function popup:IsVisible() return true end
+    _G.EUIConfirmPopup = popup
+    ns.EUIConfirmUpdate(newPlan("no SetText"))
+    eq(bare.justify, "CENTER", "a message that cannot be hooked keeps its centering")
+    popups[#popups].onCancel()
+    popup = {}
+    function popup:IsVisible() return true end
+    _G.EUIConfirmPopup = popup
+    local shownBare = pcall(ns.EUIConfirmUpdate, newPlan("no message"))
+    check(shownBare, "a popup without its message field shows without an error")
+    popups[#popups].onCancel()
+    _G.EUIConfirmPopup = nil
+    EUI.ShowConfirmPopup, _G.hooksecurefunc = realShow, realHook
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

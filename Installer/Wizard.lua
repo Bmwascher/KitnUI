@@ -43,6 +43,12 @@ local RASTA_AMBER = { 0.976, 0.549, 0.122 }
 -- its reach.
 ns.RASTA_AMBER = RASTA_AMBER
 
+-- The part list's warning amber: fills and borders, and a lighter one for
+-- text. Kept apart from the accent, which is an amber of its own on the
+-- alternate look.
+ns.WARN_AMBER = { 0.95, 0.76, 0.31 }
+ns.WARN_TEXT = { 0.96, 0.80, 0.40 }
+
 -- Every painted highlight reads this rather than either constant. Resolved once
 -- when the window is built, which is always after login: the look is keyed on
 -- the character name, which cannot be read before then. It stays the brand colour
@@ -626,6 +632,12 @@ function W:StyleButton(btn, text, fontSize, onClick)
     return bg, brd, lbl
 end
 
+-- The accent in force, for a page that paints with it on each draw instead of
+-- registering a painter: a theme swap redraws the page.
+function W:Accent()
+    return accent
+end
+
 -- Resting and hover colours for one emphasis, as {r, g, b, a} sets. Derived on
 -- each call rather than held in a table at file scope, because the accent is not
 -- resolved until Build.
@@ -645,6 +657,11 @@ local function variantColours(variant)
         return { bg  = { P[1], P[2], P[3], 0.22 }, bgOn  = { P[1], P[2], P[3], 0.34 },
                  brd = { P[1], P[2], P[3], 1 },    brdOn = { P[1], P[2], P[3], 1 },
                  txt = { 1, 1, 1, 1 },             txtOn = { 1, 1, 1, 1 } }
+    elseif variant == "warn" then
+        local A, T = ns.WARN_AMBER, ns.WARN_TEXT
+        return { bg  = { 0, 0, 0, 0.40 },          bgOn  = { A[1], A[2], A[3], 0.16 },
+                 brd = { A[1], A[2], A[3], 0.6 },  brdOn = { A[1], A[2], A[3], 0.9 },
+                 txt = { T[1], T[2], T[3], 0.9 },  txtOn = { T[1], T[2], T[3], 1 } }
     elseif variant == "done" then
         return { bg  = { 1, 1, 1, 0.04 },          bgOn  = { D[1], D[2], D[3], 0.14 },
                  brd = { D[1], D[2], D[3], 0.7 },  brdOn = { D[1], D[2], D[3], 1 },
@@ -663,8 +680,8 @@ local function paintButton(btn, bg, brd, txt)
     if btn._lbl then btn._lbl:SetTextColor(txt[1], txt[2], txt[3], txt[4]) end
 end
 
--- Retint a styled button to one of five emphases (primary / selectable / selected
--- / done / ghost). MakeStyledButton installs hover scripts that repaint from the
+-- Retint a styled button to one of six emphases (primary / selectable / selected
+-- / warn / done / ghost). MakeStyledButton installs hover scripts that repaint from the
 -- colour array it captured, which erases the variant on the first mouse-over, so
 -- the variant owns those scripts instead. Safe to call twice.
 function W:SetButtonVariant(btn, variant)
