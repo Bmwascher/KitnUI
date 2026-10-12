@@ -698,14 +698,14 @@ local function DrawButtons()
     local noBase = view.inputs.O == nil
     local width, offerTickAll = 200, false
     if view.state == "current" then
-        W:SetOption(1, TEXT.takeSkipped:format(ticked), OnUpdateClick, 12)
+        W:SetOption(1, TEXT.takeSkipped:format(ticked), OnUpdateClick, 14)
         SetVariant(f.Option1, ticked > 0 and "primary" or "ghost")
     elseif changed == 0 or (view.mode == "updater" and ticked == changed) then
-        W:SetOption(1, noBase and TEXT.updateAllNoBase or TEXT.updateAll, OnUpdateClick, 12)
+        W:SetOption(1, noBase and TEXT.updateAllNoBase or TEXT.updateAll, OnUpdateClick, 14)
         SetVariant(f.Option1, "primary")
         if noBase then width = 240 end
     else
-        W:SetOption(1, (noBase and TEXT.replaceTicked or TEXT.updateTicked):format(ticked), OnUpdateClick, 12)
+        W:SetOption(1, (noBase and TEXT.replaceTicked or TEXT.updateTicked):format(ticked), OnUpdateClick, 14)
         SetVariant(f.Option1, "primary")
         offerTickAll = view.mode == "updater"
     end
