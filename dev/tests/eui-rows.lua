@@ -848,6 +848,8 @@ eq(item, "bite", "label: and its old item")
 -- The keys between a group and its setting stay with the item as context.
 _, item = ns.EUISettingLabel("addons." .. AB .. ".barPositions.MainBar.x", { id = AB })
 eq(item, "x (Action Bar 1)", "label: a middle key a table names reads by that name")
+_, item = ns.EUISettingLabel("addons." .. AB .. ".barPositions.MainBar.[2].x", { id = AB })
+eq(item, "x (Action Bar 1 #2)", "label: an indexed middle key keeps its table name")
 group, item = ns.EUISettingLabel("addons." .. RB .. ".secondary.thresholdSpecs.[2].buffColors.[1]", { id = RB })
 eq(group, "Class Resource", "label: the group is unchanged")
 eq(item, "buff colors #1 (threshold specs #2)", "label: an index folds into the key it numbers")

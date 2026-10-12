@@ -447,11 +447,12 @@ local function labelContext(parts, from, to, unlock, names)
     local j = from
     while j <= to do
         local key = parts[j]
+        local name = names[table.concat(parts, ".", 1, j)] or GROUP_NAMES[key] or unlock[key] or tidy(key)
         if j < to and parts[j + 1]:match("^%[%d+%]$") then
-            out[#out + 1] = names[table.concat(parts, ".", 1, j + 1)] or (tidy(key) .. " " .. tidy(parts[j + 1]))
+            out[#out + 1] = names[table.concat(parts, ".", 1, j + 1)] or (name .. " " .. tidy(parts[j + 1]))
             j = j + 2
         else
-            out[#out + 1] = names[table.concat(parts, ".", 1, j)] or GROUP_NAMES[key] or unlock[key] or tidy(key)
+            out[#out + 1] = name
             j = j + 1
         end
     end
