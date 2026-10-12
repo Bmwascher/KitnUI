@@ -412,17 +412,77 @@ local function AccentUsesDefault()
     return ns.EUISettings().accentUseDefault ~= false
 end
 
--- The colour the master switch forces right now. Falls back to the shipped pink
--- whenever the stored custom colour is not three numbers, so a hand-edited saved
--- variable cannot make SetAccentColor throw.
+-- Colour equality on 8-BIT values, never on the raw doubles. The host's picker
+-- builds colours out of hex, so "8C" becomes 140/255, which is 0.5490196... and
+-- is NOT equal to the 0.549 literal above, and it round-trips everything through
+-- HSV besides.
+local function Byte(v)
+    return math.floor((tonumber(v) or 0) * 255 + 0.5)
+end
+
+local function IsRastaAmber(r, g, b)
+    return Byte(r) == Byte(RASTA_R)
+       and Byte(g) == Byte(RASTA_G)
+       and Byte(b) == Byte(RASTA_B)
+end
+
+-- KitnEssentials' theme accent, through the two methods it publishes for this.
+-- Nil when KitnEssentials is missing or older than they are.
+local function KEApi()
+    local KE = _G.KitnEssentials
+    if type(KE) == "table" and type(KE.GetThemeAccent) == "function"
+       and type(KE.RegisterThemeCallback) == "function" then
+        return KE
+    end
+end
+
+local function KEAccent()
+    local KE = KEApi()
+    if not KE then return nil end
+    local ok, r, g, b = pcall(KE.GetThemeAccent, KE)
+    if ok and type(r) == "number" and type(g) == "number" and type(b) == "number" then
+        return r, g, b
+    end
+end
+
+-- A saved choice wins. Without one, the two older keys decide exactly as they
+-- did before the choice existed: pink unless switched off, and a custom colour
+-- that is byte-identically the amber reads as the amber.
+local function AccentSource()
+    local s = ns.EUISettings()
+    local src = s.accentSource
+    if src == "pink" or src == "rasta" or src == "ke" or src == "custom" then return src end
+    if AccentUsesDefault() then return "pink" end
+    local c = s.accentCustom
+    if type(c) == "table" and IsRastaAmber(c.r, c.g, c.b) then return "rasta" end
+    return "custom"
+end
+
+-- The colour the master switch forces right now. Nil when Match KitnEssentials
+-- has nothing to read, so the accent stays as it is rather than jumping to pink.
+-- A custom colour that is not three numbers falls back to the shipped pink, so a
+-- hand-edited saved variable cannot make SetAccentColor throw.
 local function AccentColor()
-    if not AccentUsesDefault() then
+    local src = AccentSource()
+    if src == "rasta" then return RASTA_R, RASTA_G, RASTA_B end
+    if src == "ke" then return KEAccent() end
+    if src == "custom" then
         local c = ns.EUISettings().accentCustom
         if type(c) == "table" and type(c.r) == "number"
            and type(c.g) == "number" and type(c.b) == "number" then
             return c.r, c.g, c.b
         end
     end
+    return ACCENT_R, ACCENT_G, ACCENT_B
+end
+
+-- What the swatch shows: the forced colour, or the live accent when there is
+-- none to force.
+local function ShownAccentColor()
+    local r, g, b = AccentColor()
+    if r then return r, g, b end
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.GetAccentColor then return EUI.GetAccentColor() end
     return ACCENT_R, ACCENT_G, ACCENT_B
 end
 
@@ -477,8 +537,9 @@ local function ApplyAccentColor(claiming)
                 saved.prev = { custom = current.custom, useClass = current.useClass }
             end
         end
-        if EUI.SetAccentColor then
-            EUI.SetAccentColor(AccentColor())
+        local r, g, b = AccentColor()
+        if r and EUI.SetAccentColor then
+            EUI.SetAccentColor(r, g, b)
         end
     elseif saved.prev ~= nil then
         -- ResetAccentColor is deliberately NOT used here: it clears the legacy
@@ -620,38 +681,6 @@ local function AccentColorHeld()
     return saved ~= nil and saved.prev ~= nil
 end
 
--- Colour equality on 8-BIT values, never on the raw doubles. The picker builds
--- colours out of hex -- EllesmereUI_Widgets.lua:2271 turns "8C" into 140/255,
--- which is 0.5490196... and is NOT equal to the 0.549 literal above -- and it
--- round-trips everything through HSV besides. Comparing doubles would leave "Use
--- KitnUI Pink" reading off under an accent that is byte-identically KitnUI pink,
--- which is the exact label-versus-reality problem the switch was renamed to avoid.
-local function Byte(v)
-    return math.floor((tonumber(v) or 0) * 255 + 0.5)
-end
-
-local function IsKitnPink(r, g, b)
-    return Byte(r) == Byte(ACCENT_R)
-       and Byte(g) == Byte(ACCENT_G)
-       and Byte(b) == Byte(ACCENT_B)
-end
-
-local function IsRastaAmber(r, g, b)
-    return Byte(r) == Byte(RASTA_R)
-       and Byte(g) == Byte(RASTA_G)
-       and Byte(b) == Byte(RASTA_B)
-end
-
--- Whether the stored colour IS the named amber, rather than a separate stored
--- switch. One boolean already decides pink against custom, so a second switch
--- would be a second source of truth for the same question.
-local function AccentUsesRasta()
-    if AccentUsesDefault() then return false end
-    local c = ns.EUISettings().accentCustom
-    if type(c) ~= "table" then return false end
-    return IsRastaAmber(c.r, c.g, c.b)
-end
-
 -- Said by both setters whenever a colour change stored fine but could not reach
 -- the screen. Every forcing control in this addon says when it refused; a colour
 -- row that quietly does nothing is the same defect wearing a different hat.
@@ -672,35 +701,52 @@ local function WarnUnheld()
     print(ns.title .. ": Color saved, but KitnUI is not holding the accent for this profile, so nothing changed on screen. Turn KitnUI Accent Coloring off and on to take it.")
 end
 
-local function SetAccentUsesDefault(v)
-    ns.EUISettings().accentUseDefault = v and true or false
+-- Every write goes to the saved choice, so a pick made once stops the older keys
+-- from deciding.
+local function SetAccentSource(v)
+    ns.EUISettings().accentSource = v
     ApplyAccentColor(false)
     WarnUnheld()
 end
 
+-- The swatch is live only on Custom, so a pick here is always a custom colour.
+-- Replace the whole table, never write into it. See the DEFAULTS comment in
+-- Core.lua: an in-place write into a table-valued default is the one shape that
+-- does not survive a logout here.
 local function SetAccentCustom(r, g, b)
     local s = ns.EUISettings()
-
-    -- The switch above MIRRORS whether the chosen colour is KitnUI pink, rather
-    -- than being turned off one-way by any pick. The host's colour picker calls
-    -- this setter on EVERY preview change and then AGAIN with the click-time
-    -- colour when the user presses Cancel (EllesmereUI_Widgets.lua:2598-2617), so
-    -- a one-way flip would leave the switch reading off after a cancel that had
-    -- already put the colour back to pink.
-    if IsKitnPink(r, g, b) then
-        -- Pink chosen: do NOT overwrite the remembered custom colour with it, or
-        -- switching the row above off again would hand back pink and look dead.
-        s.accentUseDefault = true
-    else
-        -- Replace the whole table, never write into it. See the DEFAULTS comment
-        -- in Core.lua: an in-place write into a table-valued default is the one
-        -- shape that does not survive a logout here.
-        s.accentCustom = { r = r, g = g, b = b }
-        s.accentUseDefault = false
-    end
-
+    s.accentCustom = { r = r, g = g, b = b }
+    s.accentSource = "custom"
     ApplyAccentColor(false)
     WarnUnheld()
+end
+
+-- Following KitnEssentials. Registered once, and only after Match KitnEssentials
+-- is in use, so nobody else pays for it; the callback checks the choice on every
+-- call because KitnEssentials offers no way to unregister. A theme picker drag
+-- refreshes on every tick, so a burst settles into one repaint.
+local KE_SETTLE = 0.1
+local keFollowing, kePending = false, false
+
+local function OnKEThemeChanged()
+    if kePending or not (AccentEnabled() and AccentSource() == "ke") then return end
+    kePending = true
+    C_Timer.After(KE_SETTLE, function()
+        kePending = false
+        if not (AccentEnabled() and AccentSource() == "ke") then return end
+        ApplyAccentColor(false)
+        if _G.EllesmereUI and EllesmereUI.RefreshPage then
+            pcall(EllesmereUI.RefreshPage, EllesmereUI)
+        end
+    end)
+end
+
+local function FollowKE()
+    if keFollowing or AccentSource() ~= "ke" then return end
+    local KE = KEApi()
+    if not KE then return end
+    keFollowing = true
+    pcall(KE.RegisterThemeCallback, KE, OnKEThemeChanged)
 end
 
 -- Wrapped rather than registered bare. A bare registration would hand the
@@ -715,6 +761,7 @@ end
 -- at login, which is exactly the set of moments the answer can change.
 ns.EUIRegisterReapply(function()
     warnedUnheld = false
+    FollowKE()
     ApplyAccent(false)
 end)
 
@@ -848,59 +895,39 @@ ns.EUIPages["General"] = function(parent, yOffset)
 
     -- None of the colour-choice controls below claims anything, so none needs a
     -- combat guard, unlike the look and the resource bar. Between them they write
-    -- the two accent selection keys and ask the host to repaint its own frames;
-    -- nothing here is protected and nothing is deferred, so there is no state to
-    -- get out of step.
+    -- the accent choice and ask the host to repaint its own frames; nothing here
+    -- is protected and nothing is deferred, so there is no state to get out of
+    -- step.
     --
-    -- The two named colours share ONE row because they are alternatives, not
-    -- independent switches: each turns the other off. Stacked full width they
-    -- read as a list and pushed the swatch they both write further down. A dual
-    -- half registers the same widget refresh a full-width toggle does, in the
-    -- toggle branch of the host's dual-row factory, so each still redraws the
-    -- other.
-    local accentChoiceRow
-    accentChoiceRow, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Use KitnUI Pink",
-          tooltip = "On, the accent is KitnUI pink. Off, it is the color in the swatch below, which starts white until you pick one. Turning this off does not change which settings the accent is scoped to.",
-          getValue = AccentUsesDefault,
-          setValue = function(v)
-              SetAccentUsesDefault(v)
-              -- Unforced: the swatch below redraws through its registered widget
-              -- refresh, and no ownership sentence changed.
-              if _G.EllesmereUI and EllesmereUI.RefreshPage then
-                  pcall(EllesmereUI.RefreshPage, EllesmereUI)
-              end
-          end },
-        -- Reads the stored colour rather than a switch of its own, so picking
-        -- amber by hand in the swatch below lights it up too.
-        { type = "toggle", text = "Use Rasta Amber",
-          tooltip = "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same color you could pick by hand in the swatch below, offered by name.",
-          getValue = AccentUsesRasta,
-          setValue = function(v)
-              if v then
-                  SetAccentCustom(RASTA_R, RASTA_G, RASTA_B)
-              else
-                  SetAccentUsesDefault(true)
-              end
-              if _G.EllesmereUI and EllesmereUI.RefreshPage then
-                  pcall(EllesmereUI.RefreshPage, EllesmereUI)
-              end
-          end });                                                                  y = y - h
+    -- Match KitnEssentials is offered only where it can work, unless it is
+    -- already the saved choice: the dropdown has no way to grey out one entry,
+    -- and a saved choice missing from the list would show a blank button.
+    local sourceOrder = { "pink", "rasta" }
+    if KEApi() or AccentSource() == "ke" then sourceOrder[#sourceOrder + 1] = "ke" end
+    sourceOrder[#sourceOrder + 1] = "custom"
 
-    -- Shows the colour that is ACTIVE, not the one that is stored: pink while the
-    -- pink switch is on, the custom colour while it is off. Showing the stored
-    -- custom colour under a pink accent would put green in the swatch and pink on
-    -- screen.
+    local sourceRow
+    sourceRow, h = W:Dropdown(parent, "Accent Source", y,
+        { pink = "KitnUI Pink", rasta = "Rasta Amber", ke = "Match KitnEssentials", custom = "Custom" },
+        AccentSource,
+        function(v)
+            SetAccentSource(v)
+            FollowKE()
+            -- Forced: the swatch below is live only on Custom, and its veil is
+            -- built with the page.
+            ns.EUIRebuildForOwnership()
+        end,
+        sourceOrder,
+        "Where the accent color comes from. Rasta Amber is the warm amber the Rasta artwork is built around. Match KitnEssentials takes KitnEssentials' theme color and follows it when that changes; it is listed once a KitnEssentials version that shares its theme color is installed. Custom uses the swatch below.");
+                                                                                   y = y - h
+
+    -- Shows the colour that is ACTIVE, not the one that is stored, so the swatch
+    -- always matches the screen whichever source is chosen.
     local colorRow
     colorRow, h = W:ColorPicker(parent, "Accent Color", y,
-        AccentColor,
+        ShownAccentColor,
         function(r, g, b)
             SetAccentCustom(r, g, b)
-            -- Unforced, like the switches above, even though this ALSO moves
-            -- "Use KitnUI Pink". That switch redraws itself through the widget
-            -- refresh its dual-row half registers, described above the row, so the
-            -- fast path moves it for us. Nothing structural changes here: the veils
-            -- depend on the MASTER, which this cannot touch.
             if _G.EllesmereUI and EllesmereUI.RefreshPage then
                 pcall(EllesmereUI.RefreshPage, EllesmereUI)
             end
@@ -909,10 +936,12 @@ ns.EUIPages["General"] = function(parent, yOffset)
 
     -- The colour choice is meaningless until the master is on, so it is dimmed
     -- and made dead rather than hidden: a user who has not turned the master on
-    -- should still see that a colour choice exists. One veil per row, and the
-    -- shared row is one row.
+    -- should still see that a colour choice exists. With the master on, the
+    -- swatch takes input only on Custom and otherwise just shows the colour.
     if not AccentEnabled() then
-        Veil(accentChoiceRow)
+        Veil(sourceRow)
+        Veil(colorRow)
+    elseif AccentSource() ~= "custom" then
         Veil(colorRow)
     end
 
