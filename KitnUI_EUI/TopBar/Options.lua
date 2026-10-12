@@ -203,7 +203,7 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
     -- already checks tbTooltips; this is only the switch that sets it.
     row, h = W:DualRow(parent, y,
         { type = "toggle", text = "Use A Custom Accent",
-          tooltip = "Uses a fixed colour for the bar's accent line instead of following EllesmereUI's own accent.",
+          tooltip = "Uses a fixed color for the bar's accent line instead of following EllesmereUI's own accent.",
           getValue = function() return ns.TopBar.Get("tbAccentOverride", false) end,
           setValue = function(v)
               if v and EllesmereUI and EllesmereUI.GetAccentColor then

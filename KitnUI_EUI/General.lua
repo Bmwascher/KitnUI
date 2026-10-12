@@ -874,7 +874,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
         -- Reads the stored colour rather than a switch of its own, so picking
         -- amber by hand in the swatch below lights it up too.
         { type = "toggle", text = "Use Rasta Amber",
-          tooltip = "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same colour you could pick by hand in the swatch below, offered by name.",
+          tooltip = "On, the accent is the warm amber the Rasta artwork is built around. Off, it goes back to KitnUI pink. This is the same color you could pick by hand in the swatch below, offered by name.",
           getValue = AccentUsesRasta,
           setValue = function(v)
               if v then
@@ -930,7 +930,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "Darkens the class resource bar on its own, without changing the unit frames or raid frames.",
             "darkresourcegap",
             function() return DarkModeState(IsResourceBars) == true end,
-            "the colour of the gaps between its segments"));
+            "the color of the gaps between its segments"));
                                                                                    y = y - h
 
     _, h = W:Toggle(parent, "Dark Cast Bar", y,
