@@ -747,6 +747,9 @@ end)
 -- anyway: losing the border must cost a border, not the page.
 local function Veil(row, text)
     if not row then return end
+    -- The search's hidden build hands back stand-in rows that cannot parent a
+    -- frame, and a veil holds nothing to index.
+    if EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild() then return end
 
     local veil = CreateFrame("Frame", nil, row)
     veil:SetAllPoints(row)
