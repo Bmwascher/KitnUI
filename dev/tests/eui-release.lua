@@ -411,9 +411,10 @@ do
         for id, n in pairs(counts) do result[id] = { count = n, groups = {} } end
         return { prepared = true, units = 0, result = result, Step = function() return true end }
     end
-    ns.EUISplitLinks = function() return { { child = CDM, target = UF } } end
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = true } } end
     ns.EUIRestorable = function() return "restore" end
     ns.EUI_UPDATE_TEXT.split = "%s is anchored to %s. You're keeping your own %s, so %s may not line up."
+    ns.EUI_UPDATE_TEXT.splitSize = "%s is sized to match %s. You're keeping your own %s, so %s may not line up."
     ns.EUI_UPDATE_TEXT.splitMore = " (+%d more)"
     W:Show()
 
@@ -506,6 +507,17 @@ do
     eq(type(headAt) == "table" and headAt[4] or nil, 8, "under the band, the heads and rows sit 8 px inside the panel")
     local bandText = fontWith("Cooldown Manager is anchored to Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up.")
     eq(bandText and rawget(bandText, "width"), 434, "the band's text takes the panel's width less its padding and the button")
+
+    -- A pair linked only by a size match reads as one; the anchored pair is
+    -- drawn again after it, so the checks below see the same page.
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = false } } end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws a size-only split", drawErr)
+    check(fontWith("Cooldown Manager is sized to match Unit Frames. You're keeping your own Unit Frames, so Cooldown Manager may not line up."),
+        "the notice names a size-only link as a size match")
+    ns.EUISplitLinks = function() return { { child = CDM, target = UF, anchored = true } } end
+    drew, drawErr = pcall(ns.EUIUpdaterPage)
+    check(drew, "the list draws the anchored split again", drawErr)
 
     -- The stubs carry no C_Texture, as a client without the atlas.
     eq(child(ufRow, "box", "fill", "shown"), true, "a ticked box is filled")

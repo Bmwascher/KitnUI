@@ -1277,6 +1277,18 @@ eq(linkReset and linkReset.warnLinks, true, "reset: the removed link is noticed"
 check(linkReset and ns.EUIResetText(linkReset):find(ns.EUI_UPDATE_TEXT.links, 1, true),
     "reset: the removed link is named in the confirm")
 
+-- The reset confirm's split note names the link's kind.
+local function splitPlan(anchored)
+    return { row = { id = F, label = F }, yours = 0,
+        splits = { { child = { label = "Resource Bars" }, target = { label = "Unit Frames" }, anchored = anchored } } }
+end
+local sizeSplitText = ns.EUIResetText(splitPlan(false))
+check(sizeSplitText:find("Resource Bars is sized to match Unit Frames. You're keeping your own Unit Frames, so Resource Bars may not line up.", 1, true),
+    "reset: a size-only split reads as a size match", sizeSplitText)
+local anchorSplitText = ns.EUIResetText(splitPlan(true))
+check(anchorSplitText:find("Resource Bars is anchored to Unit Frames. You're keeping your own Unit Frames, so Resource Bars may not line up.", 1, true),
+    "reset: an anchored split reads as an anchor", anchorSplitText)
+
 freshInstall()
 db.profiles.KitnUI.addons[F].x = 5
 ns.EUIStartDecodes()

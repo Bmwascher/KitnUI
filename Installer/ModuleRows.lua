@@ -1081,7 +1081,9 @@ end
 ---------------------------------------------------------------------------------
 
 -- Every link whose child's row is ticked and whose target's row keeps the
--- player's copy, one per pair of rows, in row order.
+-- player's copy, one per pair of rows, in row order. A pair is anchored when
+-- any of its links comes from the anchors map; a pair linked only by a size
+-- match (widthMatch, heightMatch) is not, whichever map is walked first.
 function ns.EUISplitLinks(N, rows, ticked, keyToFolder)
     local ul = isTable(N) and N.unlockLayout
     if not isTable(ul) then return {} end
@@ -1092,18 +1094,22 @@ function ns.EUISplitLinks(N, rows, ticked, keyToFolder)
     end
     local out, seen = {}, {}
     for _, map in ipairs(ns.EUI_LAYOUT_MAPS) do
+        local anchors = map == "anchors"
         for child, entry in pairs(isTable(ul[map]) and ul[map] or {}) do
             local target = entry
-            if map == "anchors" then target = isTable(entry) and entry.target or nil end
+            if anchors then target = isTable(entry) and entry.target or nil end
             local childRow = rowById[keyToFolder[child]]
             local targetRow = type(target) == "string" and rowById[keyToFolder[target]] or nil
             if childRow and targetRow and childRow ~= targetRow and ticked[childRow.id]
                 and not ticked[targetRow.id] and not targetRow.off then
                 local pair = childRow.id .. "\31" .. targetRow.id
-                if not seen[pair] then
-                    seen[pair] = true
-                    out[#out + 1] = { child = childRow, target = targetRow }
+                local split = seen[pair]
+                if not split then
+                    split = { child = childRow, target = targetRow, anchored = false }
+                    seen[pair] = split
+                    out[#out + 1] = split
                 end
+                if anchors then split.anchored = true end
             end
         end
     end

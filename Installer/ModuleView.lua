@@ -580,7 +580,8 @@ local function DrawNotice()
     band:Show()
     local t = list.noticeText
     t:SetWidth(room)
-    t:SetText(T.split:format(first.child.label, first.target.label, first.target.label, first.child.label)
+    t:SetText((first.anchored and T.split or T.splitSize):format(first.child.label, first.target.label,
+        first.target.label, first.child.label)
         .. (#splits > 1 and T.splitMore:format(#splits - 1) or ""))
     list.noticeH = math.max(NOTICE_MIN_H, Measure(t:GetStringHeight(), NOTICE_LINE_H) + 10)
     band:SetHeight(list.noticeH)

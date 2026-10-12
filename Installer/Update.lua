@@ -70,8 +70,10 @@ T.resetYoursOne = "Your 1 change to %s will be replaced."
 T.resetNone = "You have no changes to %s."
 T.resetOthers = "Your other parts are not touched."
 T.resetCaptured = "Your Spec Overrides also hold settings for %s; they apply again when you change spec."
--- Formatted with the child, the target, the target and the child.
+-- Formatted with the child, the target, the target and the child: T.split for
+-- a pair with an anchor link, T.splitSize for one linked only by a size match.
 T.split = "%s is anchored to %s. You're keeping your own %s, so %s may not line up."
+T.splitSize = "%s is sized to match %s. You're keeping your own %s, so %s may not line up."
 T.splitMore = " (+%d more)"
 T.restoreNow = "Restore previous puts back your profile as it is now."
 T.restoreEarlier = "Restore previous puts back the backup taken earlier in this visit, undoing every change since then."
@@ -898,8 +900,8 @@ function ns.EUIResetText(plan)
     if plan.captured then notes[#notes + 1] = paint(C_QUIET, T.resetCaptured:format(label)) end
     local first = plan.splits[1]
     if first then
-        notes[#notes + 1] = paint(C_COUNT, T.split:format(first.child.label, first.target.label,
-            first.target.label, first.child.label)
+        notes[#notes + 1] = paint(C_COUNT, (first.anchored and T.split or T.splitSize):format(first.child.label,
+            first.target.label, first.target.label, first.child.label)
             .. (#plan.splits > 1 and T.splitMore:format(#plan.splits - 1) or ""))
     end
     if plan.row.id == "overrides" then notes[#notes + 1] = paint(C_COUNT, T.overridesTaken) end

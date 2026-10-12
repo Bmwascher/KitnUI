@@ -1026,6 +1026,28 @@ eq(#splits, 2, "split: one reset row against every part keeping the player's cop
 check(splits[1] and splits[1].target.id == UF and splits[2].target.id == CDM, "split: in row order")
 eq(#ns.EUISplitLinks(splitN, splitRows, { [UF] = true, [RB] = true, [CDM] = true }, splitK2F), 0, "split: nothing when both ends are ticked")
 
+-- A pair is anchored when any of its links is an anchor; a pair linked only
+-- by a size match is not.
+splits = ns.EUISplitLinks(splitN, splitRows, { [UF] = true }, splitK2F)
+eq(splits[1] and splits[1].anchored, true, "split: an anchors pair is anchored")
+splits = ns.EUISplitLinks(splitN, splitRows, { [RB] = true }, splitK2F)
+eq(splits[1] and splits[1].anchored, false, "split: a widthMatch-only pair is not anchored")
+eq(splits[2] and splits[2].anchored, true, "split: beside it, an anchors pair is")
+local bothN = { unlockLayout = {
+    anchors = { ERB_Power = { target = "UF_Player" } },
+    widthMatch = { ERB_Health = "UF_Player" },
+} }
+local bothK2F = { UF_Player = UF, ERB_Health = RB, ERB_Power = RB }
+splits = ns.EUISplitLinks(bothN, splitRows, { [RB] = true }, bothK2F)
+eq(#splits, 1, "split: a pair with an anchor and a size match is one entry")
+eq(splits[1] and splits[1].anchored, true, "split: and it is anchored")
+local realMaps = ns.EUI_LAYOUT_MAPS
+ns.EUI_LAYOUT_MAPS = { "widthMatch", "heightMatch", "anchors" }
+splits = ns.EUISplitLinks(bothN, splitRows, { [RB] = true }, bothK2F)
+ns.EUI_LAYOUT_MAPS = realMaps
+eq(#splits, 1, "split: met through a size match first, still one entry")
+eq(splits[1] and splits[1].anchored, true, "split: and an anchor met later makes it anchored")
+
 local capP = {
     specOverrides = { { values = { default = { [UF .. "\31player\30height"] = 1 } } } },
     condOverrides = { { values = { [71] = { [RB .. "\31castBar\30x"] = 1 } } } },
