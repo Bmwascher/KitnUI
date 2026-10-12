@@ -678,6 +678,35 @@ do
     resetExtras()
 end
 
+-- Quickdraw left out of KitnUI's string: the update hands the importer no
+-- Quickdraw folder, which the importer inherits from the player's profile,
+-- and the part list has no row for it. These prove what the update hands the
+-- importer, not what the importer stores.
+do
+    local QD = "EllesmereUIQuickdraw"
+    E._ADDON_DB_MAP[#E._ADDON_DB_MAP + 1] = { folder = QD }
+    strings.O.data.addons[QD] = { size = 30 }
+    freshInstall()
+    db.profiles.KitnUI.addons[QD] = { size = 40 }
+    ns.EUIStartDecodes()
+    local qdPlan, qdWhy = ns.EUIPrepareUpdate()
+    check(qdPlan ~= nil, "quickdraw: a plan is produced", qdWhy)
+    eq(qdPlan and qdPlan.merged.addons[QD], nil, "quickdraw: no Quickdraw folder goes to the importer")
+    check(qdPlan and qdPlan.merged.addons[F] ~= nil, "quickdraw: while a folder KitnUI's string carries does")
+    local qdConflict = false
+    for _, path in ipairs(qdPlan and qdPlan.report.conflicts or {}) do
+        if path:find(QD, 1, true) then qdConflict = true end
+    end
+    eq(qdConflict, false, "quickdraw: nothing of the player's Quickdraw is counted")
+    local qdRow = false
+    for _, row in ipairs(qdPlan and qdPlan.inputs.rows or {}) do
+        if row.id == QD then qdRow = true end
+    end
+    eq(qdRow, false, "quickdraw: the part list has no Quickdraw row")
+    strings.O.data.addons[QD] = nil
+    E._ADDON_DB_MAP[#E._ADDON_DB_MAP] = nil
+end
+
 ---------------------------------------------------------------------------------
 -- The acceptance
 ---------------------------------------------------------------------------------
