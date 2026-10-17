@@ -540,8 +540,9 @@ setupFunctions["NSRT"] = function(addonKey, import)
     -- live there. An NSRT old enough to lack any of them gets a plain
     -- refusal - importing into a pre-profile NSRT is not supported. The two
     -- tables are required because the helpers iterate and write through both.
+    -- DecodeProfileString marks an NSRT that reads the "!NSRT:Profile:" format.
     local NSI = NorthernSkyRaidTools
-    if not (NSAPI and NSAPI.ImportProfileString
+    if not (NSAPI and NSAPI.ImportProfileString and NSAPI.DecodeProfileString
         and NSI and NSI.DecodeExportData and NSI.LoadProfile
         and NSI.SaveProfile and NSI.GetProfileKey
         and type(NSRT) == "table" and type(NSRT.Profiles) == "table"
@@ -593,12 +594,10 @@ setupFunctions["NSRT"] = function(addonKey, import)
             priorCurrentCopy = CopyTable(NSRT.Profiles[priorCurrent])
         end
         -- The shared data the import may write, so a failed import puts the
-        -- player's own back with everything else.
+        -- player's own back with everything else. The tables themselves, not
+        -- copies: the import assigns fresh tables, so these stay untouched.
         local priorShared = {}
-        for _, key in ipairs(NSRT_SHARED_KEYS) do
-            local value = NSRT[key]
-            priorShared[key] = type(value) == "table" and CopyTable(value) or value
-        end
+        for _, key in ipairs(NSRT_SHARED_KEYS) do priorShared[key] = NSRT[key] end
 
         -- pcall because ImportProfileString mutates several structures with
         -- no internal protection - a raised error must reach the sweep.
