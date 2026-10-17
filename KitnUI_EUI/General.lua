@@ -1005,7 +1005,7 @@ ns.EUIPages["General"] = function(parent, yOffset)
             "Swaps the cast bar and power bar on specs that use an emphasized cast bar, darkens the cast bar, and hides its spell name. Other specs keep their layout and take the cast bar changes only. Asks nothing and needs no reload. Unavailable while a spec override layout is active.",
             "bite",
             ns.BiteEnabled,
-            "where your cast bar and power bar sit, and the cast bar's spell text and dark colors"));
+            "where your cast bar, power bar and buff bars sit, and the cast bar's spell text and dark colors"));
                                                                                    y = y - h
 
     return math.abs(y)

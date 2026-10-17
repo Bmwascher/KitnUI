@@ -103,6 +103,14 @@ sameSet(heldFor("bite", "KitnUI", { ERB_CastBar = { prev = {} }, ERB_Power = { p
 sameSet(heldFor("bite", "KitnUI", { ["override:ERB_CastBar"] = { prev = "__kitnui_absent__" } }),
     { "unlockOverrideAnchors.ERB_CastBar" }, "bite override position")
 sameSet(heldFor("bite", "KitnUI", { darkWasOn = { prev = true } }), {}, "bite's dark flag holds no path")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031buffs\031262"] = { prev = 21 } }),
+    { FK .. CDM .. "\031cdmBars\030bars\0302\030addOffsetY" }, "bite buff offset in an override slot")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031gone\031262"] = { prev = 21 } }), {},
+    "bite buff offset for a bar that is gone")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031buffs"] = { prev = 21 } }), {},
+    "bite buff offset without a slot names nothing")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031buffs\031262"] = { prev = 21, shown = true } }), {},
+    "bite buff offset put back for the open panel holds nothing")
 sameSet(heldFor("darkcastbar", "KitnUI", { fillR = { prev = 1 }, ["bgA\03171"] = { prev = 0.5 } }),
     { "addons." .. RB .. ".castBar.fillR", FK .. RB .. "\31castBar\30bgA" }, "dark cast bar")
 sameSet(heldFor("darkresourcegap", "KitnUI", { gapR = { prev = 1 }, ["gapColorEnabled\31default"] = { prev = false } }),
@@ -164,6 +172,19 @@ for name in pairs(sections) do
     check(ns.EUIHeldDescribers[name] ~= nil, "section " .. name .. " has a held-path describer")
 end
 check(found >= 7, "the source scan found the seven sections", found)
+
+---------------------------------------------------------------------------------
+-- The notes reader
+---------------------------------------------------------------------------------
+
+check(type(ns.EUIPeekNotes) == "function", "ns.EUIPeekNotes is defined")
+if type(ns.EUIPeekNotes) == "function" then
+    core.db = { euiSnap = { bite = { Default = { x = { prev = 1 } } } } }
+    local notes = ns.EUIPeekNotes("bite")
+    eq(notes and notes.x and notes.x.prev, 1, "peek notes: the active profile's notes")
+    eq(ns.EUIPeekNotes("lulu"), nil, "peek notes: a section with no notes reads nil")
+    eq(core.db.euiSnap.lulu, nil, "peek notes: nothing is seeded")
+end
 
 ---------------------------------------------------------------------------------
 -- The note move and the bridge
