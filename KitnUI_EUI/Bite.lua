@@ -50,17 +50,6 @@ local EDIT_SESSION_REFUSAL =
     "Cannot change this while an override editing session is open, because the "
     .. "session would take the change as your own edit. Close it and try again."
 
--- Refused rather than queued. EllesmereUI's toggle sends the opposite of what
--- its getter reads, and a queued click leaves the switch unchanged until the
--- fight ends, so a second click in the same fight would repeat the first
--- instead of undoing it. The host gates its own ways into the panel in combat,
--- but not every one, so these switches can be clicked mid-fight.
-local function RefuseInCombat(name)
-    if not InCombatLockdown() then return false end
-    Refuse(name .. " cannot be changed in combat.")
-    return true
-end
-
 local combatWatcher
 local combatPending = {}
 
@@ -475,8 +464,15 @@ end
 -- The re-apply asserts only while this control's own state is on. That is
 -- what makes a user's decision to switch it off survive a login: nothing
 -- re-acquires it.
+--
+-- Refused in combat rather than queued, here and in ns.SetBiteMode.
+-- EllesmereUI's toggle sends the opposite of what its getter reads, and a
+-- queued click leaves the switch unchanged until the fight ends, so a second
+-- click in the same fight would repeat the first instead of undoing it. The
+-- host gates its own ways into the panel in combat, but not every one, so
+-- these switches can be clicked mid-fight.
 function ns.SetDarkCastBar(on)
-    if RefuseInCombat("Dark Cast Bar") then return end
+    if ns.EUIRefuseInCombat("Dark Cast Bar", true) then return end
     if EditSessionActive() then
         Refuse(EDIT_SESSION_REFUSAL)
         return
@@ -1447,7 +1443,7 @@ local function CommitBite(on)
 end
 
 function ns.SetBiteMode(on)
-    if RefuseInCombat("Bite Mode") then return end
+    if ns.EUIRefuseInCombat("Bite Mode", true) then return end
     CommitBite(on)
 end
 

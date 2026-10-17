@@ -472,13 +472,7 @@ end)
 -- re-apply's one pending slot, so a profile or spec change in the same fight
 -- would replace it and lose the claim with nothing said.
 local function SetBeginnerMode(on)
-    if InCombatLockdown() then
-        print(ns.title .. ": Beginner Mode cannot be changed in combat.")
-        if _G.EllesmereUI and EllesmereUI.RefreshPage then
-            pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
-        end
-        return
-    end
+    if ns.EUIRefuseInCombat("Beginner Mode", true) then return end
     local s = ns.EUISettings()
     if not s then return end
     s.beginner = on and true or false

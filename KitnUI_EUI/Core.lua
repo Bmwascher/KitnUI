@@ -583,6 +583,19 @@ function ns.EUIRebuildForOwnership(page)
     end
 end
 
+-- True, after printing "<name> cannot be changed in combat." and `tail`, when
+-- the caller must stop. `refresh` rebuilds the page: a toggle has already
+-- animated to its new position and never re-reads its getter, so a refused
+-- click keeps showing a state that did not happen until its row is rebuilt.
+function ns.EUIRefuseInCombat(name, refresh, tail)
+    if not InCombatLockdown() then return false end
+    print(ns.title .. ": " .. name .. " cannot be changed in combat." .. (tail or ""))
+    if refresh and _G.EllesmereUI and EllesmereUI.RefreshPage then
+        pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+    end
+    return true
+end
+
 ---------------------------------------------------------------------------------
 -- Profile lifecycle
 ---------------------------------------------------------------------------------
