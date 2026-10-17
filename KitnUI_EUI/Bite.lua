@@ -247,16 +247,18 @@ end
 -- refused, before anything at all is written. The OFF path never refuses -- it
 -- returns what was taken, which is the claim-time value, and a slot that
 -- disagrees now was equal then.
-local function SlotsDisagree(fkeys)
+local function SlotsDisagree(fkeys, keep)
     for i = 1, #fkeys do
         local fkey = fkeys[i]
         local slots = CapturedMaps(fkey)
         if slots then
             for j = 1, #slots do
-                local maps = slots[j].maps
-                local first = maps[1][fkey]
-                for k = 2, #maps do
-                    if maps[k][fkey] ~= first then return true end
+                if not keep or keep(fkey, slots[j].key) then
+                    local maps = slots[j].maps
+                    local first = maps[1][fkey]
+                    for k = 2, #maps do
+                        if maps[k][fkey] ~= first then return true end
+                    end
                 end
             end
         end
@@ -269,8 +271,8 @@ local DIVERGENT_REFUSAL =
     .. "values for the same setting and turning this off again could only give "
     .. "one of them back. Make those overrides agree and try again."
 
-local function RefuseIfDivergent(fkeys)
-    if not SlotsDisagree(fkeys) then return false end
+local function RefuseIfDivergent(fkeys, keep)
+    if not SlotsDisagree(fkeys, keep) then return false end
     Refuse(DIVERGENT_REFUSAL)
     return true
 end
@@ -829,32 +831,491 @@ end
 -- which follows the user's own groups when they edit them. Every other spec
 -- keeps its cast bar where it is and takes the appearance half only.
 --
--- Mirrors EllesmereUI's own owner lookup: the first group in creation order
--- that both stores a position for this element and lists the current spec.
-local function SwapWanted()
+-- The set is every spec listed by a group that stores a position for this
+-- element; SwapWanted tests the current spec against it.
+local function SwapSpecSet()
+    local set = {}
     local entries = OverrideEntriesFor(CAST_KEY)
-    if not entries then return false end
+    local prof = entries and ProfileRoot() or nil
+    local groups = prof and prof.specOverrideGroups
+    if type(groups) ~= "table" then return set end
+    for _, group in ipairs(groups) do
+        if type(group) == "table" and entries[group.id] then
+            for _, sid in ipairs(group.specs or {}) do set[sid] = true end
+        end
+    end
+    return set
+end
+
+local function CurrentSpecID()
     local EUI = _G.EllesmereUI
-    if not EUI or not EUI.GetActiveProfileData then return false end
+    if not EUI then return nil end
     local specID = EUI._specID
     if (not specID or specID == 0) and EUI._RefreshSpecID then
         pcall(EUI._RefreshSpecID)
         specID = EUI._specID
     end
-    if not specID or specID == 0 then return false end
-    local ok, prof = pcall(EUI.GetActiveProfileData)
-    if not ok or type(prof) ~= "table" then return false end
-    local groups = prof.specOverrideGroups
-    if type(groups) ~= "table" then return false end
-    for _, group in ipairs(groups) do
-        if type(group) == "table" and entries[group.id] then
-            for _, sid in ipairs(group.specs or {}) do
-                if sid == specID then return true end
+    if not specID or specID == 0 then return nil end
+    return specID
+end
+
+local function SwapWanted()
+    local specID = CurrentSpecID()
+    return (specID ~= nil and SwapSpecSet()[specID]) and true or false
+end
+
+-- Buff offset: on a swap spec, a Cooldown Manager bar standing on the power bar
+-- or cast bar loses its vertical Additional Bar Offset, which only existed to
+-- clear the cast bar the swap moves away.
+--
+-- Only an offset the spec store captures is held, and only in the swap specs'
+-- own maps: the shared default and the conditional maps are read by every
+-- spec, and an uncaptured offset is one live value every spec shares.
+--
+-- The hold lasts only while EllesmereUI's panel is closed. Every editor action
+-- that banks or copies these values (an override session, Remove Override, a
+-- bar delete, the Default view) happens with the panel open, so its opening
+-- puts the claim-time values back and its close forces 0 again into the maps
+-- that still carry them. Any other value is the player's, and that slot is
+-- let go.
+local BUFF_OFFSET_FORCED = 0
+local STACK_KEYS = { [CAST_KEY] = true, [POWER_KEY] = true }
+local CHAIN_LIMIT = 8
+
+local function UsableBarKey(key)
+    return type(key) == "string" and key ~= "" and not key:find(FS, 1, true)
+end
+
+local function SlotRecordKey(barKey, slotKey)
+    return BUFF_OFFSET_PREFIX .. barKey .. FS .. slotKey
+end
+
+local function ClearRecord(record)
+    record.prev = nil
+    record.forced = nil
+    record.fkey = nil
+    record.shown = nil
+end
+
+local function Nonzero(v)
+    return type(v) == "number" and v ~= 0
+end
+
+local function SlotNonzero(slot, fkey)
+    for i = 1, #slot.maps do
+        if Nonzero(slot.maps[i][fkey]) then return true end
+    end
+    return false
+end
+
+local function SlotCarries(slot, fkey, value)
+    for i = 1, #slot.maps do
+        if slot.maps[i][fkey] == value then return true end
+    end
+    return false
+end
+
+-- EllesmereUI's own slider stores 0 as absent.
+local function LiveReadsForced(v)
+    return v == nil or v == BUFF_OFFSET_FORCED
+end
+
+-- Stops at the first stack element, so the swap re-targeting those two links
+-- does not change the answer.
+local function StandsOnStack(anchors, barKey)
+    local key = "CDM_" .. barKey
+    local seen = {}
+    for _ = 1, CHAIN_LIMIT do
+        if seen[key] then return false end
+        seen[key] = true
+        local link = anchors[key]
+        local target = (type(link) == "table") and link.target or nil
+        if type(target) ~= "string" then return false end
+        if STACK_KEYS[target] then return true end
+        key = target
+    end
+    return false
+end
+
+-- Keyed by spec id, without the default slot.
+local function SpecSlots(fkey)
+    local prof = ProfileRoot()
+    local found = {}
+    if prof then CollectMaps(prof.specOverrides, "", fkey, found, {}) end
+    local slots = {}
+    for i = 1, #found do
+        if found[i].key ~= "default" then slots[found[i].key] = found[i] end
+    end
+    return slots
+end
+
+-- Read at the click only. A bar is judged by its swap specs' maps, never by
+-- live: the click is made inside the panel, where live holds the shared
+-- default. A bar the spec store does not capture has no slots and is left
+-- alone.
+local function BuffOffsetCandidates()
+    local list = {}
+    local anchors = AnchorDB()
+    local bars = CdmBars(true)
+    if not (anchors and bars) then return list end
+    local swapSpecs = SwapSpecSet()
+    for i = 1, #bars do
+        local bar = bars[i]
+        if type(bar) == "table" and UsableBarKey(bar.key) and StandsOnStack(anchors, bar.key) then
+            local fkey = BuffOffsetFKey(i)
+            local claim = {}
+            for slotKey, slot in pairs(SpecSlots(fkey)) do
+                local specID = tonumber(slotKey)
+                if specID and swapSpecs[specID] and SlotNonzero(slot, fkey) then
+                    claim[#claim + 1] = slot
+                end
+            end
+            if #claim > 0 then
+                list[#list + 1] = { key = bar.key, fkey = fkey, slots = claim }
+            end
+        end
+    end
+    return list
+end
+
+-- Only the slots the claim would take are compared: the default and the
+-- conditional maps are never written, so their copies may disagree.
+local function BuffOffsetRefuseIfDivergent(candidates)
+    local fkeys, claimed = {}, {}
+    for i = 1, #candidates do
+        local c = candidates[i]
+        local set = {}
+        for j = 1, #c.slots do set[c.slots[j].key] = true end
+        fkeys[#fkeys + 1] = c.fkey
+        claimed[c.fkey] = set
+    end
+    if #fkeys == 0 then return false end
+    return RefuseIfDivergent(fkeys, function(fkey, slotKey)
+        return claimed[fkey][slotKey] == true
+    end)
+end
+
+-- A missing reader counts as the view being up, which writes nothing.
+local function CapturedLiveWritable()
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.SpecOverrides_ViewActive) then return false end
+    local ok, active = pcall(EUI.SpecOverrides_ViewActive)
+    return (ok and not active) and true or false
+end
+
+-- The resolver overlays the applied condition's values on keys the spec store
+-- does not capture, so it is read only for a bar whose own spec slot was held,
+-- where the spec value always wins.
+local function EffectiveValue(fkey)
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.SpecOverrides_PeekEffectiveValues) then return nil, false end
+    local ok, map = pcall(EUI.SpecOverrides_PeekEffectiveValues, CDM_FOLDER)
+    if not ok or type(map) ~= "table" then return nil, false end
+    local value = map[fkey]
+    if value == nil then return nil, false end
+    if value == EUI.SPECOV_NIL then return nil, true end
+    return value, true
+end
+
+-- Walking the notes rather than the bars lets a pass clear a record whose
+-- bar or map has gone.
+local function HeldByBar()
+    local byBar = {}
+    local notes = ns.EUIPeekNotes(BITE_SECTION)
+    if not notes then return byBar end
+    for noteKey, record in pairs(notes) do
+        local barKey, slotKey = ParseBuffOffsetKey(noteKey)
+        if barKey and type(record) == "table" and record.prev ~= nil then
+            local held = byBar[barKey]
+            if not held then
+                held = { slots = {} }
+                byBar[barKey] = held
+            end
+            held.slots[slotKey] = record
+        end
+    end
+    return byBar
+end
+
+-- For the open panel: the claim-time value goes back into every map still
+-- carrying the forced one, and the record stays.
+local function PutBackSlot(slot, record, fkey)
+    if record.shown then return end
+    for i = 1, #slot.maps do
+        local map = slot.maps[i]
+        if map[fkey] == BUFF_OFFSET_FORCED then map[fkey] = record.prev end
+    end
+    record.shown = true
+end
+
+-- The close. Any map no longer carrying the claim-time value was set in the
+-- panel, and the whole slot is let go: its copies share one record, so holding
+-- the others would make the player's value look like this switch's.
+local function ReassertSlot(slot, record, fkey)
+    if not record.shown then
+        HoldSlot(slot, record, fkey, BUFF_OFFSET_FORCED, false)
+        return
+    end
+    for i = 1, #slot.maps do
+        if slot.maps[i][fkey] ~= record.prev then
+            ClearRecord(record)
+            return
+        end
+    end
+    for i = 1, #slot.maps do slot.maps[i][fkey] = BUFF_OFFSET_FORCED end
+    record.shown = nil
+end
+
+-- mode is "held" (switch on, panel closed), "shown" (switch on, panel open) or
+-- "off" (the release).
+local function SettleBar(bar, fkey, held, mode, applied, specID)
+    local slots = SpecSlots(fkey)
+    local ownKey = specID and tostring(specID) or nil
+    local own = ownKey and held.slots[ownKey] or nil
+    local ownSlot = own and slots[ownKey] or nil
+    -- Read before the loop below can let the record go or put its maps back.
+    local ownPrev = ownSlot and own.prev or nil
+    local ownWasHeld = ownSlot and not own.shown
+
+    for slotKey, record in pairs(held.slots) do
+        local slot = slots[slotKey]
+        if not slot then
+            ClearRecord(record)
+        elseif mode == "off" then
+            -- With the panel open the maps already carry the original or the
+            -- player's value, so the release only lets go.
+            if record.shown then ClearRecord(record) else RestoreSlot(slot, record, fkey) end
+        else
+            record.fkey = fkey
+            if mode == "shown" then PutBackSlot(slot, record, fkey) else ReassertSlot(slot, record, fkey) end
+        end
+    end
+
+    if not CapturedLiveWritable() then return false end
+    local live = bar[BUFF_OFFSET_KEY]
+    if mode == "held" and applied then
+        if ownSlot and own.prev ~= nil and SlotCarries(ownSlot, fkey, BUFF_OFFSET_FORCED) then
+            bar[BUFF_OFFSET_KEY] = BUFF_OFFSET_FORCED
+        end
+    elseif ownWasHeld and LiveReadsForced(live) then
+        -- The 0 in live came from this switch's map. At the release live takes
+        -- what the host would apply; on the opening panel it goes back before
+        -- the host banks live; on a closed panel without the swap it is put
+        -- back as the cast bar is.
+        local value, known
+        if mode == "off" then value, known = EffectiveValue(fkey) end
+        if known then
+            bar[BUFF_OFFSET_KEY] = value
+        else
+            bar[BUFF_OFFSET_KEY] = ownPrev
+        end
+    end
+    return bar[BUFF_OFFSET_KEY] ~= live
+end
+
+-- A bar that cannot be found. With the module's data gone entirely, the maps
+-- are put back at the fkey of the last pass that found the bar; a record put
+-- back for the open panel already carries its value. No record is kept,
+-- because nothing later could place it.
+local function ReleaseUnplaced(held, useRecordedFKey)
+    for slotKey, record in pairs(held.slots) do
+        local slot = useRecordedFKey and not record.shown and record.fkey and SpecSlots(record.fkey)[slotKey]
+        if slot then RestoreSlot(slot, record, record.fkey) else ClearRecord(record) end
+    end
+end
+
+-- Set by the panel's own callbacks and read when a pass runs, not when it is
+-- queued: the close's pass lands 0.1 s later, and a force close that flashes
+-- the panel straight back open must not force 0 under it.
+local panelShown = false
+local watchingShow, watchingHide, profileHooked = false, false, false
+
+-- Whether any profile holds a buff offset record, so the callbacks and hooks
+-- do no reads or walks once the last hold is released. Counted by every pass
+-- and, while it reads true, by every re-apply; it starts true so the first
+-- re-apply counts the saved records.
+local anyHeld = true
+
+-- For the open panel only: after a close the pass Core queues repaints, and a
+-- repaint run first at the end of a fight would show the gap until it does.
+local function RepaintAnchors()
+    if not panelShown then return end
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.ReapplyAllUnlockAnchors then pcall(EUI.ReapplyAllUnlockAnchors) end
+end
+
+-- Plain table writes, done at once even in combat. The host repaints only
+-- when its own view write changes a live value, and after this the offset
+-- already equals the default it shows, so the repaint is this switch's; only
+-- it waits out a fight.
+local function PutBackAll()
+    local bars = CdmBars(false)
+    local specID = CurrentSpecID()
+    local wrote = false
+    for barKey, held in pairs(HeldByBar()) do
+        local index = BarIndexByKey(bars, barKey)
+        if index then
+            if SettleBar(bars[index], BuffOffsetFKey(index), held, "shown", false, specID) then wrote = true end
+        else
+            for slotKey, record in pairs(held.slots) do
+                local slot = record.fkey and SpecSlots(record.fkey)[slotKey]
+                if slot then PutBackSlot(slot, record, record.fkey) end
+            end
+        end
+    end
+    if wrote then RunOutOfCombat(RepaintAnchors, false, false) end
+end
+
+-- Runs inside the panel's OnShow, a frame before EllesmereUI's Default view
+-- banks live into the current spec's map, so the values are back by then.
+local function OnPanelShown()
+    panelShown = true
+    if anyHeld then PutBackAll() end
+end
+
+-- Core's own hide callback queues the re-apply that holds again.
+local function OnPanelHidden()
+    panelShown = false
+end
+
+-- A switch or delete inside the open panel brings in another profile's holds
+-- with no show to put them back, and the panel stays editable meanwhile. The
+-- switch has already closed the Default view, so live is put back too.
+local function OnProfileChanged()
+    if panelShown and anyHeld then PutBackAll() end
+end
+
+-- Registered once a record exists in any profile, so a player who never uses
+-- the hold adds nothing to the panel's lists. Each list is registered once,
+-- even when the other fails. Without both nothing is held, and the flag is
+-- kept only from then on, read from the frame as it stands because the click
+-- is made inside the open panel.
+local function WatchPanel()
+    if watchingShow and watchingHide then return true end
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.RegisterOnShow and EUI.RegisterOnHide) then return false end
+    watchingShow = watchingShow or pcall(EUI.RegisterOnShow, EUI, OnPanelShown)
+    watchingHide = watchingHide or pcall(EUI.RegisterOnHide, EUI, OnPanelHidden)
+    if not (watchingShow and watchingHide) then return false end
+    local frame = _G.EllesmereUIFrame
+    panelShown = (frame and frame.IsVisible and frame:IsVisible()) and true or false
+    if not profileHooked then
+        profileHooked = true
+        if EUI.SwitchProfile then hooksecurefunc(EUI, "SwitchProfile", OnProfileChanged) end
+        if EUI.DeleteProfile then hooksecurefunc(EUI, "DeleteProfile", OnProfileChanged) end
+    end
+    return true
+end
+
+-- Every profile's notes, not the active one's: a profile switched to inside
+-- the open panel needs the callbacks already in place.
+local function AnyBuffRecord()
+    local root = ns.db and ns.db.euiSnap
+    local sect = root and root[BITE_SECTION]
+    if type(sect) ~= "table" then return false end
+    for _, notes in pairs(sect) do
+        if type(notes) == "table" then
+            for noteKey, record in pairs(notes) do
+                if ParseBuffOffsetKey(noteKey) and type(record) == "table" and record.prev ~= nil then
+                    return true
+                end
             end
         end
     end
     return false
 end
+
+-- Inside the open panel each slot keeps its value until the close; a click
+-- that waited out a fight past the close holds at once.
+local function ClaimBuffOffsets(candidates)
+    if #candidates == 0 or not WatchPanel() then return end
+    for i = 1, #candidates do
+        local c = candidates[i]
+        for j = 1, #c.slots do
+            local slot = c.slots[j]
+            local record = ns.EUISnap(BITE_SECTION, SlotRecordKey(c.key, slot.key))
+            if record then
+                local value = panelShown and slot.maps[1][c.fkey] or BUFF_OFFSET_FORCED
+                HoldSlot(slot, record, c.fkey, value, true)
+                record.forced = BUFF_OFFSET_FORCED
+                record.fkey = c.fkey
+                record.shown = panelShown or nil
+            end
+        end
+    end
+end
+
+-- Stands down inside an editing session, which would take any write as the
+-- user's edit; the next re-apply catches up. Returns false only when a click
+-- is refused, which happens before anything is written.
+local function ApplyBuffOffset(on, claiming)
+    if EditSessionActive() then return true end
+    local bars = CdmBars(on)
+    if on and claiming then
+        if not bars then return true end
+        -- ApplyAnchors refuses this click when the layout store is unreadable,
+        -- so nothing is claimed or re-asserted ahead of that refusal.
+        if not AnchorDB() then return true end
+        local candidates = BuffOffsetCandidates()
+        if BuffOffsetRefuseIfDivergent(candidates) then return false end
+        ClaimBuffOffsets(candidates)
+    end
+
+    local heldBars = HeldByBar()
+    if next(heldBars) == nil then
+        anyHeld = AnyBuffRecord()
+        return true
+    end
+    -- Without both panel callbacks nothing would put the originals back for
+    -- the open panel, so saved holds are given back instead. Only a hold
+    -- needs the live bars; a release falls back to the stored ones and then
+    -- to each record's own fkey.
+    local mode = "off"
+    if on and WatchPanel() then mode = panelShown and "shown" or "held" end
+    if mode == "off" then
+        bars = bars or CdmBars(false)
+    elseif not bars then
+        return true
+    end
+    local applied = mode == "held" and ns.BaselineLive() and SwapWanted()
+    local specID = CurrentSpecID()
+    for barKey, held in pairs(heldBars) do
+        local index = BarIndexByKey(bars, barKey)
+        if index then
+            SettleBar(bars[index], BuffOffsetFKey(index), held, mode, applied, specID)
+        else
+            ReleaseUnplaced(held, bars == nil)
+        end
+    end
+    anyHeld = AnyBuffRecord()
+
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.ReapplyAllUnlockAnchors and not InCombatLockdown() then
+        pcall(EUI.ReapplyAllUnlockAnchors)
+    end
+    return true
+end
+
+-- The release branch is what the reset relies on: it turns the switch off and
+-- then runs every re-apply while the records still exist. The idle test comes
+-- before RunOutOfCombat, so a switch that is off and holds nothing queues
+-- nothing in combat.
+ns.EUIRegisterReapply(function()
+    -- Saved records are found at the first re-apply. After that only a claim
+    -- makes one, and its own pass counts it, so a false count cannot go stale;
+    -- a true one is recounted here, before the idle return, because a profile
+    -- delete or a reset drops notes without a pass.
+    if anyHeld then anyHeld = AnyBuffRecord() end
+    if anyHeld and not (watchingShow and watchingHide) then WatchPanel() end
+    if not ns.BiteEnabled() and not ns.EUIHolds(BITE_SECTION) then return end
+    RunOutOfCombat(function()
+        if ns.BiteEnabled() then
+            ApplyBuffOffset(true, false)
+        elseif ns.EUIHolds(BITE_SECTION) then
+            ApplyBuffOffset(false, false)
+        end
+    end, false, true)
+end)
 
 local function ApplyOverrideAnchors(on, swap, claiming)
     local store = OverrideAnchorStore()
@@ -962,6 +1423,7 @@ local function CommitBite(on)
 
     local settings = ns.EUISettings and ns.EUISettings() or nil
     if not settings then return end
+    if not ApplyBuffOffset(on, true) then return end
 
     if on then
         -- The anchor half runs FIRST and its answer decides the rest. It
