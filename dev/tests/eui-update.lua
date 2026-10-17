@@ -1328,16 +1328,20 @@ eq(#raised, 1, "raise (rename after): the error is still reported")
 eq(db.profiles.KitnUI.addons[F].x, 5, "raise (rename after): the merge is stored")
 eq(ns.EUIRestorable(), "restore", "raise (rename after): restore is offered")
 
--- That raise skips EllesmereUI's OnProfileRenamed, whose hook moves KitnUI's
--- notes, so the notes are moved with the table before the backup's copy.
+-- That raise skips EllesmereUI's OnProfileRenamed, which moves the keybind
+-- and, through KitnUI's hook, the notes; both run again before the backup's
+-- copy.
 freshInstall()
 ns.EUIStartDecodes()
 plan = ns.EUIPrepareUpdate()
 E.raise = "rename_after"
 recordNotes()
+local renamedHook
+E.OnProfileRenamed = function(old, new) renamedHook = old .. ">" .. new end
 ok, err = ns.EUIApplyUpdate(plan)
-ns.EUIMoveProfileRecords = nil
+ns.EUIMoveProfileRecords, E.OnProfileRenamed = nil, nil
 eq(ok, true, "raise (rename notes): the update applies", err)
+eq(renamedHook, "KitnUI>" .. ns.EUIBackupName, "raise (rename notes): the keybind move runs again")
 eq(#noteCalls, 2, "raise (rename notes): the move, then the backup's copy")
 eq(noteCalls[1] and noteCalls[1].from, "KitnUI", "raise (rename notes): moved from the live name")
 eq(noteCalls[1] and noteCalls[1].to, ns.EUIBackupName, "raise (rename notes): to the backup")

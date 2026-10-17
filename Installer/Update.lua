@@ -957,14 +957,16 @@ local function try(fn, ...)
     return tostring(err)
 end
 
--- KitnUI's notes follow a rename through a hook on EllesmereUI's
--- OnProfileRenamed, the rename's last call; a raise after the table moved
--- skips it, so the notes are moved here. Moving never overwrites a note.
+-- The keybind and KitnUI's notes (through its hook) follow a rename in
+-- EllesmereUI's OnProfileRenamed, the rename's last call; a raise after the
+-- table moved skips it, so it runs again here. Both moves are no-ops once
+-- done, and the notes are moved directly in case that call raises too.
 local function rename(old, new)
-    local d = DB()
-    local err = try(E().RenameProfile, old, new)
-    if err and d.profiles[new] ~= nil and d.profiles[old] == nil and ns.EUIMoveProfileRecords then
-        ns.EUIMoveProfileRecords(old, new)
+    local e, d = E(), DB()
+    local err = try(e.RenameProfile, old, new)
+    if err and d.profiles[new] ~= nil and d.profiles[old] == nil then
+        if e.OnProfileRenamed then try(e.OnProfileRenamed, old, new) end
+        if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(old, new) end
     end
     return err
 end
