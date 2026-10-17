@@ -892,7 +892,7 @@ function W:SetPage(n)
     W.page = n
     W.subPage = nil
     W.frame.SubBack:Hide()
-    W.frame.Back._lbl:SetText("Back")
+    if W.frame.Back._lbl then W.frame.Back._lbl:SetText("Back") end
     W:HideOptions()
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
@@ -917,8 +917,9 @@ function W:SetPage(n)
 end
 
 -- A page inside a step: cleared the way SetPage clears a page, but W.page and
--- the rail stay, so Back, Next and the rail leave it the way they leave the
--- step. ResetExtras cancels the step's decodes; the sub-page starts its own.
+-- the rail stay, so Next and the rail leave it the way they leave the step,
+-- and Back returns to the step itself. ResetExtras cancels the step's
+-- decodes; the sub-page starts its own.
 function W:ShowSubPage(title, draw)
     if not W.frame then return end
     local f = W.frame
@@ -934,7 +935,7 @@ function W:ShowSubPage(title, draw)
     W.subPage = draw
     f.SubTitle:SetText(title)
     f.SubBack:Show()
-    f.Back._lbl:SetText("< EllesmereUI")
+    if f.Back._lbl then f.Back._lbl:SetText("< EllesmereUI") end
     f.Back:Show()
     draw()
 end

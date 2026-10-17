@@ -33,7 +33,7 @@
 
 - **NEW:** **Individual Modules** on the EllesmereUI step lists each part of
   your profile on its own: Action Bars, Unit Frames, Resource & Cast Bars,
-  the Top Bar and the rest. **Back** there returns to the EllesmereUI step
+  the Top Bar and the rest, with **< EllesmereUI** to return to the step
 - Each row shows whether you changed that part since KitnUI installed it
   and what KitnUI's next update would change; hover a count to see the
   settings
