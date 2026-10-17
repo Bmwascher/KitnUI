@@ -146,8 +146,7 @@ failure.
   turning it off restores all three sentinels.
 
   **This check used to ask for a combat toggle.** Beginner Mode now refuses a
-  click in combat (the panel can be opened mid-fight from the Top Bar clock), so
-  there is no deferred toggle to test.
+  click in combat, so there is no deferred toggle to test.
 - [ ] **11. Partial import.** Fresh distinct sentinels on every path. Import a
   profile carrying the switches ON while excluding the module blobs they force, and
   exclude Global Settings so `euiAccent` is not carried. **Every sentinel survives
