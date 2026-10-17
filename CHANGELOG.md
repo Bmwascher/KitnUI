@@ -99,6 +99,13 @@
 - The KitnUI and KitnUI Rasta options backgrounds are redrawn for
   EllesmereUI 9.4's title bar and fold away with the panel, and the folded
   mini window shows the KitnUI cat
+- With **Bite Mode** on, the buff bars now sit directly on the stack
+  instead of keeping the gap left for the cast bar. The gap shows while
+  EllesmereUI's options are open, and turning Bite Mode off gives your
+  offset back. If Bite Mode is already on, turn it off and on once
+- Turning Bite Mode off no longer leaves the cast bar inside the buff bars:
+  the EllesmereUI profile places the buff bars clear of it again. Update
+  your EllesmereUI profile to get the fix
 
 ### Profiles
 
