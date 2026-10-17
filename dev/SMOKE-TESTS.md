@@ -1100,6 +1100,8 @@ build. Do not re-run them against this branch; run the checks below instead.
   the reset times above it do.
 - [ ] **6. Right click works IN combat.** Pull a target dummy. Right click the
   clock: the settings open and NOTHING is printed about combat.
+  **Superseded 2026-10-17:** in combat the right click now prints
+  "Cannot open options during combat." and the settings stay closed.
 - [ ] **7. The other two still refuse in combat.** Still on the dummy, left click
   the clock: the red "not in combat" message and no calendar. Middle click: the
   same message and no reload.
