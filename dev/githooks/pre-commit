@@ -2,7 +2,8 @@
 # Pre-commit guard: the comment rules (KitnUI AGENTS.md "Code style", canonical
 # in KitnEssentials AGENTS.md "Comments: lean, and impersonal") ban personal or
 # agent names, upstream addon names, plan steps, dates, and session history from
-# shipped source comments.
+# shipped source comments. It also cleans Raid Frames Extra Frames data out of a
+# staged Data/AddOns/EllesmereUI.lua (dev/scripts/eui-personal.lua --clean).
 # Deliberate exception: git commit --no-verify
 set -uo pipefail
 
@@ -21,7 +22,7 @@ ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
 # A commit that changes the shipped EllesmereUI string gets its Raid Frames
 # Extra Frames data (names of one raid group) cleaned and re-staged.
 eui_data="Data/AddOns/EllesmereUI.lua"
-if git diff --cached --name-only --diff-filter=AM | grep -qx "$eui_data"; then
+if [ -n "$(git diff --cached --name-only --diff-filter=AM -- "$eui_data")" ]; then
     if ! git diff --quiet -- "$eui_data"; then
         echo "[pre-commit] BLOCKED: $eui_data has unstaged changes; stage or drop them so the Extra Frames clean sees the whole file." >&2
         exit 1
@@ -35,13 +36,11 @@ if git diff --cached --name-only --diff-filter=AM | grep -qx "$eui_data"; then
         echo "[pre-commit] BLOCKED: the Extra Frames clean of $eui_data did not run." >&2
         exit 1
     fi
-    case "$eui_out" in
-        *"cleaned $eui_data"*)
-            echo "$eui_out" >&2
-            git add -- "$eui_data" || exit 1
-            echo "[pre-commit] $eui_data cleaned and re-staged." >&2
-            ;;
-    esac
+    if ! git diff --quiet -- "$eui_data"; then
+        echo "$eui_out" >&2
+        git add -- "$eui_data" || exit 1
+        echo "[pre-commit] $eui_data cleaned and re-staged." >&2
+    fi
 fi
 
 if ! comments="$(ng_staged_comments)"; then
