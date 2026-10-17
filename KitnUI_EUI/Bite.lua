@@ -26,15 +26,6 @@ end
 
 ns.BaselineLive = BaselineLive
 
--- The toggle has already animated to the new position and never re-reads its
--- getter, so a refused click keeps showing a state that did not happen without
--- a rebuild.
-local function Refuse(message)
-    print(ns.title .. ": " .. message)
-    local EUI = _G.EllesmereUI
-    if EUI and EUI.RefreshPage then pcall(EUI.RefreshPage, EUI, true) end
-end
-
 -- An override editing session watches every value write, and reads a forced
 -- value that matches the group's default as the user reverting it, which
 -- deletes the captured override outright. Nothing recorded here could put that
@@ -263,7 +254,7 @@ local DIVERGENT_REFUSAL =
 
 local function RefuseIfDivergent(fkeys, keep)
     if not SlotsDisagree(fkeys, keep) then return false end
-    Refuse(DIVERGENT_REFUSAL)
+    ns.EUIRefuse(DIVERGENT_REFUSAL, true)
     return true
 end
 
@@ -474,7 +465,7 @@ end
 function ns.SetDarkCastBar(on)
     if ns.EUIRefuseInCombat("Dark Cast Bar", true) then return end
     if EditSessionActive() then
-        Refuse(EDIT_SESSION_REFUSAL)
+        ns.EUIRefuse(EDIT_SESSION_REFUSAL, true)
         return
     end
     if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
@@ -531,7 +522,7 @@ end
 
 function ns.EUIRefuseIfEditSession()
     if not EditSessionActive() then return false end
-    Refuse(EDIT_SESSION_REFUSAL)
+    ns.EUIRefuse(EDIT_SESSION_REFUSAL, true)
     return true
 end
 
@@ -571,7 +562,7 @@ end
 
 function ns.ApplyResourceGap(on, claiming)
     if EditSessionActive() then
-        if claiming then Refuse(EDIT_SESSION_REFUSAL) end
+        if claiming then ns.EUIRefuse(EDIT_SESSION_REFUSAL, true) end
         return
     end
     if on and claiming and RefuseIfDivergent(GAP_FKEYS) then return end
@@ -1390,7 +1381,7 @@ ns.BiteHoldsAnchors = BiteHoldsAnchors
 
 local function CommitBite(on)
     if EditSessionActive() then
-        Refuse(EDIT_SESSION_REFUSAL)
+        ns.EUIRefuse(EDIT_SESSION_REFUSAL, true)
         return
     end
     -- Both key sets, before the anchors move. Bite Mode turns Dark Cast Bar on as
@@ -1401,7 +1392,7 @@ local function CommitBite(on)
         return
     end
     if on and not ns.BaselineLive() then
-        Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
+        ns.EUIRefuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.", true)
         return
     end
 
@@ -1415,7 +1406,7 @@ local function CommitBite(on)
         -- state written before that answer would leave the row reading on
         -- while owning and applying nothing.
         if not ApplyAnchors(true, true) then
-            Refuse("Bite Mode could not read EllesmereUI's saved layout. Reload and try again.")
+            ns.EUIRefuse("Bite Mode could not read EllesmereUI's saved layout. Reload and try again.", true)
             return
         end
         local record = ns.EUISnap(BITE_SECTION, "darkWasOn")
