@@ -71,8 +71,6 @@
 - The window is a little larger so long counts fit their column, and the
   filled buttons are softer
 - New KitnUI and KitnUI Rasta backgrounds with a constellation cat
-- Slash commands in KitnUI's popups, chat messages and `/kitn` help are
-  highlighted
 
 ### Top Bar
 
@@ -117,6 +115,11 @@
   name, in Simple Mode with search and whispering on a double click. The
   side tabs are reordered, Guild is hidden, and Friend Requests appears
   only when a request is waiting. `/kitn reset` puts your own settings back
+
+### Slash Commands
+
+- Slash commands in KitnUI's popups, chat messages and `/kitn` help are
+  highlighted
 
 ---
 
