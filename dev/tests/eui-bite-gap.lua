@@ -62,6 +62,13 @@ local combat = false
 _G.InCombatLockdown = function() return combat end
 _G.UnitGUID = function() return "Player-1-1" end
 
+-- Work deferred to the end of a fight reports its errors here rather than
+-- raising, so the last check asserts none was reported.
+local reported = {}
+_G.geterrorhandler = function()
+    return function(err) reported[#reported + 1] = tostring(err) end
+end
+
 -- Post-hooks are kept by function name, so a case can run them as the host's
 -- call returns.
 local hooks = {}
@@ -1151,6 +1158,8 @@ peeks, queues = panelWork()
 eq(peeks, 0, "W2: after the delete the show and the switch hook walk no notes")
 eq(queues, 0, "W2: and Bite's hide callback queues no re-apply of its own")
 untouched("W2")
+
+check(#reported == 0, "no work deferred to the end of a fight raised", reported[1])
 
 say(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -56,8 +56,11 @@ local function RunOutOfCombat(fn)
             self:UnregisterEvent("PLAYER_REGEN_ENABLED")
             local queued = combatPending
             combatPending = {}
+            -- xpcall: a raising entry is reported with its stack and does not
+            -- skip the entries after it.
+            local report = geterrorhandler()
             for i = 1, #queued do
-                pcall(queued[i])
+                xpcall(queued[i], report)
             end
         end)
     end

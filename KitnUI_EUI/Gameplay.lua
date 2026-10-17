@@ -84,7 +84,7 @@ local function RunOutOfCombat(fn)
             self:UnregisterEvent("PLAYER_REGEN_ENABLED")
             local run = pending
             pending = nil
-            if run then pcall(run) end
+            if run then xpcall(run, geterrorhandler()) end
         end)
     end
     combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
