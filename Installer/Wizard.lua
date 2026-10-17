@@ -214,12 +214,13 @@ function W:Build()
     f.SubBack = CreateFrame("Button", nil, f)
     f.SubBack:SetHeight(20)
     f.SubBack:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
-    f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 13, "", 1, 1, 1, 0.7)
+    f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 14, "", 1, 1, 1, 1)
     f.SubBack._lbl:SetPoint("LEFT")
     f.SubBack._lbl:SetText("< Back to EllesmereUI")
     f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
+    onAccent(function(c) f.SubBack._lbl:SetTextColor(c[1], c[2], c[3], 1) end)
     f.SubBack:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 1, 1, 1) end)
-    f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(1, 1, 1, 0.7) end)
+    f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(accent[1], accent[2], accent[3], 1) end)
     f.SubBack:SetScript("OnClick", function() W:SetPage(W.page) end)
     f.SubBack:Hide()
 
@@ -315,7 +316,11 @@ function W:Build()
     f.Back:SetSize(140, 30)
     f.Back:SetPoint("BOTTOMLEFT", CONTENT_X, 4)  -- footer, below the baked divider (y38)
     f.Back._bg, f.Back._brd, f.Back._lbl =
-        EllesmereUI.MakeStyledButton(f.Back, "Back", 14, BTN_COLOURS, function() W:SetPage((W.page or 1) - 1) end)
+        EllesmereUI.MakeStyledButton(f.Back, "Back", 14, BTN_COLOURS, function()
+            -- On a sub-page Back leaves to the step it opened from, the way the
+            -- header link does, rather than to the step before it.
+            if W.subPage then W:SetPage(W.page) else W:SetPage((W.page or 1) - 1) end
+        end)
     W:SetButtonVariant(f.Next, "ghost")
     W:SetButtonVariant(f.Back, "ghost")
 
@@ -887,6 +892,7 @@ function W:SetPage(n)
     W.page = n
     W.subPage = nil
     W.frame.SubBack:Hide()
+    W.frame.Back._lbl:SetText("Back")
     W:HideOptions()
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
@@ -928,6 +934,8 @@ function W:ShowSubPage(title, draw)
     W.subPage = draw
     f.SubTitle:SetText(title)
     f.SubBack:Show()
+    f.Back._lbl:SetText("< EllesmereUI")
+    f.Back:Show()
     draw()
 end
 

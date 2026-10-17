@@ -672,9 +672,9 @@ local function ShowModulesButton(state)
     local f = WF()
     if not modulesButton then
         modulesButton = CreateFrame("Button", nil, f)
-        modulesButton:SetSize(130, 28)
-        ns.Wizard:StyleButton(modulesButton, "Modules >", 14, function() ns.EUIShowModules() end)
-        SetVariant(modulesButton, "selectable")
+        modulesButton:SetSize(200, 34)
+        ns.Wizard:StyleButton(modulesButton, "Individual Modules >", 15, function() ns.EUIShowModules() end)
+        SetVariant(modulesButton, "selected")
     end
     -- Below the rule, beside the status block: above it, a description that
     -- fills its last line runs under the button.
