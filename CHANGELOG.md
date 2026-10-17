@@ -101,8 +101,8 @@
 
 ### Profiles
 
-- EllesmereUI, BigWigs, Northern Sky Raid Tools, Edit Mode, BuffReminders
-  and Baganator profiles refreshed
+- EllesmereUI, KitnEssentials, BigWigs, Northern Sky Raid Tools, Edit Mode,
+  BuffReminders and Baganator profiles refreshed
 - The EllesmereUI profile no longer carries Quickdraw, so an update leaves
   your Quickdraw settings alone
 

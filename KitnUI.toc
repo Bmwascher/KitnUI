@@ -2,7 +2,7 @@
 ## Notes: EllesmereUI profile installer for KitnUI.
 ## Author: Bitebtw
 ## Version: @project-version@
-## Interface: 120100, 120105
+## Interface: 120105
 ## OptionalDeps: EllesmereUI, Plater, BigWigs, NorthernSkyRaidTools, KitnEssentials, BuffReminders, Baganator
 ## SavedVariables: KitnUIDB
 ## IconTexture: Interface\AddOns\KitnUI\Media\Textures\KitnUI_Icon.tga
@@ -10,14 +10,14 @@
 ## X-Curse-Project-ID: 1493282
 ## X-Wago-ID: rNkyB8Ka
 
-## X-EllesmereUI-Version: 2026.10.13
-## X-Plater-Version: 2026.07.07
-## X-BigWigs-Version: 2026.10.13
-## X-NSRT-Version: 2026.10.13
-## X-EditMode-Version: 2026.10.13
-## X-KitnEssentials-Version: 2026.09.05
-## X-BuffReminders-Version: 2026.10.13
-## X-Baganator-Version: 2026.10.13
+## X-EllesmereUI-Version: 2026.10.16
+## X-Plater-Version: 2026.10.16
+## X-BigWigs-Version: 2026.10.16
+## X-NSRT-Version: 2026.10.16
+## X-EditMode-Version: 2026.10.16
+## X-KitnEssentials-Version: 2026.10.16
+## X-BuffReminders-Version: 2026.10.16
+## X-Baganator-Version: 2026.10.16
 
 # Load model: per-directory XML manifests (matching KitnEssentials). Each .xml
 # <Script>-lists its .lua in load order; edit the manifest, not this list.
