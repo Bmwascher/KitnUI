@@ -89,14 +89,18 @@ read_globals = {
     "UnitExists", "UnitIsUnit", "UnitCanAttack",
     "UnitCastingInfo", "UnitChannelInfo",
 
-    -- Spec functions
+    -- Spec functions. The bare GetSpecialization, GetSpecializationInfo and
+    -- GetNumSpecializationsForClassID are left out on purpose: they exist only
+    -- while the loadDeprecationFallbacks CVar is on.
     "C_SpecializationInfo",
-    "GetSpecialization", "GetSpecializationInfo",
-    "GetSpecializationInfoForClassID", "GetNumSpecializationsForClassID",
+    "GetSpecializationInfoForClassID",
     "GetSpecializationInfoByID",  -- the part list's tooltips name a Cooldown Manager spec
 
     -- Combat lockdown
     "InCombatLockdown",
+
+    -- Reports an EllesmereUI error without unwinding the profile sequence
+    "geterrorhandler",
 
     -- Top bar launchers (gamemenu, clock: insecure toggles, refuse in combat)
     "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",

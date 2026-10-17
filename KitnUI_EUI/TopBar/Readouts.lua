@@ -1249,9 +1249,13 @@ local BADGE_SIZE = 10
 
 local friendsText, guildText
 
+-- pcall'd like the guild badge below: BNGetNumFriends has no generated
+-- documentation, so whether its counts can be Secret in combat is unproven,
+-- and FriendsCount does arithmetic on them.
 local function UpdateFriendsBadge()
     if not friendsText then return end
-    friendsText:SetText(tostring(FriendsCount()))
+    local ok, count = pcall(FriendsCount)
+    if ok then friendsText:SetText(tostring(count)) end
 end
 
 -- pcall'd: whether GetNumGuildMembers can return a Secret value in combat is
