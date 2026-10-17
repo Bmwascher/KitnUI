@@ -26,6 +26,14 @@
   it was. Before, a click waited for the fight to end, and clicking Bite
   Mode off and back on in one fight could leave it off
 
+### Profiles
+
+- Northern Sky Raid Tools installs again with NSRT's 12.1.5 update, which
+  turned KitnUI's profile away and stopped the step without a message
+- The NSRT profile is refreshed and now also brings KitnUI's encounter
+  alerts, aura sounds, aura tracking and glows. NSRT shares these across
+  every profile on your account, so installing or updating replaces yours
+
 ---
 
 ## v2.2.0

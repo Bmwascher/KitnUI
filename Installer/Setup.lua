@@ -437,12 +437,13 @@ end
 
 ---------------------------------------------------------------------------------
 -- Northern Sky Raid Tools
--- NSRT export strings are LibSerialize + LibDeflate now and land in NSRT's own
+-- NSRT export strings ("!NSRT:Profile:" + CBOR, deflated) land in NSRT's own
 -- profile system (NSRT.Profiles / ProfileKeys / CurrentProfile), so the import
 -- goes through NSRT's public NSAPI:ImportProfileString - decode, activation and
--- future format changes stay NSRT's problem. The pre-profile direct-write
--- importer this replaces (AceSerializer, per-module {enabled, data} shape) is
--- in git history; it cannot decode current exports at all.
+-- future format changes stay NSRT's problem. The export also carries NSRT's
+-- account-wide shared data (encounter alerts, aura sounds, aura tracking and
+-- glows), which the import writes over the player's own: those have one copy
+-- per account, not per profile, and they are part of the setup KitnUI ships.
 ---------------------------------------------------------------------------------
 
 -- Lock the three reminder note frames.
@@ -462,6 +463,10 @@ end
 -- later profile switch loads from. Every step is type-checked because this
 -- runs against another addon's saved variables.
 local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraReminderFrame" }
+
+-- NSRT's account-wide keys an export's sharedData can write (ProfileSharedDataKeys
+-- in its Profiles.lua).
+local NSRT_SHARED_KEYS = { "EncounterAlerts", "AuraSounds", "AuraTrackingSettings", "AuraGlows" }
 
 -- A mover that NSRT has ALREADY built keeps its unlocked behaviour until the
 -- addon rebuilds it, so the settings write alone would land at the next reload
@@ -554,7 +559,7 @@ setupFunctions["NSRT"] = function(addonKey, import)
         -- Preflight the decode before touching any saved state: the import
         -- API rejects only a non-table decode, so a decoded table with no
         -- data field would still create and activate an EMPTY profile.
-        local decoded = NSI:DecodeExportData(ns.data[addonKey])
+        local decoded = NSI:DecodeExportData(ns.data[addonKey], "Profile")
         if type(decoded) ~= "table" or type(decoded.data) ~= "table" then
             print(ns.title .. ": NSRT import failed - the export string could not be decoded.")
             return false
@@ -587,11 +592,21 @@ setupFunctions["NSRT"] = function(addonKey, import)
             end
             priorCurrentCopy = CopyTable(NSRT.Profiles[priorCurrent])
         end
+        -- The shared data the import may write, so a failed import puts the
+        -- player's own back with everything else.
+        local priorShared = {}
+        for _, key in ipairs(NSRT_SHARED_KEYS) do
+            local value = NSRT[key]
+            priorShared[key] = type(value) == "table" and CopyTable(value) or value
+        end
 
         -- pcall because ImportProfileString mutates several structures with
         -- no internal protection - a raised error must reach the sweep.
-        local ok, imported = pcall(NSAPI.ImportProfileString, NSAPI, ns.data[addonKey], ns.profileName)
+        -- allowSharedData: without it NSRT refuses an export carrying shared
+        -- data and returns nil, "shared_data".
+        local ok, imported = pcall(NSAPI.ImportProfileString, NSAPI, ns.data[addonKey], ns.profileName, true)
         if not ok or not imported then
+            for _, key in ipairs(NSRT_SHARED_KEYS) do NSRT[key] = priorShared[key] end
             -- The preflight makes this near-impossible (the import decodes
             -- the same string); sweep whatever the aborted import created
             -- and put everything else back where it was. Only bindings that
