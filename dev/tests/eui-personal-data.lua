@@ -126,11 +126,13 @@ eq(bare.data.addons.EllesmereUIRaidFrames, nil, "cleaning never adds a Raid Fram
 -- The shipped string
 ---------------------------------------------------------------------------------
 
+local _, s = M.ReadData(M.DATA_PATH)
 local lib, why = M.LoadLibDeflate()
-if not lib then
+if s == "" then
+    io.write("skip: shipped-string checks, the string is empty\n")
+elseif not lib then
     io.write("skip: shipped-string checks, " .. why .. "\n")
 else
-    local _, s = M.ReadData(M.DATA_PATH)
     local shipped, err = M.Decode(lib, s)
     check(type(shipped) == "table", "the shipped string decodes", err)
     if type(shipped) == "table" then

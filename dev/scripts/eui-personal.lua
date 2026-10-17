@@ -13,7 +13,8 @@
 --   lua dev/scripts/eui-personal.lua --clean   rewrite Data/AddOns/EllesmereUI.lua
 --
 -- Decoding needs EllesmereUI's LibDeflate: KITNUI_LIBDEFLATE names the file,
--- otherwise the current EllesmereUI folder under References/ is used.
+-- otherwise the current EllesmereUI folder under References/ is used, in this
+-- checkout or the primary one. Without it the report skips and --clean fails.
 -- dev/tests/eui-personal-data.lua loads this file as a module.
 
 local M = {}
@@ -157,69 +158,66 @@ local function OverrideStores(data)
     return { { "specOverrides", data.specOverrides }, { "condOverrides", data.condOverrides } }
 end
 
+-- Lists every override entry holding an Extra Frames key. With strip set it
+-- also removes those keys, and an entry left with no default value goes, list
+-- order kept.
+local function WalkOverrides(data, strip)
+    local found = {}
+    for _, pair in ipairs(OverrideStores(data)) do
+        local name, store = pair[1], pair[2]
+        local hits = {}
+        if type(store) == "table" then
+            for i = #store, 1, -1 do
+                local entry = store[i]
+                local vals = type(entry) == "table" and entry.values
+                if type(vals) == "table" then
+                    local hit = false
+                    for _, m in pairs(vals) do
+                        if type(m) == "table" then
+                            for fkey in pairs(m) do
+                                if M.IsTarget(fkey) then
+                                    hit = true
+                                    if strip then m[fkey] = nil end
+                                end
+                            end
+                        end
+                    end
+                    if hit then
+                        table.insert(hits, 1, ("%s entry %d targets Extra Frames (%s)"):format(
+                            name, i, tostring(entry.crumb or entry.label)))
+                        if strip and (type(vals.default) ~= "table" or next(vals.default) == nil) then
+                            table.remove(store, i)
+                        end
+                    end
+                end
+            end
+        end
+        for _, line in ipairs(hits) do found[#found + 1] = line end
+    end
+    return found
+end
+
 -- One line per finding; an empty list means the payload is clean.
 function M.Findings(payload)
-    local found = {}
     local data = type(payload) == "table" and payload.data
-    if type(data) ~= "table" then return found end
+    if type(data) ~= "table" then return {} end
+    local found = {}
     local rf = type(data.addons) == "table" and data.addons.EllesmereUIRaidFrames
     local xf = type(rf) == "table" and rf.extraFrames
     if type(rf) == "table" and not M.DeepEqual(xf, M.EXTRA_DEFAULTS) then
         local names = type(xf) == "table" and type(xf.players) == "table" and #xf.players or 0
         found[#found + 1] = ("Raid Frames Extra Frames differs from its defaults (%d names)"):format(names)
     end
-    for _, pair in ipairs(OverrideStores(data)) do
-        local name, store = pair[1], pair[2]
-        if type(store) == "table" then
-            for i, entry in ipairs(store) do
-                local vals = type(entry) == "table" and entry.values
-                local hit = false
-                if type(vals) == "table" then
-                    for _, m in pairs(vals) do
-                        if type(m) == "table" then
-                            for fkey in pairs(m) do
-                                if M.IsTarget(fkey) then hit = true end
-                            end
-                        end
-                    end
-                end
-                if hit then
-                    found[#found + 1] = ("%s entry %d targets Extra Frames (%s)"):format(
-                        name, i, tostring(entry.crumb or entry.label))
-                end
-            end
-        end
-    end
+    for _, line in ipairs(WalkOverrides(data, false)) do found[#found + 1] = line end
     return found
 end
 
--- Resets the block to its defaults and strips Extra Frames keys from every
--- override; an entry left with no default value goes, list order kept.
+-- Resets the block to its defaults and strips Extra Frames from every override.
 function M.Clean(payload)
     local data = payload.data
     local rf = type(data.addons) == "table" and data.addons.EllesmereUIRaidFrames
     if type(rf) == "table" then rf.extraFrames = DeepCopy(M.EXTRA_DEFAULTS) end
-    for _, pair in ipairs(OverrideStores(data)) do
-        local store = pair[2]
-        if type(store) == "table" then
-            for i = #store, 1, -1 do
-                local vals = type(store[i]) == "table" and store[i].values
-                if type(vals) == "table" then
-                    local touched = false
-                    for _, m in pairs(vals) do
-                        if type(m) == "table" then
-                            for fkey in pairs(m) do
-                                if M.IsTarget(fkey) then m[fkey] = nil; touched = true end
-                            end
-                        end
-                    end
-                    if touched and (type(vals.default) ~= "table" or next(vals.default) == nil) then
-                        table.remove(store, i)
-                    end
-                end
-            end
-        end
-    end
+    WalkOverrides(data, true)
     return payload
 end
 
@@ -227,17 +225,30 @@ end
 -- The string and the data file
 ---------------------------------------------------------------------------------
 
-local function ListDir(dir)
-    local names = {}
-    for _, cmd in ipairs({ 'dir /b /ad "' .. dir .. '" 2>nul', 'ls -1 "' .. dir .. '" 2>/dev/null' }) do
-        local p = io.popen(cmd)
-        if p then
-            for line in p:lines() do names[#names + 1] = (line:gsub("[\r/]+$", "")) end
-            p:close()
-        end
-        if #names > 0 then break end
+local WINDOWS = package.config:sub(1, 1) == "\\"
+
+local function Lines(cmd)
+    local out = {}
+    local p = io.popen(cmd)
+    if p then
+        for line in p:lines() do out[#out + 1] = (line:gsub("[\r/]+$", "")) end
+        p:close()
     end
-    return names
+    return out
+end
+
+local function ListDir(dir)
+    return Lines(WINDOWS and ('dir /b /ad "' .. dir .. '" 2>nul') or ('ls -1 "' .. dir .. '" 2>/dev/null'))
+end
+
+-- References/ is gitignored, so a worktree reads the primary checkout's.
+local function ReferenceRoots()
+    local roots = { "References" }
+    local common = Lines("git rev-parse --path-format=absolute --git-common-dir" .. (WINDOWS and " 2>nul" or " 2>/dev/null"))[1]
+    if common and common ~= "" then
+        roots[2] = common:gsub("[/\\]%.git$", "") .. "/References"
+    end
+    return roots
 end
 
 local function Exists(path)
@@ -249,12 +260,11 @@ end
 -- Returns LibDeflate, or nil and why.
 function M.LoadLibDeflate()
     local path = os.getenv("KITNUI_LIBDEFLATE")
-    if not path then
-        for _, name in ipairs(ListDir("References")) do
-            local candidate = "References/" .. name .. "/EllesmereUI/Libs/LibDeflate/LibDeflate.lua"
-            if name:match("^EllesmereUI") and not name:match("_old$") and Exists(candidate) then
+    for _, root in ipairs(path and {} or ReferenceRoots()) do
+        for _, name in ipairs(ListDir(root)) do
+            local candidate = root .. "/" .. name .. "/EllesmereUI/Libs/LibDeflate/LibDeflate.lua"
+            if not path and name:match("^EllesmereUI") and not name:match("_old$") and Exists(candidate) then
                 path = candidate
-                break
             end
         end
     end
@@ -291,13 +301,17 @@ end
 
 local function Main(args)
     local clean = args[1] == "--clean"
-    local lib, why = M.LoadLibDeflate()
-    if not lib then
-        print("skip: " .. why)
-        return 0
-    end
     local text, s, i, j = M.ReadData(M.DATA_PATH)
     if not text then print(s) return 1 end
+    if s == "" then
+        print("clean: the shipped EllesmereUI string is empty")
+        return 0
+    end
+    local lib, why = M.LoadLibDeflate()
+    if not lib then
+        print((clean and "cannot clean: " or "skip: ") .. why)
+        return clean and 1 or 0
+    end
     local payload, err = M.Decode(lib, s)
     if not payload then print(err) return 1 end
     local found = M.Findings(payload)
