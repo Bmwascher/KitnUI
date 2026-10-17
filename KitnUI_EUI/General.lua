@@ -314,10 +314,7 @@ ns.CurrentLook = CurrentLook
 -- refreshers to repaint. Anything that defers under lockdown leaves the stored
 -- values ahead of the screen, half-applied mid-fight.
 local function PickLook(key)
-    if InCombatLockdown() then
-        print(ns.title .. ": Appearance cannot be changed in combat.")
-        return
-    end
+    if ns.EUIRefuseInCombat("Appearance") then return end
 
     ApplyLook(key)
 
@@ -337,9 +334,7 @@ local function SetResourceBarDark(on)
     if on and ns.EUIRefuseResourceGapClaim and ns.EUIRefuseResourceGapClaim() then return end
     if not on and ns.EUIRefuseIfEditSession and ns.EUIRefuseIfEditSession() then return end
 
-    if InCombatLockdown() then
-        print(ns.title .. ": Appearance cannot be changed in combat.")
-    elseif _G.EllesmereUI and EllesmereUI.SetDarkModeAll then
+    if not ns.EUIRefuseInCombat("Appearance") and _G.EllesmereUI and EllesmereUI.SetDarkModeAll then
         pcall(EllesmereUI.SetDarkModeAll, on, IsResourceBars)
         -- Inside the same branch as the module's own switch: the combat refusal
         -- above leaves the data untouched, and the seam colour has to follow it.

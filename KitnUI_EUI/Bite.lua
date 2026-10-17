@@ -26,15 +26,6 @@ end
 
 ns.BaselineLive = BaselineLive
 
--- The toggle has already animated to the new position and never re-reads its
--- getter, so a refused click keeps showing a state that did not happen without
--- a rebuild.
-local function Refuse(message)
-    print(ns.title .. ": " .. message)
-    local EUI = _G.EllesmereUI
-    if EUI and EUI.RefreshPage then pcall(EUI.RefreshPage, EUI, true) end
-end
-
 -- An override editing session watches every value write, and reads a forced
 -- value that matches the group's default as the user reverting it, which
 -- deletes the captured override outright. Nothing recorded here could put that
@@ -49,17 +40,6 @@ end
 local EDIT_SESSION_REFUSAL =
     "Cannot change this while an override editing session is open, because the "
     .. "session would take the change as your own edit. Close it and try again."
-
--- Refused rather than queued. EllesmereUI's toggle sends the opposite of what
--- its getter reads, and a queued click leaves the switch unchanged until the
--- fight ends, so a second click in the same fight would repeat the first
--- instead of undoing it. The host gates its own ways into the panel in combat,
--- but not every one, so these switches can be clicked mid-fight.
-local function RefuseInCombat(name)
-    if not InCombatLockdown() then return false end
-    Refuse(name .. " cannot be changed in combat.")
-    return true
-end
 
 local combatWatcher
 local combatPending = {}
@@ -76,8 +56,11 @@ local function RunOutOfCombat(fn)
             self:UnregisterEvent("PLAYER_REGEN_ENABLED")
             local queued = combatPending
             combatPending = {}
+            -- xpcall: a raising entry is reported with its stack and does not
+            -- skip the entries after it.
+            local report = geterrorhandler()
             for i = 1, #queued do
-                pcall(queued[i])
+                xpcall(queued[i], report)
             end
         end)
     end
@@ -274,7 +257,7 @@ local DIVERGENT_REFUSAL =
 
 local function RefuseIfDivergent(fkeys, keep)
     if not SlotsDisagree(fkeys, keep) then return false end
-    Refuse(DIVERGENT_REFUSAL)
+    ns.EUIRefuse(DIVERGENT_REFUSAL, true)
     return true
 end
 
@@ -475,10 +458,17 @@ end
 -- The re-apply asserts only while this control's own state is on. That is
 -- what makes a user's decision to switch it off survive a login: nothing
 -- re-acquires it.
+--
+-- Refused in combat rather than queued, here and in ns.SetBiteMode.
+-- EllesmereUI's toggle sends the opposite of what its getter reads, and a
+-- queued click leaves the switch unchanged until the fight ends, so a second
+-- click in the same fight would repeat the first instead of undoing it. The
+-- host gates its own ways into the panel in combat, but not every one, so
+-- these switches can be clicked mid-fight.
 function ns.SetDarkCastBar(on)
-    if RefuseInCombat("Dark Cast Bar") then return end
+    if ns.EUIRefuseInCombat("Dark Cast Bar", true) then return end
     if EditSessionActive() then
-        Refuse(EDIT_SESSION_REFUSAL)
+        ns.EUIRefuse(EDIT_SESSION_REFUSAL, true)
         return
     end
     if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
@@ -535,7 +525,7 @@ end
 
 function ns.EUIRefuseIfEditSession()
     if not EditSessionActive() then return false end
-    Refuse(EDIT_SESSION_REFUSAL)
+    ns.EUIRefuse(EDIT_SESSION_REFUSAL, true)
     return true
 end
 
@@ -575,7 +565,7 @@ end
 
 function ns.ApplyResourceGap(on, claiming)
     if EditSessionActive() then
-        if claiming then Refuse(EDIT_SESSION_REFUSAL) end
+        if claiming then ns.EUIRefuse(EDIT_SESSION_REFUSAL, true) end
         return
     end
     if on and claiming and RefuseIfDivergent(GAP_FKEYS) then return end
@@ -1212,8 +1202,9 @@ local function AnyBuffRecord()
     return false
 end
 
--- Inside the open panel each slot keeps its value until the close; a click
--- made with the panel closed holds at once.
+-- Inside the open panel each slot keeps its value until the close. The click
+-- is always made inside the panel, so holding at once with the panel closed
+-- is defensive.
 local function ClaimBuffOffsets(candidates)
     if #candidates == 0 or not WatchPanel() then return end
     for i = 1, #candidates do
@@ -1393,7 +1384,7 @@ ns.BiteHoldsAnchors = BiteHoldsAnchors
 
 local function CommitBite(on)
     if EditSessionActive() then
-        Refuse(EDIT_SESSION_REFUSAL)
+        ns.EUIRefuse(EDIT_SESSION_REFUSAL, true)
         return
     end
     -- Both key sets, before the anchors move. Bite Mode turns Dark Cast Bar on as
@@ -1404,7 +1395,7 @@ local function CommitBite(on)
         return
     end
     if on and not ns.BaselineLive() then
-        Refuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.")
+        ns.EUIRefuse("Bite Mode cannot be turned on while a spec override layout is active. Switch back to your normal layout and try again.", true)
         return
     end
 
@@ -1418,12 +1409,13 @@ local function CommitBite(on)
         -- state written before that answer would leave the row reading on
         -- while owning and applying nothing.
         if not ApplyAnchors(true, true) then
-            Refuse("Bite Mode could not read EllesmereUI's saved layout. Reload and try again.")
+            ns.EUIRefuse("Bite Mode could not read EllesmereUI's saved layout. Reload and try again.", true)
             return
         end
         local record = ns.EUISnap(BITE_SECTION, "darkWasOn")
-        -- Written once per activation. A second ON would otherwise record the
-        -- state the FIRST one produced, which is Dark Cast Bar already on.
+        -- Written once per activation. Nothing sends a second ON before an
+        -- OFF clears the marker, so the guard is defensive: a second ON would
+        -- record the state the first produced, Dark Cast Bar already on.
         if record and record.darkWasOn == nil then
             record.darkWasOn = ns.DarkCastBarEnabled()
         end
@@ -1447,7 +1439,7 @@ local function CommitBite(on)
 end
 
 function ns.SetBiteMode(on)
-    if RefuseInCombat("Bite Mode") then return end
+    if ns.EUIRefuseInCombat("Bite Mode", true) then return end
     CommitBite(on)
 end
 

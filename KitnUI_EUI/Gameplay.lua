@@ -84,7 +84,7 @@ local function RunOutOfCombat(fn)
             self:UnregisterEvent("PLAYER_REGEN_ENABLED")
             local run = pending
             pending = nil
-            if run then run() end
+            if run then xpcall(run, geterrorhandler()) end
         end)
     end
     combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -472,13 +472,7 @@ end)
 -- re-apply's one pending slot, so a profile or spec change in the same fight
 -- would replace it and lose the claim with nothing said.
 local function SetBeginnerMode(on)
-    if InCombatLockdown() then
-        print(ns.title .. ": Beginner Mode cannot be changed in combat.")
-        if _G.EllesmereUI and EllesmereUI.RefreshPage then
-            pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
-        end
-        return
-    end
+    if ns.EUIRefuseInCombat("Beginner Mode", true) then return end
     local s = ns.EUISettings()
     if not s then return end
     s.beginner = on and true or false

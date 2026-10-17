@@ -583,6 +583,24 @@ function ns.EUIRebuildForOwnership(page)
     end
 end
 
+-- `refresh` rebuilds the page: a toggle has already animated to its new
+-- position and never re-reads its getter, so a refused click keeps showing a
+-- state that did not happen until its row is rebuilt.
+function ns.EUIRefuse(message, refresh)
+    print(ns.title .. ": " .. message)
+    if refresh and _G.EllesmereUI and EllesmereUI.RefreshPage then
+        pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+    end
+end
+
+-- True, after refusing with "<name> cannot be changed in combat." and `tail`,
+-- when the caller must stop.
+function ns.EUIRefuseInCombat(name, refresh, tail)
+    if not InCombatLockdown() then return false end
+    ns.EUIRefuse(name .. " cannot be changed in combat." .. (tail or ""), refresh)
+    return true
+end
+
 ---------------------------------------------------------------------------------
 -- Profile lifecycle
 ---------------------------------------------------------------------------------

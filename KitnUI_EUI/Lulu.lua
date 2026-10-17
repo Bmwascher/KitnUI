@@ -508,16 +508,7 @@ end
 -- Every part of this needs a reload to be true, so the switch owns the popup and
 -- the reload rather than each part doing its own.
 function ns.SetLuluMode(on)
-    if InCombatLockdown() then
-        print(ns.title .. ": Lulu Mode cannot be changed in combat.")
-        -- The toggle already animated to the new position when it called this,
-        -- and it never re-reads its getter, so it would keep showing a state
-        -- that was refused. RefreshPage rebuilds the row from the real value.
-        if _G.EllesmereUI and EllesmereUI.RefreshPage then
-            pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
-        end
-        return
-    end
+    if ns.EUIRefuseInCombat("Lulu Mode", true) then return end
 
     local text
     if on then
@@ -540,14 +531,7 @@ function ns.SetLuluMode(on)
             -- would return false, and the ReloadUI on the next line means
             -- nothing ever retries: Lulu Mode would end up half applied, with
             -- the minimap and the action bars changed and the layout missing.
-            if InCombatLockdown() then
-                print(ns.title .. ": Lulu Mode cannot be changed in combat. Try again after this fight.")
-                -- Same reason as the entry guard: the knob already moved.
-                if _G.EllesmereUI and EllesmereUI.RefreshPage then
-                    pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
-                end
-                return
-            end
+            if ns.EUIRefuseInCombat("Lulu Mode", true, " Try again after this fight.") then return end
             local s = ns.EUISettings()
             s.lulu = on and true or false
             ApplyMinimapShape(on, true)
@@ -556,7 +540,7 @@ function ns.SetLuluMode(on)
             ReloadUI()
         end,
         OnCancel = function()
-            -- Same reason as the combat guard: the knob already moved.
+            -- The knob already moved and never re-reads its getter.
             if _G.EllesmereUI and EllesmereUI.RefreshPage then
                 pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
             end
@@ -797,8 +781,7 @@ function ns.LuluReconcile()
             -- be opened out of combat and accepted mid-fight, and
             -- ApplyPresetEditMode refuses in combat. The reload on the next line
             -- means nothing retries, so a half-done Lulu would be permanent.
-            if InCombatLockdown() then
-                print(ns.title .. ": Lulu Mode cannot be changed in combat. Try again after this fight.")
+            if ns.EUIRefuseInCombat("Lulu Mode", false, " Try again after this fight.") then
                 promptedForMismatch = nil
                 return
             end
