@@ -216,8 +216,6 @@ function W:Build()
     f.SubBack:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
     f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 14, "", 1, 1, 1, 1)
     f.SubBack._lbl:SetPoint("LEFT")
-    f.SubBack._lbl:SetText("< Back to EllesmereUI")
-    f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
     onAccent(function(c) f.SubBack._lbl:SetTextColor(c[1], c[2], c[3], 1) end)
     f.SubBack:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 1, 1, 1) end)
     f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(accent[1], accent[2], accent[3], 1) end)
@@ -934,8 +932,11 @@ function W:ShowSubPage(title, draw)
     f.Desc3:SetText("")
     W.subPage = draw
     f.SubTitle:SetText(title)
+    local step = W.stepTitles and W.stepTitles[W.page]
+    f.SubBack._lbl:SetText(step and ("< Back to " .. step) or "< Back")
+    f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
     f.SubBack:Show()
-    if f.Back._lbl then f.Back._lbl:SetText("< EllesmereUI") end
+    if f.Back._lbl then f.Back._lbl:SetText(step and ("< " .. step) or "< Back") end
     f.Back:Show()
     draw()
 end
