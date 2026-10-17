@@ -208,7 +208,7 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
     -- Combat-guarded, like every other caller of the RAW apply. ns.ApplyLook
     -- carries no refusal of its own; the refusal lives in the config page's
     -- PickLook wrapper, which this path does not go through. A look is not one
-    -- write - it flips dark mode across two modules and asks three refreshers to
+    -- write - it flips dark mode across two modules and asks four refreshers to
     -- repaint - so a mid-fight apply stores values the screen never finishes
     -- painting. The wizard refuses to OPEN in combat, but combat can start while
     -- it is already open. Skipped rather than deferred: the user picks a look on

@@ -188,6 +188,12 @@ local function ApplyLook(key)
                 end
             end
         end
+        -- The switch above repaints health color from the flags as they were,
+        -- and the reload it arms never repaints the class tier, so without this
+        -- the player frame keeps the old look until a /reload. The writes stay
+        -- after the switch: it rechecks the Dark Mode conditional override,
+        -- which banks the live values into the group being left.
+        if EllesmereUI.RefreshDarkMode then pcall(EllesmereUI.RefreshDarkMode) end
         -- Two refreshers, both required. ReloadFrames rebuilds the frames, but
         -- the unit NAME is rendered by its own pass and keeps the colour it was
         -- last painted with, so without the second call a look change leaves
@@ -310,7 +316,7 @@ ns.ApplyLook = ApplyLook
 ns.CurrentLook = CurrentLook
 
 -- Refused in combat because a look is not one write: it flips dark mode across
--- two modules, rewrites the unit and raid frame colour flags, and asks three
+-- two modules, rewrites the unit and raid frame color flags, and asks four
 -- refreshers to repaint. Anything that defers under lockdown leaves the stored
 -- values ahead of the screen, half-applied mid-fight.
 local function PickLook(key)
