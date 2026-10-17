@@ -1038,6 +1038,13 @@ local function finishScratch(scratchName)
     if d.profiles[scratchName] then e.DeleteProfile(scratchName) end
 end
 
+-- The rename into the backup took the notes, but the new profile carries the
+-- same switches and forced values. Copied, not moved: Restore previous brings
+-- the backup's own set back under this name.
+local function finishBackup()
+    if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(BACKUP, NAME, true) end
+end
+
 local function finishApply(plan, before)
     if plan.kind == "update" then ns.CompleteSetup("EllesmereUI") end
     ns.db.euiRowAt, ns.db.euiBases = ns.EUIRecordRows(plan.kind, before, {
@@ -1146,7 +1153,7 @@ function ns.EUIApplyUpdate(plan)
         -- The activation tail threw after the account writes: the merged
         -- profile is active and the visit's backup is intact, so Restore is
         -- offered.
-        if scratch then finishScratch(from) end
+        if scratch then finishScratch(from) else finishBackup() end
         if scaleTaken then ns.db.euiBackup.scaleTaken = true end
         ns.euiVisitBacked = true
         refreshAll()
@@ -1165,7 +1172,7 @@ function ns.EUIApplyUpdate(plan)
         end
     end
 
-    if scratch then finishScratch(from) end
+    if scratch then finishScratch(from) else finishBackup() end
     if scaleTaken then ns.db.euiBackup.scaleTaken = true end
     ns.euiVisitBacked = true
     finishApply(plan, before)

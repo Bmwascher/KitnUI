@@ -969,6 +969,41 @@ eq(ns.EUIUpdateState(), "update", "tail error: update is offered again")
 eq(ns.EUIRestorable(), "restore", "tail error: restore is offered")
 
 ---------------------------------------------------------------------------------
+-- The switch notes on the backup path
+---------------------------------------------------------------------------------
+
+local noteCalls
+local function recordNotes()
+    noteCalls = {}
+    ns.EUIMoveProfileRecords = function(from, to, keep)
+        noteCalls[#noteCalls + 1] = { from = from, to = to, keep = keep, stood = db.activeProfile == to and db.profiles[to] ~= nil }
+    end
+end
+local function notesRun(mode)
+    freshInstall()
+    ns.EUIStartDecodes()
+    plan = ns.EUIPrepareUpdate()
+    E.importMode = mode
+    recordNotes()
+    ok, err = ns.EUIApplyUpdate(plan)
+    ns.EUIMoveProfileRecords = nil
+    return noteCalls
+end
+
+for _, run in ipairs({ { mode = "activate", label = "notes" }, { mode = "throw_active", label = "notes (tail error)" } }) do
+    local got = notesRun(run.mode)
+    eq(#got, 1, run.label .. ": one note copy")
+    local c = got[1] or {}
+    eq(c.from, ns.EUIBackupName, run.label .. ": from the backup")
+    eq(c.to, "KitnUI", run.label .. ": to the new profile")
+    eq(c.keep, true, run.label .. ": copied, so the backup keeps its own")
+    eq(c.stood, true, run.label .. ": once the new profile is active")
+end
+for _, mode in ipairs({ "throw_before", "throw_stored" }) do
+    eq(#notesRun(mode), 0, "notes (" .. mode .. "): a rolled-back update copies nothing")
+end
+
+---------------------------------------------------------------------------------
 -- Restore previous
 ---------------------------------------------------------------------------------
 
@@ -1100,7 +1135,7 @@ eq(ns.EUIDecodeCache.byVersion["2026.08.22"] and ns.EUIDecodeCache.byVersion["20
     "decodes: an older base lands under its version")
 
 local moved = {}
-ns.EUIMoveProfileRecords = function(from, to) moved[#moved + 1] = from .. ">" .. to end
+ns.EUIMoveProfileRecords = function(from, to, keep) moved[#moved + 1] = from .. ">" .. to .. (keep and " kept" or "") end
 local scratchDeletedAfterMove
 local realDelete = E.DeleteProfile
 E.DeleteProfile = function(name)
@@ -1131,6 +1166,7 @@ eq(db.profiles[ns.EUIScratchName], nil, "visit: the scratch profile is deleted")
 check(db.profiles[ns.EUIBackupName] == backupProfile, "visit: the visit's backup profile is kept")
 check(ns.db.euiBackup == backupRec, "visit: and its record")
 eq(moved[1], ns.EUIScratchName .. ">KitnUI", "visit: the notes move back to the new profile")
+eq(#moved, 1, "visit: and the backup's notes are not copied again")
 eq(scratchDeletedAfterMove, true, "visit: before the scratch profile is deleted")
 eq(db.activeProfile, "KitnUI", "visit: KitnUI is active")
 

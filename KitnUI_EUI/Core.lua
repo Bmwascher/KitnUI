@@ -631,21 +631,25 @@ end
 -- orphans it and whatever KitnUI forced into that profile becomes unrestorable.
 -- The switch states need no help: they live inside the profile table itself, and
 -- EllesmereUI.RenameProfile moves that table wholesale.
-local function MoveProfileRecords(oldName, newName)
+--
+-- `keep` copies instead, for when both names end up holding the same forced
+-- values. The copy is deep because EUIRestore clears prev in place, and a shared
+-- record would release the value in both profiles at once.
+local function MoveProfileRecords(oldName, newName, keep)
     local snap = ns.db and ns.db.euiSnap
     if snap then
         for _, section in pairs(snap) do
             -- Never clobber: an existing newName record is real data.
             if section[oldName] and not section[newName] then
-                section[newName] = section[oldName]
+                section[newName] = keep and ns.EUIDeepCopy(section[oldName]) or section[oldName]
             end
-            section[oldName] = nil
+            if not keep then section[oldName] = nil end
         end
     end
 end
 
--- The update's scratch profile is deleted after its import, and the delete
--- drops its notes; KitnUI moves them back to the new profile first.
+-- The update moves the live profile aside before its import, and the rename
+-- takes the notes with it; KitnUI brings them back to the new profile.
 ns.EUIMoveProfileRecords = MoveProfileRecords
 
 -- EllesmereUI's RenameProfile moves the profile order entry, the spec

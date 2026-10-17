@@ -174,6 +174,21 @@ ns.EUIMoveProfileRecords("KitnUI (updating)", "KitnUI")
 eq(core.db.euiSnap.bite.KitnUI and core.db.euiSnap.bite.KitnUI.x.prev, 1, "move: the notes follow the name")
 eq(core.db.euiSnap.bite["KitnUI (updating)"], nil, "move: the old name keeps nothing")
 
+core.db = { euiSnap = { bite = { [BACKUP] = { x = { prev = 1 } } } } }
+ns.EUIMoveProfileRecords(BACKUP, "KitnUI", true)
+local bite = core.db.euiSnap.bite
+eq(bite.KitnUI and bite.KitnUI.x.prev, 1, "copy: the new name gets the notes")
+eq(bite[BACKUP] and bite[BACKUP].x.prev, 1, "copy: the old name keeps its own")
+check(bite.KitnUI ~= bite[BACKUP] and bite.KitnUI.x ~= bite[BACKUP].x, "copy: the copy shares no table")
+local live = { x = 9 }
+ns.EUIRestore(live, bite.KitnUI.x, "x")
+eq(live.x, 1, "copy: switching off restores the player's value")
+eq(bite[BACKUP].x.prev, 1, "copy: and the backup's note still holds")
+
+core.db = { euiSnap = { bite = { [BACKUP] = { x = { prev = 1 } }, KitnUI = { x = { prev = 2 } } } } }
+ns.EUIMoveProfileRecords(BACKUP, "KitnUI", true)
+eq(core.db.euiSnap.bite.KitnUI.x.prev, 2, "copy: an existing record under the new name is kept")
+
 local coreFile = assert(io.open("KitnUI_EUI/Core.lua", "rb"))
 local coreSource = coreFile:read("*a")
 coreFile:close()
