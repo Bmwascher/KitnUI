@@ -14,6 +14,17 @@
 
 - The friends badge skips a refresh it cannot read instead of raising an
   error
+- Right-clicking the clock or clicking the EllesmereUI icon in combat no
+  longer opens EllesmereUI's options, which raised a "blocked action" error.
+  You see EllesmereUI's own "Cannot open options during combat." instead,
+  the same as `/eui`
+
+### Settings Tab
+
+- **Bite Mode**, **Dark Cast Bar** and **Beginner Mode** can no longer be
+  changed during combat. Clicking one mid-fight now says so and leaves it as
+  it was. Before, a click waited for the fight to end, and clicking Bite
+  Mode off and back on in one fight could leave it off
 
 ---
 
