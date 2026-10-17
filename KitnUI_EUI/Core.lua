@@ -693,18 +693,25 @@ local function OnProfileRenamed(oldName, newName)
     RepairColorsPullFrom(oldName, newName)
 end
 
--- Without this, a new profile that reuses a deleted profile's name inherits the
--- old one's SNAPSHOTS and restores values it never had. The switch states go
--- with the profile table that EllesmereUI.DeleteProfile drops.
-local function OnProfileDeleted(name)
-    if type(name) ~= "string" then return end
-
+local function DropProfileRecords(name)
     local snap = ns.db and ns.db.euiSnap
     if snap then
         for _, section in pairs(snap) do
             section[name] = nil
         end
     end
+end
+
+-- The update reruns this when a delete raised before reaching the hook.
+ns.EUIDropProfileRecords = DropProfileRecords
+
+-- Without this, a new profile that reuses a deleted profile's name inherits the
+-- old one's SNAPSHOTS and restores values it never had. The switch states go
+-- with the profile table that EllesmereUI.DeleteProfile drops.
+local function OnProfileDeleted(name)
+    if type(name) ~= "string" then return end
+
+    DropProfileRecords(name)
 
     -- Deleting the ACTIVE profile repoints every db to Default without going
     -- through SwitchProfile, ApplyProfileData or OnSpecSwitchComplete, so this
@@ -1142,7 +1149,7 @@ KitnCommands["config"] = KitnCommands["options"]
 -- The read-through metatable above is one-way: KitnUI_EUI reads KitnUI's
 -- namespace, but anything this addon defines stays local until it is copied back
 -- here.
-local EXPORTS = { "EUIResetAll", "ApplyEUIOptionsTheme", "EUIThemeNames", "ApplyLook", "CurrentLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar", "EUIHeldPaths", "EUIMoveProfileRecords" }
+local EXPORTS = { "EUIResetAll", "ApplyEUIOptionsTheme", "EUIThemeNames", "ApplyLook", "CurrentLook", "LuluEnabled", "LuluLayoutName", "LuluApplyActionBars", "TopBar", "EUIHeldPaths", "EUIMoveProfileRecords", "EUIDropProfileRecords" }
 
 -- Its own frame, deliberately. The main boot handler above returns early when
 -- EllesmereUI is too old for RegisterModule, and none of these exports needs

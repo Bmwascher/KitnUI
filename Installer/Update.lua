@@ -277,9 +277,10 @@ end
 ---------------------------------------------------------------------------------
 
 function ns.EUICurrentSpecID()
-    local index = GetSpecialization and GetSpecialization() or 0
-    if not index or index <= 0 then return nil end
-    return GetSpecializationInfo(index)
+    local info = C_SpecializationInfo
+    local index = info and info.GetSpecialization and info.GetSpecialization()
+    if type(index) ~= "number" or index <= 0 or not info.GetSpecializationInfo then return nil end
+    return info.GetSpecializationInfo(index)
 end
 
 local function assignedSpecs()
@@ -939,9 +940,53 @@ end
 -- The acceptance: backup, import, rollbacks
 ---------------------------------------------------------------------------------
 
+-- EllesmereUI's profile calls run every module's repoint and keybind hooks, so
+-- one can raise partway through. The error is reported without unwinding; the
+-- profile table, read after the call, decides which rollback applies.
+-- xpcall, not pcall: the handler runs before the stack unwinds, so the report
+-- carries the raising frame's stack.
+local function report(err)
+    geterrorhandler()(err)
+    return err
+end
+
+local function try(fn, ...)
+    local args, n = { ... }, select("#", ...)
+    local ok, err = xpcall(function() return fn(unpack(args, 1, n)) end, report)
+    if ok then return nil end
+    return tostring(err)
+end
+
+-- The keybind and KitnUI's notes (through its hook) follow a rename in
+-- EllesmereUI's OnProfileRenamed, the rename's last call; a raise after the
+-- table moved skips it, so it runs again here. Both moves are no-ops once
+-- done, and the notes are moved directly in case that call raises too.
+local function rename(old, new)
+    local e, d = E(), DB()
+    local err = try(e.RenameProfile, old, new)
+    if err and d.profiles[new] ~= nil and d.profiles[old] == nil then
+        if e.OnProfileRenamed then try(e.OnProfileRenamed, old, new) end
+        if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(old, new) end
+    end
+    return err
+end
+
+-- The same for a delete, whose OnProfileDeleted clears the keybind and the
+-- notes. A note left under the name outlives the profile, and the live
+-- profile renamed into that name would then lose its own to it.
+local function delete(name)
+    local e, d = E(), DB()
+    local err = try(e.DeleteProfile, name)
+    if err and d.profiles[name] == nil then
+        if e.OnProfileDeleted then try(e.OnProfileDeleted, name) end
+        if ns.EUIDropProfileRecords then ns.EUIDropProfileRecords(name) end
+    end
+    return err
+end
+
 local function refreshAll()
     local e = E()
-    if e and e.RefreshAllAddons then e.RefreshAllAddons() end
+    if e and e.RefreshAllAddons then try(e.RefreshAllAddons) end
 end
 
 -- True when the import had changed the scale. EllesmereUI applies the scale
@@ -966,9 +1011,9 @@ end
 -- Nothing stored: the rename alone moves everything back. `rec` holds the
 -- scale to put back; only the visit's own backup record is cleared.
 local function rollbackA(err, detail, from, rec)
-    local e, d = E(), DB()
-    e.RenameProfile(from, NAME)
-    local ok = d.activeProfile == NAME
+    local d = DB()
+    rename(from, NAME)
+    local ok = d.activeProfile == NAME and d.profiles[NAME] ~= nil
     local scaled = restoreScale(rec)
     if from == BACKUP then ns.db.euiBackup = nil end
     refreshAll()
@@ -978,10 +1023,10 @@ end
 -- Stored without activating and the switch failed: remove the stored profile,
 -- put the moved one back under its name and its assignments back on it.
 local function rollbackB(err, detail, from, rec)
-    local e, d = E(), DB()
-    e.DeleteProfile(NAME)
-    e.RenameProfile(from, NAME)
-    local ok = d.activeProfile == NAME
+    local d = DB()
+    delete(NAME)
+    rename(from, NAME)
+    local ok = d.activeProfile == NAME and d.profiles[NAME] ~= nil
     for _, spec in ipairs(isTable(rec) and rec.assignedSpecs or {}) do
         assignSpec(spec)
     end
@@ -1031,11 +1076,11 @@ local function finishScratch(scratchName)
     local e, d = E(), DB()
     if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(scratchName, NAME) end
     if e.ColorSourcesProfileRenamed then
-        e.ColorSourcesProfileRenamed(scratchName, NAME)
+        try(e.ColorSourcesProfileRenamed, scratchName, NAME)
     elseif d.colorsPullFrom == scratchName then
         d.colorsPullFrom = NAME
     end
-    if d.profiles[scratchName] then e.DeleteProfile(scratchName) end
+    if d.profiles[scratchName] then delete(scratchName) end
 end
 
 -- The rename into the backup took the notes, but the new profile carries the
@@ -1122,16 +1167,25 @@ function ns.EUIApplyUpdate(plan)
         -- layout over the merged one, so the live profile moves aside first.
         from = freeScratchName()
         rec = { assignedSpecs = assigned, ppUIScale = d.ppUIScale, ppUIScaleAuto = d.ppUIScaleAuto, scaleTaken = scaleTaken }
-        e.RenameProfile(NAME, from)
-        if not (d.profiles[from] and d.activeProfile == from) then return false, T.scratchFail end
+        err = rename(NAME, from)
+        if not (d.profiles[from] and d.activeProfile == from) then
+            -- A rename that raised after moving the table left the active
+            -- name pointing at nothing.
+            if d.profiles[NAME] == nil then return rollbackA(T.scratchFail, err, from, rec) end
+            return false, T.scratchFail, err
+        end
     else
         from = BACKUP
-        if d.profiles[BACKUP] then e.DeleteProfile(BACKUP) end
+        if d.profiles[BACKUP] then
+            err = delete(BACKUP)
+            if d.profiles[BACKUP] then return false, T.renameFail, err end
+        end
         ns.db.euiBackup = backupRecord(assigned, scaleTaken)
-        e.RenameProfile(NAME, BACKUP)
+        err = rename(NAME, BACKUP)
         if not (d.profiles[BACKUP] and d.activeProfile == BACKUP) then
+            if d.profiles[NAME] == nil then return rollbackA(T.renameFail, err, BACKUP, ns.db.euiBackup) end
             ns.db.euiBackup = nil
-            return false, T.renameFail
+            return false, T.renameFail, err
         end
         rec = ns.db.euiBackup
     end
@@ -1161,11 +1215,11 @@ function ns.EUIApplyUpdate(plan)
     end
 
     if status == "spec_locked" then
-        e.SetProfile(NAME)
-        if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate, nil, from, rec) end
+        err = try(e.SetProfile, NAME)
+        if d.activeProfile ~= NAME then return rollbackB(T.switchFailUpdate, err, from, rec) end
         if plan.merged.customColors then
             if e.PointColorSectionsAt then
-                e.PointColorSectionsAt(NAME)
+                try(e.PointColorSectionsAt, NAME)
             elseif d.colorsApplyToAllProfiles ~= false then
                 d.colorsPullFrom = NAME
             end
@@ -1210,17 +1264,22 @@ function ns.EUIRestorePrevious()
         sections = {}
         for s, n in pairs(d.colorsSectionPullFrom) do sections[s] = n == BACKUP and NAME or n end
     end
-    e.SetProfile(BACKUP)
+    try(e.SetProfile, BACKUP)
     if d.activeProfile ~= BACKUP then return false, T.switchFail end
-    if d.profiles[NAME] then e.DeleteProfile(NAME) end
-    e.RenameProfile(BACKUP, NAME)
-    if not (d.profiles[NAME] and d.activeProfile == NAME) then return false, "Could not restore the backup." end
+    if d.profiles[NAME] then delete(NAME) end
+    rename(BACKUP, NAME)
+    if not (d.profiles[NAME] and d.activeProfile == NAME) then
+        -- Moved back under the backup's name, the profile is the active one
+        -- again and Restore stays on offer.
+        if d.profiles[BACKUP] == nil and d.profiles[NAME] then rename(NAME, BACKUP) end
+        return false, "Could not restore the backup."
+    end
     for _, spec in ipairs(isTable(rec.assignedSpecs) and rec.assignedSpecs or {}) do
         assignSpec(spec)
     end
     d.colorsPullFrom = rec.colorsPullFrom or nil
     if sections ~= nil then d.colorsSectionPullFrom = sections or nil end
-    if e.ApplyColorsToOUF then e.ApplyColorsToOUF() end
+    if e.ApplyColorsToOUF then try(e.ApplyColorsToOUF) end
     local scaled = restoreScale(rec)
     ns.db.euiBase = rec.base
     ns.db.addonVersions = ns.db.addonVersions or {}

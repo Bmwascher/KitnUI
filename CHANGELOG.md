@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.2.1
+
+### EllesmereUI Profile Update
+
+- **Update Profile** reads your current spec through the current game API,
+  so its confirm is right on clients with the old spec functions turned off
+- An EllesmereUI error partway through an update or **Restore previous** no
+  longer leaves your profile under the backup's name: KitnUI puts it back
+  and the error shows in your error log
+
+### Top Bar
+
+- The friends badge skips a refresh it cannot read instead of raising an
+  error
+
+---
+
 ## v2.2.0
 
 ### EllesmereUI Profile Update
