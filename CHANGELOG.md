@@ -38,7 +38,7 @@
   and what KitnUI's next update would change; hover a count to see the
   settings
 - **NEW:** Untick a part to keep yours through an update, and take it any
-  time later from Modules
+  time later from Individual Modules
 - **NEW:** **Reset** on a row puts just that part back to KitnUI's
   version; **Restore previous** undoes it
 - Right after an install or an update a part reads "Reload to Check" until
@@ -48,9 +48,9 @@
   many settings differ, such as "Differs - 18", and hovering lists them
 - Hover lists name Cooldown Manager specs, spells and trinket slots, Top
   Bar settings and the spells in aura lists instead of bare IDs
-- The update and Modules pages are redrawn: a dark panel behind the list,
-  taller rows, colored badges such as "Changed by You - 12", tick boxes
-  with a check or a cross, and nothing dimmed
+- The update and Individual Modules pages are redrawn: a dark panel behind
+  the list, taller rows, colored badges such as "Changed by You - 12", tick
+  boxes with a check or a cross, and nothing dimmed
 
 ### Installer
 
