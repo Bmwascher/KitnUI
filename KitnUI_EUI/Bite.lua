@@ -1208,8 +1208,9 @@ local function AnyBuffRecord()
     return false
 end
 
--- Inside the open panel each slot keeps its value until the close; a click
--- made with the panel closed holds at once.
+-- Inside the open panel each slot keeps its value until the close. The click
+-- is always made inside the panel, so holding at once with the panel closed
+-- is defensive.
 local function ClaimBuffOffsets(candidates)
     if #candidates == 0 or not WatchPanel() then return end
     for i = 1, #candidates do
@@ -1418,8 +1419,9 @@ local function CommitBite(on)
             return
         end
         local record = ns.EUISnap(BITE_SECTION, "darkWasOn")
-        -- Written once per activation. A second ON would otherwise record the
-        -- state the FIRST one produced, which is Dark Cast Bar already on.
+        -- Written once per activation. Nothing sends a second ON before an
+        -- OFF clears the marker, so the guard is defensive: a second ON would
+        -- record the state the first produced, Dark Cast Bar already on.
         if record and record.darkWasOn == nil then
             record.darkWasOn = ns.DarkCastBarEnabled()
         end
