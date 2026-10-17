@@ -50,24 +50,26 @@ local EDIT_SESSION_REFUSAL =
     "Cannot change this while an override editing session is open, because the "
     .. "session would take the change as your own edit. Close it and try again."
 
+-- Refused rather than queued. EllesmereUI's toggle sends the opposite of what
+-- its getter reads, and a queued click leaves the switch unchanged until the
+-- fight ends, so a second click in the same fight would repeat the first
+-- instead of undoing it. The host gates its own ways into the panel in combat,
+-- but not every one, so these switches can be clicked mid-fight.
+local function RefuseInCombat(name)
+    if not InCombatLockdown() then return false end
+    Refuse(name .. " cannot be changed in combat.")
+    return true
+end
+
 local combatWatcher
 local combatPending = {}
 
-local function DropClaims()
-    local kept = {}
-    for i = 1, #combatPending do
-        if not combatPending[i].claiming then kept[#kept + 1] = combatPending[i] end
-    end
-    combatPending = kept
-end
-
-local function RunOutOfCombat(fn, claiming, superseding)
+local function RunOutOfCombat(fn)
     if not InCombatLockdown() then
         fn()
-        return true
+        return
     end
-    if superseding then DropClaims() end
-    combatPending[#combatPending + 1] = { run = fn, claiming = claiming and true or false }
+    combatPending[#combatPending + 1] = fn
     if not combatWatcher then
         combatWatcher = CreateFrame("Frame")
         combatWatcher:SetScript("OnEvent", function(self)
@@ -75,12 +77,11 @@ local function RunOutOfCombat(fn, claiming, superseding)
             local queued = combatPending
             combatPending = {}
             for i = 1, #queued do
-                pcall(queued[i].run)
+                pcall(queued[i])
             end
         end)
     end
     combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-    return false
 end
 
 local function CastProfile(forWriting)
@@ -475,31 +476,17 @@ end
 -- what makes a user's decision to switch it off survive a login: nothing
 -- re-acquires it.
 function ns.SetDarkCastBar(on)
+    if RefuseInCombat("Dark Cast Bar") then return end
     if EditSessionActive() then
         Refuse(EDIT_SESSION_REFUSAL)
         return
     end
     if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
-    if not RunOutOfCombat(function()
-        -- Tested again here, not only before queueing: a session can be opened
-        -- during the fight this click is waiting out, and the queued write
-        -- would land inside it. The same goes for a membership change made
-        -- mid-fight.
-        if EditSessionActive() then
-            Refuse(EDIT_SESSION_REFUSAL)
-            return
-        end
-        if on and RefuseIfDivergent(DARK_CAST_FKEYS) then return end
-        -- Re-read inside the closure. A profile switch re-points db.profile in
-        -- place, so a table captured before a fight writes the old profile.
-        local settings = ns.EUISettings and ns.EUISettings() or nil
-        if not settings then return end
-        settings.darkCastBar = on and true or false
-        ApplyDarkCastBar(on, true)
-        ns.EUIRebuildForOwnership("General")
-    end, true, false) then
-        print(ns.title .. ": Dark Cast Bar is queued until you leave combat. Switching, importing or deleting a profile, changing spec, or changing EllesmereUI's Dark Mode, before then cancels it.")
-    end
+    local settings = ns.EUISettings and ns.EUISettings() or nil
+    if not settings then return end
+    settings.darkCastBar = on and true or false
+    ApplyDarkCastBar(on, true)
+    ns.EUIRebuildForOwnership("General")
 end
 
 -- The elseif branch is NOT optional. ns.EUIResetAll turns every switch off and
@@ -514,7 +501,7 @@ ns.EUIRegisterReapply(function()
         elseif ns.EUIHolds("darkcastbar") then
             ApplyDarkCastBar(false, false)
         end
-    end, false, true)
+    end)
 end)
 
 local BITE_SECTION = "bite"
@@ -1163,7 +1150,7 @@ local function PutBackAll()
             end
         end
     end
-    if wrote then RunOutOfCombat(RepaintAnchors, false, false) end
+    if wrote then RunOutOfCombat(RepaintAnchors) end
 end
 
 -- Runs inside the panel's OnShow, a frame before EllesmereUI's Default view
@@ -1226,7 +1213,7 @@ local function AnyBuffRecord()
 end
 
 -- Inside the open panel each slot keeps its value until the close; a click
--- that waited out a fight past the close holds at once.
+-- made with the panel closed holds at once.
 local function ClaimBuffOffsets(candidates)
     if #candidates == 0 or not WatchPanel() then return end
     for i = 1, #candidates do
@@ -1314,7 +1301,7 @@ ns.EUIRegisterReapply(function()
         elseif ns.EUIHolds(BITE_SECTION) then
             ApplyBuffOffset(false, false)
         end
-    end, false, true)
+    end)
 end)
 
 local function ApplyOverrideAnchors(on, swap, claiming)
@@ -1435,9 +1422,8 @@ local function CommitBite(on)
             return
         end
         local record = ns.EUISnap(BITE_SECTION, "darkWasOn")
-        -- Written once per activation. Two clicks can queue in one fight, and
-        -- the second would otherwise record the state the FIRST one produced,
-        -- which is Dark Cast Bar already on.
+        -- Written once per activation. A second ON would otherwise record the
+        -- state the FIRST one produced, which is Dark Cast Bar already on.
         if record and record.darkWasOn == nil then
             record.darkWasOn = ns.DarkCastBarEnabled()
         end
@@ -1461,9 +1447,8 @@ local function CommitBite(on)
 end
 
 function ns.SetBiteMode(on)
-    if not RunOutOfCombat(function() CommitBite(on) end, true, false) then
-        Refuse("Bite Mode is queued until you leave combat. Switching, importing or deleting a profile, changing spec, or changing EllesmereUI's Dark Mode, before then cancels it.")
-    end
+    if RefuseInCombat("Bite Mode") then return end
+    CommitBite(on)
 end
 
 -- The anchor half is gated inside ApplyAnchors; the spell text half is not,
@@ -1488,7 +1473,7 @@ ns.EUIRegisterReapply(function()
             local record = ns.EUIPeekSnap(BITE_SECTION, "darkWasOn")
             if record then record.darkWasOn = nil end
         end
-    end, false, true)
+    end)
 end)
 
 -- The ownership sentence on the General page is a string fixed when the row is
@@ -1516,7 +1501,7 @@ ns.EUIRegisterReapply(function()
             gapTipSeen, gapTipDark, gapTipHeld = true, dark, held
             ns.EUIRebuildForOwnership("General")
         end
-    end, false, true)
+    end)
 end)
 
 local function Settings()

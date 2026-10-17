@@ -146,10 +146,9 @@ failure.
   turning it off restores all three sentinels. It is the only switch whose apply
   rides a closure, so this is what proves that closure runs.
 
-  **This check used to ask for a combat toggle. That was impossible.** EllesmereUI
-  refuses to open its panel in combat and closes it when combat starts, so no
-  switch on that page can be clicked while locked down. The deferred branch stays
-  in the code as a defence against a host rule change and is documented as such.
+  **This check used to ask for a combat toggle.** Beginner Mode now refuses a
+  click in combat (the panel can be opened mid-fight from the Top Bar clock), so
+  there is no deferred toggle to test.
 - [ ] **11. Partial import.** Fresh distinct sentinels on every path. Import a
   profile carrying the switches ON while excluding the module blobs they force, and
   exclude Global Settings so `euiAccent` is not carried. **Every sentinel survives
@@ -159,11 +158,9 @@ failure.
   Then finish the cycle: off changes nothing; on claims and the probe shows the new
   notes; a final off restores every sentinel and returns to `NOTES 0`.
 - **12. The eviction race. REMOVED, not skipped, and not a pass.** It asked you to
-  turn Beginner Mode on during combat and switch profile before combat ended. That
-  cannot be done: the panel is closed in combat, so the switch cannot be clicked
-  and the race has no way in. The queued-claim branch and its cancelling message
-  stay in the code as a defence against a host rule change, and neither is
-  reachable from the interface today. Nothing here needs testing.
+  turn Beginner Mode on during combat and switch profile before combat ended.
+  Beginner Mode now refuses a click in combat, so nothing is queued and the race
+  has no way in. Nothing here needs testing.
 - [ ] **13. MANDATORY STANDALONE, after both passes.** The unloaded-module restore
   path, which neither pass reaches. Set the action bar sentinels, claim Beginner
   Mode with Lulu OFF, turn Lulu ON and reload. Now turn Beginner Mode OFF while

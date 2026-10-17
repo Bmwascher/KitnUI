@@ -617,10 +617,9 @@ end
 
 local hideWatcher
 
--- For triggers that a user can reach mid-fight. A re-apply SUPERSEDES any click
--- that is waiting out the fight, and closing the options window is what a player
--- does immediately after clicking one, so queueing it now would cancel the click
--- with nothing said. Held until the fight ends, where the click has already run.
+-- For triggers that a user can reach mid-fight, such as the options window
+-- closing in combat. Held until the fight ends, so no re-apply member runs
+-- under lockdown.
 function ns.EUIQueueReapplyOutOfCombat()
     if not InCombatLockdown() then
         ns.EUIQueueReapply()
