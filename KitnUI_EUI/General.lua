@@ -157,11 +157,13 @@ local function ApplyLook(key)
     local look = LOOKS[key]
     if not (look and _G.EllesmereUI) then return end
 
-    -- Every color flag is written BEFORE the dark mode switch below, because
-    -- that switch is the only call that repaints health color at once. The
-    -- unit frame reload it arms runs a frame later and never repaints the
-    -- class tier, and the player frame gets no repaint of its own, so a flag
-    -- written after the switch stays off screen until a /reload.
+    -- A pure view over the module providers, each of which flips its own flag
+    -- and repaints itself. Writing those flags directly is exactly what this
+    -- master exists to prevent. Filtered to the frame group: see NotResourceBars.
+    if EllesmereUI.SetDarkModeAll then
+        pcall(EllesmereUI.SetDarkModeAll, look.darkMode, NotResourceBars)
+    end
+
     local uf = ns.EUIProfile("EllesmereUIUnitFrames")
     if uf then
         for _, unit in ipairs(UNIT_KEYS) do
@@ -186,6 +188,18 @@ local function ApplyLook(key)
                 end
             end
         end
+        -- The switch above repaints health color from the flags as they were,
+        -- and the reload it arms never repaints the class tier, so without this
+        -- the player frame keeps the old look until a /reload. The writes stay
+        -- after the switch: it rechecks the Dark Mode conditional override,
+        -- which banks the live values into the group being left.
+        if EllesmereUI.RefreshDarkMode then pcall(EllesmereUI.RefreshDarkMode) end
+        -- Two refreshers, both required. ReloadFrames rebuilds the frames, but
+        -- the unit NAME is rendered by its own pass and keeps the colour it was
+        -- last painted with, so without the second call a look change leaves
+        -- names class-coloured with everything else already switched.
+        if _G._EUF_ReloadFrames then pcall(_G._EUF_ReloadFrames) end
+        if _G._EUF_RefreshUnitNames then pcall(_G._EUF_RefreshUnitNames) end
     end
 
     -- Two name renderers, only one live at a time: the top name bar suppresses
@@ -202,24 +216,8 @@ local function ApplyLook(key)
                 rf[k] = look.raidName
             end
         end
+        if _G._ERF_RefreshAll then pcall(_G._ERF_RefreshAll) end
     end
-
-    -- A pure view over the module providers, each of which flips its own flag
-    -- and repaints itself. Writing those flags directly is exactly what this
-    -- master exists to prevent. Filtered to the frame group: see NotResourceBars.
-    if EllesmereUI.SetDarkModeAll then
-        pcall(EllesmereUI.SetDarkModeAll, look.darkMode, NotResourceBars)
-    end
-
-    if uf then
-        -- Two refreshers, both required. ReloadFrames rebuilds the frames, but
-        -- the unit NAME is rendered by its own pass and keeps the colour it was
-        -- last painted with, so without the second call a look change leaves
-        -- names class-coloured with everything else already switched.
-        if _G._EUF_ReloadFrames then pcall(_G._EUF_ReloadFrames) end
-        if _G._EUF_RefreshUnitNames then pcall(_G._EUF_RefreshUnitNames) end
-    end
-    if rf and _G._ERF_RefreshAll then pcall(_G._ERF_RefreshAll) end
 end
 
 -- True only when every value this look writes currently holds that look's value,
@@ -318,7 +316,7 @@ ns.ApplyLook = ApplyLook
 ns.CurrentLook = CurrentLook
 
 -- Refused in combat because a look is not one write: it flips dark mode across
--- two modules, rewrites the unit and raid frame colour flags, and asks three
+-- two modules, rewrites the unit and raid frame color flags, and asks four
 -- refreshers to repaint. Anything that defers under lockdown leaves the stored
 -- values ahead of the screen, half-applied mid-fight.
 local function PickLook(key)
