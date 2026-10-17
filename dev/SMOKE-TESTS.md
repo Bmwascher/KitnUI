@@ -143,8 +143,7 @@ failure.
   turn each switch off: the sentinels recorded before the change must return.
 - [ ] **10. All three paths, pass A only.** Flip Beginner Mode on, out of combat,
   which is the only way it can be flipped at all. All THREE of its paths apply, and
-  turning it off restores all three sentinels. It is the only switch whose apply
-  rides a closure, so this is what proves that closure runs.
+  turning it off restores all three sentinels.
 
   **This check used to ask for a combat toggle.** Beginner Mode now refuses a
   click in combat (the panel can be opened mid-fight from the Top Bar clock), so

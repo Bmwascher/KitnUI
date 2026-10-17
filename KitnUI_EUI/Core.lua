@@ -558,8 +558,8 @@ end
 -- fires, so navigating during that frame rebuilds an unrelated page.
 --
 -- `page` is optional. Pass it when the call can happen long after the click --
--- Beginner Mode's claim lands when combat ends -- so the rebuild is skipped when
--- the user has moved on. Invalidation still runs, and returning to the page then
+-- a re-apply that waited out a fight -- so the rebuild is skipped when the user
+-- has moved on. Invalidation still runs, and returning to the page then
 -- takes the cold-build path. RefreshPage handles the panel-closed case itself.
 function ns.EUIRebuildForOwnership(page)
     if not _G.EllesmereUI then return end

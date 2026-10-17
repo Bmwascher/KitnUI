@@ -468,8 +468,9 @@ end)
 -- the default", so a deleted key would come back ON after a reload, and
 -- EllesmereUI's spec-override engine would separately bank the absence as a
 -- removal marker. Every switch in this addon follows the same rule.
--- Refused in combat rather than queued, for the reason Bite.lua's
--- RefuseInCombat gives.
+-- Refused in combat rather than queued: a queued claim would share the
+-- re-apply's one pending slot, so a profile or spec change in the same fight
+-- would replace it and lose the claim with nothing said.
 local function SetBeginnerMode(on)
     if InCombatLockdown() then
         print(ns.title .. ": Beginner Mode cannot be changed in combat.")
