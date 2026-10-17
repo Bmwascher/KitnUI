@@ -31,9 +31,9 @@
 
 ### EllesmereUI Modules
 
-- **NEW:** **Modules** on the EllesmereUI step lists each part of your
-  profile on its own: Action Bars, Unit Frames, Resource & Cast Bars, the
-  Top Bar and the rest
+- **NEW:** **Individual Modules** on the EllesmereUI step lists each part of
+  your profile on its own: Action Bars, Unit Frames, Resource & Cast Bars,
+  the Top Bar and the rest, with **< EllesmereUI** to return to the step
 - Each row shows whether you changed that part since KitnUI installed it
   and what KitnUI's next update would change; hover a count to see the
   settings
@@ -68,9 +68,8 @@
 - The login prompts take only **Later** or **No** as an answer. Escape, or
   a prompt that never reached the screen, used to count as No and could
   silence it for good
-- The window is a little larger so long counts fit their column, the
-  filled buttons are softer, and the **Modules** button sits beside the
-  profile status
+- The window is a little larger so long counts fit their column, and the
+  filled buttons are softer
 - New KitnUI and KitnUI Rasta backgrounds with a constellation cat
 - Slash commands in KitnUI's popups, chat messages and `/kitn` help are
   highlighted
