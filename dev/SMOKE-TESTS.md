@@ -1071,6 +1071,10 @@ moves.
   that addon's own window and reaches nothing protected, so refusing it would
   block a click that is safe, while the bar's own EllesmereUI icon a few places
   away has never refused.
+  **Superseded 2026-10-17:** that premise was wrong. Opening the panel in combat
+  builds pages that call protected functions (BugSack: ADDON_ACTION_BLOCKED,
+  `SetPropagateMouseClicks`). The right click and the EllesmereUI icon now both
+  refuse in combat with EllesmereUI's own "Cannot open options during combat."
 
 ## This supersedes two checks in Item 5
 
