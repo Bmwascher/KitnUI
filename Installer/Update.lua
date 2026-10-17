@@ -277,9 +277,10 @@ end
 ---------------------------------------------------------------------------------
 
 function ns.EUICurrentSpecID()
-    local index = GetSpecialization and GetSpecialization() or 0
-    if not index or index <= 0 then return nil end
-    return GetSpecializationInfo(index)
+    local info = C_SpecializationInfo
+    local index = info and info.GetSpecialization and info.GetSpecialization()
+    if type(index) ~= "number" or index <= 0 or not info.GetSpecializationInfo then return nil end
+    return info.GetSpecializationInfo(index)
 end
 
 local function assignedSpecs()

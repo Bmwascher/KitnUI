@@ -31,8 +31,10 @@ end
 
 local game = { combat = false, spec = 1, specID = 71 }
 _G.InCombatLockdown = function() return game.combat end
-_G.GetSpecialization = function() return game.spec end
-_G.GetSpecializationInfo = function() return game.specID end
+_G.C_SpecializationInfo = {
+    GetSpecialization = function() return game.spec end,
+    GetSpecializationInfo = function() return game.specID end,
+}
 
 local ns = { profileName = "KitnUI", data = {}, title = "KitnUI" }
 -- Core.lua's, which these files do not load.
@@ -367,6 +369,17 @@ eq(ns.db.euiBase, nil, "seed: a stale stamp seeds nothing")
 ns.db = { profiles = {}, addonVersions = { EllesmereUI = SHIPPED }, euiBase = "kept" }
 ns.EUISeedBase()
 eq(ns.db.euiBase, "kept", "seed: an existing base is never overwritten")
+
+---------------------------------------------------------------------------------
+-- The current spec
+---------------------------------------------------------------------------------
+
+-- Only C_SpecializationInfo is stubbed: the bare globals exist in game only
+-- while the loadDeprecationFallbacks CVar is on.
+eq(ns.EUICurrentSpecID(), 71, "spec: read through C_SpecializationInfo")
+game.spec = 0
+eq(ns.EUICurrentSpecID(), nil, "spec: no spec chosen reads nil")
+game.spec = 1
 
 ---------------------------------------------------------------------------------
 -- Page state and restorable
