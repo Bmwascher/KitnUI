@@ -341,6 +341,15 @@ function ns.EUIPeekSnap(section, key)
     return profile and profile[key] or nil
 end
 
+-- Every note a section holds in the active profile, for a release that has to
+-- find records whose bar or map has since gone. Never seeds.
+function ns.EUIPeekNotes(section)
+    local root = ns.db and ns.db.euiSnap
+    local sect = root and root[section]
+    local notes = sect and sect[ActiveProfileName()]
+    return (type(notes) == "table") and notes or nil
+end
+
 -- Record once, then write. The record-once guard matters on re-apply: without
 -- it, re-applying after a profile switch would snapshot KitnUI's own forced
 -- value over the user's original and make the switch unrestorable.

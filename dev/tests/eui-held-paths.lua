@@ -166,6 +166,19 @@ end
 check(found >= 7, "the source scan found the seven sections", found)
 
 ---------------------------------------------------------------------------------
+-- The notes reader
+---------------------------------------------------------------------------------
+
+check(type(ns.EUIPeekNotes) == "function", "ns.EUIPeekNotes is defined")
+if type(ns.EUIPeekNotes) == "function" then
+    core.db = { euiSnap = { bite = { Default = { x = { prev = 1 } } } } }
+    local notes = ns.EUIPeekNotes("bite")
+    eq(notes and notes.x and notes.x.prev, 1, "peek notes: the active profile's notes")
+    eq(ns.EUIPeekNotes("lulu"), nil, "peek notes: a section with no notes reads nil")
+    eq(core.db.euiSnap.lulu, nil, "peek notes: nothing is seeded")
+end
+
+---------------------------------------------------------------------------------
 -- The note move and the bridge
 ---------------------------------------------------------------------------------
 

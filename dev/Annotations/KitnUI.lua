@@ -37,6 +37,7 @@
 ---@field EUI_ABSENT string
 ---@field EUISnap fun(section: string, key: string): table|nil
 ---@field EUIPeekSnap fun(section: string, key: string): table|nil
+---@field EUIPeekNotes fun(section: string): table|nil
 ---@field EUISnapGlobal fun(key: string): table|nil
 ---@field EUIPeekSnapGlobal fun(key: string): table|nil
 ---@field EUIOverride fun(tbl: table, saved: table, key: string, value: any, claiming: boolean|nil)
