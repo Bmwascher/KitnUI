@@ -103,6 +103,14 @@ sameSet(heldFor("bite", "KitnUI", { ERB_CastBar = { prev = {} }, ERB_Power = { p
 sameSet(heldFor("bite", "KitnUI", { ["override:ERB_CastBar"] = { prev = "__kitnui_absent__" } }),
     { "unlockOverrideAnchors.ERB_CastBar" }, "bite override position")
 sameSet(heldFor("bite", "KitnUI", { darkWasOn = { prev = true } }), {}, "bite's dark flag holds no path")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031buffs\031262"] = { prev = 21 } }),
+    { FK .. CDM .. "\031cdmBars\030bars\0302\030addOffsetY" }, "bite buff offset in an override slot")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031gone\031262"] = { prev = 21 } }), {},
+    "bite buff offset for a bar that is gone")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031buffs"] = { prev = 21 } }), {},
+    "bite buff offset without a slot names nothing")
+sameSet(heldFor("bite", "KitnUI", { ["buffOffset\031buffs\031262"] = { prev = 21, shown = true } }), {},
+    "bite buff offset put back for the open panel holds nothing")
 sameSet(heldFor("darkcastbar", "KitnUI", { fillR = { prev = 1 }, ["bgA\03171"] = { prev = 0.5 } }),
     { "addons." .. RB .. ".castBar.fillR", FK .. RB .. "\31castBar\30bgA" }, "dark cast bar")
 sameSet(heldFor("darkresourcegap", "KitnUI", { gapR = { prev = 1 }, ["gapColorEnabled\31default"] = { prev = false } }),

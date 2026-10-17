@@ -652,8 +652,46 @@ end
 local CAST_KEY, POWER_KEY = "ERB_CastBar", "ERB_Power"
 local REPOSITIONED_KEYS = { CAST_KEY, POWER_KEY }
 
+local CDM_FOLDER = "EllesmereUICooldownManager"
+local BUFF_OFFSET_KEY = "addOffsetY"
+local BUFF_OFFSET_PREFIX = "buffOffset" .. FS
+
+-- Buff offset records name a bar by its key: deleting a bar shifts every later
+-- index, so the fkey is rebuilt from the current index on each pass.
+local function BuffOffsetFKey(index)
+    return CDM_FOLDER .. FS .. "cdmBars" .. PS .. "bars" .. PS .. tostring(index) .. PS .. BUFF_OFFSET_KEY
+end
+
+-- The stored profile is read on the release path only, where a switched-off
+-- module still holds values that have to be handed back.
+local function CdmBars(forWriting)
+    local profile = ns.EUIProfile and ns.EUIProfile(CDM_FOLDER) or nil
+    if not profile and not forWriting then
+        profile = ns.EUIStoredProfile and ns.EUIStoredProfile(CDM_FOLDER) or nil
+    end
+    local cdm = (type(profile) == "table") and profile.cdmBars or nil
+    local bars = (type(cdm) == "table") and cdm.bars or nil
+    return (type(bars) == "table") and bars or nil
+end
+
+local function BarIndexByKey(bars, barKey)
+    if not (bars and barKey) then return nil end
+    for i = 1, #bars do
+        local bar = bars[i]
+        if type(bar) == "table" and bar.key == barKey then return i end
+    end
+    return nil
+end
+
+-- "buffOffset\31<bar>\31<spec>" holds one override slot.
+local function ParseBuffOffsetKey(noteKey)
+    if type(noteKey) ~= "string" then return nil end
+    if noteKey:sub(1, #BUFF_OFFSET_PREFIX) ~= BUFF_OFFSET_PREFIX then return nil end
+    return noteKey:sub(#BUFF_OFFSET_PREFIX + 1):match("^([^\31]+)\31(.+)$")
+end
+
 -- darkWasOn remembers a switch state, not a setting, so it holds no path.
-ns.EUIRegisterHeld(BITE_SECTION, function(noteKey, _, add)
+ns.EUIRegisterHeld(BITE_SECTION, function(noteKey, note, add)
     if noteKey == "showSpellText" then
         add("addons." .. ERB_FOLDER .. ".castBar.showSpellText")
     elseif noteKey:match("^spellText\31") then
@@ -662,6 +700,13 @@ ns.EUIRegisterHeld(BITE_SECTION, function(noteKey, _, add)
         add("unlockLayout.anchors." .. noteKey)
     elseif noteKey == "override:" .. CAST_KEY or noteKey == "override:" .. POWER_KEY then
         add("unlockOverrideAnchors." .. noteKey:sub(#"override:" + 1))
+    else
+        local barKey = ParseBuffOffsetKey(noteKey)
+        local index = BarIndexByKey(CdmBars(false), barKey)
+        -- While the panel is open the maps carry the player's own value again,
+        -- so a record put back for it holds nothing.
+        if not index or (type(note) == "table" and note.shown) then return end
+        add(ns.EUI_HELD_FKEY .. BuffOffsetFKey(index))
     end
 end)
 
