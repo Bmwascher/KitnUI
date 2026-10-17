@@ -358,7 +358,7 @@ local function WelcomePage()
         .. "boss timers, and cooldowns, all tuned to work together out of the box.")
     f.Desc2:SetText("\n" .. ns.Red("WARNING") .. ": importing overwrites each addon's current settings. "
         .. "Only the addons you click are changed \226\128\148 exit now to keep everything as it is.")
-    f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with /kitn install.")
+    f.Desc3:SetText("Some changes finish applying on reload. Reinstall anytime with " .. ns.WizardColor("/kitn install") .. ".")
     ShowThemeOptions()
 end
 
