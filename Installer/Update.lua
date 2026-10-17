@@ -943,11 +943,30 @@ end
 -- EllesmereUI's profile calls run every module's repoint and keybind hooks, so
 -- one can raise partway through. The error is reported without unwinding; the
 -- profile table, read after the call, decides which rollback applies.
-local function try(fn, ...)
-    local ok, err = pcall(fn, ...)
-    if ok then return nil end
+-- xpcall, not pcall: the handler runs before the stack unwinds, so the report
+-- carries the raising frame's stack.
+local function report(err)
     geterrorhandler()(err)
+    return err
+end
+
+local function try(fn, ...)
+    local args, n = { ... }, select("#", ...)
+    local ok, err = xpcall(function() return fn(unpack(args, 1, n)) end, report)
+    if ok then return nil end
     return tostring(err)
+end
+
+-- KitnUI's notes follow a rename through a hook on EllesmereUI's
+-- OnProfileRenamed, the rename's last call; a raise after the table moved
+-- skips it, so the notes are moved here. Moving never overwrites a note.
+local function rename(old, new)
+    local d = DB()
+    local err = try(E().RenameProfile, old, new)
+    if err and d.profiles[new] ~= nil and d.profiles[old] == nil and ns.EUIMoveProfileRecords then
+        ns.EUIMoveProfileRecords(old, new)
+    end
+    return err
 end
 
 local function refreshAll()
@@ -977,8 +996,8 @@ end
 -- Nothing stored: the rename alone moves everything back. `rec` holds the
 -- scale to put back; only the visit's own backup record is cleared.
 local function rollbackA(err, detail, from, rec)
-    local e, d = E(), DB()
-    try(e.RenameProfile, from, NAME)
+    local d = DB()
+    rename(from, NAME)
     local ok = d.activeProfile == NAME and d.profiles[NAME] ~= nil
     local scaled = restoreScale(rec)
     if from == BACKUP then ns.db.euiBackup = nil end
@@ -991,7 +1010,7 @@ end
 local function rollbackB(err, detail, from, rec)
     local e, d = E(), DB()
     try(e.DeleteProfile, NAME)
-    try(e.RenameProfile, from, NAME)
+    rename(from, NAME)
     local ok = d.activeProfile == NAME and d.profiles[NAME] ~= nil
     for _, spec in ipairs(isTable(rec) and rec.assignedSpecs or {}) do
         assignSpec(spec)
@@ -1133,7 +1152,7 @@ function ns.EUIApplyUpdate(plan)
         -- layout over the merged one, so the live profile moves aside first.
         from = freeScratchName()
         rec = { assignedSpecs = assigned, ppUIScale = d.ppUIScale, ppUIScaleAuto = d.ppUIScaleAuto, scaleTaken = scaleTaken }
-        err = try(e.RenameProfile, NAME, from)
+        err = rename(NAME, from)
         if not (d.profiles[from] and d.activeProfile == from) then
             -- A rename that raised after moving the table left the active
             -- name pointing at nothing.
@@ -1147,7 +1166,7 @@ function ns.EUIApplyUpdate(plan)
             if d.profiles[BACKUP] then return false, T.renameFail, err end
         end
         ns.db.euiBackup = backupRecord(assigned, scaleTaken)
-        err = try(e.RenameProfile, NAME, BACKUP)
+        err = rename(NAME, BACKUP)
         if not (d.profiles[BACKUP] and d.activeProfile == BACKUP) then
             if d.profiles[NAME] == nil then return rollbackA(T.renameFail, err, BACKUP, ns.db.euiBackup) end
             ns.db.euiBackup = nil
@@ -1233,11 +1252,11 @@ function ns.EUIRestorePrevious()
     try(e.SetProfile, BACKUP)
     if d.activeProfile ~= BACKUP then return false, T.switchFail end
     if d.profiles[NAME] then try(e.DeleteProfile, NAME) end
-    try(e.RenameProfile, BACKUP, NAME)
+    rename(BACKUP, NAME)
     if not (d.profiles[NAME] and d.activeProfile == NAME) then
         -- Moved back under the backup's name, the profile is the active one
         -- again and Restore stays on offer.
-        if d.profiles[BACKUP] == nil and d.profiles[NAME] then try(e.RenameProfile, NAME, BACKUP) end
+        if d.profiles[BACKUP] == nil and d.profiles[NAME] then rename(NAME, BACKUP) end
         return false, "Could not restore the backup."
     end
     for _, spec in ipairs(isTable(rec.assignedSpecs) and rec.assignedSpecs or {}) do
