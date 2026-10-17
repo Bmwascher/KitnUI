@@ -581,8 +581,9 @@ setupFunctions["NSRT"] = function(addonKey, import)
         -- Preflight the decode before touching any saved state: the import
         -- API rejects only a non-table decode, so a decoded table with no
         -- data field would still create and activate an EMPTY profile.
-        local decoded = NSI:DecodeExportData(ns.data[addonKey], "Profile")
-        if type(decoded) ~= "table" or type(decoded.data) ~= "table" then
+        -- pcall: the decode's C calls can raise on a damaged string.
+        local decodeOk, decoded = pcall(NSI.DecodeExportData, NSI, ns.data[addonKey], "Profile")
+        if not decodeOk or type(decoded) ~= "table" or type(decoded.data) ~= "table" then
             print(ns.title .. ": NSRT import failed - the export string could not be decoded.")
             return false
         end
