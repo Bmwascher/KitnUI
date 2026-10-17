@@ -941,9 +941,8 @@ end
 ---------------------------------------------------------------------------------
 
 -- EllesmereUI's profile calls run every module's repoint and keybind hooks, so
--- one can raise partway through. Each runs protected and its error is reported
--- without stopping the sequence; the profile table, read after the call, says
--- what happened and which rollback applies. Returns the error text or nil.
+-- one can raise partway through. The error is reported without unwinding; the
+-- profile table, read after the call, decides which rollback applies.
 local function try(fn, ...)
     local ok, err = pcall(fn, ...)
     if ok then return nil end
