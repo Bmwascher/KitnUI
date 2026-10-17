@@ -119,7 +119,13 @@ E.establishPending = false
 E.Conditions_EstablishPending = function() return E.establishPending end
 E.SpecOverrides_HarvestCurrent = function() bump("harvest") end
 E.IsModuleAddonLoaded = function() return true end
-E.RefreshAllAddons = function() bump("refresh") end
+E.RefreshAllAddons = function()
+    bump("refresh")
+    if E.raise == "refresh" then
+        E.raise = nil
+        error("boom: refresh")
+    end
+end
 E.ApplyColorsToOUF = function() bump("colors") end
 E.DecodeImportString = decodeToken
 E.asyncMode = "sync"
@@ -196,19 +202,38 @@ local function setColors94(on)
     for k, fn in pairs(colors94) do E[k] = on and fn or nil end
 end
 
+-- One EllesmereUI call raises at the named point, once: the real ones run
+-- every module's hooks, so a raise can land before, during or after the
+-- profile table moves. Reported errors are collected, not printed.
+E.raise = nil
+local function raiseAt(point)
+    if E.raise == point then
+        E.raise = nil
+        error("boom: " .. point)
+    end
+end
+local raised = {}
+_G.geterrorhandler = function()
+    return function(msg) raised[#raised + 1] = tostring(msg) end
+end
+
 E.RenameProfile = function(old, new)
     bump("rename")
     if E.renameFails then return end
+    raiseAt("rename_before")
     db.profiles[new] = db.profiles[old]
     db.profiles[old] = nil
+    raiseAt("rename_moved")
     if db.activeProfile == old then db.activeProfile = new end
     for spec, name in pairs(db.specProfiles) do
         if name == old then db.specProfiles[spec] = new end
     end
     if E.ColorSourcesProfileRenamed then E.ColorSourcesProfileRenamed(old, new) end
+    raiseAt("rename_after")
 end
 E.DeleteProfile = function(name)
     bump("delete")
+    raiseAt("delete_before")
     db.profiles[name] = nil
     for spec, n in pairs(db.specProfiles) do
         if n == name then db.specProfiles[spec] = nil end
@@ -219,11 +244,14 @@ E.DeleteProfile = function(name)
         db.colorsPullFrom = nil
     end
     if db.activeProfile == name then db.activeProfile = "Default" end
+    raiseAt("delete_after")
 end
 E.SetProfile = function(name)
     bump("set")
     if E.switchFails then return end
+    raiseAt("set_before")
     if db.profiles[name] then db.activeProfile = name end
+    raiseAt("set_after")
 end
 -- The resolver classifies every endpoint, children and targets alike. The
 -- filter keeps a link only when both endpoints resolve to a kept folder, and
@@ -336,6 +364,8 @@ local function freshInstall(opts)
     E.live = nil
     E.importMode = "activate"
     E.exportFails, E.renameFails, E.switchFails = nil, nil, nil
+    E.raise = nil
+    raised = {}
     E._unlockModeActive = false
     E.establishPending = false
     E.asyncMode = "sync"
@@ -1252,6 +1282,151 @@ E.renameFails = nil
 eq(stuckOk, false, "scratch: a rename that fails stops the change")
 eq(stuckErr, "Could not move your profile aside for the update. Nothing was imported.", "scratch: with its own line, not the backup's")
 eq(calls.import, nil, "scratch: and nothing is imported")
+
+---------------------------------------------------------------------------------
+-- EllesmereUI calls that raise partway
+---------------------------------------------------------------------------------
+
+-- The rename into the backup raises after moving the table: the profile goes
+-- back under its name and nothing is imported.
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.raise = "rename_moved"
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "raise (backup rename): reports failure")
+check(err and err:find("Could not back up your profile.", 1, true) and err:find("put back", 1, true),
+    "raise (backup rename): the failure and the outcome are named", err)
+check(detail and detail:find("rename_moved", 1, true), "raise (backup rename): the error is the detail", detail)
+eq(#raised, 1, "raise (backup rename): the error is reported")
+eq(calls.import, nil, "raise (backup rename): nothing is imported")
+eq(db.profiles.KitnUI and db.profiles.KitnUI.addons[F].y, 9, "raise (backup rename): the player's profile is back")
+eq(db.activeProfile, "KitnUI", "raise (backup rename): and active")
+eq(db.profiles[ns.EUIBackupName], nil, "raise (backup rename): no backup profile is left")
+eq(ns.db.euiBackup, nil, "raise (backup rename): and no record")
+
+-- A raise before the table moves leaves the profile where it was.
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.raise = "rename_before"
+ok, err = ns.EUIApplyUpdate(plan)
+eq(ok, false, "raise (rename before): reports failure")
+eq(err, "Could not back up your profile.", "raise (rename before): with the backup line")
+eq(db.activeProfile, "KitnUI", "raise (rename before): KitnUI is active")
+eq(ns.db.euiBackup, nil, "raise (rename before): no record")
+
+-- A raise after the rename finished changes nothing the profile table shows,
+-- so the update goes on.
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.raise = "rename_after"
+ok, err = ns.EUIApplyUpdate(plan)
+eq(ok, true, "raise (rename after): the update applies", err)
+eq(#raised, 1, "raise (rename after): the error is still reported")
+eq(db.profiles.KitnUI.addons[F].x, 5, "raise (rename after): the merge is stored")
+eq(ns.EUIRestorable(), "restore", "raise (rename after): restore is offered")
+
+-- The previous backup's delete: a raise before it removed the profile stops
+-- the update; one after lets it go on.
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+ns.EUIBeginVisit()
+ns.db.addonVersions.EllesmereUI = "2026.08.22"
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.raise = "delete_before"
+calls = {}
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "raise (delete before): reports failure")
+eq(err, "Could not back up your profile.", "raise (delete before): with the backup line")
+check(detail and detail:find("delete_before", 1, true), "raise (delete before): the error is the detail", detail)
+eq(calls.rename, nil, "raise (delete before): the live profile is not moved")
+eq(db.activeProfile, "KitnUI", "raise (delete before): KitnUI is active")
+E.raise = "delete_after"
+ok, err = ns.EUIApplyUpdate(plan)
+eq(ok, true, "raise (delete after): the update applies", err)
+
+-- The scratch path: a raise after the table moved puts the profile back.
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate({ [F] = true }))
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate({ general = true })
+E.raise = "rename_moved"
+calls = {}
+ok, err = ns.EUIApplyUpdate(plan)
+eq(ok, false, "raise (scratch rename): reports failure")
+check(err and err:find("Nothing was imported.", 1, true) and err:find("put back", 1, true),
+    "raise (scratch rename): the failure and the outcome are named", err)
+eq(calls.import, nil, "raise (scratch rename): nothing is imported")
+eq(db.activeProfile, "KitnUI", "raise (scratch rename): KitnUI is active")
+check(db.profiles.KitnUI ~= nil, "raise (scratch rename): under its own name")
+eq(db.profiles[ns.EUIScratchName], nil, "raise (scratch rename): no scratch profile is left")
+check(db.profiles[ns.EUIBackupName] ~= nil and ns.db.euiBackup ~= nil, "raise (scratch rename): the visit's backup stands")
+
+-- The spec-locked switch: a raise before the switch rolls back B with the
+-- error as the detail; one after it lets the update finish.
+freshInstall()
+db.specProfiles[71] = "Other"
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.importMode = "spec_locked"
+E.raise = "set_before"
+ok, err, detail = ns.EUIApplyUpdate(plan)
+eq(ok, false, "raise (switch before): reports failure")
+check(err and err:find("Could not switch to the updated profile", 1, true), "raise (switch before): names the switch", err)
+check(detail and detail:find("set_before", 1, true), "raise (switch before): the error is the detail", detail)
+eq(db.activeProfile, "KitnUI", "raise (switch before): the player's profile is active")
+eq(db.profiles.KitnUI.addons[F].y, 9, "raise (switch before): and is the player's")
+eq(ns.db.euiBackup, nil, "raise (switch before): the record is cleared")
+freshInstall()
+db.specProfiles[71] = "Other"
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.importMode = "spec_locked"
+E.raise = "set_after"
+ok, err = ns.EUIApplyUpdate(plan)
+eq(ok, true, "raise (switch after): the update applies", err)
+
+-- The closing refresh: the update has landed, so it still completes.
+freshInstall()
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.raise = "refresh"
+calls = {}
+ok, err = ns.EUIApplyUpdate(plan)
+eq(ok, true, "raise (refresh): the update applies", err)
+eq(calls.apply, 1, "raise (refresh): the module set is still applied")
+eq(#raised, 1, "raise (refresh): the error is reported")
+
+-- Restore: a rename that raised after moving the table goes back under the
+-- backup's name, and Restore stays on offer.
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+E.raise = "rename_moved"
+ok, err = ns.EUIRestorePrevious()
+eq(ok, false, "raise (restore rename): reports failure")
+eq(err, "Could not restore the backup.", "raise (restore rename): with the restore line")
+eq(db.activeProfile, ns.EUIBackupName, "raise (restore rename): the backup is active")
+check(db.profiles[ns.EUIBackupName] ~= nil, "raise (restore rename): under the backup's name")
+eq(ns.EUIRestorable(), "restore", "raise (restore rename): restore is offered again")
+ok, err = ns.EUIRestorePrevious()
+eq(ok, true, "raise (restore rename): the second restore succeeds", err)
+eq(db.profiles.KitnUI.addons[F].y, 9, "raise (restore rename): the player's profile is back")
+
+-- Restore: a switch that raised after switching goes on.
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+E.raise = "set_after"
+ok, err = ns.EUIRestorePrevious()
+eq(ok, true, "raise (restore switch after): restores", err)
+eq(db.activeProfile, "KitnUI", "raise (restore switch after): KitnUI is active")
+eq(#raised, 1, "raise (restore switch after): the error is reported")
 
 ---------------------------------------------------------------------------------
 -- Restore puts the record back and ends the visit's backing

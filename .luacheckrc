@@ -99,6 +99,9 @@ read_globals = {
     -- Combat lockdown
     "InCombatLockdown",
 
+    -- Reports an EllesmereUI error without unwinding the profile sequence
+    "geterrorhandler",
+
     -- Top bar launchers (gamemenu, clock: insecure toggles, refuse in combat)
     "UIErrorsFrame", "ERR_NOT_IN_COMBAT", "GameMenuFrame",
     "ShowUIPanel", "HideUIPanel", "ToggleCalendar", "ToggleTimeManager",
