@@ -854,7 +854,7 @@ local function ConfirmOverwriteInstall(fn)
 
     if ns.db and ns.db.perChar[key] then
         StaticPopupDialogs["KITNUI_OVERWRITE_CONFIRM"] = {
-            text = ns.title .. ": You have already installed profiles. This will overwrite any local changes. If you just want to load profiles on a new character, use /kitn load instead.\n\nContinue?",
+            text = ns.title .. ": You have already installed profiles. This will overwrite any local changes. If you just want to load profiles on a new character, use " .. ns.Color("/kitn load") .. " instead.\n\nContinue?",
             button1 = "Yes",
             button2 = "No",
             OnAccept = fn,
@@ -882,7 +882,7 @@ end
 
 KitnCommands["load"] = function()
     if not ns.db.profiles or not next(ns.db.profiles) then
-        print(ns.title .. ": No profiles installed yet. Run /kitn install first.")
+        print(ns.title .. ": No profiles installed yet. Run " .. ns.Color("/kitn install") .. " first.")
         return
     end
     if ns.OpenInstaller then ns.OpenInstaller(true) end
@@ -1087,20 +1087,21 @@ SlashCmdList["KITN"] = function(msg)
     if cmd then
         cmd()
     elseif msg == "" then
+        local function help(command, text) print("  " .. ns.Color(command) .. "  - " .. text) end
         print(ns.title .. " " .. ns.DisplayVersion())
-        print("  /kitn install  - Open the installer to import profiles")
+        help("/kitn install", "Open the installer to import profiles")
         print("   |cffff8800Warning: This will overwrite personal customizations|r")
-        print("  /kitn update   - Reimport only profiles that have been updated")
-        print("  /kitn load     - Apply installed profiles to this character")
-        print("  /kitn cdm      - Import Blizzard CDM layouts for your current class")
+        help("/kitn update", "Reimport only profiles that have been updated")
+        help("/kitn load", "Apply installed profiles to this character")
+        help("/kitn cdm", "Import Blizzard CDM layouts for your current class")
         -- Registered by KitnUI_EUI, which can be disabled on its own now that it is a
         -- separate addon. Advertising a command that answers "Unknown command" is
         -- worse than saying nothing.
         if KitnCommands and KitnCommands["options"] then
-            print("  /kitn options  - Open the KitnUI tab in EllesmereUI's config panel")
+            help("/kitn options", "Open the KitnUI tab in EllesmereUI's config panel")
         end
-        print("  /kitn reset    - Reset installer state (does not remove addon profiles)")
-        print("  /kitn version  - Show addon version")
+        help("/kitn reset", "Reset installer state (does not remove addon profiles)")
+        help("/kitn version", "Show addon version")
         if KitnHelpLines then
             for _, line in ipairs(KitnHelpLines) do
                 print(line)
@@ -1269,7 +1270,7 @@ boot:SetScript("OnEvent", function()
     -- this prompt too.
     if IsAddOnLoaded("KitnUI_Lite") then
         StaticPopupDialogs["KITNUI_LITE_CONFLICT"] = {
-            text = ns.title .. ": KitnUI and KitnUI Lite are both enabled. The full KitnUI replaces Lite, and running both causes duplicate login prompts and conflicting /kitn commands.\n\nDisable KitnUI Lite now? After that, remove it in your addon manager.",
+            text = ns.title .. ": KitnUI and KitnUI Lite are both enabled. The full KitnUI replaces Lite, and running both causes duplicate login prompts and conflicting " .. ns.Color("/kitn") .. " commands.\n\nDisable KitnUI Lite now? After that, remove it in your addon manager.",
             button1 = "Disable and Reload",
             button2 = "Later",
             OnAccept = function()

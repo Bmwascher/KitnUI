@@ -1743,6 +1743,10 @@ end
 -- these through its own database layer at load.
 local BFL_ONBOARDING_VERSION = 3
 
+-- Raised whenever the values below change, so a repair left pending by an
+-- install of an older preset can tell it never recorded this one.
+local BFL_PRESET = 2
+
 -- Stored in place of a key that was ABSENT, so the reset can tell "they had
 -- false" from "they had nothing". A string, not a table: this rides in saved
 -- variables, and a table would come back as a different table every login.
@@ -1750,8 +1754,21 @@ local BFL_ABSENT = "__kitnui_absent"
 
 local BFL_SETTINGS = {
     -- Friendlist UI
-    friendsFrameStyle       = "legacy",
+    friendsFrameStyle       = "modern",
     theme                   = "dark",
+
+    -- Sorting
+    primarySort             = "status",
+    secondarySort           = "name",
+
+    -- Behavior
+    accordionGroups         = false,
+    compactMode             = false,
+    useUIPanelSystem        = false,
+    simpleMode              = true,
+    simpleModeShowSearch    = true,
+    friendListClickWhisperEnabled = true,
+    friendListClickWhisperMode    = "double",
 
     -- Display Options
     colorClassNames         = true,
@@ -1791,24 +1808,47 @@ local BFL_SETTINGS = {
     fontShadowTabText       = false,
 }
 
--- The three font colours, kept apart from the scalars above because each one is
--- a TABLE: it has to be copied in rather than assigned (BetterFriendlist owns
--- what it stores and is free to mutate it, and a shared reference would let it
--- edit this file's constants), and compared field by field.
-local BFL_COLORS = {
+-- The settings whose value is a flat TABLE, kept apart from the scalars above:
+-- each is written as a fresh table, never assigned (BetterFriendlist owns
+-- what it stores and is free to mutate it, and sharing one table would let it edit
+-- this file's constants), and compared field by field.
+local BFL_TABLES = {
     fontColorFriendName = { r = 0.51,  g = 0.773, b = 1,    a = 1 },  -- Battle.net blue
     fontColorFriendInfo = { r = 0.51,  g = 0.51,  b = 0.51, a = 1 },  -- grey
     fontColorTabText    = { r = 1,     g = 0.82,  b = 0,    a = 1 },  -- Blizzard yellow
+
+    -- The Modern style's side tabs. PopulatedOnly hides a tab while it is empty.
+    modernFriendTabOrder = { "friends", "recent_allies", "who", "friend_requests",
+        "recruit_a_friend", "guild", "quick_join", "raid" },
+    modernFriendTabVisibility = { guild = false },
+    modernFriendTabPopulatedOnly = { quick_join = false, friend_requests = true },
 }
 
-local function ColorMatches(have, want)
+-- The keys BetterFriendlist's own appearance picker rolls back, each with the
+-- field name its rollback record uses.
+local BFL_PICKER_KEYS = {
+    friendsFrameStyle = "style",
+    theme             = "theme",
+    simpleMode        = "simpleMode",
+    compactMode       = "compactMode",
+}
+
+local function FlatMatches(have, want)
     if type(have) ~= "table" then return false end
-    return have.r == want.r and have.g == want.g and have.b == want.b and have.a == want.a
+    for k, v in pairs(want) do
+        if have[k] ~= v then return false end
+    end
+    for k in pairs(have) do
+        if want[k] == nil then return false end
+    end
+    return true
 end
 
-local function CopyColor(color)
-    if type(color) ~= "table" then return nil end
-    return { r = color.r, g = color.g, b = color.b, a = color.a }
+local function CopyFlat(t)
+    if type(t) ~= "table" then return nil end
+    local copy = {}
+    for k, v in pairs(t) do copy[k] = v end
+    return copy
 end
 
 -- Does the addon currently read the way this file writes it?
@@ -1816,8 +1856,8 @@ local function BFLHolds(bfl)
     for key, want in pairs(BFL_SETTINGS) do
         if bfl[key] ~= want then return false end
     end
-    for key, want in pairs(BFL_COLORS) do
-        if not ColorMatches(bfl[key], want) then return false end
+    for key, want in pairs(BFL_TABLES) do
+        if not FlatMatches(bfl[key], want) then return false end
     end
     return (tonumber(bfl.appearanceOnboardingVersion) or 0) >= BFL_ONBOARDING_VERSION
 end
@@ -1826,8 +1866,8 @@ local function WriteBFL(bfl)
     for key, want in pairs(BFL_SETTINGS) do
         bfl[key] = want
     end
-    for key, want in pairs(BFL_COLORS) do
-        bfl[key] = CopyColor(want)
+    for key, want in pairs(BFL_TABLES) do
+        bfl[key] = CopyFlat(want)
     end
 
     -- Never LOWER their number. A newer BetterFriendlist raises this constant,
@@ -1844,25 +1884,32 @@ local function WriteBFL(bfl)
     bfl.appearanceOnboardingResume = false
 end
 
--- What the player had, recorded so /kitn reset can hand it back.
+-- What the player had, recorded so /kitn reset can hand it back. A key already
+-- recorded keeps its record: only a key no earlier install wrote is taken, so a
+-- key added to this file is still the player's own value when it is first seen.
+local function RecordPrev(snap, bfl, base)
+    for key in pairs(BFL_SETTINGS) do
+        if snap.prev[key] == nil then
+            local value = bfl[key]
+            -- The picker's own rollback record wins for the keys it holds: while
+            -- it is open, the live values are a preview the player never accepted.
+            local field = base and BFL_PICKER_KEYS[key]
+            if field and base[field] ~= nil then value = base[field] end
+            if value == nil then value = BFL_ABSENT end
+            snap.prev[key] = value
+        end
+    end
+    for key in pairs(BFL_TABLES) do
+        if snap.prev[key] == nil then
+            snap.prev[key] = CopyFlat(bfl[key]) or BFL_ABSENT
+        end
+    end
+end
+
 local function TakeSnapshot(snap, bfl, base)
     snap.taken = true
     snap.prev = {}
-    for key in pairs(BFL_SETTINGS) do
-        local value = bfl[key]
-        -- The picker's own rollback record wins for the two keys it holds: while
-        -- it is open, the live values are a preview the player never accepted.
-        -- Its field names are the picker's, not the saved variable's.
-        if base then
-            if key == "theme" and base.theme ~= nil then value = base.theme end
-            if key == "friendsFrameStyle" and base.style ~= nil then value = base.style end
-        end
-        if value == nil then value = BFL_ABSENT end
-        snap.prev[key] = value
-    end
-    for key in pairs(BFL_COLORS) do
-        snap.prev[key] = CopyColor(bfl[key]) or BFL_ABSENT
-    end
+    RecordPrev(snap, bfl, base)
     snap.appearanceOnboardingVersion = (base and base.completedVersion)
         or bfl.appearanceOnboardingVersion or BFL_ABSENT
     snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
@@ -1888,10 +1935,13 @@ end
 -- Did a RestorePrev survive? Only the keys BetterFriendlist's own rollback can
 -- reach are worth testing, because only those can be taken back.
 local function PrevHolds(bfl, snap)
-    for _, key in ipairs({ "theme", "friendsFrameStyle" }) do
+    for key in pairs(BFL_PICKER_KEYS) do
         local want = snap.prev[key]
-        if want == BFL_ABSENT then want = nil end
-        if bfl[key] ~= want then return false end
+        -- A record taken by an older preset may not hold this key at all.
+        if want ~= nil then
+            if want == BFL_ABSENT then want = nil end
+            if bfl[key] ~= want then return false end
+        end
     end
     return true
 end
@@ -1904,20 +1954,23 @@ function ns.ApplyBetterFriendlistAppearance()
     ns.db.bflSnap = ns.db.bflSnap or {}
     local snap = ns.db.bflSnap
 
+    -- Validated the way BetterFriendlist validates it (GetResumeState in its
+    -- AppearanceOnboarding module): a record from an older onboarding version is
+    -- one THAT addon ignores, so its embedded values are stale and the live keys
+    -- are the player's real ones.
+    local resume = bfl.appearanceOnboardingResume
+    local base
+    if type(resume) == "table" and type(resume.snapshot) == "table"
+        and tonumber(resume.version) == BFL_ONBOARDING_VERSION then
+        base = resume.snapshot
+    end
+
     -- ONCE. Re-snapshotting on a second install would record KitnUI's own values
     -- as the player's and leave the reset with nothing to put back.
     if not snap.taken or not snap.prev then
-        -- Validated the way BetterFriendlist validates it (GetResumeState in its
-        -- AppearanceOnboarding module): a record from an older onboarding
-        -- version is one THAT addon ignores, so its embedded values are stale
-        -- and the live keys are the player's real ones.
-        local resume = bfl.appearanceOnboardingResume
-        local base
-        if type(resume) == "table" and type(resume.snapshot) == "table"
-            and tonumber(resume.version) == BFL_ONBOARDING_VERSION then
-            base = resume.snapshot
-        end
         TakeSnapshot(snap, bfl, base)
+    else
+        RecordPrev(snap, bfl, base)
     end
 
     WriteBFL(bfl)
@@ -1925,6 +1978,7 @@ function ns.ApplyBetterFriendlistAppearance()
     -- attempts, because one reload is not always enough (the same picker that
     -- rolls the write back can still be open when the repair runs).
     snap.pending = 3
+    snap.preset = BFL_PRESET
     -- A reset's unsettled check, dropped here. It can still be set: a reset that
     -- restored while the addon was loaded sets it, and a following login without
     -- BetterFriendlist leaves it standing. Carried into an install, it would win
@@ -1966,6 +2020,14 @@ function ns.RecheckBetterFriendlistAppearance()
         return
     end
 
+    -- A repair left pending by an install of an older preset: this preset was
+    -- never recorded for that player, so writing it here would change their
+    -- settings outside an install and leave the reset unable to undo it.
+    if snap.preset ~= BFL_PRESET then
+        snap.pending = nil
+        return
+    end
+
     -- After an install: did the write survive?
     if BFLHolds(bfl) then
         snap.pending = nil
@@ -1975,36 +2037,29 @@ function ns.RecheckBetterFriendlistAppearance()
     snap.pending = snap.pending - 1
     if snap.pending <= 0 then snap.pending = nil end
 
-    -- Their rollback touches six keys, of which this file manages two: theme and
-    -- friendsFrameStyle, plus the version stamp. When those have moved, they are
+    -- The picker's rollback touches six keys, of which this file manages the four in
+    -- BFL_PICKER_KEYS, plus the version stamp. When those have moved, they are
     -- the player's real values again and are worth re-recording, because the
     -- record taken at finish may have caught an open picker's unaccepted
     -- preview.
     --
-    -- Only when THOSE moved, though. Any managed option the player edits
-    -- themselves also fails the test above, and in that case theme and style
-    -- still hold KitnUI's own values -- re-recording them there would overwrite
-    -- the real backup with our own write.
+    -- Only after a rollback, though, and the rollback is told apart by the
+    -- version stamp it puts back below the one written here. A player's own
+    -- edit to one of these keys leaves the stamp alone, and re-recording it
+    -- would overwrite the real backup with a value set after the install.
     --
-    -- The other 28 keys are never re-recorded: their rollback does not touch
+    -- The other keys are never re-recorded: the picker's rollback does not touch
     -- them, so what is in the table is this file's write either way.
-    -- Key by key, not as a group: a player who changes only the theme inside the
-    -- repair window would otherwise have KitnUI's own "legacy" recorded as their
-    -- style, which is wrong for anyone whose style was the retail default.
-    local rolledBack = false
-    if bfl.theme ~= BFL_SETTINGS.theme then
-        rolledBack = true
-        if snap.prev then snap.prev.theme = bfl.theme or BFL_ABSENT end
-    end
-    if bfl.friendsFrameStyle ~= BFL_SETTINGS.friendsFrameStyle then
-        rolledBack = true
-        if snap.prev then
-            snap.prev.friendsFrameStyle = bfl.friendsFrameStyle or BFL_ABSENT
+    -- Key by key, not as a group: a rollback restores only what the picker
+    -- changed, and an untouched key still holds KitnUI's own value.
+    if (tonumber(bfl.appearanceOnboardingVersion) or 0) < BFL_ONBOARDING_VERSION then
+        for key in pairs(BFL_PICKER_KEYS) do
+            if bfl[key] ~= BFL_SETTINGS[key] and snap.prev then
+                local value = bfl[key]
+                if value == nil then value = BFL_ABSENT end
+                snap.prev[key] = value
+            end
         end
-    end
-    if rolledBack then
-        -- These two ride with the pair above: the rollback that moves theme or
-        -- style is the same one that puts the version and the resume record back.
         snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
         snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
     end

@@ -72,6 +72,8 @@
   filled buttons are softer, and the **Modules** button sits beside the
   profile status
 - New KitnUI and KitnUI Rasta backgrounds with a constellation cat
+- Slash commands in KitnUI's popups, chat messages and `/kitn` help are
+  highlighted
 
 ### Top Bar
 
@@ -105,6 +107,10 @@
   BuffReminders and Baganator profiles refreshed
 - The EllesmereUI profile no longer carries Quickdraw, so an update leaves
   your Quickdraw settings alone
+- BetterFriendlist installs in its Modern style, sorted by status then
+  name, in Simple Mode with search and whispering on a double click. The
+  side tabs are reordered, Guild is hidden, and Friend Requests appears
+  only when a request is waiting. `/kitn reset` puts your own settings back
 
 ---
 

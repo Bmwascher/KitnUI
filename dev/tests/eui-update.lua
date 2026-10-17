@@ -35,6 +35,8 @@ _G.GetSpecialization = function() return game.spec end
 _G.GetSpecializationInfo = function() return game.specID end
 
 local ns = { profileName = "KitnUI", data = {}, title = "KitnUI" }
+-- Core.lua's, which these files do not load.
+ns.Color = function(text) return "|cffFF008C" .. text .. "|r" end
 for _, file in ipairs({ "Installer/Merge.lua", "Installer/MergeInputs.lua", "Installer/ModuleRows.lua", "Installer/Update.lua" }) do
     local chunk, err = loadfile(file)
     if not chunk then
@@ -907,7 +909,7 @@ E.importMode = "throw_scale"
 ok, err = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback A scale: reports failure")
 check(err:find("put back", 1, true), "rollback A scale: rolled back A", err)
-check(err:find("Type /reload to put your UI scale back.", 1, true), "rollback A scale: asks for a reload", err)
+check(plain(err):find("Type /reload to put your UI scale back.", 1, true), "rollback A scale: asks for a reload", err)
 eq(db.ppUIScale, 0.9, "rollback A scale: the scale is put back")
 eq(db.ppUIScaleAuto, false, "rollback A scale: and its auto flag")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback A scale: the player's profile is back")
@@ -926,7 +928,7 @@ calls = {}
 ok, err, detail = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback B: reports failure")
 check(err:find("Could not switch to the updated profile", 1, true), "rollback B: names the switch", err)
-check(err:find("Type /reload to put your UI scale back.", 1, true), "rollback B: asks for a reload after the scale moved", err)
+check(plain(err):find("Type /reload to put your UI scale back.", 1, true), "rollback B: asks for a reload after the scale moved", err)
 eq(detail, nil, "rollback B: no importer error to report")
 eq(db.profiles[ns.EUIBackupName], nil, "rollback B: the backup name is gone")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback B: the player's profile is back")
@@ -945,7 +947,7 @@ ok, err, detail = ns.EUIApplyUpdate(plan)
 eq(ok, false, "rollback B (thrown): reports failure")
 check(err:find("EllesmereUI import failed.", 1, true) and err:find("put back", 1, true), "rollback B (thrown): the failure and the outcome are named", err)
 check(detail and detail:find("boom after store", 1, true), "rollback B (thrown): the raw error comes back apart", detail)
-check(err:find("Type /reload to put your UI scale back.", 1, true), "rollback B (thrown): asks for a reload after the scale moved", err)
+check(plain(err):find("Type /reload to put your UI scale back.", 1, true), "rollback B (thrown): asks for a reload after the scale moved", err)
 eq(db.activeProfile, "KitnUI", "rollback B (thrown): the player's profile is active")
 eq(db.profiles.KitnUI.addons[F].y, 9, "rollback B (thrown): and is the player's")
 
@@ -1032,7 +1034,8 @@ eq(db.profiles.KitnUI.addons[F].y, 9, "restore: the player's profile is back")
 eq(db.activeProfile, "KitnUI", "restore: and active")
 check(db.specProfiles[71] == "KitnUI" and db.specProfiles[72] == "KitnUI", "restore: assignments are back")
 eq(db.ppUIScale, 0.9, "restore: the scale is back")
-eq(err, "Type /reload to put your UI scale back.", "restore: asks for a reload after the scale moved")
+eq(err and plain(err), "Type /reload to put your UI scale back.", "restore: asks for a reload after the scale moved")
+check(err and err:find(ns.Color("/reload"), 1, true), "restore: the command is colored", err)
 eq(db.colorsPullFrom, nil, "restore: the colour source is back to nil")
 eq(calls.colors, 1, "restore: colours re-applied")
 eq(ns.db.euiBase, O_STR, "restore: the base is the backup's")
@@ -1102,7 +1105,7 @@ eq(partPlan.byRow[F], 1, "parts: the ticked row's replaced count")
 local partText = ns.EUIConfirmText(partPlan)
 check(partText:find(F .. ": 1 of yours replaced", 1, true), "parts: the confirm names the ticked row's replaced changes", partText)
 check(not partText:find("General:", 1, true), "parts: an unticked row has no confirm line", partText)
-eq(ns.EUISkippedNote(partPlan), "Skipped: General -- take them any time from /kitn install, EllesmereUI > Modules.",
+eq(plain(ns.EUISkippedNote(partPlan)), "Skipped: General -- take them any time from /kitn install, EllesmereUI > Modules.",
     "parts: the skipped note")
 
 calls = {}
