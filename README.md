@@ -28,7 +28,7 @@ KitnUI walks you through configuring EllesmereUI and its companion addons with a
 | Northern Sky Raid Tools | Raid assignments, timers, and note sync; reminder frames locked in place |
 | KitnEssentials | Combat, dungeon, and QoL profiles |
 | Baganator | Category-sorted bags and bank |
-| BetterFriendlist | Appearance only — Legacy style, Dark theme, display options and fonts; no separate step, applied on finish |
+| BetterFriendlist | Modern style, Dark theme, status-then-name sorting, Simple Mode, side tab order, display options and fonts; no separate step, applied on finish |
 | Blizzard Edit Mode | HUD frame layout |
 | Blizzard CDM | Per-spec Cooldown Manager layouts |
 

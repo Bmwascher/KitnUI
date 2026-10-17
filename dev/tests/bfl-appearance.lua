@@ -25,7 +25,8 @@ end
 
 local loaded = { BetterFriendlist = true }
 _G.C_AddOns = { IsAddOnLoaded = function(name) return loaded[name] == true end }
-_G.print = function() end
+local printed = 0
+_G.print = function() printed = printed + 1 end
 
 local ns = { data = {}, title = "KitnUI", profileName = "KitnUI" }
 ns.Color = function(text) return text end
@@ -119,6 +120,7 @@ _G.BetterFriendlistDB = player()
 bfl = _G.BetterFriendlistDB
 ns.ApplyBetterFriendlistAppearance()
 bfl.friendsFrameStyle, bfl.simpleMode, bfl.compactMode = "legacy", false, true
+bfl.appearanceOnboardingVersion = 0
 ns.RecheckBetterFriendlistAppearance()
 prev = ns.db.bflSnap.prev
 eq(bfl.simpleMode, true, "repair: simple mode is written again")
@@ -132,6 +134,44 @@ ns.RecheckBetterFriendlistAppearance()
 eq(bfl.modernFriendTabVisibility.raid, nil, "repair: a hidden tab fails the check and is shown again")
 eq(bfl.modernFriendTabVisibility.guild, false, "repair: and Guild is hidden again")
 eq(prev.modernFriendTabVisibility.raid, false, "repair: a key the picker cannot reach is not re-recorded")
+
+---------------------------------------------------------------------------------
+-- A player's own edit inside the repair window is not a rollback
+---------------------------------------------------------------------------------
+
+ns.db = {}
+_G.BetterFriendlistDB = player()
+bfl = _G.BetterFriendlistDB
+ns.ApplyBetterFriendlistAppearance()
+bfl.simpleMode = false
+ns.RecheckBetterFriendlistAppearance()
+eq(ns.db.bflSnap.prev.simpleMode, false, "edit: the record keeps the player's pre-install value")
+eq(ns.db.bflSnap.appearanceOnboardingVersion, ABSENT, "edit: and the pre-install stamp")
+
+---------------------------------------------------------------------------------
+-- Records an older preset left behind
+---------------------------------------------------------------------------------
+
+ns.db = { bflSnap = { taken = true, pending = 2, prev = { friendsFrameStyle = "modern", theme = "blizzard" } } }
+_G.BetterFriendlistDB = { friendsFrameStyle = "legacy", theme = "dark", primarySort = "zone" }
+bfl = _G.BetterFriendlistDB
+printed = 0
+ns.RecheckBetterFriendlistAppearance()
+eq(bfl.friendsFrameStyle, "legacy", "old repair: this preset is not written outside an install")
+eq(bfl.primarySort, "zone", "old repair: nor any newly managed key")
+eq(ns.db.bflSnap.pending, nil, "old repair: the repair is dropped")
+eq(ns.db.bflSnap.prev.friendsFrameStyle, "modern", "old repair: the record is unchanged")
+eq(printed, 0, "old repair: and nothing is reported")
+
+ns.db = { bflSnap = { taken = true, prev = { friendsFrameStyle = "modern", theme = "blizzard" } } }
+_G.BetterFriendlistDB = { friendsFrameStyle = "legacy", theme = "dark", simpleMode = true }
+bfl = _G.BetterFriendlistDB
+ns.RestoreBetterFriendlistAppearance()
+printed = 0
+ns.RecheckBetterFriendlistAppearance()
+eq(printed, 0, "old reset: a key the record never held is not read as a rollback")
+eq(ns.db.bflSnap, nil, "old reset: the check settles")
+eq(bfl.simpleMode, true, "old reset: and Simple Mode is left as it is")
 
 io.write(string.format("%d checks, %d failures\n", checks, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -1743,6 +1743,10 @@ end
 -- these through its own database layer at load.
 local BFL_ONBOARDING_VERSION = 3
 
+-- Raised whenever the values below change, so a repair left pending by an
+-- install of an older preset can tell it never recorded this one.
+local BFL_PRESET = 2
+
 -- Stored in place of a key that was ABSENT, so the reset can tell "they had
 -- false" from "they had nothing". A string, not a table: this rides in saved
 -- variables, and a table would come back as a different table every login.
@@ -1933,8 +1937,11 @@ end
 local function PrevHolds(bfl, snap)
     for key in pairs(BFL_PICKER_KEYS) do
         local want = snap.prev[key]
-        if want == BFL_ABSENT then want = nil end
-        if bfl[key] ~= want then return false end
+        -- A record taken by an older preset may not hold this key at all.
+        if want ~= nil then
+            if want == BFL_ABSENT then want = nil end
+            if bfl[key] ~= want then return false end
+        end
     end
     return true
 end
@@ -1970,6 +1977,7 @@ function ns.ApplyBetterFriendlistAppearance()
     -- attempts, because one reload is not always enough (the same picker that
     -- rolls the write back can still be open when the repair runs).
     snap.pending = 3
+    snap.preset = BFL_PRESET
     -- A reset's unsettled check, dropped here. It can still be set: a reset that
     -- restored while the addon was loaded sets it, and a following login without
     -- BetterFriendlist leaves it standing. Carried into an install, it would win
@@ -2011,6 +2019,14 @@ function ns.RecheckBetterFriendlistAppearance()
         return
     end
 
+    -- A repair left pending by an install of an older preset: this preset was
+    -- never recorded for that player, so writing it here would change their
+    -- settings outside an install and leave the reset unable to undo it.
+    if snap.preset ~= BFL_PRESET then
+        snap.pending = nil
+        return
+    end
+
     -- After an install: did the write survive?
     if BFLHolds(bfl) then
         snap.pending = nil
@@ -2026,29 +2042,23 @@ function ns.RecheckBetterFriendlistAppearance()
     -- record taken at finish may have caught an open picker's unaccepted
     -- preview.
     --
-    -- Only when THOSE moved, though. Any managed option the player edits
-    -- themselves also fails the test above, and in that case the picker's keys
-    -- still hold KitnUI's own values -- re-recording them there would overwrite
-    -- the real backup with our own write.
+    -- Only after a rollback, though, and the rollback is told apart by the
+    -- version stamp it puts back below the one written here. A player's own
+    -- edit to one of these keys leaves the stamp alone, and re-recording it
+    -- would overwrite the real backup with a value set after the install.
     --
     -- The other keys are never re-recorded: the picker's rollback does not touch
     -- them, so what is in the table is this file's write either way.
-    -- Key by key, not as a group: a player who changes only the theme inside the
-    -- repair window would otherwise have KitnUI's own style recorded as the player's.
-    local rolledBack = false
-    for key in pairs(BFL_PICKER_KEYS) do
-        if bfl[key] ~= BFL_SETTINGS[key] then
-            rolledBack = true
-            if snap.prev then
+    -- Key by key, not as a group: a rollback restores only what the picker
+    -- changed, and an untouched key still holds KitnUI's own value.
+    if (tonumber(bfl.appearanceOnboardingVersion) or 0) < BFL_ONBOARDING_VERSION then
+        for key in pairs(BFL_PICKER_KEYS) do
+            if bfl[key] ~= BFL_SETTINGS[key] and snap.prev then
                 local value = bfl[key]
                 if value == nil then value = BFL_ABSENT end
                 snap.prev[key] = value
             end
         end
-    end
-    if rolledBack then
-        -- These two ride with the pair above: the rollback that moves theme or
-        -- style is the same one that puts the version and the resume record back.
         snap.appearanceOnboardingVersion = bfl.appearanceOnboardingVersion or BFL_ABSENT
         snap.appearanceOnboardingResume = bfl.appearanceOnboardingResume or false
     end
