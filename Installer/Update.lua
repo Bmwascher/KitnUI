@@ -971,6 +971,19 @@ local function rename(old, new)
     return err
 end
 
+-- The same for a delete, whose OnProfileDeleted clears the keybind and the
+-- notes. A note left under the name outlives the profile, and the live
+-- profile renamed into that name would then lose its own to it.
+local function delete(name)
+    local e, d = E(), DB()
+    local err = try(e.DeleteProfile, name)
+    if err and d.profiles[name] == nil then
+        if e.OnProfileDeleted then try(e.OnProfileDeleted, name) end
+        if ns.EUIDropProfileRecords then ns.EUIDropProfileRecords(name) end
+    end
+    return err
+end
+
 local function refreshAll()
     local e = E()
     if e and e.RefreshAllAddons then try(e.RefreshAllAddons) end
@@ -1010,8 +1023,8 @@ end
 -- Stored without activating and the switch failed: remove the stored profile,
 -- put the moved one back under its name and its assignments back on it.
 local function rollbackB(err, detail, from, rec)
-    local e, d = E(), DB()
-    try(e.DeleteProfile, NAME)
+    local d = DB()
+    delete(NAME)
     rename(from, NAME)
     local ok = d.activeProfile == NAME and d.profiles[NAME] ~= nil
     for _, spec in ipairs(isTable(rec) and rec.assignedSpecs or {}) do
@@ -1067,7 +1080,7 @@ local function finishScratch(scratchName)
     elseif d.colorsPullFrom == scratchName then
         d.colorsPullFrom = NAME
     end
-    if d.profiles[scratchName] then try(e.DeleteProfile, scratchName) end
+    if d.profiles[scratchName] then delete(scratchName) end
 end
 
 -- The rename into the backup took the notes, but the new profile carries the
@@ -1164,7 +1177,7 @@ function ns.EUIApplyUpdate(plan)
     else
         from = BACKUP
         if d.profiles[BACKUP] then
-            err = try(e.DeleteProfile, BACKUP)
+            err = delete(BACKUP)
             if d.profiles[BACKUP] then return false, T.renameFail, err end
         end
         ns.db.euiBackup = backupRecord(assigned, scaleTaken)
@@ -1253,7 +1266,7 @@ function ns.EUIRestorePrevious()
     end
     try(e.SetProfile, BACKUP)
     if d.activeProfile ~= BACKUP then return false, T.switchFail end
-    if d.profiles[NAME] then try(e.DeleteProfile, NAME) end
+    if d.profiles[NAME] then delete(NAME) end
     rename(BACKUP, NAME)
     if not (d.profiles[NAME] and d.activeProfile == NAME) then
         -- Moved back under the backup's name, the profile is the active one

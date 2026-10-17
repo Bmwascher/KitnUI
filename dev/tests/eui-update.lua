@@ -235,6 +235,7 @@ E.DeleteProfile = function(name)
     bump("delete")
     raiseAt("delete_before")
     db.profiles[name] = nil
+    raiseAt("delete_moved")
     for spec, n in pairs(db.specProfiles) do
         if n == name then db.specProfiles[spec] = nil end
     end
@@ -1367,6 +1368,26 @@ eq(db.activeProfile, "KitnUI", "raise (delete before): KitnUI is active")
 E.raise = "delete_after"
 ok, err = ns.EUIApplyUpdate(plan)
 eq(ok, true, "raise (delete after): the update applies", err)
+
+-- A raise after the table went skips OnProfileDeleted, which clears the
+-- keybind and the notes; both run again before the live profile takes the
+-- name, so no stale note outlives the old backup.
+freshInstall()
+ns.EUIStartDecodes()
+ns.EUIApplyUpdate(ns.EUIPrepareUpdate())
+ns.EUIBeginVisit()
+ns.db.addonVersions.EllesmereUI = "2026.08.22"
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+E.raise = "delete_moved"
+local deletedHook, dropped
+E.OnProfileDeleted = function(name) deletedHook = name end
+ns.EUIDropProfileRecords = function(name) dropped = name end
+ok, err = ns.EUIApplyUpdate(plan)
+E.OnProfileDeleted, ns.EUIDropProfileRecords = nil, nil
+eq(ok, true, "raise (delete moved): the update applies", err)
+eq(deletedHook, ns.EUIBackupName, "raise (delete moved): the keybind clear runs again")
+eq(dropped, ns.EUIBackupName, "raise (delete moved): the old backup's notes are dropped")
 
 -- The scratch path: a raise after the table moved puts the profile back.
 freshInstall()
