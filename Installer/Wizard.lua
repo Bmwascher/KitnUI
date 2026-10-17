@@ -214,12 +214,11 @@ function W:Build()
     f.SubBack = CreateFrame("Button", nil, f)
     f.SubBack:SetHeight(20)
     f.SubBack:SetPoint("LEFT", f.SubTitle, "RIGHT", 14, 0)
-    f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 13, "", 1, 1, 1, 0.7)
+    f.SubBack._lbl = EllesmereUI.MakeFont(f.SubBack, 14, "", 1, 1, 1, 1)
     f.SubBack._lbl:SetPoint("LEFT")
-    f.SubBack._lbl:SetText("< Back to EllesmereUI")
-    f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
+    onAccent(function(c) f.SubBack._lbl:SetTextColor(c[1], c[2], c[3], 1) end)
     f.SubBack:SetScript("OnEnter", function(b) b._lbl:SetTextColor(1, 1, 1, 1) end)
-    f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(1, 1, 1, 0.7) end)
+    f.SubBack:SetScript("OnLeave", function(b) b._lbl:SetTextColor(accent[1], accent[2], accent[3], 1) end)
     f.SubBack:SetScript("OnClick", function() W:SetPage(W.page) end)
     f.SubBack:Hide()
 
@@ -315,7 +314,11 @@ function W:Build()
     f.Back:SetSize(140, 30)
     f.Back:SetPoint("BOTTOMLEFT", CONTENT_X, 4)  -- footer, below the baked divider (y38)
     f.Back._bg, f.Back._brd, f.Back._lbl =
-        EllesmereUI.MakeStyledButton(f.Back, "Back", 14, BTN_COLOURS, function() W:SetPage((W.page or 1) - 1) end)
+        EllesmereUI.MakeStyledButton(f.Back, "Back", 14, BTN_COLOURS, function()
+            -- On a sub-page Back leaves to the step it opened from, the way the
+            -- header link does, rather than to the step before it.
+            if W.subPage then W:SetPage(W.page) else W:SetPage((W.page or 1) - 1) end
+        end)
     W:SetButtonVariant(f.Next, "ghost")
     W:SetButtonVariant(f.Back, "ghost")
 
@@ -887,6 +890,7 @@ function W:SetPage(n)
     W.page = n
     W.subPage = nil
     W.frame.SubBack:Hide()
+    if W.frame.Back._lbl then W.frame.Back._lbl:SetText("Back") end
     W:HideOptions()
     if W.ResetExtras then W.ResetExtras() end
     W:HideStatusHeader()
@@ -911,8 +915,9 @@ function W:SetPage(n)
 end
 
 -- A page inside a step: cleared the way SetPage clears a page, but W.page and
--- the rail stay, so Back, Next and the rail leave it the way they leave the
--- step. ResetExtras cancels the step's decodes; the sub-page starts its own.
+-- the rail stay, so Next and the rail leave it the way they leave the step,
+-- and Back returns to the step itself. ResetExtras cancels the step's
+-- decodes; the sub-page starts its own.
 function W:ShowSubPage(title, draw)
     if not W.frame then return end
     local f = W.frame
@@ -927,7 +932,12 @@ function W:ShowSubPage(title, draw)
     f.Desc3:SetText("")
     W.subPage = draw
     f.SubTitle:SetText(title)
+    local step = W.stepTitles and W.stepTitles[W.page]
+    f.SubBack._lbl:SetText(step and ("< Back to " .. step) or "< Back")
+    f.SubBack:SetWidth(math.max(24, f.SubBack._lbl:GetStringWidth() + 4))
     f.SubBack:Show()
+    if f.Back._lbl then f.Back._lbl:SetText(step and ("< " .. step) or "< Back") end
+    f.Back:Show()
     draw()
 end
 

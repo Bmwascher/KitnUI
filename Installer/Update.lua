@@ -43,7 +43,7 @@ ns.EUI_UPDATE_TEXT = {
     importFail = "EllesmereUI import failed",
     switchFail = "Could not switch to the backup.",
     switchFailUpdate = "Could not switch to the updated profile.",
-    reloadScale = "Type /reload to put your UI scale back.",
+    reloadScale = "Type " .. ns.Color("/reload") .. " to put your UI scale back.",
     tailRestore = "Restore previous puts your previous profile back.",
     renameFail = "Could not back up your profile.",
     sync = "Your active profile and the backup share a sync group. Remove one of them from the group first.",
@@ -60,7 +60,7 @@ T.noneTicked = "Tick at least one part first."
 T.rowReplaced = "%d of yours replaced"
 T.rowNone = "none of yours"
 T.rowReplaces = "replaces yours"
-T.skipped = "Skipped: %s -- take them any time from /kitn install, EllesmereUI > Modules."
+T.skipped = "Skipped: %s -- take them any time from " .. ns.Color("/kitn install") .. ", EllesmereUI > Modules."
 T.movedScratch = "Your profile keybind and sync-group membership are removed; set them again in EllesmereUI."
 T.scratchFail = "Could not move your profile aside for the update. Nothing was imported."
 T.resetTitle = "Reset %s?"
@@ -1038,6 +1038,13 @@ local function finishScratch(scratchName)
     if d.profiles[scratchName] then e.DeleteProfile(scratchName) end
 end
 
+-- The rename into the backup took the notes, but the new profile carries the
+-- same switches and forced values. Copied, not moved: Restore previous brings
+-- the backup's own set back under this name.
+local function finishBackup()
+    if ns.EUIMoveProfileRecords then ns.EUIMoveProfileRecords(BACKUP, NAME, true) end
+end
+
 local function finishApply(plan, before)
     if plan.kind == "update" then ns.CompleteSetup("EllesmereUI") end
     ns.db.euiRowAt, ns.db.euiBases = ns.EUIRecordRows(plan.kind, before, {
@@ -1146,7 +1153,7 @@ function ns.EUIApplyUpdate(plan)
         -- The activation tail threw after the account writes: the merged
         -- profile is active and the visit's backup is intact, so Restore is
         -- offered.
-        if scratch then finishScratch(from) end
+        if scratch then finishScratch(from) else finishBackup() end
         if scaleTaken then ns.db.euiBackup.scaleTaken = true end
         ns.euiVisitBacked = true
         refreshAll()
@@ -1165,7 +1172,7 @@ function ns.EUIApplyUpdate(plan)
         end
     end
 
-    if scratch then finishScratch(from) end
+    if scratch then finishScratch(from) else finishBackup() end
     if scaleTaken then ns.db.euiBackup.scaleTaken = true end
     ns.euiVisitBacked = true
     finishApply(plan, before)

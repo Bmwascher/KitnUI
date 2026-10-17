@@ -7,9 +7,9 @@ Everything under `dev/` is **git-tracked but stripped from the player zip** by
 |------|----------|----------|
 | `dev/Annotations/` | yes | wowlua-ls `---@meta` type stubs (`KitnUI.lua` = the `ns` namespace, `Types.lua` = companion-addon APIs). LS-only; never loaded by WoW, never shipped. |
 | `dev/claude-hooks/` | yes | Durable copies of the Claude Code hooks (`luacheck-postedit.ps1` edit-time lint, `git-guard.ps1` destructive-git-command guard) + their `settings.template.json`. `.claude/` is gitignored, so these templates are what survive a re-clone. |
-| `dev/githooks/` | yes | `pre-push` — release-tag guard + luacheck gate; `commit-msg` — upstream-name / AI-trailer guard; `pre-commit` — comment-rules guard on staged addon source. Opt in with `git config core.hooksPath dev/githooks` (the installer does this for you). |
-| `dev/scripts/` | yes | `install-claude-hooks.ps1` — restores the hooks + `core.hooksPath` config after a re-clone or PC reset. `lint-plan-fences.lua` — lints the ```` ```lua ```` blocks in a markdown plan (run by hand before a plan freezes). |
-| `dev/tests/` | yes | Standalone Lua 5.1 gates. `cdm-fingerprint.lua` loads the shipped `Installer/Core.lua` and `Data/Classes/BlizzardCDM.lua` as chunks and checks the CDM fingerprint scheme against fixed golden vectors. `eui-merge.lua`, `eui-merge-inputs.lua`, `eui-update.lua` and `eui-reset.lua` gate the EllesmereUI profile update: the three-way merge, the work around it, the flow against a stub EllesmereUI, and what the full install records. |
+| `dev/githooks/` | yes | `pre-push` — release-tag guard + luacheck gate; `commit-msg` — upstream-name / AI-trailer guard; `pre-commit` — comment-rules guard on staged addon source, and the Extra Frames clean of a staged `Data/AddOns/EllesmereUI.lua`. Opt in with `git config core.hooksPath dev/githooks` (the installer does this for you). |
+| `dev/scripts/` | yes | `install-claude-hooks.ps1` — restores the hooks + `core.hooksPath` config after a re-clone or PC reset. `lint-plan-fences.lua` — lints the ```` ```lua ```` blocks in a markdown plan (run by hand before a plan freezes). `eui-personal.lua` — finds Raid Frames Extra Frames data in the shipped EllesmereUI string; `--clean` resets it to the defaults and drops its overrides (run after pasting a new capture; it fails without LibDeflate, found under `References/` here or in the primary checkout). |
+| `dev/tests/` | yes | Standalone Lua 5.1 gates. `cdm-fingerprint.lua` loads the shipped `Installer/Core.lua` and `Data/Classes/BlizzardCDM.lua` as chunks and checks the CDM fingerprint scheme against fixed golden vectors. `eui-merge.lua`, `eui-merge-inputs.lua`, `eui-update.lua` and `eui-reset.lua` gate the EllesmereUI profile update: the three-way merge, the work around it, the flow against a stub EllesmereUI, and what the full install records. `eui-personal-data.lua` fails while the shipped EllesmereUI string carries Extra Frames data or an override for it (it skips that check without EllesmereUI's LibDeflate), and gates the cleaning script. |
 | `dev/ARTWORK-REFERENCE.md` | yes | Authoritative asset specifications, visual identities, future image-chat reference order, normalization anchors, and media verification gates. |
 | `dev/docs/` | **no** (gitignored) | Local-only: the CurseForge readme (`CURSEFORGE_README.md`), source and working art files (`art/`), icon reference material (`topbar-icons/`), and planning / Superpowers artifacts (`superpowers/`). |
 
@@ -69,7 +69,10 @@ git config core.hooksPath dev/githooks
   profile-target addons are public compatibility targets and stay allowed.
 - **`pre-commit`** blocks comment-rule violations (names, dates, plan steps,
   session history) in the comment portion of ADDED lines in staged `.lua`/`.xml`
-  addon source; `dev/` and `.claude/` are exempt.
+  addon source; `dev/` and `.claude/` are exempt. When the commit changes
+  `Data/AddOns/EllesmereUI.lua`, it also runs `dev/scripts/eui-personal.lua
+  --clean` and re-stages the file, blocking when the file has unstaged changes
+  or the script cannot run.
 
 Override a single push/commit with `--no-verify` (a deliberate exception, not a
 convenience).

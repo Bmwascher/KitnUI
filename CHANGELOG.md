@@ -31,14 +31,14 @@
 
 ### EllesmereUI Modules
 
-- **NEW:** **Modules** on the EllesmereUI step lists each part of your
-  profile on its own: Action Bars, Unit Frames, Resource & Cast Bars, the
-  Top Bar and the rest
+- **NEW:** **Individual Modules** on the EllesmereUI step lists each part of
+  your profile on its own: Action Bars, Unit Frames, Resource & Cast Bars,
+  the Top Bar and the rest, with **< EllesmereUI** to return to the step
 - Each row shows whether you changed that part since KitnUI installed it
   and what KitnUI's next update would change; hover a count to see the
   settings
 - **NEW:** Untick a part to keep yours through an update, and take it any
-  time later from Modules
+  time later from Individual Modules
 - **NEW:** **Reset** on a row puts just that part back to KitnUI's
   version; **Restore previous** undoes it
 - Right after an install or an update a part reads "Reload to Check" until
@@ -48,9 +48,9 @@
   many settings differ, such as "Differs - 18", and hovering lists them
 - Hover lists name Cooldown Manager specs, spells and trinket slots, Top
   Bar settings and the spells in aura lists instead of bare IDs
-- The update and Modules pages are redrawn: a dark panel behind the list,
-  taller rows, colored badges such as "Changed by You - 12", tick boxes
-  with a check or a cross, and nothing dimmed
+- The update and Individual Modules pages are redrawn: a dark panel behind
+  the list, taller rows, colored badges such as "Changed by You - 12", tick
+  boxes with a check or a cross, and nothing dimmed
 
 ### Installer
 
@@ -68,10 +68,11 @@
 - The login prompts take only **Later** or **No** as an answer. Escape, or
   a prompt that never reached the screen, used to count as No and could
   silence it for good
-- The window is a little larger so long counts fit their column, the
-  filled buttons are softer, and the **Modules** button sits beside the
-  profile status
+- The window is a little larger so long counts fit their column, and the
+  filled buttons are softer
 - New KitnUI and KitnUI Rasta backgrounds with a constellation cat
+- Slash commands in KitnUI's popups, chat messages and `/kitn` help are
+  highlighted
 
 ### Top Bar
 
@@ -105,6 +106,10 @@
   BuffReminders and Baganator profiles refreshed
 - The EllesmereUI profile no longer carries Quickdraw, so an update leaves
   your Quickdraw settings alone
+- BetterFriendlist installs in its Modern style, sorted by status then
+  name, in Simple Mode with search and whispering on a double click. The
+  side tabs are reordered, Guild is hidden, and Friend Requests appears
+  only when a request is waiting. `/kitn reset` puts your own settings back
 
 ---
 

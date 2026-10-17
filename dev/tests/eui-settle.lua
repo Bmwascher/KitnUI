@@ -81,6 +81,8 @@ local profile = {}
 _G.EllesmereUIDB = { activeProfile = "KitnUI", profiles = { KitnUI = profile } }
 
 local ns = { profileName = "KitnUI", data = {}, title = "KitnUI" }
+-- Core.lua's, which these files do not load.
+ns.Color = function(text) return "|cffFF008C" .. text .. "|r" end
 for _, file in ipairs({ "Installer/Merge.lua", "Installer/MergeInputs.lua", "Installer/ModuleRows.lua", "Installer/Update.lua" }) do
     local chunk, err = loadfile(file)
     if not chunk then
