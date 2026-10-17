@@ -25,6 +25,9 @@
   changed during combat. Clicking one mid-fight now says so and leaves it as
   it was. Before, a click waited for the fight to end, and clicking Bite
   Mode off and back on in one fight could leave it off
+- Picking **Dark** or **Colored** under **Unit Frame Appearance** repaints
+  your player frame at once. Before, its health bar kept the old look until
+  a `/reload`
 
 ### Profiles
 
