@@ -248,7 +248,7 @@ local function CreateElementButton(el)
     icon:SetTexture(el.icon)
     btn._icon = icon
 
-    -- Non-secure elements (gamemenu) get their click handler once, here:
+    -- Non-secure elements get their click handler once, here:
     -- ordinary Lua, so there is no combat gate and no reason to redo it on
     -- every Apply. Secure elements get theirs from WireSecureAttributes.
     if not el.secure and el.onClick then

@@ -1147,6 +1147,19 @@ local volumeElement = {
     end,
 }
 
+-- Refused in combat, as every one of EllesmereUI's own ways into its panel is:
+-- building a page calls functions that are protected in combat (a slider's
+-- SetPropagateMouseClicks), and Toggle is the one entry that does not check.
+local function ToggleEllesmereUI()
+    local EUI = _G.EllesmereUI
+    if not (EUI and EUI.Toggle) then return end
+    if InCombatLockdown() then
+        if EUI.PrintError then EUI.PrintError("Cannot open options during combat.") end
+        return
+    end
+    EUI:Toggle()
+end
+
 ns.TopBar.Elements = {
     friendsElement,
     guildElement,
@@ -1194,8 +1207,14 @@ ns.TopBar.Elements = {
 
     volumeElement,
 
-    Macro("euiconfig", "EllesmereUI", Icon("euiconfig"), "right",
-        "/run if EllesmereUI and EllesmereUI.Toggle then EllesmereUI:Toggle() end"),
+    {
+        id = "euiconfig", label = "EllesmereUI", icon = Icon("euiconfig"), panel = "right",
+        kind = "launcher", secure = false,
+        onClick = function(_self, button)
+            if button == "LeftButton" then ToggleEllesmereUI() end
+        end,
+        tooltip = function(tt) tt:AddLine("EllesmereUI", 1, 1, 1) end,
+    },
 
     -- Absent entirely, not greyed out, when KitnEssentials is not loaded.
     Macro("kitnessentials", "KitnEssentials", Icon("kitnessentials"), "right", "/kes",
@@ -1227,20 +1246,15 @@ ns.TopBar.Elements = {
     -- its button as "KitnUITopBar_clock" like any other element; Readouts.lua
     -- reaches that stable global name to attach the time FontString and size it
     -- from tbClockSize. Left click opens the calendar, right click opens
-    -- EllesmereUI's settings, middle click reloads.
-    --
-    -- Only two of the three refuse in combat. EllesmereUI's Toggle creates and
-    -- shows that addon's own frame and reaches nothing protected, so gating it
-    -- would refuse a click that is perfectly safe -- and the bar's own
-    -- EllesmereUI launcher, three icons away, does not refuse either.
+    -- EllesmereUI's settings, middle click reloads. All three refuse in combat.
     {
         id = "clock", label = "Clock", panel = "centre",
         kind = "readout", secure = false,
         onClick = function(_self, button)
-            -- Taken before the combat gate, deliberately: see the note above.
+            -- Taken before the gate below, which would show the game's own
+            -- message instead of EllesmereUI's.
             if button == "RightButton" then
-                local EUI = _G.EllesmereUI
-                if EUI and EUI.Toggle then EUI:Toggle() end
+                ToggleEllesmereUI()
                 return
             end
             if button ~= "LeftButton" and button ~= "MiddleButton" then return end

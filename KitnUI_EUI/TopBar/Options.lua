@@ -337,9 +337,9 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
           setValue = function(v)
               -- The layout half of Apply is protected, so a click taken
               -- mid-fight would hand the minimap its clock back and leave the
-              -- bar drawing its own until the fight ended. This panel is
-              -- reachable in combat: the bar's own clock opens it ahead of that
-              -- element's combat gate.
+              -- bar drawing its own until the fight ended. Kept although the
+              -- bar refuses to open this panel in combat, because another
+              -- addon can still open it through EllesmereUI's Toggle.
               if InCombatLockdown() then
                   UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0.1, 0.1, 1, 3)
                   return

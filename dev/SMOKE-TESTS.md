@@ -143,13 +143,10 @@ failure.
   turn each switch off: the sentinels recorded before the change must return.
 - [ ] **10. All three paths, pass A only.** Flip Beginner Mode on, out of combat,
   which is the only way it can be flipped at all. All THREE of its paths apply, and
-  turning it off restores all three sentinels. It is the only switch whose apply
-  rides a closure, so this is what proves that closure runs.
+  turning it off restores all three sentinels.
 
-  **This check used to ask for a combat toggle. That was impossible.** EllesmereUI
-  refuses to open its panel in combat and closes it when combat starts, so no
-  switch on that page can be clicked while locked down. The deferred branch stays
-  in the code as a defence against a host rule change and is documented as such.
+  **This check used to ask for a combat toggle.** Beginner Mode now refuses a
+  click in combat, so there is no deferred toggle to test.
 - [ ] **11. Partial import.** Fresh distinct sentinels on every path. Import a
   profile carrying the switches ON while excluding the module blobs they force, and
   exclude Global Settings so `euiAccent` is not carried. **Every sentinel survives
@@ -159,11 +156,9 @@ failure.
   Then finish the cycle: off changes nothing; on claims and the probe shows the new
   notes; a final off restores every sentinel and returns to `NOTES 0`.
 - **12. The eviction race. REMOVED, not skipped, and not a pass.** It asked you to
-  turn Beginner Mode on during combat and switch profile before combat ended. That
-  cannot be done: the panel is closed in combat, so the switch cannot be clicked
-  and the race has no way in. The queued-claim branch and its cancelling message
-  stay in the code as a defence against a host rule change, and neither is
-  reachable from the interface today. Nothing here needs testing.
+  turn Beginner Mode on during combat and switch profile before combat ended.
+  Beginner Mode now refuses a click in combat, so nothing is queued and the race
+  has no way in. Nothing here needs testing.
 - [ ] **13. MANDATORY STANDALONE, after both passes.** The unloaded-module restore
   path, which neither pass reaches. Set the action bar sentinels, claim Beginner
   Mode with Lulu OFF, turn Lulu ON and reload. Now turn Beginner Mode OFF while
@@ -1075,6 +1070,10 @@ moves.
   that addon's own window and reaches nothing protected, so refusing it would
   block a click that is safe, while the bar's own EllesmereUI icon a few places
   away has never refused.
+  **Superseded 2026-10-17:** that premise was wrong. Opening the panel in combat
+  builds pages that call protected functions (BugSack: ADDON_ACTION_BLOCKED,
+  `SetPropagateMouseClicks`). The right click and the EllesmereUI icon now both
+  refuse in combat with EllesmereUI's own "Cannot open options during combat."
 
 ## This supersedes two checks in Item 5
 
@@ -1100,6 +1099,8 @@ build. Do not re-run them against this branch; run the checks below instead.
   the reset times above it do.
 - [ ] **6. Right click works IN combat.** Pull a target dummy. Right click the
   clock: the settings open and NOTHING is printed about combat.
+  **Superseded 2026-10-17:** in combat the right click now prints
+  "Cannot open options during combat." and the settings stay closed.
 - [ ] **7. The other two still refuse in combat.** Still on the dummy, left click
   the clock: the red "not in combat" message and no calendar. Middle click: the
   same message and no reload.

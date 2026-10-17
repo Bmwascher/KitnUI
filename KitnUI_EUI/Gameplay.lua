@@ -59,10 +59,7 @@ end
 -- Combat deferral
 ---------------------------------------------------------------------------------
 
--- Deferred rather than refused: nothing about Beginner Mode needs the user
--- standing there, as long as the write and the repaint defer together.
---
--- It cannot simply run under lockdown either. barVisibility feeds secure
+-- The re-apply cannot simply run under lockdown. barVisibility feeds secure
 -- visibility drivers, and EllesmereUI's action bar apply HALF applies in combat
 -- rather than failing: its own lockdown gate covers the enable pass, the layout,
 -- the borders and the shapes, but the font pass that applies the keybind sits
@@ -71,18 +68,15 @@ end
 local pending
 local combatWatcher
 
--- Returns true when it ran now, false when it deferred, so the caller can decide
--- whether anyone needs telling. The helper never prints: the re-apply path shares
--- it and has nobody to tell.
 local function RunOutOfCombat(fn)
     if not InCombatLockdown() then
         fn()
-        return true
+        return
     end
 
-    -- One slot, not a queue: a second toggle during the same fight replaces the
-    -- first, and only the final state should apply. One reused frame, because a
-    -- frame per call leaks one per toggle.
+    -- One slot, not a queue: a second re-apply during the same fight replaces
+    -- the first, and only the final state should apply. One reused frame,
+    -- because a frame per call leaks one per re-apply.
     pending = fn
     if not combatWatcher then
         combatWatcher = CreateFrame("Frame")
@@ -94,7 +88,6 @@ local function RunOutOfCombat(fn)
         end)
     end
     combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-    return false
 end
 
 ---------------------------------------------------------------------------------
@@ -475,41 +468,26 @@ end)
 -- the default", so a deleted key would come back ON after a reload, and
 -- EllesmereUI's spec-override engine would separately bank the absence as a
 -- removal marker. Every switch in this addon follows the same rule.
+-- Refused in combat rather than queued: a queued claim would share the
+-- re-apply's one pending slot, so a profile or spec change in the same fight
+-- would replace it and lose the claim with nothing said.
 local function SetBeginnerMode(on)
+    if InCombatLockdown() then
+        print(ns.title .. ": Beginner Mode cannot be changed in combat.")
+        if _G.EllesmereUI and EllesmereUI.RefreshPage then
+            pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+        end
+        return
+    end
     local s = ns.EUISettings()
     if not s then return end
     s.beginner = on and true or false
-
-    -- The rebuild rides INSIDE the closure, so it runs once the claim has really
-    -- landed. Guarded by the page name because a deferred claim can land long
-    -- after the user moved on, and an unguarded rebuild would then tear down
-    -- whatever page they are on.
-    --
-    -- The deferred branch is DEFENSIVE, not a path this switch reaches today:
-    -- EllesmereUI refuses to open its panel in combat and closes it on entering
-    -- combat (EllesmereUI.lua:11347 and :11514 in 8.8.2), so nobody can click
-    -- this switch while locked down. Kept because that is the host's rule and
-    -- the host's rules change between releases, and because the same helper is
-    -- shared with the re-apply below, which genuinely does run in combat.
-    if not RunOutOfCombat(function()
-        ApplyBeginner(ns.BeginnerEnabled(), true)
-        ns.EUIRebuildForOwnership("Gameplay")
-    end) then
-        print(ns.title .. ": Beginner Mode is queued until you leave combat. Switching, importing or deleting a profile, or changing spec, before then cancels it - toggle it again afterwards.")
-    end
+    ApplyBeginner(ns.BeginnerEnabled(), true)
+    ns.EUIRebuildForOwnership("Gameplay")
 end
 
 -- Re-read inside the closure rather than captured, because a fight can outlast
--- the user's interest and what applies afterwards has to be the state that is
--- true then. Sharing RunOutOfCombat with the toggle also shares its one pending
--- slot, so a profile switch mid-fight supersedes a toggle made earlier in that
--- same fight and the last state wins.
---
--- The CLAIM is captured, not re-read, and it is lost with the closure it rides
--- in. A profile, import, deletion or spec change during the same fight replaces
--- the toggle's claiming closure with this one, which then finds no note and
--- writes nothing. That supersede is only reachable if the host ever lets its
--- panel stay open in combat; see SetBeginnerMode above for why it cannot today.
+-- the trigger and what applies afterwards has to be the state that is true then.
 ns.EUIRegisterReapply(function()
     RunOutOfCombat(function() ApplyBeginner(ns.BeginnerEnabled(), false) end)
 end)
@@ -608,9 +586,7 @@ ns.EUIPages["Gameplay"] = function(parent, yOffset)
 
     _, h = W:Toggle(parent, "Beginner Mode", y,
         function() return ns.BeginnerEnabled() end,
-        -- No rebuild here. It lives inside SetBeginnerMode's closure so it can
-        -- never run ahead of the claim, which matters if the host's defensive
-        -- deferred branch is ever reached.
+        -- No rebuild here: SetBeginnerMode rebuilds once the claim has landed.
         function(v) SetBeginnerMode(v) end,
         ns.EUIOwnershipTip(
             "Shows tooltips, keybinds and key-press highlights on the Cooldown Manager, and keeps Action Bars 1, 2, 3 and 5 always visible.",

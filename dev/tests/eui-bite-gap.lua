@@ -780,24 +780,80 @@ eq(bars[3].addOffsetY, 21, "I2: live is the spec's own value")
 untouched("I2")
 
 ---------------------------------------------------------------------------------
--- J: a click made in combat runs when the fight ends
+-- J: a click made in combat is refused, and nothing runs when the fight ends
 ---------------------------------------------------------------------------------
 
 fresh()
 combat = true
 ns.SetBiteMode(true)
-local queued = said[#said]
-check(queued and queued:find("queued until you leave combat", 1, true), "J: the queued message is printed", queued)
+local refused = said[#said]
+check(refused and refused:find("Bite Mode cannot be changed in combat", 1, true), "J: the refusal is printed", refused)
 eq(ns.BiteEnabled(), false, "J: the switch is still off in combat")
 eq(A(262), 21, "J: no map is written in combat")
 eq(bars[3].addOffsetY, 21, "J: no live value is written in combat")
 combat = false
 fireRegen()
 runTimers()
-eq(ns.BiteEnabled(), true, "J: the click runs when the fight ends")
-eq(A(262), 0, "J: with the panel closed by then the map is held at once")
-eq(bars[3].addOffsetY, 0, "J: and live is 0")
+eq(ns.BiteEnabled(), false, "J: nothing was queued for the end of the fight")
+eq(A(262), 21, "J: the map is still not written")
+eq(core.db.euiSnap and core.db.euiSnap.bite, nil, "J: no record was made")
 untouched("J")
+
+fresh()
+combat = true
+ns.SetDarkCastBar(true)
+refused = said[#said]
+check(refused and refused:find("Dark Cast Bar cannot be changed in combat", 1, true), "J2: the refusal is printed", refused)
+eq(ns.DarkCastBarEnabled(), false, "J2: Dark Cast Bar stays off in combat")
+combat = false
+fireRegen()
+runTimers()
+eq(ns.DarkCastBarEnabled(), false, "J2: nothing was queued for the end of the fight")
+
+---------------------------------------------------------------------------------
+-- X: the first smoke run of 2026-10-17. The panel opened in combat from the Top
+-- Bar clock, and Bite Mode was clicked off, then on, before the fight ended. The
+-- toggle's click is setValue(not getValue()), so with the clicks queued both
+-- sent off, and the fight's end turned Bite Mode off and released every record.
+-- Refused in combat, both clicks leave the hold as it was.
+---------------------------------------------------------------------------------
+
+local function toggleClick() ns.SetBiteMode(not ns.BiteEnabled()) end
+
+for _, closeFirst in ipairs({ true, false }) do
+    local label = closeFirst and "X close, then the fight ends" or "X the fight ends, then close"
+    fresh()
+    clickOn()
+    claimed(label)
+    combat = true
+    openPanel()
+    toggleClick()
+    toggleClick()
+    if closeFirst then
+        hideWork()
+        runTimers()
+        combat = false
+        fireRegen()
+        runTimers()
+    else
+        combat = false
+        fireRegen()
+        runTimers()
+        closePanel()
+    end
+    EUI._specID = 264
+    HostApplies()
+    reapply()
+    EUI._specID = 262
+    HostApplies()
+    reapply()
+    eq(ns.BiteEnabled(), true, label .. ": Bite Mode is still on")
+    eq(held(REC_262), 21, label .. ": spec 262's record still holds 21")
+    eq(held(REC_63), 21, label .. ": so does spec 63's")
+    eq(A(262), 0, label .. ": spec 262's map is held")
+    eq(bars[3].addOffsetY, 0, label .. ": and live is 0")
+    untouched(label)
+end
 
 ---------------------------------------------------------------------------------
 -- K: the reset with the Cooldown Manager's data gone
