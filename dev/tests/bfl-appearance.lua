@@ -111,6 +111,14 @@ eq(prev.primarySort, "zone", "backfill: a newly managed key records the player's
 eq(prev.simpleMode, false, "backfill: including a false")
 eq(bfl.primarySort, "status", "backfill: and is then written")
 
+ns.db = { bflSnap = { taken = true, prev = { friendsFrameStyle = "legacy", theme = "blizzard" } } }
+_G.BetterFriendlistDB = { friendsFrameStyle = "legacy", theme = "dark", simpleMode = false, compactMode = true,
+    appearanceOnboardingResume = { version = 3, snapshot = { simpleMode = true, compactMode = false } } }
+ns.ApplyBetterFriendlistAppearance()
+prev = ns.db.bflSnap.prev
+eq(prev.simpleMode, true, "backfill: an open picker's saved value wins over its preview")
+eq(prev.compactMode, false, "backfill: for each key the picker holds")
+
 ---------------------------------------------------------------------------------
 -- The picker's rollback undoes the write before the next login
 ---------------------------------------------------------------------------------

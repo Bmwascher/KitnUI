@@ -1954,22 +1954,23 @@ function ns.ApplyBetterFriendlistAppearance()
     ns.db.bflSnap = ns.db.bflSnap or {}
     local snap = ns.db.bflSnap
 
+    -- Validated the way BetterFriendlist validates it (GetResumeState in its
+    -- AppearanceOnboarding module): a record from an older onboarding version is
+    -- one THAT addon ignores, so its embedded values are stale and the live keys
+    -- are the player's real ones.
+    local resume = bfl.appearanceOnboardingResume
+    local base
+    if type(resume) == "table" and type(resume.snapshot) == "table"
+        and tonumber(resume.version) == BFL_ONBOARDING_VERSION then
+        base = resume.snapshot
+    end
+
     -- ONCE. Re-snapshotting on a second install would record KitnUI's own values
     -- as the player's and leave the reset with nothing to put back.
     if not snap.taken or not snap.prev then
-        -- Validated the way BetterFriendlist validates it (GetResumeState in its
-        -- AppearanceOnboarding module): a record from an older onboarding
-        -- version is one THAT addon ignores, so its embedded values are stale
-        -- and the live keys are the player's real ones.
-        local resume = bfl.appearanceOnboardingResume
-        local base
-        if type(resume) == "table" and type(resume.snapshot) == "table"
-            and tonumber(resume.version) == BFL_ONBOARDING_VERSION then
-            base = resume.snapshot
-        end
         TakeSnapshot(snap, bfl, base)
     else
-        RecordPrev(snap, bfl, nil)
+        RecordPrev(snap, bfl, base)
     end
 
     WriteBFL(bfl)
