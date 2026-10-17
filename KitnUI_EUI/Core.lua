@@ -618,8 +618,8 @@ end
 local hideWatcher
 
 -- For triggers that a user can reach mid-fight, such as the options window
--- closing in combat. Held until the fight ends, so no re-apply member runs
--- under lockdown.
+-- closing in combat. The re-apply is scheduled when the fight ends rather than
+-- during it.
 function ns.EUIQueueReapplyOutOfCombat()
     if not InCombatLockdown() then
         ns.EUIQueueReapply()
