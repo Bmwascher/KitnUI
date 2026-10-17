@@ -1813,13 +1813,11 @@ local BFL_TABLES = {
     fontColorFriendInfo = { r = 0.51,  g = 0.51,  b = 0.51, a = 1 },  -- grey
     fontColorTabText    = { r = 1,     g = 0.82,  b = 0,    a = 1 },  -- Blizzard yellow
 
-    -- The Modern style's side tabs: every tab, in its default order, shown
-    -- whether or not it has anything in it. An empty visibility map is the
-    -- addon's own "all shown".
-    modernFriendTabOrder = { "friends", "recent_allies", "quick_join", "friend_requests",
-        "recruit_a_friend", "raid", "guild", "who" },
-    modernFriendTabVisibility = {},
-    modernFriendTabPopulatedOnly = { quick_join = false, friend_requests = false },
+    -- The Modern style's side tabs. PopulatedOnly hides a tab while it is empty.
+    modernFriendTabOrder = { "friends", "recent_allies", "who", "friend_requests",
+        "recruit_a_friend", "guild", "quick_join", "raid" },
+    modernFriendTabVisibility = { guild = false },
+    modernFriendTabPopulatedOnly = { quick_join = false, friend_requests = true },
 }
 
 -- The keys BetterFriendlist's own appearance picker rolls back, each with the

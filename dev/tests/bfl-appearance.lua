@@ -68,7 +68,9 @@ eq(bfl.friendListClickWhisperEnabled, true, "install: whisper from the list")
 eq(bfl.friendListClickWhisperMode, "double", "install: on a double click")
 eq(#bfl.modernFriendTabOrder, 8, "install: every side tab in the order")
 eq(bfl.modernFriendTabOrder[1], "friends", "install: Friends first")
-eq(next(bfl.modernFriendTabVisibility), nil, "install: every tab shown")
+eq(bfl.modernFriendTabOrder[3], "who", "install: Who third")
+eq(bfl.modernFriendTabVisibility.guild, false, "install: Guild hidden")
+eq(bfl.modernFriendTabPopulatedOnly.friend_requests, true, "install: Friend Requests only while a request waits")
 eq(bfl.modernFriendTabPopulatedOnly.quick_join, false, "install: Quick Join shown when empty")
 eq(bfl.appearanceOnboardingVersion, 3, "install: the picker is marked done")
 
@@ -127,7 +129,8 @@ eq(ns.db.bflSnap.pending, 2, "repair: one attempt spent")
 
 bfl.modernFriendTabVisibility = { raid = false }
 ns.RecheckBetterFriendlistAppearance()
-eq(next(bfl.modernFriendTabVisibility), nil, "repair: a hidden tab fails the check and is shown again")
+eq(bfl.modernFriendTabVisibility.raid, nil, "repair: a hidden tab fails the check and is shown again")
+eq(bfl.modernFriendTabVisibility.guild, false, "repair: and Guild is hidden again")
 eq(prev.modernFriendTabVisibility.raid, false, "repair: a key the picker cannot reach is not re-recorded")
 
 io.write(string.format("%d checks, %d failures\n", checks, failures))

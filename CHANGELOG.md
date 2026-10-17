@@ -108,8 +108,9 @@
 - The EllesmereUI profile no longer carries Quickdraw, so an update leaves
   your Quickdraw settings alone
 - BetterFriendlist installs in its Modern style, sorted by status then
-  name, in Simple Mode with search, whispering on a double click, and with
-  every side tab shown. `/kitn reset` puts your own settings back
+  name, in Simple Mode with search and whispering on a double click. The
+  side tabs are reordered, Guild is hidden, and Friend Requests appears
+  only when a request is waiting. `/kitn reset` puts your own settings back
 
 ---
 
