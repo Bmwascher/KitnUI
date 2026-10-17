@@ -468,6 +468,22 @@ local NSRT_LOCK_FRAMES = { "ReminderFrame", "PersonalReminderFrame", "ExtraRemin
 -- in its Profiles.lua).
 local NSRT_SHARED_KEYS = { "EncounterAlerts", "AuraSounds", "AuraTrackingSettings", "AuraGlows" }
 
+-- Rebuilds what NSRT's running systems built from the shared data, in the
+-- order its own import does. Each call is pcall'd: this runs on a failure path,
+-- inside another addon.
+local function RefreshNSRTShared(NSI)
+    local function call(method, ...)
+        if type(NSI[method]) == "function" then pcall(NSI[method], NSI, ...) end
+    end
+    call("AddMissingDefaults")
+    call("FireCallback", "NSRT_ALERT_FULL_UPDATE")
+    call("RebuildAuraSounds")
+    call("InitAuraTracking")
+    call("RefreshAuraTrackingUI")
+    call("RefreshAuraGlows")
+    call("RefreshAuraGlowsUI")
+end
+
 -- A mover that NSRT has ALREADY built keeps its unlocked behaviour until the
 -- addon rebuilds it, so the settings write alone would land at the next reload
 -- -- which the installer's Finish does anyway, but a wizard closed before
@@ -540,9 +556,8 @@ setupFunctions["NSRT"] = function(addonKey, import)
     -- live there. An NSRT old enough to lack any of them gets a plain
     -- refusal - importing into a pre-profile NSRT is not supported. The two
     -- tables are required because the helpers iterate and write through both.
-    -- DecodeProfileString marks an NSRT that reads the "!NSRT:Profile:" format.
     local NSI = NorthernSkyRaidTools
-    if not (NSAPI and NSAPI.ImportProfileString and NSAPI.DecodeProfileString
+    if not (NSAPI and NSAPI.ImportProfileString
         and NSI and NSI.DecodeExportData and NSI.LoadProfile
         and NSI.SaveProfile and NSI.GetProfileKey
         and type(NSRT) == "table" and type(NSRT.Profiles) == "table"
@@ -554,6 +569,12 @@ setupFunctions["NSRT"] = function(addonKey, import)
     if import then
         if not HasData(addonKey) then
             print(ns.title .. ": No NSRT data found.")
+            return false
+        end
+        -- DecodeProfileString marks an NSRT that reads the "!NSRT:Profile:"
+        -- format. Load needs no decode, so only the import asks for it.
+        if not NSAPI.DecodeProfileString then
+            print(ns.title .. ": Your Northern Sky Raid Tools version is too old for this profile. Please update it.")
             return false
         end
 
@@ -606,6 +627,7 @@ setupFunctions["NSRT"] = function(addonKey, import)
         local ok, imported = pcall(NSAPI.ImportProfileString, NSAPI, ns.data[addonKey], ns.profileName, true)
         if not ok or not imported then
             for _, key in ipairs(NSRT_SHARED_KEYS) do NSRT[key] = priorShared[key] end
+            RefreshNSRTShared(NSI)
             -- The preflight makes this near-impossible (the import decodes
             -- the same string); sweep whatever the aborted import created
             -- and put everything else back where it was. Only bindings that
