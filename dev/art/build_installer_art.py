@@ -88,33 +88,38 @@ def constellation(t):
             continue
         r = rnd.choice([0.6, 0.8, 0.8, 1.0, 1.3, 1.7])
         field.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{t["star"]}" opacity="{rnd.uniform(0.25, 0.8):.2f}"/>')
-    outline = [(-92, -138), (-118, -52), (-128, 8), (-98, 62), (-50, 94), (0, 104), (50, 94), (98, 62), (128, 8),
-               (118, -52), (92, -138), (40, -82), (0, -88), (-40, -82)]
-    ear_l, ear_r = [(-92, -138), (-80, -82), (-56, -84)], [(92, -138), (80, -82), (56, -84)]
-    nose, mouth, mark = (0, 38), [(-18, 58), (0, 50), (18, 58)], (0, -46)
-    whiskers = [((-34, 46), (-178, 22)), ((-34, 52), (-184, 52)), ((-32, 58), (-172, 84)),
-                ((34, 46), (178, 22)), ((34, 52), (184, 52)), ((32, 58), (172, 84))]
-    lines = [(poly(outline, True), 0.5, 1.3), (poly(ear_l), 0.3, 1), (poly(ear_r), 0.3, 1),
-             (poly([nose, (0, 50)]) + " " + poly(mouth), 0.4, 1)]
-    lines += [(poly([a, b]), 0.18, 0.9) for a, b in whiskers]
+    m = lambda pts: [(-x, y) for x, y in pts]
+    half = [(-92, -138), (-105.5, -116.7), (-124, -27), (-133, 20), (-114, 45.5), (-95, 71), (-55, 87)]
+    outline = half + [(0, 100)] + m(half)[::-1] + [(43, -91), (0, -95), (-43, -91)]
+    ear_l = [(-124, -27), (-43, -91)]
+    streak_l = [(-92, -138), (-84.5, -68.5)]
+    nose, mouth, mark, mark_tail = (0, 59), [(-20, 84), (0, 77), (20, 84)], (0, -38), (0, -10)
+    whiskers_l = [[(-24, 71), (-133, 20), (-180.1, -2)], [(-26, 81), (-114, 45.5), (-162.2, 26)],
+                  [(-22, 89), (-95, 71), (-145.5, 58.6)]]
+    whiskers = whiskers_l + [m(w) for w in whiskers_l]
+    eye_l = [(-80.4, 12.6), (-55.7, -2.5), (-26.4, 19.2)]
+    lines = [(poly(outline, True), 0.5, 1.3), (poly(ear_l), 0.3, 1), (poly(m(ear_l)), 0.3, 1),
+             (poly(streak_l), 0.3, 1), (poly(m(streak_l)), 0.3, 1), (poly([mark, mark_tail]), 0.4, 1),
+             (poly([nose, (0, 77)]) + " " + poly(mouth), 0.4, 1)]
+    lines += [(poly(w), 0.18, 0.9) for w in whiskers]
     out = [f'<circle cx="{CX}" cy="{CY}" r="190" fill="url(#catGlow)" opacity="0.7"/>'] + field
     out += [f'<path d="{d}" fill="none" stroke="{t["line"]}" stroke-opacity="{o}" stroke-width="{w}" stroke-linejoin="round"/>'
             for d, o, w in lines]
-    for ex in (-48, 48):
-        (x0, y0), (x1, y1), (xc, yc) = P(ex - 22, -8), P(ex + 22, -8), P(ex, -24)
+    for eye in (eye_l, m(eye_l)[::-1]):
+        (x0, y0), (xc, yc), (x1, y1) = (P(*p) for p in eye)
         out.append(f'<path d="M{x0:.1f} {y0:.1f} Q{xc:.1f} {yc:.1f} {x1:.1f} {y1:.1f}" fill="none" stroke="{t["eye"]}" '
                    f'stroke-opacity="0.7" stroke-width="1.7" stroke-linecap="round" filter="url(#glow)"/>')
     out += [star(*P(*p), 3.4, t["star"]) for p in outline]
-    out += [star(*P(*p), 2.5, t["star"]) for p in (ear_l[1], ear_l[2], ear_r[1], ear_r[2])]
-    out += [star(*P(*nose), 3.3, t["star"]), star(*P(*mark), 5.2, t["star"])]
-    out += [star(*P(*b), 2, t["star"]) for _, b in whiskers]
+    out += [star(*P(*p), 2.5, t["star"]) for p in (streak_l[1], m(streak_l)[1])]
+    out += [star(*P(*nose), 3.3, t["star"]), star(*P(*mark), 5.2, t["star"]), star(*P(*mark_tail), 2, t["star"])]
+    out += [star(*P(*w[-1]), 2, t["star"]) for w in whiskers]
     if t["blunt"]:
-        out.append(blunt())
+        out.append(blunt(mouth[2]))
     return "\n    ".join(out)
 
 
-def blunt():
-    (x0, y0), (x1, y1) = P(20, 57), P(150, 100)
+def blunt(corner):
+    (x0, y0), (x1, y1) = P(*corner), P(corner[0] + 130, corner[1] + 43)
     ang = math.atan2(y1 - y0, x1 - x0)
     nx, ny = -math.sin(ang), math.cos(ang)
     off = lambda x, y, d: f"{x + nx * d:.1f} {y + ny * d:.1f}"
