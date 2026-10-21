@@ -13,10 +13,9 @@ Features the wizard positions against (Wizard.lua):
   close box centered 14 in from the top-right corner (26 x 24 hit area)
   version text centered at x 88 near the bottom, divider 34 up from the bottom
 
-Run: python -I dev/art/build_installer_art.py   (needs Pillow, numpy, Edge)
+Run: python -I dev/art/build_installer_art.py   (needs Pillow, Edge)
 """
-import base64, io, math, os, random, subprocess, time
-import numpy as np
+import math, os, random, subprocess, time
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,14 +33,14 @@ CX, CY, S = (SIDE + W) / 2, (103 + FY) / 2 - 12, 0.85
 
 THEMES = {
     "KitnUI": dict(
-        file="KitnUI-EUI-Background", logo="pink",
+        file="KitnUI-EUI-Background",
         window=("#2a0f24", "#1e0a1a", "#170814"), sidebar=("#1a0916", "#220c1d"), header=("#2c1027", "#1f0b1b"),
         band="#1b0918", content="#3a1232", accent="#ff008c", line="#ff4fb3", rule="#a8357f", border="#c2408f",
         star="#ffd1ea", eye="#ffb3dc", title="#fff0f8", side_line="#ff4fb3",
         glow=(("#ff008c", 0.15), ("#ff4fb3", 0.9), ("#ff008c", 0.35)), wash=None, box="#c2408f", glyph="#ffd1ea",
         blunt=False),
     "Rasta": dict(
-        file="KitnUI-EUI-Background-Rasta", logo="teal",
+        file="KitnUI-EUI-Background-Rasta",
         window=("#13201d", "#0f1513", "#140c0b"), sidebar=("#0b1715", "#0e1c19"), header=("#141b17", "#0f1311"),
         band="#0d1110", content="#2a2212", accent="#f2a33a", line="#f2c24d", rule="#8c7a3c", border="url(#border)",
         star="#fff0c8", eye="#ffd27a", title="#c8fff4", side_line="#2fd6c0",
@@ -49,20 +48,6 @@ THEMES = {
         wash=(("#2fd6c0", 0.13), ("#f2b33d", 0.07), ("#e0483c", 0.17)), box="#e0483c", glyph="#ffd9cf",
         blunt=True),
 }
-
-
-def cat_logo(kind):
-    src = Image.open(os.path.join(HERE, "kitnui-cathead.png")).convert("RGBA").resize((96, 96), Image.LANCZOS)
-    if kind == "teal":
-        a = np.asarray(src).astype(np.float64) / 255.0
-        lum = 0.3 * a[..., 0] + 0.59 * a[..., 1] + 0.11 * a[..., 2]
-        lum = np.clip(lum / max(lum[a[..., 3] > 0.2].max(), 1e-6), 0, 1) ** 0.8
-        dark, light = np.array([4, 34, 32]) / 255.0, np.array([150, 255, 236]) / 255.0
-        rgb = dark + (light - dark) * lum[..., None]
-        src = Image.fromarray((np.dstack([rgb, a[..., 3]]) * 255).round().astype(np.uint8), "RGBA")
-    buf = io.BytesIO()
-    src.save(buf, "PNG", optimize=True)
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
 def star(x, y, r, color):
@@ -252,10 +237,8 @@ def build(name, t):
     <rect x="0.6" y="0.6" width="{W - 1.2}" height="{H - 1.2}" stroke="{t['border']}" stroke-opacity="0.9" stroke-width="1.2"/>
   </g>
 
-  <g id="logo">
-    <circle cx="31" cy="22" r="22" fill="url(#catGlow)"/>
-    <image x="12" y="3" width="38" height="38" xlink:href="{cat_logo(t['logo'])}"/>
-    <text x="56" y="30" font-family="Segoe UI Black, Segoe UI, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="0.4" fill="{t['title']}" stroke="{t['accent'] if not t['blunt'] else t['side_line']}" stroke-opacity="0.35" stroke-width="0.8" filter="url(#glow)">KitnUI</text>
+  <g id="title">
+    <text x="{SIDE / 2}" y="30" text-anchor="middle" font-family="Segoe UI Black, Segoe UI, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="0.4" fill="{t['title']}" stroke="{t['accent'] if not t['blunt'] else t['side_line']}" stroke-opacity="0.35" stroke-width="0.8" filter="url(#glow)">KitnUI</text>
   </g>
 
   <g id="close-box">
