@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.2.2
+
+### Installer
+
+- A redrawn constellation cat sits in the center of the installer
+  background, and the title is centered with the small sidebar cat removed
+
+### Options Themes
+
+- The KitnUI options backgrounds carry the same redrawn cat and centered
+  title
+
+### General
+
+- New cat icon in the addon list: the constellation head with a soft pink
+  glow
+
+---
+
 ## v2.2.1
 
 ### EllesmereUI Profile Update
