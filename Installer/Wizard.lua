@@ -78,7 +78,7 @@ local ART_CROP = { 0.0395, 0.9605, 0.0696, 0.9304 }  -- left, right, top, bottom
 local PANEL_W, PANEL_H = 800, 590                     -- 1.356:1, matches the cropped panel
 local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI_Icon.tga"
 
--- Layout: the baked art already draws the sidebar column, logo, header band and
+-- Layout: the baked art already draws the sidebar column, title, header band and
 -- close box, so overlays are positioned INTO those regions rather than redrawn.
 local SIDEBAR_W = 176                   -- baked sidebar width (art divider @ x~178)
 local CONTENT_X = SIDEBAR_W + 24        -- left edge of the content column

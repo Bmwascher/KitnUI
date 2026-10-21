@@ -13,10 +13,9 @@ Features the wizard positions against (Wizard.lua):
   close box centered 14 in from the top-right corner (26 x 24 hit area)
   version text centered at x 88 near the bottom, divider 34 up from the bottom
 
-Run: python -I dev/art/build_installer_art.py   (needs Pillow, numpy, Edge)
+Run: python -I dev/art/build_installer_art.py   (needs Pillow, Edge)
 """
-import base64, io, math, os, random, subprocess, time
-import numpy as np
+import math, os, random, subprocess, time
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,14 +33,14 @@ CX, CY, S = (SIDE + W) / 2, (103 + FY) / 2 - 12, 0.85
 
 THEMES = {
     "KitnUI": dict(
-        file="KitnUI-EUI-Background", logo="pink",
+        file="KitnUI-EUI-Background",
         window=("#2a0f24", "#1e0a1a", "#170814"), sidebar=("#1a0916", "#220c1d"), header=("#2c1027", "#1f0b1b"),
         band="#1b0918", content="#3a1232", accent="#ff008c", line="#ff4fb3", rule="#a8357f", border="#c2408f",
         star="#ffd1ea", eye="#ffb3dc", title="#fff0f8", side_line="#ff4fb3",
         glow=(("#ff008c", 0.15), ("#ff4fb3", 0.9), ("#ff008c", 0.35)), wash=None, box="#c2408f", glyph="#ffd1ea",
         blunt=False),
     "Rasta": dict(
-        file="KitnUI-EUI-Background-Rasta", logo="teal",
+        file="KitnUI-EUI-Background-Rasta",
         window=("#13201d", "#0f1513", "#140c0b"), sidebar=("#0b1715", "#0e1c19"), header=("#141b17", "#0f1311"),
         band="#0d1110", content="#2a2212", accent="#f2a33a", line="#f2c24d", rule="#8c7a3c", border="url(#border)",
         star="#fff0c8", eye="#ffd27a", title="#c8fff4", side_line="#2fd6c0",
@@ -49,20 +48,6 @@ THEMES = {
         wash=(("#2fd6c0", 0.13), ("#f2b33d", 0.07), ("#e0483c", 0.17)), box="#e0483c", glyph="#ffd9cf",
         blunt=True),
 }
-
-
-def cat_logo(kind):
-    src = Image.open(os.path.join(HERE, "kitnui-cathead.png")).convert("RGBA").resize((96, 96), Image.LANCZOS)
-    if kind == "teal":
-        a = np.asarray(src).astype(np.float64) / 255.0
-        lum = 0.3 * a[..., 0] + 0.59 * a[..., 1] + 0.11 * a[..., 2]
-        lum = np.clip(lum / max(lum[a[..., 3] > 0.2].max(), 1e-6), 0, 1) ** 0.8
-        dark, light = np.array([4, 34, 32]) / 255.0, np.array([150, 255, 236]) / 255.0
-        rgb = dark + (light - dark) * lum[..., None]
-        src = Image.fromarray((np.dstack([rgb, a[..., 3]]) * 255).round().astype(np.uint8), "RGBA")
-    buf = io.BytesIO()
-    src.save(buf, "PNG", optimize=True)
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
 def star(x, y, r, color):
@@ -88,33 +73,38 @@ def constellation(t):
             continue
         r = rnd.choice([0.6, 0.8, 0.8, 1.0, 1.3, 1.7])
         field.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{t["star"]}" opacity="{rnd.uniform(0.25, 0.8):.2f}"/>')
-    outline = [(-92, -138), (-118, -52), (-128, 8), (-98, 62), (-50, 94), (0, 104), (50, 94), (98, 62), (128, 8),
-               (118, -52), (92, -138), (40, -82), (0, -88), (-40, -82)]
-    ear_l, ear_r = [(-92, -138), (-80, -82), (-56, -84)], [(92, -138), (80, -82), (56, -84)]
-    nose, mouth, mark = (0, 38), [(-18, 58), (0, 50), (18, 58)], (0, -46)
-    whiskers = [((-34, 46), (-178, 22)), ((-34, 52), (-184, 52)), ((-32, 58), (-172, 84)),
-                ((34, 46), (178, 22)), ((34, 52), (184, 52)), ((32, 58), (172, 84))]
-    lines = [(poly(outline, True), 0.5, 1.3), (poly(ear_l), 0.3, 1), (poly(ear_r), 0.3, 1),
-             (poly([nose, (0, 50)]) + " " + poly(mouth), 0.4, 1)]
-    lines += [(poly([a, b]), 0.18, 0.9) for a, b in whiskers]
+    m = lambda pts: [(-x, y) for x, y in pts]
+    half = [(-92, -138), (-105.5, -116.7), (-124, -27), (-133, 20), (-114, 45.5), (-95, 71), (-55, 87)]
+    outline = half + [(0, 100)] + m(half)[::-1] + [(43, -91), (0, -95), (-43, -91)]
+    ear_l = [(-124, -27), (-43, -91)]
+    streak_l = [(-92, -138), (-84.5, -68.5)]
+    nose, mouth, mark, mark_tail = (0, 59), [(-20, 84), (0, 77), (20, 84)], (0, -38), (0, -10)
+    whiskers_l = [[(-24, 71), (-133, 20), (-180.1, -2)], [(-26, 81), (-114, 45.5), (-162.2, 26)],
+                  [(-22, 89), (-95, 71), (-145.5, 58.6)]]
+    whiskers = whiskers_l + [m(w) for w in whiskers_l]
+    eye_l = [(-80.4, 12.6), (-55.7, -2.5), (-26.4, 19.2)]
+    lines = [(poly(outline, True), 0.5, 1.3), (poly(ear_l), 0.3, 1), (poly(m(ear_l)), 0.3, 1),
+             (poly(streak_l), 0.3, 1), (poly(m(streak_l)), 0.3, 1), (poly([mark, mark_tail]), 0.4, 1),
+             (poly([nose, (0, 77)]) + " " + poly(mouth), 0.4, 1)]
+    lines += [(poly(w), 0.18, 0.9) for w in whiskers]
     out = [f'<circle cx="{CX}" cy="{CY}" r="190" fill="url(#catGlow)" opacity="0.7"/>'] + field
     out += [f'<path d="{d}" fill="none" stroke="{t["line"]}" stroke-opacity="{o}" stroke-width="{w}" stroke-linejoin="round"/>'
             for d, o, w in lines]
-    for ex in (-48, 48):
-        (x0, y0), (x1, y1), (xc, yc) = P(ex - 22, -8), P(ex + 22, -8), P(ex, -24)
+    for eye in (eye_l, m(eye_l)[::-1]):
+        (x0, y0), (xc, yc), (x1, y1) = (P(*p) for p in eye)
         out.append(f'<path d="M{x0:.1f} {y0:.1f} Q{xc:.1f} {yc:.1f} {x1:.1f} {y1:.1f}" fill="none" stroke="{t["eye"]}" '
                    f'stroke-opacity="0.7" stroke-width="1.7" stroke-linecap="round" filter="url(#glow)"/>')
     out += [star(*P(*p), 3.4, t["star"]) for p in outline]
-    out += [star(*P(*p), 2.5, t["star"]) for p in (ear_l[1], ear_l[2], ear_r[1], ear_r[2])]
-    out += [star(*P(*nose), 3.3, t["star"]), star(*P(*mark), 5.2, t["star"])]
-    out += [star(*P(*b), 2, t["star"]) for _, b in whiskers]
+    out += [star(*P(*p), 2.5, t["star"]) for p in (streak_l[1], m(streak_l)[1])]
+    out += [star(*P(*nose), 3.3, t["star"]), star(*P(*mark), 5.2, t["star"]), star(*P(*mark_tail), 2, t["star"])]
+    out += [star(*P(*w[-1]), 2, t["star"]) for w in whiskers]
     if t["blunt"]:
-        out.append(blunt())
+        out.append(blunt(mouth[2]))
     return "\n    ".join(out)
 
 
-def blunt():
-    (x0, y0), (x1, y1) = P(20, 57), P(150, 100)
+def blunt(corner):
+    (x0, y0), (x1, y1) = P(*corner), P(corner[0] + 130, corner[1] + 43)
     ang = math.atan2(y1 - y0, x1 - x0)
     nx, ny = -math.sin(ang), math.cos(ang)
     off = lambda x, y, d: f"{x + nx * d:.1f} {y + ny * d:.1f}"
@@ -247,10 +237,8 @@ def build(name, t):
     <rect x="0.6" y="0.6" width="{W - 1.2}" height="{H - 1.2}" stroke="{t['border']}" stroke-opacity="0.9" stroke-width="1.2"/>
   </g>
 
-  <g id="logo">
-    <circle cx="31" cy="22" r="22" fill="url(#catGlow)"/>
-    <image x="12" y="3" width="38" height="38" xlink:href="{cat_logo(t['logo'])}"/>
-    <text x="56" y="30" font-family="Segoe UI Black, Segoe UI, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="0.4" fill="{t['title']}" stroke="{t['accent'] if not t['blunt'] else t['side_line']}" stroke-opacity="0.35" stroke-width="0.8" filter="url(#glow)">KitnUI</text>
+  <g id="title">
+    <text x="{SIDE / 2}" y="30" text-anchor="middle" font-family="Segoe UI Black, Segoe UI, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="0.4" fill="{t['title']}" stroke="{t['accent'] if not t['blunt'] else t['side_line']}" stroke-opacity="0.35" stroke-width="0.8" filter="url(#glow)">KitnUI</text>
   </g>
 
   <g id="close-box">
