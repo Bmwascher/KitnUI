@@ -6,6 +6,7 @@
 
 - A redrawn constellation cat sits in the center of the installer
   background, and the title is centered with the small sidebar cat removed
+- The icon beside each page title is the new purple-to-pink K
 
 ### Options Themes
 
@@ -14,8 +15,7 @@
 
 ### General
 
-- New cat icon in the addon list: the constellation head with a soft pink
-  glow
+- New K icon in the addon list, purple fading to pink
 
 ---
 
