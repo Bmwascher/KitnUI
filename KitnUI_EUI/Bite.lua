@@ -833,6 +833,13 @@ local function CurrentSpecID()
         specID = EUI._specID
     end
     if not specID or specID == 0 then return nil end
+    -- Forever reports one spec per class. EllesmereUI's spec overrides key
+    -- their groups and maps by the retail spec it translates that to, so the
+    -- swap set and the slots only match through the same translation.
+    if ns.IS_FOREVER and type(EUI.SpecFor) == "function" and type(EUI._SO_InAnyGroup) == "function" then
+        local ok, translated = pcall(EUI.SpecFor, specID, EUI._SO_InAnyGroup)
+        if ok and type(translated) == "number" then return translated end
+    end
     return specID
 end
 

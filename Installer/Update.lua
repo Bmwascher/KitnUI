@@ -500,7 +500,24 @@ local function predictLock(scratch)
     local d = DB()
     local profiles = isTable(d) and d.profiles
     local backupGoes = not scratch and isTable(profiles) and profiles[BACKUP] ~= nil
-    return ns.EUIWillLock(ns.EUICurrentSpecID(), isTable(d) and d.specProfiles, backupGoes)
+    local assigned = isTable(d) and d.specProfiles or nil
+    local specID = ns.EUICurrentSpecID()
+    -- Forever reports one spec per class, and the importer reads the first of
+    -- the class's retail specs with an assignment, after the backup's own
+    -- assignments are gone. The prediction picks the same one.
+    local e = E()
+    if ns.IS_FOREVER and specID and e and type(e.SpecFor) == "function"
+        and type(e.SpecHasEntry) == "function" then
+        local view = {}
+        if isTable(assigned) then
+            for id, name in pairs(assigned) do
+                if not (backupGoes and name == BACKUP) then view[id] = name end
+            end
+        end
+        local ok, translated = pcall(e.SpecFor, specID, e.SpecHasEntry, view)
+        if ok and type(translated) == "number" then specID = translated end
+    end
+    return ns.EUIWillLock(specID, assigned, backupGoes)
 end
 
 -- What the list and the merge share: KitnUI's string and every recorded base,

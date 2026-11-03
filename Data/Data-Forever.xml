@@ -1,0 +1,11 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+
+    <!-- Forever-only payloads, loaded after Data.xml. Each file listed here
+         assigns the same ns.data keys as its retail sibling and ships in the
+         same commit as its step's X-<Addon>-Forever-Version line in
+         KitnUI.toc, which must differ from the retail line so players who
+         took the retail string are offered the update. Keys that share their
+         step's version need no line, and Blizzard CDM has none. With nothing
+         listed, Forever imports the retail strings. -->
+</Ui>

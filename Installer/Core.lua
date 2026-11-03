@@ -44,6 +44,12 @@ ns.version = C_AddOns.GetAddOnMetadata(addonName, "Version")
 ns.data = ns.data or {}
 ns.db = nil
 
+-- The interface version decides which client this is. An unreadable value is
+-- not Forever, so nothing Forever-only runs on a guess.
+local getBuildInfo = _G.GetBuildInfo
+local interface = getBuildInfo and select(4, getBuildInfo())
+ns.IS_FOREVER = type(interface) == "number" and interface >= 16000 and interface < 20000
+
 -- The version as it should be SHOWN. ns.version is the raw .toc value and is not
 -- printable as-is: the packager substitutes the git tag, which carries a leading
 -- "v" that reads as a second "version" next to the word, and an unpackaged
@@ -122,9 +128,22 @@ local addonVersionHeaders = {
 -- both directions once it drifts from the data. CDM answers "is this stale?" by
 -- fingerprinting the string it ships -- see the block below.
 
+-- Forever reads its own line first, so an update to one client's string never
+-- prompts the other. A key with no Forever line reads the retail one, because
+-- Forever then ships the retail string. Built from the retail names, so every
+-- step has a Forever name and the read below never passes a nil header.
+local addonForeverVersionHeaders = {}
+for addonKey, header in pairs(addonVersionHeaders) do
+    addonForeverVersionHeaders[addonKey] = (header:gsub("%-Version$", "-Forever-Version"))
+end
+
 function ns.GetAddonDataVersion(addonKey)
     local header = addonVersionHeaders[addonKey]
     if not header then return nil end
+    if ns.IS_FOREVER then
+        local forever = C_AddOns.GetAddOnMetadata(addonName, addonForeverVersionHeaders[addonKey])
+        if forever and forever ~= "" then return forever end
+    end
     return C_AddOns.GetAddOnMetadata(addonName, header)
 end
 
@@ -414,9 +433,9 @@ function ns.GetOutdatedAddons()
         }
     end
 
-    for addonKey, header in pairs(addonVersionHeaders) do
+    for addonKey in pairs(addonVersionHeaders) do
         local installed = ns.db.addonVersions and ns.db.addonVersions[addonKey]
-        local current = C_AddOns.GetAddOnMetadata(addonName, header)
+        local current = ns.GetAddonDataVersion(addonKey)
         local hasProfile = ns.db.profiles and ns.db.profiles[addonKey]
 
         -- An addon whose payload is empty can never be imported, so reporting it

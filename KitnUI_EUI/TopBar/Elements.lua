@@ -120,12 +120,19 @@ local function ApplyBar()
     if ns.TopBar and ns.TopBar.Apply then ns.TopBar.Apply() end
 end
 
+-- Home, Great Vault, Encounter Journal and Mythic+ Portals open windows the
+-- Forever client does not have, so those elements exist on retail only.
+local function RetailOnly() return not ns.IS_FOREVER end
+
+-- Home is absent on Forever, so nothing there asks for a house list.
 local housingWatcher = CreateFrame("Frame")
-housingWatcher:RegisterEvent("PLAYER_LOGIN")
-housingWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-housingWatcher:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
-housingWatcher:RegisterEvent("HOUSE_PLOT_ENTERED")
-housingWatcher:RegisterEvent("HOUSE_PLOT_EXITED")
+if RetailOnly() then
+    housingWatcher:RegisterEvent("PLAYER_LOGIN")
+    housingWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+    housingWatcher:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
+    housingWatcher:RegisterEvent("HOUSE_PLOT_ENTERED")
+    housingWatcher:RegisterEvent("HOUSE_PLOT_EXITED")
+end
 housingWatcher:SetScript("OnEvent", function(_, event, houseInfoList)
     if event == "PLAYER_LOGIN" then
         RequestHouseList()
@@ -252,6 +259,7 @@ local homeElement = {
     id = "home", label = "Home", icon = Icon("home"), panel = "right",
     kind = "launcher", secure = true,
     attrs = HomeAttrs,
+    requires = RetailOnly,
     tooltip = function(tt)
         tt:AddLine("Home", 1, 1, 1)
         -- A blank line under every title that has content beneath it, so the
@@ -310,6 +318,7 @@ end
 local vaultElement = {
     id = "vault", label = "Great Vault", icon = Icon("vault"), panel = "right",
     kind = "launcher", secure = false,
+    requires = RetailOnly,
     onClick = function(_self, button)
         if button ~= "LeftButton" then return end
         if InCombatLockdown() then
@@ -1051,8 +1060,9 @@ local portalsElement = {
     end,
     tooltip = function(tt) tt:AddLine("Mythic+ Portals", 1, 1, 1) end,
     -- SEASON_PORTALS is the host's, and it moves every season. Absent entirely
-    -- rather than a button that opens an empty grid.
-    requires = function() return SeasonPortals() and true or false end,
+    -- rather than a button that opens an empty grid, and on Forever, which has
+    -- no dungeon teleports.
+    requires = function() return RetailOnly() and SeasonPortals() and true or false end,
 }
 
 ---------------------------------------------------------------------------------
@@ -1168,10 +1178,15 @@ ns.TopBar.Elements = {
         "/click LFDMicroButton"),
 
     Macro("journal", "Encounter Journal", Icon("journal"), "left",
-        "/click EJMicroButton"),
+        "/click EJMicroButton", RetailOnly),
 
-    Macro("achievements", "Achievements", Icon("achievements"), "left",
-        "/click AchievementMicroButton"),
+    -- Forever's micro menu puts its Progress Legacy window in this slot, so on
+    -- Forever the button opens that window under the name Forever gives it.
+    Macro("achievements",
+        ns.IS_FOREVER and type(_G.LEGACY_BUTTON) == "string" and _G.LEGACY_BUTTON ~= ""
+            and _G.LEGACY_BUTTON or "Achievements",
+        Icon("achievements"), "left",
+        ns.IS_FOREVER and "/click LegacyMicroButton" or "/click AchievementMicroButton"),
 
     -- No `collections` element here: it opened the same WINDOW `toybox` opens,
     -- on whatever tab was last used. `toybox` is kept because it lands
@@ -1199,8 +1214,9 @@ ns.TopBar.Elements = {
     Macro("spellbook", "Spellbook", Icon("spellbook"), "right",
         "/run PlayerSpellsUtil.OpenToSpellBookTab()"),
 
+    -- Forever defines both buttons but lays out only its talents-only one.
     Macro("talents", "Talents", Icon("talents"), "right",
-        "/click PlayerSpellsMicroButton"),
+        ns.IS_FOREVER and "/click TalentMicroButton" or "/click PlayerSpellsMicroButton"),
 
     Macro("professions", "Professions", Icon("professions"), "right",
         "/click ProfessionMicroButton"),

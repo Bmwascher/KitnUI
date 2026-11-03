@@ -287,8 +287,8 @@
 - With Lulu Mode on, the prompt names the Lulu layout
 - Loading the Edit Mode layout is refused during a fight instead of
   attempted, with a note in chat
-- EllesmereUI's Data Bars module is switched off at install, since the Edit
-  Mode profile already places Blizzard's experience and reputation bar
+- EllesmereUI's Data Bars module, its information bar, is switched off at
+  install, since the KitnUI Top Bar already does that job
 
 ### Top Bar
 

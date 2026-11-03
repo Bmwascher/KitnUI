@@ -169,6 +169,10 @@ setupFunctions["EllesmereUI"] = function(addonKey, import)
         -- Re-assert the disable set here so a caller that never reaches Finish
         -- still gets it. Idempotent, so the Finish-time pass is unaffected.
         ns.ApplyEUIModuleSet()
+
+        -- Import only: these switches are account-wide, so an alt's load must
+        -- not set them again.
+        ns.ApplyForeverEssentials()
     else
         -- Load only. EllesmereUI.SetProfile returns silently when the named
         -- profile is gone, and this function returns true unconditionally below,
@@ -1625,9 +1629,8 @@ end
 -- these with a dedicated addon or leaves the job to Blizzard. Disabling Blizz
 -- UI Enhanced also takes its Dragon Riding skin, which lives in the same folder.
 --
--- DataBars is the "leaves the job to Blizzard" case: the Edit Mode payload
--- already places Blizzard's own StatusTrackingBarManager, so the module is a
--- second experience and reputation bar competing with the one KitnUI ships.
+-- DataBars is EllesmereUI's information bar (clock, gold and similar blocks),
+-- a second bar doing the job of the Top Bar KitnUI ships.
 local ALWAYS_DISABLED = {
     "EllesmereUIQoL",
     "EllesmereUIAuraBuffReminders",
@@ -1759,6 +1762,49 @@ function ns.ApplyEUIModuleSet()
         end
     end
 end
+
+---------------------------------------------------------------------------------
+-- EllesmereUI Forever Essentials: the switches a Forever install sets
+---------------------------------------------------------------------------------
+
+-- Each feature keeps account-wide settings in its own EllesmereUIDB table,
+-- outside every profile, so no import string can carry them. Only the fields
+-- named here are written. Flight Timer keeps its default, and Fishing has no
+-- master switch.
+local FOREVER_ESSENTIALS = {
+    spellUprank      = { enabled = true },
+    junkList         = { enabled = true, onlyLowBagSpace = true },
+    activeForm       = { enabled = true },
+    gatherSkill      = { enabled = true },
+    worldMapReveal   = { enabled = true },
+    mapTravel        = { enabled = true },
+    questRewards     = { enabled = true },
+    zoneLevels       = { enabled = true },
+    petSummon        = { enabled = true },
+    macroManager     = { enabled = true },
+    classicSpellbook = { enabled = false },
+    classicTalents   = { enabled = false },
+    simplifiedStats  = { enabled = false },
+    worldMapFade     = { enabled = false },
+    threatMeter      = { enabled = false },
+    lootFeed         = { enabled = false },
+}
+
+function ns.ApplyForeverEssentials()
+    if not ns.IS_FOREVER then return end
+    local db = _G.EllesmereUIDB
+    if type(db) ~= "table" then return end
+    for key, fields in pairs(FOREVER_ESSENTIALS) do
+        if db[key] == nil then db[key] = {} end
+        local settings = db[key]
+        -- Anything but a table is not a shape this feature reads, so it is
+        -- left for EllesmereUI to deal with.
+        if type(settings) == "table" then
+            for field, value in pairs(fields) do settings[field] = value end
+        end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- BetterFriendlist: the appearance KitnUI's skinning expects
 ---------------------------------------------------------------------------------
