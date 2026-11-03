@@ -327,4 +327,33 @@ for i, t in ipairs(timers) do check(t.canceled or t.fired, "both off: timer " ..
 check(next(updaters) == nil, "both off: the visibility updater is gone")
 eq(unlocks, 1, "both off: the Unlock Mode elements stay registered")
 
+---------------------------------------------------------------------------------
+-- Atlas lookups
+---------------------------------------------------------------------------------
+
+-- The client returns a new table on every atlas lookup and a bar redraws on
+-- every XP event, so a redraw looks no atlas up.
+local lookups = 0
+_G.C_Texture = {
+    GetAtlasInfo = function()
+        lookups = lookups + 1
+        return { width = 256, height = 34, file = 1 }
+    end,
+}
+settings.xpFrameStyle, settings.xpFillStyle, settings.xpProfFill = "prof", "profession", "Alchemy"
+local atlasWidget = X.NewWidget(_G.UIParent, "xp")
+local atlasData = { fill = 40, questEnd = 50, restedEnd = 60, level = "Level 10", center = "400 / 1,000", right = "40.0%" }
+local function drawTwice(label)
+    ok, why = pcall(X.Draw, atlasWidget, X.Get, atlasData)
+    check(ok, label .. ": a first draw runs", why)
+    local first = lookups
+    ok, why = pcall(X.Draw, atlasWidget, X.Get, atlasData)
+    check(ok, label .. ": a redraw runs", why)
+    eq(lookups, first, label .. ": a redraw looks no atlas up")
+end
+drawTwice("profession frame and fill")
+check(lookups > 0, "profession frame and fill: the first draw looks its atlases up")
+settings.xpFrameStyle = "blizzard"
+drawTwice("Blizzard frame")
+
 finish()

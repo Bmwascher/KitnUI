@@ -38,11 +38,21 @@ X.PROFESSIONS = {
 local XP_TEXTS = { "level", "center", "right", "levelTime", "sessionTime", "rate", "compRested" }
 local FB_TEXTS = { "left", "right" }
 
+-- The client returns a new table on every lookup and Draw runs on every XP
+-- event, so each atlas's info is read once and kept; false marks one this
+-- client lacks.
+local atlasInfo = {}
+
 local function Atlas(name)
     local T = _G.C_Texture
     if not (T and T.GetAtlasInfo and name) then return nil end
-    local ok, info = pcall(T.GetAtlasInfo, name)
-    return ok and type(info) == "table" and info or nil
+    local info = atlasInfo[name]
+    if info == nil then
+        local ok, got = pcall(T.GetAtlasInfo, name)
+        info = ok and type(got) == "table" and got or false
+        atlasInfo[name] = info
+    end
+    return info or nil
 end
 
 function X.StyleAvailable(style)
