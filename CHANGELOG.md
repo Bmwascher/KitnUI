@@ -19,8 +19,9 @@
 
 ### WoW Forever
 
-- KitnUI and its EllesmereUI tab load on WoW Forever, installing the retail
-  profiles until Forever ones are ready
+- KitnUI and its EllesmereUI tab load on WoW Forever, installing copies of
+  the retail profiles until Forever ones are ready; Blizzard CDM layouts for
+  Forever's classes come later
 - On Forever, the EllesmereUI step turns on ten Forever Essentials, among
   them spell upranking, quest rewards, map reveal and the junk list (which
   clears junk only when your bags are nearly full), and turns off six more
