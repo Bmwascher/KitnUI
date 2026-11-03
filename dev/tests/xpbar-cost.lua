@@ -824,4 +824,42 @@ do
     EUI.RefreshPage = nil
 end
 
+-- The reputation sample: Argent Dawn at Revered, 13,020 of 21,000, drawn
+-- through the bar's own fill: Standing Color shows the client's Revered
+-- color, Custom Color the Fill Color.
+do
+    local drawBar = X.Draw
+    local rep
+    X.Draw = function(w, view, data)
+        if w and w.kind == "fb" then rep = data end
+        return drawBar(w, view, data)
+    end
+    local function colorOf(d)
+        return tostring(d.r) .. " " .. tostring(d.g) .. " " .. tostring(d.b)
+    end
+    local function drawRep()
+        rep = nil
+        X.PreviewRefresh()
+        return rep or {}
+    end
+    local realColors = _G.FACTION_BAR_COLORS
+    _G.FACTION_STANDING_LABEL7 = "Revered"
+    _G.FACTION_BAR_COLORS = { [7] = { r = 0.1, g = 0.7, b = 0.2 } }
+    settings.fbFillMode = "standing"
+    X.SelectBar("fb")
+    local repData = drawRep()
+    eq(repData.left, "Argent Dawn - Revered - 62.0%", "reputation sample: Argent Dawn at Revered, 62%")
+    eq(repData.right, "(13.0K / 21.0K)", "reputation sample: 13,020 of 21,000, short")
+    eq(colorOf(repData), "0.1 0.7 0.2", "reputation sample: Standing Color fills it in the client's Revered color")
+    settings.fbFillMode = "custom"
+    eq(colorOf(drawRep()), "0.435 0.294 1", "reputation sample: Custom Color fills it in the Fill Color")
+    settings.fbFillMode = "standing"
+    _G.FACTION_BAR_COLORS = nil
+    eq(colorOf(drawRep()), "0.435 0.294 1", "reputation sample: Standing Color without the client's colors falls back to the Fill Color")
+    settings.fbFillMode = nil
+    _G.FACTION_BAR_COLORS, _G.FACTION_STANDING_LABEL7 = realColors, nil
+    X.SelectBar("xp")
+    X.Draw = drawBar
+end
+
 finish()

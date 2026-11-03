@@ -45,7 +45,11 @@ local sampleXP = {
     level = 59, cur = 94410, max = 209800, quest = 31470, rested = 52450,
     atMax = false, xpOff = false, levelTime = 1200, elapsed = 3600, gained = 90000,
 }
-local sampleFaction = { cur = 6500, min = 0, max = 10000, isMax = false }
+-- Argent Dawn at Revered: 13,020 of the 21,000 that reach Exalted.
+local REVERED = 7
+local sampleFaction = {
+    kind = "standard", name = "Argent Dawn", reaction = REVERED, cur = 13020, min = 0, max = 21000, isMax = false,
+}
 local xpOut, fbOut = {}, {}
 
 local function Pad()
@@ -53,14 +57,8 @@ local function Pad()
 end
 
 local function SampleFaction()
-    if ns.IS_FOREVER then
-        local label = _G.FACTION_STANDING_LABEL5
-        sampleFaction.kind, sampleFaction.name = "standard", "Watched Faction"
-        sampleFaction.label, sampleFaction.reaction = type(label) == "string" and label or "Friendly", 5
-    else
-        sampleFaction.kind, sampleFaction.name = "friendship", "Delve Companion"
-        sampleFaction.label, sampleFaction.reaction = "Level 20", nil
-    end
+    local label = _G.FACTION_STANDING_LABEL7
+    sampleFaction.label = type(label) == "string" and label or "Revered"
     return sampleFaction
 end
 
