@@ -204,6 +204,10 @@ eq(xpDefaults.xpHeight, 30, "the XP bar defaults to 30 high")
 eq(xpDefaults.fbWidth, 400, "the faction bar defaults to 400 wide")
 eq(xpDefaults.fbHeight, 20, "the faction bar defaults to 20 high")
 eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
+for _, stem in ipairs({ "xpAmount", "xpLevelTime", "xpSessionTime", "xpRate", "xpCompRested", "fbName", "fbAmount" }) do
+    eq(xpDefaults[stem .. "OffX"], 0, "the default " .. stem .. "OffX leaves the text where it was")
+    eq(xpDefaults[stem .. "OffY"], 0, "the default " .. stem .. "OffY leaves the text where it was")
+end
 for defaultKey, defaultValue in pairs(xpDefaults) do
     local prefix = type(defaultKey) == "string" and defaultKey:sub(1, 2)
     if prefix == "xp" or prefix == "fb" then

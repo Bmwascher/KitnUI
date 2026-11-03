@@ -792,22 +792,22 @@ local function TextWidth(fs)
     return type(width) == "number" and width or 0
 end
 
-local function PlaceAround(fs, w, edge, side, row, step, gap, pad)
+local function PlaceAround(fs, w, edge, side, row, step, gap, pad, ox, oy)
     local h = side == "left" and "LEFT" or side == "right" and "RIGHT" or ""
-    local x = side == "left" and pad or side == "right" and -pad or 0
+    local x = (side == "left" and pad or side == "right" and -pad or 0) + ox
     fs:ClearAllPoints()
     if edge == "above" then
-        fs:SetPoint("BOTTOM" .. h, w.frame, "TOP" .. h, x, gap + row * step)
+        fs:SetPoint("BOTTOM" .. h, w.frame, "TOP" .. h, x, gap + row * step + oy)
     else
-        fs:SetPoint("TOP" .. h, w.frame, "BOTTOM" .. h, x, -(gap + row * step))
+        fs:SetPoint("TOP" .. h, w.frame, "BOTTOM" .. h, x, -(gap + row * step) + oy)
     end
 end
 
 -- One text on an edge's rows, in call order. A left and a right text share a
 -- row only when both fit across the bar beside each other, measured; a
 -- centered text takes a row of its own. So no two texts on an edge overlap,
--- at any font size or bar width.
-local function PlaceRow(fs, w, edge, side, rowW, step, gap, pad)
+-- at any font size or bar width, until an offset moves one.
+local function PlaceRow(fs, w, edge, side, rowW, step, gap, pad, ox, oy)
     local e = w.rows[edge]
     local width = TextWidth(fs)
     local fits = e.n > 0 and not e.c and side ~= "center"
@@ -815,19 +815,20 @@ local function PlaceRow(fs, w, edge, side, rowW, step, gap, pad)
     if fits and side == "right" then fits = e.r == 0 and width + e.l + 3 * pad <= rowW end
     if not fits then e.n, e.l, e.r, e.c = e.n + 1, 0, 0, false end
     if side == "left" then e.l = width elseif side == "right" then e.r = width else e.c = true end
-    PlaceAround(fs, w, edge, side, e.n - 1, step, gap, pad)
+    PlaceAround(fs, w, edge, side, e.n - 1, step, gap, pad, ox, oy)
 end
 
--- One text inside the bar, or on the next row of its edge.
-local function Place(fs, w, text, pos, side, font, size, flags, rowW, step, gap, pad)
+-- One text inside the bar, or on the next row of its edge, then moved by its
+-- own offsets ox, oy.
+local function Place(fs, w, text, pos, side, font, size, flags, rowW, step, gap, pad, ox, oy)
     if not SetText(fs, text, font, size, flags) then return end
     if pos == "above" or pos == "below" then
-        PlaceRow(fs, w, pos, side, rowW, step, gap, pad)
+        PlaceRow(fs, w, pos, side, rowW, step, gap, pad, ox, oy)
         return
     end
     local point = side == "left" and "LEFT" or side == "right" and "RIGHT" or "CENTER"
     fs:ClearAllPoints()
-    fs:SetPoint(point, w.body, point, side == "left" and pad or side == "right" and -pad or 0, 0)
+    fs:SetPoint(point, w.body, point, (side == "left" and pad or side == "right" and -pad or 0) + ox, oy)
     w.inside[side] = fs
 end
 
@@ -851,8 +852,13 @@ local function EdgeRoom(e, step, gap)
     return e.n > 0 and (gap + e.n * step) or 0
 end
 
--- The stacking step and the padding follow the font size, so no text offset
--- is a fixed pixel count.
+-- A text's saved X and Y offsets, from the stem of its keys.
+local function Offsets(view, stem)
+    return tonumber(view(stem .. "OffX")) or 0, tonumber(view(stem .. "OffY")) or 0
+end
+
+-- The stacking step and the padding follow the font size, so no spacing is
+-- a fixed pixel count.
 local function LayoutTexts(w, view, p, data, font, flags, width, bw)
     local T, rows, inside = w.texts, w.rows, w.inside
     rows.above.n, rows.below.n = 0, 0
@@ -862,19 +868,19 @@ local function LayoutTexts(w, view, p, data, font, flags, width, bw)
     local step, gap
     if p == "fb" then
         step, gap = ceil(size * 1.25), ceil(size * 0.2)
-        Place(T.left, w, data.left, view("fbNamePos"), "left", font, size, flags, width, step, gap, pad)
-        Place(T.right, w, data.right, view("fbAmountPos"), "right", font, size, flags, width, step, gap, pad)
+        Place(T.left, w, data.left, view("fbNamePos"), "left", font, size, flags, width, step, gap, pad, Offsets(view, "fbName"))
+        Place(T.right, w, data.right, view("fbAmountPos"), "right", font, size, flags, width, step, gap, pad, Offsets(view, "fbAmount"))
     else
         local around = max(6, size - 1)
         step, gap = ceil(around * 1.25), ceil(around * 0.2)
-        Place(T.level, w, data.level, "inside", "left", font, size, flags, width, step, gap, pad)
-        Place(T.right, w, data.right, "inside", "right", font, size, flags, width, step, gap, pad)
-        Place(T.levelTime, w, data.levelTime, view("xpLevelTimePos"), "left", font, around, flags, width, step, gap, pad)
-        Place(T.sessionTime, w, data.sessionTime, view("xpSessionTimePos"), "right", font, around, flags, width, step, gap, pad)
-        Place(T.rate, w, data.rate, view("xpRatePos"), "left", font, around, flags, width, step, gap, pad)
-        Place(T.compRested, w, data.compRested, view("xpCompRestedPos"), "right", font, around, flags, width, step, gap, pad)
+        Place(T.level, w, data.level, "inside", "left", font, size, flags, width, step, gap, pad, 0, 0)
+        Place(T.right, w, data.right, "inside", "right", font, size, flags, width, step, gap, pad, 0, 0)
+        Place(T.levelTime, w, data.levelTime, view("xpLevelTimePos"), "left", font, around, flags, width, step, gap, pad, Offsets(view, "xpLevelTime"))
+        Place(T.sessionTime, w, data.sessionTime, view("xpSessionTimePos"), "right", font, around, flags, width, step, gap, pad, Offsets(view, "xpSessionTime"))
+        Place(T.rate, w, data.rate, view("xpRatePos"), "left", font, around, flags, width, step, gap, pad, Offsets(view, "xpRate"))
+        Place(T.compRested, w, data.compRested, view("xpCompRestedPos"), "right", font, around, flags, width, step, gap, pad, Offsets(view, "xpCompRested"))
         local pos = view("xpAmountPos")
-        Place(T.center, w, data.center, pos, "center", font, pos == "inside" and size or around, flags, width, step, gap, pad)
+        Place(T.center, w, data.center, pos, "center", font, pos == "inside" and size or around, flags, width, step, gap, pad, Offsets(view, "xpAmount"))
     end
     FitInside(w, bw, pad)
     w.above, w.below = EdgeRoom(rows.above, step, gap), EdgeRoom(rows.below, step, gap)

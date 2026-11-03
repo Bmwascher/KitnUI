@@ -509,4 +509,42 @@ check(ok, "a secret visibility: the refresh runs", why)
 eq(draws, 0, "a secret visibility: the preview does not redraw")
 X.Draw, methods.IsVisible, _G.issecretvalue = drawFn, realVisible, nil
 
+---------------------------------------------------------------------------------
+-- Text offsets
+---------------------------------------------------------------------------------
+
+-- A text's offsets move it from the spot its position gives it, inside the
+-- bar and on its rows alike; at 0 it sits where it did.
+do
+    methods.SetPoint = function(self, point, rel, relPoint, x, y) self.pt = { point, rel, relPoint, x, y } end
+    settings.xpFrameStyle, settings.xpFillStyle = "eui", "gradient"
+    local offWidget = X.NewWidget(_G.UIParent, "xp")
+    local offData = { fill = 40, questEnd = 50, restedEnd = 60, level = "Level 10", center = "400 / 1,000",
+        right = "40.0%", levelTime = "Time this level: 20m" }
+    local function pointOf(w, key)
+        local pt = w.texts[key].pt or {}
+        return tostring(pt[1]) .. " " .. tostring(pt[3]) .. " " .. tostring(pt[4]) .. " " .. tostring(pt[5])
+    end
+    ok, why = pcall(X.Draw, offWidget, X.Get, offData)
+    check(ok, "text offsets at 0: the draw runs", why)
+    eq(pointOf(offWidget, "center"), "CENTER CENTER 0 0", "text offsets at 0: the amount sits centered in the bar")
+    eq(pointOf(offWidget, "levelTime"), "BOTTOMLEFT TOPLEFT 6 3", "text offsets at 0: the time this level sits on the first row above")
+    settings.xpAmountOffX, settings.xpAmountOffY = 7, -3
+    settings.xpLevelTimeOffX, settings.xpLevelTimeOffY = 5, 2
+    ok, why = pcall(X.Draw, offWidget, X.Get, offData)
+    check(ok, "text offsets: the draw runs", why)
+    eq(pointOf(offWidget, "center"), "CENTER CENTER 7 -3", "text offsets: the amount moves by its own")
+    eq(pointOf(offWidget, "levelTime"), "BOTTOMLEFT TOPLEFT 11 5", "text offsets: the time this level moves by its own")
+    eq(pointOf(offWidget, "level"), "LEFT LEFT 6 0", "text offsets: the level text has none and stays put")
+    settings.fbNameOffX, settings.fbNameOffY = 4, 1
+    local offFaction = X.NewWidget(_G.UIParent, "fb")
+    ok, why = pcall(X.Draw, offFaction, X.Get, { fill = 65, left = "Delve Companion - Level 20 - 65.0%", right = "(6.5K / 10.0K)" })
+    check(ok, "faction text offsets: the draw runs", why)
+    eq(pointOf(offFaction, "left"), "LEFT LEFT 9 1", "faction text offsets: the name moves by its own")
+    eq(pointOf(offFaction, "right"), "RIGHT RIGHT -5 0", "faction text offsets: the values have none of their own set and stay put")
+    settings.xpAmountOffX, settings.xpAmountOffY, settings.xpLevelTimeOffX, settings.xpLevelTimeOffY = nil, nil, nil, nil
+    settings.fbNameOffX, settings.fbNameOffY = nil, nil
+    methods.SetPoint = nil
+end
+
 finish()
