@@ -235,56 +235,181 @@ ok, why = pcall(X.PreviewRefresh)
 check(ok, "preview with both bars off: a redraw runs without a Lua error", why)
 eq(#frames, previewFrames, "preview with both bars off: a redraw creates no frame")
 
--- The page builder itself with both bars off. Its one script hook goes on its
--- own Pinned dropdown, a control of the options window.
-local hooks, mounts = {}, 0
-local touchErr
-local function Control()
-    local c = Obj("Control")
-    c.HookScript = function(_, name, fn) hooks[#hooks + 1] = { name = name, fn = fn } end
-    return c
-end
-local function Touch(cfg)
-    if type(cfg) ~= "table" then return end
-    for _, key in ipairs({ "getValue", "disabled" }) do
-        if type(cfg[key]) == "function" then
-            local done, err = pcall(cfg[key])
-            if not done and not touchErr then touchErr = key .. ": " .. tostring(err) end
+-- The page builder itself with both bars off, against stubbed widgets. It
+-- builds only the selected bar's sections, and the search prebuild builds
+-- both; its one script hook goes on the faction view's Pinned dropdown, a
+-- control of the options window.
+local page = { hooks = {}, headers = {}, headerAt = {}, rows = {}, cogs = {}, mounts = 0 }
+do
+    local function Control()
+        local c = Obj("Control")
+        c.HookScript = function(_, name, fn) page.hooks[#page.hooks + 1] = { name = name, fn = fn } end
+        return c
+    end
+    local function Touch(cfg)
+        if type(cfg) ~= "table" then return end
+        for _, key in ipairs({ "getValue", "disabled" }) do
+            if type(cfg[key]) == "function" then
+                local done, err = pcall(cfg[key])
+                if not done and not page.touchErr then page.touchErr = key .. ": " .. tostring(err) end
+            end
         end
     end
+    EUI.Widgets = {
+        SectionHeader = function(_, _parent, text, y)
+            local f = Obj("Frame")
+            f.GetPoint = function() return "TOPLEFT", nil, "TOPLEFT", 0, y end
+            page.headers[#page.headers + 1] = text
+            page.headerAt[text] = f
+            return f, 20
+        end,
+        DualRow = function(_, _parent, _y, left, right)
+            Touch(left)
+            Touch(right)
+            local row = { _leftRegion = { _control = Control() }, _rightRegion = { _control = Control() } }
+            if type(right) == "table" and right.text then page.rows[right.text] = row end
+            if type(left) == "table" and left.text then page.rows[left.text] = row end
+            return row, 30
+        end,
+    }
+    EUI.BuildInlineCog = function(rgn, opts) page.cogs[#page.cogs + 1] = { rgn = rgn, opts = opts } end
+    function EUI.SetContentHeader(_, builder)
+        page.mounts = page.mounts + 1
+        builder(Obj("Frame"), 800)
+    end
 end
-EUI.Widgets = {
-    SectionHeader = function() return Obj("Frame"), 20 end,
-    DualRow = function(_, _parent, _y, left, right)
-        Touch(left)
-        Touch(right)
-        return { _rightRegion = { _control = Control() } }, 30
-    end,
-}
-function EUI.SetContentHeader(_, builder)
-    mounts = mounts + 1
-    builder(Obj("Frame"), 800)
+local function buildPage(label)
+    page.hooks, page.headers, page.headerAt, page.rows, page.cogs, page.touchErr = {}, {}, {}, {}, {}, nil
+    local height
+    ok, why = pcall(function() height = ns.EUIPages["XP Bar"](Obj("Frame"), -10) end)
+    check(ok, label .. ": the page builds", why)
+    check(type(height) == "number" and height > 10, label .. ": it returns its height", height)
+    check(page.touchErr == nil, label .. ": every control reads its value and state", page.touchErr)
+end
+local function has(text)
+    for _, h in ipairs(page.headers) do
+        if h == text then return true end
+    end
+    return false
+end
+local function cogTitled(title)
+    for _, c in ipairs(page.cogs) do
+        if c.opts and c.opts.title == title then return c end
+    end
+    return nil
 end
 local aftersAtPage = afters
-local height
-ok, why = pcall(function() height = ns.EUIPages["XP Bar"](Obj("Frame"), -10) end)
-check(ok, "the page builds with both bars off", why)
-check(type(height) == "number" and height > 10, "page with both bars off: it returns its height", height)
-eq(mounts, 1, "page with both bars off: it mounts the preview header once")
-check(touchErr == nil, "page with both bars off: every control reads its value and state", touchErr)
-eq(#hooks, 1, "page with both bars off: one script hook")
-eq(hooks[1] and hooks[1].name, "OnMouseDown", "page with both bars off: on the Pinned dropdown's press")
-if hooks[1] then
-    ok, why = pcall(hooks[1].fn)
-    check(ok, "page with both bars off: a press on the Pinned dropdown runs", why)
+
+buildPage("page, XP view")
+eq(page.mounts, 1, "page, XP view: it mounts the preview header once")
+check(has("XP BAR") and has("XP DISPLAY") and has("XP TOOLTIP") and has("SESSION"), "page, XP view: the XP bar's sections")
+check(has("FRAME") and has("FILL") and has("TEXT") and has("SIZE") and has("DIVIDERS") and not has("XP APPEARANCE"),
+    "page, XP view: the appearance in five sections")
+check(not has("FACTION SOURCE") and not has("FACTION DISPLAY"), "page, XP view: no faction section")
+check(has("POSITION"), "page, XP view: the position line")
+check(page.rows.Bar ~= nil, "page, XP view: without the header's picker the page carries its own")
+eq(#page.hooks, 0, "page, XP view: no script hook")
+eq(#frames, previewFrames, "page, XP view: no frame beyond the preview's own")
+eq(#page.cogs, 5, "page, XP view: a cogwheel on the amount and on each around-text")
+local amountCog, levelCog = cogTitled("Amount Position"), cogTitled("Time This Level")
+check(amountCog ~= nil and amountCog.rgn == (page.rows["Amount Position"] or {})._leftRegion,
+    "page, XP view: the amount's cogwheel sits on Amount Position")
+eq(amountCog and #amountCog.opts.rows, 2, "page, XP view: the amount's cogwheel holds X Offset and Y Offset")
+check(levelCog ~= nil and levelCog.rgn == (page.rows["Time This Level"] or {})._leftRegion,
+    "page, XP view: an around-text's cogwheel sits on its switch")
+eq(levelCog and #levelCog.opts.rows, 3, "page, XP view: an around-text's cogwheel holds Position, X Offset and Y Offset")
+eq(levelCog and levelCog.opts.rows[1].type, "dropdown", "page, XP view: the position first")
+check(levelCog ~= nil and type(levelCog.opts.disabled) == "function" and type(levelCog.opts.disabledTooltip) == "string",
+    "page, XP view: the cogwheel grays out, with its reason, while its text is off")
+check(page.rows["Time This Level Position"] == nil, "page, XP view: no separate around-text position row")
+
+X.SelectBar("fb")
+buildPage("page, faction view")
+check(has("FACTION BAR") and has("FACTION SOURCE") and has("FACTION DISPLAY") and has("FRAME") and has("DIVIDERS"),
+    "page, faction view: the faction bar's sections")
+check(not has("XP DISPLAY") and not has("SESSION"), "page, faction view: no XP section")
+eq(#page.hooks, 1, "page, faction view: one script hook")
+eq(page.hooks[1] and page.hooks[1].name, "OnMouseDown", "page, faction view: on the Pinned dropdown's press")
+if page.hooks[1] then
+    ok, why = pcall(page.hooks[1].fn)
+    check(ok, "page, faction view: a press on the Pinned dropdown runs", why)
 end
-eq(#frames, previewFrames, "page with both bars off: no frame beyond the preview's own")
+eq(#page.cogs, 2, "page, faction view: a cogwheel on each text position")
+local nameCog = cogTitled("Name Position")
+check(nameCog ~= nil and nameCog.rgn == (page.rows["Name Position"] or {})._leftRegion,
+    "page, faction view: the name's cogwheel sits on Name Position")
+eq(nameCog and #nameCog.opts.rows, 2, "page, faction view: it holds X Offset and Y Offset")
+local factionFrames = #frames
+buildPage("page, faction view again")
+eq(#frames, factionFrames, "page, faction view: a rebuild creates no frame")
+
+EUI.IsSearchPrebuild = function() return true end
+buildPage("page, search prebuild")
+check(has("XP DISPLAY") and has("FACTION SOURCE"), "page, search prebuild: both bars' sections, so search finds every setting")
+EUI.IsSearchPrebuild = nil
+X.SelectBar("xp")
+
 eq(#timers, 0, "page with both bars off: no timer")
 eq(afters, aftersAtPage, "page with both bars off: no next-frame work")
 eq(eventNames(), "PLAYER_ENTERING_WORLD,PLAYER_LOGIN", "page with both bars off: only Core's boot events")
 check(next(updaters) == nil, "page with both bars off: no visibility updater")
 eq(unlocks, 0, "page with both bars off: no Unlock Mode element")
 eq(accents, 0, "page with both bars off: no accent callback")
+
+buildPage("page, XP view again")
+local setCog = cogTitled("Amount Position")
+if setCog then
+    setCog.opts.rows[1].set(7)
+    eq(ns.EUISettings().xpAmountOffX, 7, "page, XP view: the amount's X Offset is saved")
+    eq(setCog.opts.rows[1].get(), 7, "page, XP view: and read back")
+    ns.EUISettings().xpAmountOffX = nil
+end
+
+-- A click on a part of the preview scrolls to the row that sets it, then
+-- glows it.
+check(type(X.NavigateToSetting) == "function", "the page publishes its navigation")
+if type(X.NavigateToSetting) == "function" then
+    local scrolled, glowed, pending
+    local realAfter = _G.C_Timer.After
+    EUI.SmoothScrollTo = function(v) scrolled = v end
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.MakeSettingGlow = function() return function(target) glowed = target end end
+    _G.C_Timer.After = function(_, fn) pending = fn end
+    local function click(key)
+        scrolled, glowed, pending = nil, nil, nil
+        X.NavigateToSetting(key)
+    end
+    buildPage("navigation, XP view")
+    click("center")
+    local display = page.headerAt["XP DISPLAY"]
+    local displayY = display and select(5, display:GetPoint(1))
+    eq(scrolled, displayY and math.abs(displayY) - 40, "navigation: the amount scrolls to XP DISPLAY")
+    check(pending ~= nil, "navigation: the glow waits a moment")
+    if pending then pending() end
+    eq(glowed, page.rows["Amount Position"] and page.rows["Amount Position"]._leftRegion,
+        "navigation: the glow lands on Amount Position")
+    click("sessionTime")
+    local stale = pending
+    buildPage("navigation, rebuilt")
+    if stale then stale() end
+    eq(glowed, nil, "navigation: a page built again before the glow plays glows nothing")
+    local amountRow = page.rows["Amount Position"]
+    EUI.IsSearchPrebuild = function() return true end
+    buildPage("navigation, search prebuild")
+    EUI.IsSearchPrebuild = nil
+    click("center")
+    if pending then pending() end
+    eq(glowed, amountRow and amountRow._leftRegion, "navigation: the search prebuild leaves the rows on screen in place")
+    EUI.BuildLessCommonExpander = function(_parent, y) return false, y end
+    buildPage("navigation, dividers collapsed")
+    check(page.rows.Dividers == nil, "navigation: the collapsed divider rows are not built")
+    click("body")
+    if pending then pending() end
+    eq(glowed, page.headerAt.DIVIDERS, "navigation: a part whose rows are collapsed glows its section")
+    EUI.BuildLessCommonExpander = nil
+    _G.C_Timer.After = realAfter
+    EUI.SmoothScrollTo, EUI.MakeSettingGlow, EUI.ELLESMERE_GREEN = nil, nil, nil
+end
 
 -- The preview's sample: Level 59 at 94,410 of 209,800, which is 45%, on any
 -- client and at any level cap.
