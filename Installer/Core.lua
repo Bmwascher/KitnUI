@@ -130,17 +130,12 @@ local addonVersionHeaders = {
 
 -- Forever reads its own line first, so an update to one client's string never
 -- prompts the other. A key with no Forever line reads the retail one, because
--- Forever then ships the retail string.
-local addonForeverVersionHeaders = {
-    EllesmereUI       = "X-EllesmereUI-Forever-Version",
-    Plater            = "X-Plater-Forever-Version",
-    BigWigs           = "X-BigWigs-Forever-Version",
-    NSRT              = "X-NSRT-Forever-Version",
-    Blizzard_EditMode = "X-EditMode-Forever-Version",
-    KitnEssentials    = "X-KitnEssentials-Forever-Version",
-    BuffReminders     = "X-BuffReminders-Forever-Version",
-    Baganator         = "X-Baganator-Forever-Version",
-}
+-- Forever then ships the retail string. Built from the retail names, so every
+-- step has a Forever name and the read below never passes a nil header.
+local addonForeverVersionHeaders = {}
+for addonKey, header in pairs(addonVersionHeaders) do
+    addonForeverVersionHeaders[addonKey] = (header:gsub("%-Version$", "-Forever-Version"))
+end
 
 function ns.GetAddonDataVersion(addonKey)
     local header = addonVersionHeaders[addonKey]

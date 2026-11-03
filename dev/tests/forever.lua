@@ -473,6 +473,45 @@ _G.LEGACY_BUTTON = nil
 local unnamedBar = loadElements(true)
 eq(unnamedBar.achievements.label, "Achievements", "topbar: with no Forever name the button keeps Achievements")
 
+---------------------------------------------------------------------------------
+-- A step in the retail table alone still reads on Forever
+---------------------------------------------------------------------------------
+
+-- The shipped Core.lua with one step added to its retail header table only, as
+-- an edit that forgets the Forever side would leave it. The version API stub
+-- raises on a nil header, as the game's does.
+local coreFile = io.open("Installer/Core.lua", "r")
+local coreSource = coreFile and coreFile:read("*a") or ""
+if coreFile then coreFile:close() end
+local injectedSource, injections = coreSource:gsub(
+    'Baganator         = "X%-Baganator%-Version",',
+    'Baganator         = "X-Baganator-Version",\n    TestStep          = "X-TestStep-Version",', 1)
+eq(injections, 1, "derived: the retail header table is found")
+
+local realMetadataRead = _G.C_AddOns.GetAddOnMetadata
+_G.C_AddOns.GetAddOnMetadata = function(_, header)
+    if header == nil then error("GetAddOnMetadata: header is nil") end
+    return metadata[header]
+end
+_G.GetBuildInfo = function() return "12.0.5", "1", "Nov 1 2026", 16001 end
+metadata["X-TestStep-Version"] = "T1"
+
+local derivedNS = { data = {} }
+local derivedChunk, derivedErr = loadstring(injectedSource, "@Installer/Core.lua")
+check(derivedChunk ~= nil, "derived: the edited Core.lua loads", derivedErr)
+if derivedChunk then derivedChunk("KitnUI", derivedNS) end
+local derivedRead = derivedNS.GetAddonDataVersion or function() end
+
+local readOk, readVersion = pcall(derivedRead, "TestStep")
+check(readOk, "derived: a step only in the retail table reads on Forever without an error", readVersion)
+eq(readOk and readVersion, "T1", "derived: with no Forever line it reads the retail line")
+metadata["X-TestStep-Forever-Version"] = "F9"
+readOk, readVersion = pcall(derivedRead, "TestStep")
+eq(readOk and readVersion, "F9", "derived: its Forever line is the retail name with -Forever before -Version")
+
+_G.C_AddOns.GetAddOnMetadata = realMetadataRead
+metadata["X-TestStep-Version"], metadata["X-TestStep-Forever-Version"] = nil, nil
+
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
     os.exit(1)

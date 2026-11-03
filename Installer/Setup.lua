@@ -1804,6 +1804,7 @@ function ns.ApplyForeverEssentials()
         end
     end
 end
+
 ---------------------------------------------------------------------------------
 -- BetterFriendlist: the appearance KitnUI's skinning expects
 ---------------------------------------------------------------------------------
