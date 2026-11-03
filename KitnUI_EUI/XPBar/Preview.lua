@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/XPBar/Preview.lua                                ║
--- ║  Purpose: The live preview of both bars pinned above the XP  ║
--- ║           Bar options page, drawn with sample values.        ║
+-- ║  Purpose: The live preview pinned above the XP Bar options   ║
+-- ║           page: the selected bar, drawn with sample values.  ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 local _, ns = ... ---@type string, KitnUINS
@@ -12,7 +12,13 @@ ns.XPBar = ns.XPBar or {}
 local X = ns.XPBar
 
 local STAGE_PAD_Y = 14
-local BAR_GAP = 18
+-- The bar picker above the stage: its gap from the top, width, height, and
+-- the gap below it.
+local PICK_TOP, PICK_W, PICK_H, PICK_GAP = 14, 260, 30, 12
+-- Overlay levels above a bar's base, over its top layer (the texts, at 12).
+local HIT_FRAME, HIT_BODY, HIT_FILL, HIT_TEXT = 20, 21, 22, 30
+-- How far the frame's overlay reaches past the bar.
+local RING_OUT = 4
 
 -- nil for a secret value, the value otherwise.
 local function Plain(v)
@@ -23,9 +29,15 @@ end
 -- wrap is UNSCALED and centered on the stage; content holds the fit scale at
 -- offset 0,0 inside it. An offset on a scaled frame is in its own scaled
 -- space, so the centering must not live on the scaled frame.
-local stage, wrap, content
-local xpWidget, fbWidget
+local stage, wrap, content, picker
+local widgets = {}
+local hits, hitsBuilt = { xp = {}, fb = {} }, {}
 local availW = 1
+-- The bar the page and the preview show, kept for the session only.
+local selected = "xp"
+
+local BAR_V = { xp = "XP Bar", fb = "Faction Bar" }
+local BAR_O = { "xp", "fb" }
 
 -- Every piece visible: quest XP, rested XP, both times and a rate, even on a
 -- character at max level or with no rested XP.
@@ -52,28 +64,121 @@ local function SampleFaction()
     return sampleFaction
 end
 
+function X.SelectedBar()
+    return selected
+end
+
+-- The page builds only the selected bar's sections, so a pick rebuilds it,
+-- and the rebuilt page mounts this header again.
+function X.SelectBar(kind)
+    if (kind ~= "xp" and kind ~= "fb") or kind == selected then return end
+    selected = kind
+    if EllesmereUI and EllesmereUI.RefreshPage then
+        pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+    else
+        X.PreviewRefresh()
+    end
+end
+
+-- Without the picker the page carries its own.
+function X.SelectorShown()
+    return picker ~= nil
+end
+
+local function PickerRoom()
+    return picker and (PICK_TOP + PICK_H + PICK_GAP) or 0
+end
+
+-- Made once and moved to each header it is mounted in, as the stage is.
+local function MountPicker(parent)
+    local level = (Plain(parent:GetFrameLevel()) or 0) + 5
+    if not picker and EllesmereUI and EllesmereUI.BuildDropdownControl then
+        local ok, btn = pcall(EllesmereUI.BuildDropdownControl, parent, PICK_W, level, BAR_V, BAR_O,
+            X.SelectedBar, X.SelectBar)
+        if ok and btn then picker = btn end
+    end
+    if not picker then return end
+    picker:SetParent(parent)
+    picker:SetFrameLevel(level)
+    picker:ClearAllPoints()
+    picker:SetPoint("TOP", parent, "TOP", 0, -PICK_TOP)
+    picker:SetHeight(PICK_H)
+    picker:Show()
+    if picker._refreshLabel then pcall(picker._refreshLabel) end
+end
+
+local function Navigate(key)
+    if X.NavigateToSetting then X.NavigateToSetting(key) end
+end
+
+local function AddHit(w, key, element, isText, level)
+    local ok, btn = pcall(EllesmereUI.CreatePreviewHitOverlay, element, Navigate, key, isText, w.base + level,
+        { parent = w.frame })
+    if ok and btn then hits[w.kind][key] = btn end
+end
+
+-- Each part of a bar leads to the row that sets it. Made once per bar, the
+-- first time the host has the overlay helper and the colors it draws with.
+local function BuildHits(kind)
+    local EUI, w = EllesmereUI, widgets[kind]
+    if hitsBuilt[kind] or not w then return end
+    if not (EUI and EUI.CreatePreviewHitOverlay and EUI.ELLESMERE_GREEN and EUI.PP and EUI.PP.CreateBorder) then
+        return
+    end
+    hitsBuilt[kind] = true
+    local ring = CreateFrame("Frame", nil, w.frame)
+    ring:SetPoint("TOPLEFT", w.frame, "TOPLEFT", -RING_OUT, RING_OUT)
+    ring:SetPoint("BOTTOMRIGHT", w.frame, "BOTTOMRIGHT", RING_OUT, -RING_OUT)
+    AddHit(w, "frame", ring, false, HIT_FRAME)
+    AddHit(w, "body", w.body, false, HIT_BODY)
+    AddHit(w, "fill", w.fill, false, HIT_FILL)
+    for key, fs in pairs(w.texts) do AddHit(w, key, fs, true, HIT_TEXT) end
+end
+
+-- The fill's overlay covers the filled part only; a text's shows only with
+-- its text.
+local function SyncHits(kind)
+    local w, list = widgets[kind], hits[kind]
+    local tex = list.fill and w.fill:GetStatusBarTexture()
+    if tex then
+        list.fill:ClearAllPoints()
+        list.fill:SetAllPoints(tex)
+    end
+    for key, fs in pairs(w.texts) do
+        local btn = list[key]
+        if btn then
+            local on = Plain(fs:IsShown()) == true
+            btn:SetShown(on)
+            if on and btn._resizeToText then pcall(btn._resizeToText) end
+        end
+    end
+end
+
 local function Layout()
-    if not (content and xpWidget and fbWidget) then return 0 end
-    X.XPView(sampleXP, X.Get, xpOut)
-    X.Draw(xpWidget, X.Get, xpOut)
-    X.FactionView(SampleFaction(), X.Get, fbOut)
-    X.Draw(fbWidget, X.Get, fbOut)
-    local xh = tonumber(X.Get("xpHeight")) or 24
-    local fh = tonumber(X.Get("fbHeight")) or 20
-    local cw = math.max(tonumber(X.Get("xpWidth")) or 600, tonumber(X.Get("fbWidth")) or 400)
-    local yPos = -(xpWidget.above or 0)
-    xpWidget.frame:ClearAllPoints()
-    xpWidget.frame:SetPoint("TOP", content, "TOP", 0, yPos)
-    yPos = yPos - xh - (xpWidget.below or 0) - BAR_GAP - (fbWidget.above or 0)
-    fbWidget.frame:ClearAllPoints()
-    fbWidget.frame:SetPoint("TOP", content, "TOP", 0, yPos)
-    local h = -yPos + fh + (fbWidget.below or 0)
-    local scale = (cw > availW) and (availW / cw) or 1
+    local w = content and widgets[selected]
+    if not w then return 0 end
+    local other = widgets[selected == "xp" and "fb" or "xp"]
+    if other then other.frame:Hide() end
+    if selected == "xp" then
+        X.XPView(sampleXP, X.Get, xpOut)
+        X.Draw(w, X.Get, xpOut)
+    else
+        X.FactionView(SampleFaction(), X.Get, fbOut)
+        X.Draw(w, X.Get, fbOut)
+    end
+    w.frame:Show()
+    SyncHits(selected)
+    local bw = tonumber(X.Get(selected .. "Width")) or 100
+    local bh = tonumber(X.Get(selected .. "Height")) or 10
+    w.frame:ClearAllPoints()
+    w.frame:SetPoint("TOP", content, "TOP", 0, -(w.above or 0))
+    local h = (w.above or 0) + bh + (w.below or 0)
+    local scale = (bw > availW) and (availW / bw) or 1
     content:SetScale(scale)
-    content:SetSize(math.max(1, cw), math.max(1, h))
-    wrap:SetSize(math.max(1, cw * scale), math.max(1, h * scale))
+    content:SetSize(math.max(1, bw), math.max(1, h))
+    wrap:SetSize(math.max(1, bw * scale), math.max(1, h * scale))
     stage:SetSize(math.max(1, availW), h * scale + STAGE_PAD_Y * 2)
-    return h * scale + STAGE_PAD_Y * 2
+    return PickerRoom() + h * scale + STAGE_PAD_Y * 2
 end
 
 function X.BuildPreviewHeader(parent, width)
@@ -95,8 +200,9 @@ function X.BuildPreviewHeader(parent, width)
     end
     stage:SetParent(parent)
     stage:SetFrameLevel(math.max(0, (Plain(wrap:GetFrameLevel()) or 1) - 1))
+    MountPicker(parent)
     stage:ClearAllPoints()
-    stage:SetPoint("TOP", parent, "TOP", 0, 0)
+    stage:SetPoint("TOP", parent, "TOP", 0, -PickerRoom())
     stage:Show()
     wrap:ClearAllPoints()
     wrap:SetPoint("TOP", stage, "TOP", 0, -STAGE_PAD_Y)
@@ -106,8 +212,10 @@ function X.BuildPreviewHeader(parent, width)
     content:ClearAllPoints()
     content:SetPoint("TOPLEFT", wrap, "TOPLEFT", 0, 0)
     content:Show()
-    xpWidget = xpWidget or X.NewWidget(content, "xp")
-    fbWidget = fbWidget or X.NewWidget(content, "fb")
+    widgets.xp = widgets.xp or X.NewWidget(content, "xp")
+    widgets.fb = widgets.fb or X.NewWidget(content, "fb")
+    BuildHits("xp")
+    BuildHits("fb")
     return Layout()
 end
 

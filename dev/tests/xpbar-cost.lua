@@ -551,4 +551,95 @@ do
     methods.SetPoint = nil
 end
 
+---------------------------------------------------------------------------------
+-- The preview: the selected bar, the picker and the clickable parts
+---------------------------------------------------------------------------------
+
+do
+    local kinds = {}
+    local drawBar = X.Draw
+    X.Draw = function(w, view, data)
+        kinds[#kinds + 1] = w and w.kind or "?"
+        return drawBar(w, view, data)
+    end
+    local function drawnKinds()
+        for i = #kinds, 1, -1 do kinds[i] = nil end
+        X.PreviewRefresh()
+        return table.concat(kinds, ",")
+    end
+    local selects = type(X.SelectedBar) == "function" and type(X.SelectBar) == "function"
+        and type(X.SelectorShown) == "function"
+    check(selects, "the preview publishes its bar selection")
+    eq(drawnKinds(), "xp", "the XP bar selected: the preview draws it alone")
+    if selects then
+        eq(X.SelectedBar(), "xp", "the preview opens on the XP bar")
+        X.SelectBar("fb")
+        eq(X.SelectedBar(), "fb", "the faction bar selected")
+        eq(drawnKinds(), "fb", "the faction bar selected: the preview draws it alone")
+        X.SelectBar("nope")
+        eq(X.SelectedBar(), "fb", "an unknown bar selects nothing")
+        X.SelectBar("xp")
+        check(not X.SelectorShown(), "without the host's dropdown helper the header holds no picker")
+
+        local picked
+        local plainHeight = X.BuildPreviewHeader(Obj("Frame"), 800)
+        EUI.BuildDropdownControl = function(_parent, _width, _level, values, order, getValue, setValue)
+            picked = { values = values, order = order, get = getValue, set = setValue }
+            return _G.CreateFrame("Button")
+        end
+        local before = #frames
+        local pickHeight = X.BuildPreviewHeader(Obj("Frame"), 800)
+        check(X.SelectorShown(), "the bar picker: the header holds it")
+        eq(picked and table.concat(picked.order, ","), "xp,fb", "the bar picker: the XP bar, then the faction bar")
+        eq(picked and picked.values.fb, "Faction Bar", "the bar picker: names the faction bar")
+        eq(picked and picked.get(), "xp", "the bar picker: reads the selection")
+        if picked then picked.set("fb") end
+        eq(X.SelectedBar(), "fb", "the bar picker: a pick selects the bar")
+        if picked then picked.set("xp") end
+        X.BuildPreviewHeader(Obj("Frame"), 800)
+        eq(#frames, before + 1, "the bar picker: made once")
+        eq(pickHeight - plainHeight, 56, "the bar picker: the header grows by its room")
+        EUI.BuildDropdownControl = nil
+    end
+
+    local made = {}
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.PP = { CreateBorder = NOOP }
+    EUI.CreatePreviewHitOverlay = function(element, navigate, key, isText, level, opts)
+        local btn = _G.CreateFrame("Button")
+        made[#made + 1] = { key = key, btn = btn, element = element, navigate = navigate, isText = isText,
+            level = level, parent = opts and opts.parent }
+        return btn
+    end
+    ok, why = pcall(X.BuildPreviewHeader, Obj("Frame"), 800)
+    check(ok, "clickable preview: the header builds", why)
+    eq(#made, 15, "clickable preview: one overlay for each bar's frame, body, fill and texts")
+    if #made > 0 then
+        local madeOnce, framesOnce = #made, #frames
+        ok, why = pcall(X.BuildPreviewHeader, Obj("Frame"), 800)
+        check(ok, "clickable preview: a second mount builds", why)
+        eq(#made, madeOnce, "clickable preview: a second mount makes no overlay")
+        eq(#frames, framesOnce, "clickable preview: nor any frame")
+        local byKey = {}
+        for _, m in ipairs(made) do byKey[m.key] = byKey[m.key] or m end
+        local function levelOf(key) return byKey[key] and byKey[key].level or 0 end
+        check(levelOf("frame") < levelOf("body") and levelOf("body") < levelOf("fill") and levelOf("fill") < levelOf("rate"),
+            "clickable preview: the frame's ring lowest, then the body, the fill and the texts")
+        eq(byKey.rate and byKey.rate.isText, true, "clickable preview: a text's overlay is sized to its text")
+        check(byKey.rate and byKey.rate.parent ~= nil, "clickable preview: an overlay hangs on its bar's frame")
+        settings.xpShowRate = false
+        X.PreviewRefresh()
+        eq(byKey.rate and byKey.rate.btn.shown, false, "clickable preview: a text's overlay hides with its text")
+        settings.xpShowRate = nil
+        X.PreviewRefresh()
+        eq(byKey.rate and byKey.rate.btn.shown, true, "clickable preview: and shows again with it")
+        if byKey.center then
+            ok, why = pcall(byKey.center.navigate, "center")
+            check(ok, "clickable preview: a press runs", why)
+        end
+    end
+    EUI.CreatePreviewHitOverlay, EUI.PP, EUI.ELLESMERE_GREEN = nil, nil, nil
+    X.Draw = drawBar
+end
+
 finish()
