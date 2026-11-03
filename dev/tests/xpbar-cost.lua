@@ -159,6 +159,7 @@ for _, file in ipairs(files) do load("KitnUI_EUI/XPBar/" .. file) end
 
 local X = ns.XPBar
 check(type(X) == "table" and type(X.Apply) == "function", "the XP Bar module loads with its Apply funnel")
+check(type(ns.EUIPages) == "table" and type(ns.EUIPages["XP Bar"]) == "function", "the XP Bar page registers its builder")
 if not (type(X) == "table" and type(X.Apply) == "function") then finish() end
 
 local XP_EVENTS = {
