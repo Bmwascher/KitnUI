@@ -223,6 +223,25 @@ ok, why = pcall(X.PreviewRefresh)
 check(ok, "preview with both bars off: a redraw runs without a Lua error", why)
 eq(#frames, previewFrames, "preview with both bars off: a redraw creates no frame")
 
+-- The preview's sample level: 85, or five below a lower cap.
+local realDraw = X.Draw
+local drawnLevel
+X.Draw = function(w, view, data)
+    if data and data.level then drawnLevel = data.level end
+    return realDraw(w, view, data)
+end
+local function sampleAt(cap)
+    _G.GetMaxLevelForPlayerExpansion = function() return cap end
+    drawnLevel = nil
+    X.PreviewRefresh()
+    return drawnLevel
+end
+eq(sampleAt(90), "Level 85", "preview sample: Level 85 under a higher cap")
+eq(sampleAt(85), "Level 85", "preview sample: Level 85 at a cap of exactly 85")
+eq(sampleAt(60), "Level 55", "preview sample: five below a lower cap")
+X.Draw = realDraw
+_G.GetMaxLevelForPlayerExpansion = function() return 90 end
+
 ---------------------------------------------------------------------------------
 -- The XP bar alone
 ---------------------------------------------------------------------------------

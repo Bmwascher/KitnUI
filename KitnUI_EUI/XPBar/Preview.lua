@@ -38,7 +38,7 @@ end
 local function SampleLevel()
     local ok, cap = pcall(GetMaxLevelForPlayerExpansion)
     cap = ok and tonumber(cap) or nil
-    if cap and cap <= 85 then return cap - 5 end
+    if cap and cap < 85 then return cap - 5 end
     return 85
 end
 
