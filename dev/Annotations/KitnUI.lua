@@ -85,6 +85,7 @@
 ---@field RunOptimize fun(): boolean
 ---@field RunChatSetup fun(): boolean
 ---@field GetCDMKey fun(classId: number?, specIndex: number?): string?
+---@field CDMClassHasLayouts fun(classData: table?): boolean   # false for a class whose spec strings are all empty
 ---@field GetCDMShippedFingerprint fun(classId: number?, specIndex: number?): string?
 ---@field GetCDMSpecState fun(classId: number?, specIndex: number?): "nodata"|"current"|"stale"|"untracked"|"missing"
 ---@field GetCDMSpecRows fun(): number?, { specIndex: number, specName: string, specIcon: (number|string)?, state: string }[]
