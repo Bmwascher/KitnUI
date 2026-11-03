@@ -3,7 +3,8 @@
 # in KitnEssentials AGENTS.md "Comments: lean, and impersonal") ban personal or
 # agent names, upstream addon names, plan steps, dates, and session history from
 # shipped source comments. It also cleans Raid Frames Extra Frames data out of a
-# staged Data/AddOns/EllesmereUI.lua (dev/scripts/eui-personal.lua --clean).
+# staged EllesmereUI payload, retail or Forever (dev/scripts/eui-personal.lua
+# --clean).
 # Deliberate exception: git commit --no-verify
 set -uo pipefail
 
@@ -19,28 +20,37 @@ fi
 # commit rather than only on the ones that happen to touch a comment.
 ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
 
-# A commit that changes the shipped EllesmereUI string gets its Raid Frames
-# Extra Frames data (names of one raid group) cleaned and re-staged.
-eui_data="Data/AddOns/EllesmereUI.lua"
-if [ -n "$(git diff --cached --name-only --diff-filter=AM -- "$eui_data")" ]; then
-    if ! git diff --quiet -- "$eui_data"; then
-        echo "[pre-commit] BLOCKED: $eui_data has unstaged changes; stage or drop them so the Extra Frames clean sees the whole file." >&2
-        exit 1
-    fi
+# A commit that changes a shipped EllesmereUI string gets its Raid Frames
+# Extra Frames data (names of one raid group) cleaned and re-staged. The clean
+# rewrites both files, so neither may hold unstaged changes.
+eui_files=("Data/AddOns/EllesmereUI.lua" "Data/Forever/AddOns/EllesmereUI.lua")
+if [ -n "$(git diff --cached --name-only --diff-filter=AM -- "${eui_files[@]}")" ]; then
+    for eui_data in "${eui_files[@]}"; do
+        if ! git diff --quiet -- "$eui_data"; then
+            echo "[pre-commit] BLOCKED: $eui_data has unstaged changes; stage or drop them so the Extra Frames clean sees the whole file." >&2
+            exit 1
+        fi
+    done
     if ! command -v lua >/dev/null 2>&1; then
-        echo "[pre-commit] BLOCKED: lua is not on PATH, so $eui_data cannot be cleaned of Extra Frames data." >&2
+        echo "[pre-commit] BLOCKED: lua is not on PATH, so the EllesmereUI strings cannot be cleaned of Extra Frames data." >&2
         exit 1
     fi
     if ! eui_out="$(lua dev/scripts/eui-personal.lua --clean 2>&1)"; then
         echo "$eui_out" >&2
-        echo "[pre-commit] BLOCKED: the Extra Frames clean of $eui_data did not run." >&2
+        echo "[pre-commit] BLOCKED: the Extra Frames clean of the EllesmereUI strings did not run." >&2
         exit 1
     fi
-    if ! git diff --quiet -- "$eui_data"; then
-        echo "$eui_out" >&2
-        git add -- "$eui_data" || exit 1
-        echo "[pre-commit] $eui_data cleaned and re-staged." >&2
-    fi
+    eui_reported=0
+    for eui_data in "${eui_files[@]}"; do
+        if ! git diff --quiet -- "$eui_data"; then
+            if [ "$eui_reported" -eq 0 ]; then
+                echo "$eui_out" >&2
+                eui_reported=1
+            fi
+            git add -- "$eui_data" || exit 1
+            echo "[pre-commit] $eui_data cleaned and re-staged." >&2
+        fi
+    done
 fi
 
 if ! comments="$(ng_staged_comments)"; then

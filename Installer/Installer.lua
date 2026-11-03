@@ -916,9 +916,9 @@ local function BlizzardCDMPage()
     -- The class id and the rows come from ONE guarded call.
     local classId, rows = ns.GetCDMSpecRows()
     local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
-    if not classId or #rows == 0 or not classData or not next(classData) then
+    if not classId or #rows == 0 or not ns.CDMClassHasLayouts(classData) then
         f.Desc1:SetText("No CDM layouts available for your class yet.")
-        f.Desc2:SetText("Add your layout strings to Data/Classes/BlizzardCDM.lua.")
+        f.Desc2:SetText("Add your layout strings to " .. (ns.IS_FOREVER and "Data/Forever/Classes/BlizzardCDM.lua." or "Data/Classes/BlizzardCDM.lua."))
         if cdmAllButton then cdmAllButton:Hide() end
         return
     end

@@ -126,21 +126,25 @@ eq(bare.data.addons.EllesmereUIRaidFrames, nil, "cleaning never adds a Raid Fram
 -- The shipped string
 ---------------------------------------------------------------------------------
 
-local _, s = M.ReadData(M.DATA_PATH)
 local lib, why = M.LoadLibDeflate()
-if s == "" then
-    io.write("skip: shipped-string checks, the string is empty\n")
-elseif not lib then
-    io.write("skip: shipped-string checks, " .. why .. "\n")
-else
-    local shipped, err = M.Decode(lib, s)
-    check(type(shipped) == "table", "the shipped string decodes", err)
-    if type(shipped) == "table" then
-        local found = M.Findings(shipped)
-        check(#found == 0, "the shipped string has no Extra Frames data; run: lua dev/scripts/eui-personal.lua --clean",
-            table.concat(found, "; "))
-        check(M.DeepEqual(M.Decode(lib, M.Encode(lib, shipped)), shipped),
-            "the shipped profile survives encode and decode")
+for _, entry in ipairs(M.DATA_FILES) do
+    local path = entry.path
+    local _, s = M.ReadData(path)
+    if s == "" then
+        io.write("skip: shipped-string checks for " .. path .. ", the string is empty\n")
+    elseif not lib then
+        io.write("skip: shipped-string checks for " .. path .. ", " .. why .. "\n")
+    else
+        local shipped, err = M.Decode(lib, s)
+        check(type(shipped) == "table", path .. ": the shipped string decodes", err)
+        if type(shipped) == "table" then
+            local found = M.Findings(shipped)
+            check(#found == 0,
+                path .. ": the shipped string has no Extra Frames data; run: lua dev/scripts/eui-personal.lua --clean",
+                table.concat(found, "; "))
+            check(M.DeepEqual(M.Decode(lib, M.Encode(lib, shipped)), shipped),
+                path .. ": the shipped profile survives encode and decode")
+        end
     end
 end
 

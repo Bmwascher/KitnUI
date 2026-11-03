@@ -19,10 +19,18 @@
 ## X-BuffReminders-Version: 2026.10.17
 ## X-Baganator-Version: 2026.10.17
 
+## X-EllesmereUI-Forever-Version: 2026.10.17
+## X-Plater-Forever-Version: 2026.10.17
+## X-BigWigs-Forever-Version: 2026.10.17
+## X-NSRT-Forever-Version: 2026.10.17
+## X-EditMode-Forever-Version: 2026.10.17
+## X-KitnEssentials-Forever-Version: 2026.10.17
+## X-BuffReminders-Forever-Version: 2026.10.17
+## X-Baganator-Forever-Version: 2026.10.17
+
 # Load model: per-directory XML manifests (matching KitnEssentials). Each .xml
 # <Script>-lists its .lua in load order; edit the manifest, not this list.
 Installer\Installer.xml
-Data\Data.xml
-# Forever only, after the retail list: each payload it lists replaces its
-# retail string on that client.
+# Each client loads only its own payload list.
+Data\Data.xml [AllowLoadGameType standard]
 Data\Data-Forever.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]

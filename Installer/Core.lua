@@ -129,8 +129,8 @@ local addonVersionHeaders = {
 -- fingerprinting the string it ships -- see the block below.
 
 -- Forever reads its own line first, so an update to one client's string never
--- prompts the other. A key with no Forever line reads the retail one, because
--- Forever then ships the retail string. Built from the retail names, so every
+-- prompts the other. A key with no Forever line falls back to the retail one,
+-- though every shipped step has one. Built from the retail names, so every
 -- step has a Forever name and the read below never passes a nil header.
 local addonForeverVersionHeaders = {}
 for addonKey, header in pairs(addonVersionHeaders) do
@@ -261,6 +261,15 @@ end
 -- stale: ns.data.BlizzardCDM is a load-time table literal and nothing writes to
 -- it, so a shipped string is constant for the session.
 local shippedFingerprints = {}
+
+-- A class table may hold only empty spec slots, which leave nothing to import.
+function ns.CDMClassHasLayouts(classData)
+    if type(classData) ~= "table" then return false end
+    for _, specString in pairs(classData) do
+        if type(specString) == "string" and strtrim(specString) ~= "" then return true end
+    end
+    return false
+end
 
 function ns.GetCDMShippedFingerprint(classId, specIndex)
     local key = ns.GetCDMKey(classId, specIndex)

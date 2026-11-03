@@ -1583,7 +1583,7 @@ function ns.ImportCDMAllSpecs()
 
     local _, _, classId = UnitClass("player")
     local classData = classId and ns.data.BlizzardCDM and ns.data.BlizzardCDM[classId]
-    if not classData or not next(classData) then return 0, 0, false end
+    if not ns.CDMClassHasLayouts(classData) then return 0, 0, false end
 
     local imported, failed = 0, 0
     local _, rows = ns.GetCDMSpecRows()

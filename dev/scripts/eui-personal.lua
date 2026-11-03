@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  eui-personal.lua                                            ║
 -- ║  Purpose: Find and clear personal data in the shipped        ║
--- ║           EllesmereUI profile string: the Raid Frames Extra  ║
+-- ║           EllesmereUI profile strings: the Raid Frames Extra ║
 -- ║           Frames block and any override that targets it.     ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
@@ -10,7 +10,7 @@
 --
 -- Run from the repo root:
 --   lua dev/scripts/eui-personal.lua           report; exit 1 when anything is found
---   lua dev/scripts/eui-personal.lua --clean   rewrite Data/AddOns/EllesmereUI.lua
+--   lua dev/scripts/eui-personal.lua --clean   rewrite each file in DATA_FILES
 --
 -- Decoding needs EllesmereUI's LibDeflate: KITNUI_LIBDEFLATE names the file,
 -- otherwise the current EllesmereUI folder under References/ is used, in this
@@ -19,7 +19,11 @@
 
 local M = {}
 
-M.DATA_PATH = "Data/AddOns/EllesmereUI.lua"
+-- Retail and Forever each ship their own string.
+M.DATA_FILES = {
+    { path = "Data/AddOns/EllesmereUI.lua", header = "X-EllesmereUI-Version" },
+    { path = "Data/Forever/AddOns/EllesmereUI.lua", header = "X-EllesmereUI-Forever-Version" },
+}
 M.PREFIX = "!EUI_"
 
 -- EllesmereUIRaidFrames' defaults for the block. A clean string carries exactly
@@ -299,12 +303,12 @@ function M.ReadData(path)
     return text, text:sub(open + 1, close - 1), open + 1, close - 1
 end
 
-local function Main(args)
-    local clean = args[1] == "--clean"
-    local text, s, i, j = M.ReadData(M.DATA_PATH)
+local function MainFile(entry, clean)
+    local path = entry.path
+    local text, s, i, j = M.ReadData(path)
     if not text then print(s) return 1 end
     if s == "" then
-        print("clean: the shipped EllesmereUI string is empty")
+        print("clean: the EllesmereUI string in " .. path .. " is empty")
         return 0
     end
     local lib, why = M.LoadLibDeflate()
@@ -316,10 +320,10 @@ local function Main(args)
     if not payload then print(err) return 1 end
     local found = M.Findings(payload)
     if #found == 0 then
-        print("clean: no Extra Frames data in the shipped EllesmereUI string")
+        print("clean: no Extra Frames data in " .. path)
         return 0
     end
-    for _, line in ipairs(found) do print("found: " .. line) end
+    for _, line in ipairs(found) do print("found in " .. path .. ": " .. line) end
     if not clean then
         print("run: lua dev/scripts/eui-personal.lua --clean")
         return 1
@@ -331,11 +335,20 @@ local function Main(args)
         print("the cleaned string did not decode back to the cleaned profile; nothing written")
         return 1
     end
-    local f = assert(io.open(M.DATA_PATH, "wb"))
+    local f = assert(io.open(path, "wb"))
     f:write(text:sub(1, i - 1), out, text:sub(j + 1))
     f:close()
-    print("cleaned " .. M.DATA_PATH .. "; bump X-EllesmereUI-Version in KitnUI.toc")
+    print("cleaned " .. path .. "; bump " .. entry.header .. " in KitnUI.toc")
     return 0
+end
+
+local function Main(args)
+    local clean = args[1] == "--clean"
+    local status = 0
+    for _, entry in ipairs(M.DATA_FILES) do
+        if MainFile(entry, clean) ~= 0 then status = 1 end
+    end
+    return status
 end
 
 if arg and type(arg[0]) == "string" and arg[0]:find("eui%-personal%.lua$") then
