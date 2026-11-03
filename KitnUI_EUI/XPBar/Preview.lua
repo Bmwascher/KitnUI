@@ -69,12 +69,15 @@ function X.SelectedBar()
 end
 
 -- The page builds only the selected bar's sections, so a pick rebuilds it,
--- and the rebuilt page mounts this header again.
+-- and the rebuilt page mounts this header again. The rebuild keeps the old
+-- scroll, so the page then goes to its top: the player lands on the selected
+-- bar's first section.
 function X.SelectBar(kind)
     if (kind ~= "xp" and kind ~= "fb") or kind == selected then return end
     selected = kind
     if EllesmereUI and EllesmereUI.RefreshPage then
         pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
+        if EllesmereUI.ScrollToTop then pcall(EllesmereUI.ScrollToTop, EllesmereUI) end
     else
         X.PreviewRefresh()
     end

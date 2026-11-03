@@ -767,4 +767,24 @@ do
     X.Draw = drawBar
 end
 
+-- A pick rebuilds the page, which keeps its scroll; the page then goes to
+-- its top, so the player lands on the selected bar's first section.
+do
+    local calls = {}
+    EUI.RefreshPage = function(_, force) calls[#calls + 1] = force == true and "refresh" or "refresh, not forced" end
+    EUI.ScrollToTop = function() calls[#calls + 1] = "top" end
+    local function pick(kind)
+        for i = #calls, 1, -1 do calls[i] = nil end
+        ok, why = pcall(X.SelectBar, kind)
+        check(ok, "a pick of " .. kind .. " runs", why)
+        return table.concat(calls, ",")
+    end
+    eq(pick("fb"), "refresh,top", "a pick of the faction bar rebuilds the page, then scrolls it to the top")
+    eq(pick("fb"), "", "a pick of the bar already selected does nothing")
+    eq(pick("nope"), "", "a pick of an unknown bar does nothing")
+    EUI.ScrollToTop = nil
+    eq(pick("xp"), "refresh", "without the host's scroll helper a pick still rebuilds the page")
+    EUI.RefreshPage = nil
+end
+
 finish()
