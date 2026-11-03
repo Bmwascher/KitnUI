@@ -201,8 +201,9 @@ eq(xpDefaults.xpTexture, "KitnUI", "the XP bar's texture defaults to KitnUI's ow
 eq(xpDefaults.fbTexture, "KitnUI", "the faction bar's texture defaults to KitnUI's own")
 eq(xpDefaults.xpWidth, 600, "the XP bar defaults to 600 wide")
 eq(xpDefaults.xpHeight, 30, "the XP bar defaults to 30 high")
-eq(xpDefaults.fbWidth, 400, "the faction bar defaults to 400 wide")
-eq(xpDefaults.fbHeight, 20, "the faction bar defaults to 20 high")
+eq(xpDefaults.fbWidth, 600, "the reputation bar defaults to 600 wide, as the XP bar")
+eq(xpDefaults.fbHeight, 27, "the reputation bar defaults to 27 high")
+eq(xpDefaults.fbFillMode, "standing", "the reputation bar defaults to Standing Color")
 eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
 for _, stem in ipairs({ "xpAmount", "xpLevelTime", "xpSessionTime", "xpRate", "xpCompRested", "fbName", "fbAmount" }) do
     eq(xpDefaults[stem .. "OffX"], 0, "the default " .. stem .. "OffX leaves the text where it was")

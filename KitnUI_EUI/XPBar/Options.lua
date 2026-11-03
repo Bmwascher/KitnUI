@@ -312,8 +312,9 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
                 Toggle("Stretch to Bar", "xpProfStretch", "Draws one copy of the art across the whole bar.", Unless("xpFillStyle", "profession")))
             Row(Color("Completed Quest Color", "xpQuest", true), Color("Rested Color", "xpRested", true))
         else
-            Nav("fill", fillHdr, Row(Drop("Fill Mode", "fbFillMode", FBFILL_V, FBFILL_O, "Standing Color follows the standing's own color.", nil, true),
-                Color("Fill Color", "fb", false, nil, Unless("fbFillMode", "custom"))), "left")
+            Nav("fill", fillHdr, Row(Drop("Fill Mode", "fbFillMode", FBFILL_V, FBFILL_O, "Standing Color follows the standing's own color."),
+                Color("Fill Color", "fb", false,
+                    "Fills the bar under Custom Color. Under Standing Color it fills the reputations that have no standing color: renown, friendship and paragon.")), "left")
         end
 
         local textHdr = Header("TEXT")

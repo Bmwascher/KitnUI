@@ -377,6 +377,26 @@ local factionFrames = #frames
 buildPage("page, faction view again")
 eq(#frames, factionFrames, "page, faction view: a rebuild creates no frame")
 
+-- Fill Color stays usable under Standing Color: it fills the reputations
+-- that have no standing color.
+do
+    local dualRow, fillColor = EUI.Widgets.DualRow, nil
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        if type(right) == "table" and right.text == "Fill Color" then fillColor = right end
+        return dualRow(w, parent, y, left, right)
+    end
+    ns.EUISettings().fbFillMode = "standing"
+    buildPage("page, faction view, Standing Color")
+    EUI.Widgets.DualRow = dualRow
+    check(fillColor ~= nil, "page, faction view: the Fill Color row is built")
+    local off = fillColor and fillColor.disabled
+    eq(type(off) == "function" and off() or false, false, "page, faction view: Fill Color is usable under Standing Color")
+    local tip = fillColor and fillColor.tooltip
+    check(type(tip) == "string" and tip:find("no standing color", 1, true) ~= nil,
+        "page, faction view: Fill Color's tooltip names the reputations with no standing color")
+    ns.EUISettings().fbFillMode = nil
+end
+
 EUI.IsSearchPrebuild = function() return true end
 buildPage("page, search prebuild")
 check(has("XP DISPLAY") and has("REPUTATION SOURCE"), "page, search prebuild: both bars' sections, so search finds every setting")
