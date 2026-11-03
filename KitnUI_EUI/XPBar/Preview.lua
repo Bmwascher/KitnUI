@@ -30,7 +30,7 @@ local availW = 1
 -- Every piece visible: quest XP, rested XP, both times and a rate, even on a
 -- character at max level or with no rested XP.
 local sampleXP = {
-    cur = 45000, max = 100000, quest = 15000, rested = 25000,
+    level = 59, cur = 94410, max = 209800, quest = 31470, rested = 52450,
     atMax = false, xpOff = false, levelTime = 1200, elapsed = 3600, gained = 90000,
 }
 local sampleFaction = { cur = 6500, min = 0, max = 10000, isMax = false }
@@ -38,14 +38,6 @@ local xpOut, fbOut = {}, {}
 
 local function Pad()
     return (EllesmereUI and EllesmereUI.CONTENT_PAD) or 10
-end
-
--- Level 85, or five below the cap where the cap is lower.
-local function SampleLevel()
-    local ok, cap = pcall(GetMaxLevelForPlayerExpansion)
-    cap = ok and tonumber(cap) or nil
-    if cap and cap < 85 then return cap - 5 end
-    return 85
 end
 
 local function SampleFaction()
@@ -62,7 +54,6 @@ end
 
 local function Layout()
     if not (content and xpWidget and fbWidget) then return 0 end
-    sampleXP.level = SampleLevel()
     X.XPView(sampleXP, X.Get, xpOut)
     X.Draw(xpWidget, X.Get, xpOut)
     X.FactionView(SampleFaction(), X.Get, fbOut)

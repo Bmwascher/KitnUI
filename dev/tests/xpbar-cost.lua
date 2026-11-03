@@ -286,22 +286,26 @@ check(next(updaters) == nil, "page with both bars off: no visibility updater")
 eq(unlocks, 0, "page with both bars off: no Unlock Mode element")
 eq(accents, 0, "page with both bars off: no accent callback")
 
--- The preview's sample level: 85, or five below a lower cap.
+-- The preview's sample: Level 59 at 94,410 of 209,800, which is 45%, on any
+-- client and at any level cap.
 local realDraw = X.Draw
-local drawnLevel
+local drawn
 X.Draw = function(w, view, data)
-    if data and data.level then drawnLevel = data.level end
+    if data and data.level then drawn = data end
     return realDraw(w, view, data)
 end
 local function sampleAt(cap)
     _G.GetMaxLevelForPlayerExpansion = function() return cap end
-    drawnLevel = nil
+    drawn = nil
     X.PreviewRefresh()
-    return drawnLevel
+    return drawn or {}
 end
-eq(sampleAt(90), "Level 85", "preview sample: Level 85 under a higher cap")
-eq(sampleAt(85), "Level 85", "preview sample: Level 85 at a cap of exactly 85")
-eq(sampleAt(60), "Level 55", "preview sample: five below a lower cap")
+for _, cap in ipairs({ 90, 85, 60 }) do
+    local s = sampleAt(cap)
+    eq(s.level, "Level 59", "preview sample: Level 59 at a cap of " .. cap)
+    eq(s.center, "94.4K / 209.8K (115.4K)", "preview sample: the amount in the default short style at a cap of " .. cap)
+    eq(s.right, "45.0% (85.0%)", "preview sample: 45% earned at a cap of " .. cap)
+end
 X.Draw = realDraw
 _G.GetMaxLevelForPlayerExpansion = function() return 90 end
 
