@@ -262,6 +262,15 @@ end
 -- it, so a shipped string is constant for the session.
 local shippedFingerprints = {}
 
+-- A class table may hold only empty spec slots, which leave nothing to import.
+function ns.CDMClassHasLayouts(classData)
+    if type(classData) ~= "table" then return false end
+    for _, specString in pairs(classData) do
+        if type(specString) == "string" and strtrim(specString) ~= "" then return true end
+    end
+    return false
+end
+
 function ns.GetCDMShippedFingerprint(classId, specIndex)
     local key = ns.GetCDMKey(classId, specIndex)
     if not key then return nil end

@@ -237,9 +237,20 @@ for _ in pairs(foreverCDM) do cdmClasses = cdmClasses + 1 end
 eq(cdmClasses, #FOREVER_CLASSES, "cdm: Forever's layouts cover nine classes")
 for _, classId in ipairs(FOREVER_CLASSES) do
     local specs = foreverCDM[classId]
-    check(type(specs) == "table" and type(specs[1]) == "string" and next(specs, 1) == nil,
-        "cdm: Forever class " .. classId .. " has one spec")
+    local specCount = 0
+    if type(specs) == "table" then
+        for _ in pairs(specs) do specCount = specCount + 1 end
+    end
+    check(specCount == 1 and type(specs[1]) == "string", "cdm: Forever class " .. classId .. " has one spec")
 end
+
+-- Only a non-empty layout string makes a class importable.
+local cdmCore = loadCore(120105)
+eq(cdmCore.CDMClassHasLayouts(nil), false, "cdm: no class table has no layouts")
+eq(cdmCore.CDMClassHasLayouts({}), false, "cdm: an empty class table has no layouts")
+eq(cdmCore.CDMClassHasLayouts({ [1] = "" }), false, "cdm: an empty spec string is no layout")
+eq(cdmCore.CDMClassHasLayouts({ [1] = "  " }), false, "cdm: a blank spec string is no layout")
+eq(cdmCore.CDMClassHasLayouts({ [1] = "", [2] = "1|x" }), true, "cdm: one filled spec makes the class importable")
 
 -- A retail version bump must never offer Forever an update its own string did
 -- not get, so every versioned step has its own Forever line. Read with the
