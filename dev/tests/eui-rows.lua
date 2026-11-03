@@ -1217,5 +1217,93 @@ do
     eq(ns.EUIComposeSettled(nil, snRows, snRec, { [1] = snSnap }, k2f, {}), nil, "compose: no base gives no composite")
 end
 
+---------------------------------------------------------------------------------
+-- The XP Bar row
+---------------------------------------------------------------------------------
+
+do
+    local XP = "xpbar"
+    local xpRowsOf = ns.EUIRows(map, roster, { [AB] = {}, [TOP_BAR] = { tbOpacity = 85, xpWidth = 600 } }, {})
+    eq(rowIds(xpRowsOf), table.concat({ AB, TOP_BAR, XP, "general", "overrides" }, ","),
+        "xp row: listed after the Top Bar when KitnUI's folder holds an XP key")
+    eq(xpRowsOf[3] and xpRowsOf[3].label, "XP Bar", "xp row: its label")
+    eq(xpRowsOf[3] and xpRowsOf[3].sub, "KitnUI", "xp row: its sub")
+    eq(rowIds(ns.EUIRows(map, roster, { [AB] = {}, [TOP_BAR] = { tbOpacity = 85 } }, {})),
+        table.concat({ AB, TOP_BAR, "general", "overrides" }, ","), "xp row: absent while the folder holds no XP key")
+
+    local xk2f = { KitnUI_TopBar = TOP_BAR, KitnUI_XPBar = TOP_BAR, KitnUI_FactionBar = TOP_BAR }
+    eq(ns.EUIRowOf("addons." .. TOP_BAR .. ".xpWidth", xk2f), XP, "xp owner: an xp key")
+    eq(ns.EUIRowOf("addons." .. TOP_BAR .. ".fbHeight", xk2f), XP, "xp owner: an fb key")
+    eq(ns.EUIRowOf("addons." .. TOP_BAR .. ".xpPos.x", xk2f), XP, "xp owner: below an xp key")
+    eq(ns.EUIRowOf("unlockLayout.anchors.KitnUI_XPBar", xk2f), XP, "xp owner: the XP bar's Unlock element")
+    eq(ns.EUIRowOf("unlockLayout.anchors.KitnUI_FactionBar", xk2f), XP, "xp owner: the faction bar's")
+    eq(ns.EUIRowOf("addons." .. TOP_BAR .. ".tbOpacity", xk2f), TOP_BAR, "xp owner: a Top Bar key stays the Top Bar's")
+    eq(ns.EUIRowOf("unlockLayout.anchors.KitnUI_TopBar", xk2f), TOP_BAR, "xp owner: as does the Top Bar's element")
+
+    local xpRows = { { id = TOP_BAR, label = "Top Bar" }, { id = XP, label = "XP Bar" } }
+    local function side(tb, xp, bite)
+        return {
+            addons = { [TOP_BAR] = { tbOpacity = tb, xpWidth = xp, bite = bite } },
+            unlockLayout = { anchors = { KitnUI_TopBar = { y = tb }, KitnUI_XPBar = { y = xp } } },
+        }
+    end
+    local kept = side(85, 600, false)
+    ns.EUIKeepSlices(kept, { conflicts = {} }, side(60, 900, true), xpRows, { [XP] = true }, xk2f)
+    local f = kept.addons[TOP_BAR]
+    eq(f.tbOpacity, 60, "keep top bar, take xp: the player's Top Bar setting")
+    eq(f.bite, true, "keep top bar, take xp: the player's switch state")
+    eq(f.xpWidth, 600, "keep top bar, take xp: KitnUI's XP setting")
+    eq(kept.unlockLayout.anchors.KitnUI_TopBar.y, 60, "keep top bar, take xp: the player's Top Bar position")
+    eq(kept.unlockLayout.anchors.KitnUI_XPBar.y, 600, "keep top bar, take xp: KitnUI's XP bar position")
+    kept = side(85, 600, false)
+    ns.EUIKeepSlices(kept, { conflicts = {} }, side(60, 900, true), xpRows, { [TOP_BAR] = true }, xk2f)
+    f = kept.addons[TOP_BAR]
+    eq(f.tbOpacity, 85, "take top bar, keep xp: KitnUI's Top Bar setting")
+    eq(f.xpWidth, 900, "take top bar, keep xp: the player's XP setting")
+    eq(kept.unlockLayout.anchors.KitnUI_TopBar.y, 85, "take top bar, keep xp: KitnUI's Top Bar position")
+    eq(kept.unlockLayout.anchors.KitnUI_XPBar.y, 900, "take top bar, keep xp: the player's XP bar position")
+
+    local reset = side(60, 900, true)
+    ns.EUITakeSlice(reset, side(85, 600, false), { id = TOP_BAR }, xk2f)
+    f = reset.addons[TOP_BAR]
+    eq(f.tbOpacity, 85, "top bar reset: KitnUI's Top Bar setting")
+    eq(f.xpWidth, 900, "top bar reset: the player's XP setting stays")
+    eq(f.bite, true, "top bar reset: and the player's switch state")
+    eq(reset.unlockLayout.anchors.KitnUI_XPBar.y, 900, "top bar reset: the XP bar's position stays")
+    ns.EUITakeSlice(reset, side(85, 600, false), { id = XP }, xk2f)
+    f = reset.addons[TOP_BAR]
+    eq(f.xpWidth, 600, "xp reset: KitnUI's XP setting")
+    eq(f.tbOpacity, 85, "xp reset: the Top Bar setting is untouched")
+    eq(f.bite, true, "xp reset: as is the switch state")
+    eq(reset.unlockLayout.anchors.KitnUI_XPBar.y, 600, "xp reset: KitnUI's XP bar position")
+
+    local function counts(A, B, opts)
+        local walker = ns.EUIRowDiff(A, B, xpRows, xk2f, opts)
+        walker:Step(math.huge)
+        local r = walker.result
+        return r[TOP_BAR] and r[TOP_BAR].count or 0, r[XP] and r[XP].count or 0
+    end
+    local A = { addons = { [TOP_BAR] = { tbOpacity = 85, xpWidth = 600, bite = false } } }
+    local B = { addons = { [TOP_BAR] = { tbOpacity = 60, xpWidth = 900, bite = true } } }
+    local tb, xp = counts(A, B)
+    eq(tb, 2, "xp walk: the update walk counts the Top Bar's keys and switch states, not XP keys")
+    eq(xp, 1, "xp walk: the XP row counts its own key")
+    tb, xp = counts(A, B, { player = true })
+    eq(tb, 1, "xp walk: the player's walk counts the Top Bar's own setting")
+    eq(xp, 1, "xp walk: and the XP row its own")
+
+    group, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".xpWidth", { id = XP })
+    eq(group, "XP Bar", "xp label: an XP key is in the XP Bar group")
+    eq(item, "Width", "xp label: named by its tidied key")
+    _, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".fbHeight", { id = XP })
+    eq(item, "Faction height", "xp label: a faction key says so")
+    _, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".xpEnabled", { id = XP })
+    eq(item, "XP bar on", "xp label: the switch is named")
+    _, item = ns.EUISettingLabel("addons." .. TOP_BAR .. ".xpPos.x", { id = XP })
+    eq(item, "XP bar position (x)", "xp label: with what lies below it")
+    group = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbIconSize", { id = TOP_BAR })
+    eq(group, "Top Bar", "xp label: a Top Bar key keeps its group")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

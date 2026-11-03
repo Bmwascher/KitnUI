@@ -14,6 +14,47 @@ local function isTable(v) return type(v) == "table" end
 local CDM = "EllesmereUICooldownManager"
 local NAMEPLATES = "EllesmereUINameplates"
 local TOP_BAR = "KitnUI_EUI"
+-- The XP Bar's row shares KitnUI's folder with the Top Bar's: its xp and fb
+-- keys, and its two Unlock Mode elements.
+local XP_ROW = "xpbar"
+local XP_CHILDREN = { KitnUI_XPBar = true, KitnUI_FactionBar = true }
+
+local function isXPKey(k)
+    if type(k) ~= "string" then return false end
+    local prefix = k:sub(1, 2)
+    return prefix == "xp" or prefix == "fb"
+end
+
+local function hasXPKey(t)
+    for k in pairs(t) do
+        if isXPKey(k) then return true end
+    end
+    return false
+end
+
+-- The folder a row's settings live in.
+local function rowFolder(id)
+    return id == XP_ROW and TOP_BAR or id
+end
+
+-- The row an Unlock Mode element belongs to.
+local function childRowId(child, keyToFolder)
+    local folder = keyToFolder and keyToFolder[child]
+    if folder == TOP_BAR and XP_CHILDREN[child] then return XP_ROW end
+    return folder
+end
+
+-- KitnUI's folder split for its two rows: xp true keeps the XP Bar's keys,
+-- false the rest. A walk passes its tick, charged once per key read.
+local function xpSplit(t, xp, tickFn)
+    if not isTable(t) then return nil end
+    local out = {}
+    for k, v in pairs(t) do
+        if tickFn then tickFn() end
+        if isXPKey(k) == xp then out[k] = v end
+    end
+    return out
+end
 
 local OVERRIDE_KEYS = {}
 for _, key in ipairs(ns.EUI_OV_KEYS) do OVERRIDE_KEYS[key] = true end
@@ -32,7 +73,7 @@ end
 ---------------------------------------------------------------------------------
 
 -- One row per module the shipped payload carries, in EllesmereUI's order, then
--- the Top Bar, General and Spec Overrides. A module KitnUI always switches off
+-- the Top Bar, the XP Bar, General and Spec Overrides. A module KitnUI always switches off
 -- is left out; Nameplates stays, marked off, because Plater is the player's
 -- choice. A map that cannot be read still lists the payload's folders.
 function ns.EUIRows(map, roster, nAddons, disableList)
@@ -81,6 +122,9 @@ function ns.EUIRows(map, roster, nAddons, disableList)
     if nAddons[TOP_BAR] ~= nil then
         rows[#rows + 1] = { id = TOP_BAR, label = "Top Bar", sub = "KitnUI" }
     end
+    if isTable(nAddons[TOP_BAR]) and hasXPKey(nAddons[TOP_BAR]) then
+        rows[#rows + 1] = { id = XP_ROW, label = "XP Bar", sub = "KitnUI" }
+    end
     rows[#rows + 1] = { id = "general", label = "General", sub = "fonts, colors, scale" }
     rows[#rows + 1] = { id = "overrides", label = "Spec Overrides", sub = "all or nothing" }
     return rows
@@ -93,11 +137,15 @@ function ns.EUIRowOf(path, keyToFolder)
     if path == "uiScale" then return "general" end
     local root, rest = path:match("^([^.]+)(.*)$")
     if not root then return nil end
-    if root == "addons" then return rest:match("^%.([^.]+)") end
+    if root == "addons" then
+        local folder, key = rest:match("^%.([^.]+)%.?([^.]*)")
+        if folder == TOP_BAR and isXPKey(key) then return XP_ROW end
+        return folder
+    end
     if root == "cdmSpells" then return CDM end
     if root == "unlockLayout" then
         local child = rest:match("^%.[^.]+%.(.+)$")
-        return child and keyToFolder and keyToFolder[child] or nil
+        return child and childRowId(child, keyToFolder) or nil
     end
     if OVERRIDE_KEYS[root] then return "overrides" end
     if ns.EUI_SPECIAL_KEYS[root] then return nil end
@@ -107,6 +155,28 @@ end
 ---------------------------------------------------------------------------------
 -- Slices
 ---------------------------------------------------------------------------------
+
+-- KitnUI's folder holds two rows' settings: the XP Bar's xp and fb keys, and
+-- the Top Bar row's, which are all the rest. Each row replaces only its own.
+local function copyFolderKeys(into, from, xp, copy)
+    local src = isTable(from.addons) and from.addons[TOP_BAR] or nil
+    local dst = isTable(into.addons) and into.addons[TOP_BAR] or nil
+    if isTable(dst) then
+        for k in pairs(dst) do
+            if isXPKey(k) == xp then dst[k] = nil end
+        end
+    end
+    if isTable(src) then
+        if not isTable(into.addons) then into.addons = {} end
+        if not isTable(into.addons[TOP_BAR]) then into.addons[TOP_BAR] = {} end
+        dst = into.addons[TOP_BAR]
+        for k, v in pairs(src) do
+            if isXPKey(k) == xp then dst[k] = copy(v) end
+        end
+    elseif isTable(dst) and next(dst) == nil then
+        into.addons[TOP_BAR] = nil
+    end
+end
 
 -- Replaces `into`'s slice for one row with `from`'s: absent in `from` means
 -- absent in `into`, which the importer reads as "inherit".
@@ -126,8 +196,10 @@ local function copySlice(into, from, row, keyToFolder)
         end
         return
     end
-    local folder = row.id
-    if isTable(from.addons) and from.addons[folder] ~= nil then
+    local folder = rowFolder(row.id)
+    if folder == TOP_BAR then
+        copyFolderKeys(into, from, row.id == XP_ROW, copy)
+    elseif isTable(from.addons) and from.addons[folder] ~= nil then
         if not isTable(into.addons) then into.addons = {} end
         into.addons[folder] = copy(from.addons[folder])
     elseif isTable(into.addons) then
@@ -139,11 +211,11 @@ local function copySlice(into, from, row, keyToFolder)
         local dst = isTable(into.unlockLayout) and into.unlockLayout[map]
         if isTable(dst) then
             for child in pairs(dst) do
-                if keyToFolder[child] == folder then dst[child] = nil end
+                if childRowId(child, keyToFolder) == row.id then dst[child] = nil end
             end
         end
         for child, v in pairs(isTable(fromLayout[map]) and fromLayout[map] or {}) do
-            if keyToFolder[child] == folder then
+            if childRowId(child, keyToFolder) == row.id then
                 if not isTable(into.unlockLayout) then into.unlockLayout = {} end
                 if not isTable(into.unlockLayout[map]) then into.unlockLayout[map] = {} end
                 into.unlockLayout[map][child] = copy(v)
@@ -426,6 +498,13 @@ local function cdmSpellID(list, key, value, labels)
     return nil
 end
 
+-- XP Bar settings the tidied key would misname. Any other xp or fb key reads
+-- as its tidied name without the prefix, a faction key with "Faction " first.
+local XP_NAMES = {
+    xpEnabled = "XP bar on", fbEnabled = "Faction bar on",
+    xpPos = "XP bar position", fbPos = "Faction bar position",
+}
+
 -- Top Bar settings the tidied key would misname. Any other tb key reads as
 -- its tidied name without the prefix: "tbIconSize" is "Icon size".
 local TOP_BAR_NAMES = {
@@ -458,12 +537,17 @@ local function cdmLabel(parts, labels, value)
     return group, item
 end
 
--- A Top Bar setting: its name, then what lies below it, as "Hidden elements (clock)".
-local function topBarItem(parts)
+-- A Top Bar or XP Bar setting: its name, then what lies below it, as "Hidden
+-- elements (clock)".
+local function kitnItem(parts)
     local last = #parts
     while last > 3 and CHANNELS[parts[last]] do last = last - 1 end
     local key = parts[3]
-    local item = TOP_BAR_NAMES[key] or capital(tidy(key:sub(3)))
+    local item = TOP_BAR_NAMES[key] or XP_NAMES[key]
+    if not item then
+        local name = tidy(key:sub(3))
+        item = key:sub(1, 2) == "fb" and ("Faction " .. name) or capital(name)
+    end
     if last > 3 then
         local below = {}
         for j = 4, last do below[#below + 1] = tidy(parts[j]) end
@@ -523,8 +607,9 @@ function ns.EUISettingLabel(path, row, labels, value)
     local parts = {}
     for part in path:gmatch("[^.]+") do parts[#parts + 1] = part end
     if parts[1] == "cdmSpells" and parts[2] then return cdmLabel(parts, labels, value) end
-    if parts[1] == "addons" and parts[2] == TOP_BAR and parts[3] and parts[3]:sub(1, 2) == "tb" then
-        return "Top Bar", topBarItem(parts)
+    if parts[1] == "addons" and parts[2] == TOP_BAR and parts[3] then
+        if isXPKey(parts[3]) then return "XP Bar", kitnItem(parts) end
+        if parts[3]:sub(1, 2) == "tb" then return "Top Bar", kitnItem(parts) end
     end
     local i = 1
     if parts[1] == "addons" then i = 3 end
@@ -878,7 +963,7 @@ local function layoutJob(w, B, rowById, bases, keyToFolder)
         end
         for child in pairs(children) do
             tick(w)
-            local row = rowById[keyToFolder[child]]
+            local row = rowById[childRowId(child, keyToFolder)]
             if row and bases[row.id] ~= nil then
                 local path = "unlockLayout." .. map .. "." .. tostring(child)
                 local am, bm = layoutMap(bases[row.id], map), layoutMap(B, map)
@@ -955,16 +1040,25 @@ local function seedRow(w, row, src, B, defaults)
         end
         return
     end
-    local folder = row.id
+    local folder = rowFolder(row.id)
     local d = defaults[folder]
     local a, b = channelOf(channelOf(src, "addons"), folder), channelOf(channelOf(B, "addons"), folder)
     local n = channelOf(channelOf(N, "addons"), folder)
-    -- The player's walk reads the Top Bar row as the Top Bar's own settings;
-    -- a switch state is KitnUI's, and a Reset keeps it.
-    if folder == TOP_BAR and w.player then
+    -- KitnUI's folder holds two rows. The XP Bar row reads its xp and fb keys;
+    -- the Top Bar row reads the rest, and the player's walk reads only the Top
+    -- Bar's own tb keys: a switch state is KitnUI's, and a Reset keeps it.
+    if folder == TOP_BAR then
         local tickFn = w.tickFn
-        a, b = topBarKeys(a, true, tickFn), topBarKeys(b, true, tickFn)
-        n, d = topBarKeys(n, true, tickFn), topBarKeys(d, true, tickFn)
+        if row.id == XP_ROW then
+            a, b = xpSplit(a, true, tickFn), xpSplit(b, true, tickFn)
+            n, d = xpSplit(n, true, tickFn), xpSplit(d, true, tickFn)
+        elseif w.player then
+            a, b = topBarKeys(a, true, tickFn), topBarKeys(b, true, tickFn)
+            n, d = topBarKeys(n, true, tickFn), topBarKeys(d, true, tickFn)
+        else
+            a, b = xpSplit(a, false, tickFn), xpSplit(b, false, tickFn)
+            n, d = xpSplit(n, false, tickFn), xpSplit(d, false, tickFn)
+        end
     end
     push(w, a, b, d, "addons." .. folder, row, d ~= nil, nil, n)
     if folder == "EllesmereUICooldownManager" then
@@ -1098,8 +1192,8 @@ function ns.EUISplitLinks(N, rows, ticked, keyToFolder)
         for child, entry in pairs(isTable(ul[map]) and ul[map] or {}) do
             local target = entry
             if anchors then target = isTable(entry) and entry.target or nil end
-            local childRow = rowById[keyToFolder[child]]
-            local targetRow = type(target) == "string" and rowById[keyToFolder[target]] or nil
+            local childRow = rowById[childRowId(child, keyToFolder)]
+            local targetRow = type(target) == "string" and rowById[childRowId(target, keyToFolder)] or nil
             if childRow and targetRow and childRow ~= targetRow and ticked[childRow.id]
                 and not ticked[targetRow.id] and not targetRow.off then
                 local pair = childRow.id .. "\31" .. targetRow.id
@@ -1139,23 +1233,28 @@ local function eachElementKey(P, fn)
     end
 end
 
--- True when the player's Spec Overrides hold anything of this folder: a
--- captured value whose fkey names it, or a position of one of its elements.
-function ns.EUIOverridesCapture(P, folder, keyToFolder)
-    if not (isTable(P) and folder) then return false end
+-- True when the player's Spec Overrides hold anything of this row: a
+-- captured value whose fkey names its folder (in KitnUI's folder, one of the
+-- row's own keys), or a position of one of its elements.
+function ns.EUIOverridesCapture(P, id, keyToFolder)
+    if not (isTable(P) and id) then return false end
+    local folder = rowFolder(id)
     local prefix = folder .. "\31"
     for _, storeKey in ipairs({ "specOverrides", "condOverrides" }) do
         for _, entry in pairs(isTable(P[storeKey]) and P[storeKey] or {}) do
             for _, map in pairs(isTable(entry) and isTable(entry.values) and entry.values or {}) do
                 for fkey in pairs(isTable(map) and map or {}) do
-                    if type(fkey) == "string" and fkey:sub(1, #prefix) == prefix then return true end
+                    if type(fkey) == "string" and fkey:sub(1, #prefix) == prefix
+                        and (folder ~= TOP_BAR or isXPKey(fkey:sub(#prefix + 1)) == (id == XP_ROW)) then
+                        return true
+                    end
                 end
             end
         end
     end
     local found = false
     eachElementKey(P, function(key)
-        if keyToFolder[key] == folder then found = true end
+        if childRowId(key, keyToFolder) == id then found = true end
     end)
     return found
 end
@@ -1284,7 +1383,9 @@ end
 -- folder part only when it carries the folder.
 local function holdsPart(src, row)
     if row.id == "general" or row.id == "overrides" then return true end
-    return isTable(src.addons) and src.addons[row.id] ~= nil
+    local folder = isTable(src.addons) and src.addons[rowFolder(row.id)] or nil
+    if row.id == XP_ROW then return isTable(folder) and hasXPKey(folder) end
+    return folder ~= nil
 end
 
 -- S: the composite base with each settled part's slice from its snapshot.
