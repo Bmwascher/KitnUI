@@ -64,10 +64,6 @@ X.RANGES = {
 
 -- One coalesced quest-log scan per burst of quest events, in seconds.
 local QUEST_SCAN_DELAY = 0.3
--- EllesmereUI builds its XP bar a moment after login: the first spot is read
--- again every SEED_RETRY seconds until it exists, at most SEED_TRIES times.
-local SEED_RETRY = 1
-local SEED_TRIES = 10
 local DEFAULT_Y = { xp = -100, fb = -160 }
 local LABEL_R, LABEL_G, LABEL_B = 1, 0.82, 0
 
@@ -89,8 +85,7 @@ local unlockDone, accentDone, sessionQueued, questFresh = false, false, false, f
 local xpWasOn = false
 local widgets = {}
 local registered, wanted, wantOpts = {}, {}, {}
-local questTimer, clock, seedTimer
-local seedTries = 0
+local questTimer, clock
 local questDone, questOpen = 0, 0
 -- Defined with the event handlers; ReconcileEvents arms it.
 local ArmQuestScan
@@ -639,25 +634,6 @@ local function Ensure()
     end
 end
 
-local SeedRetry
-
--- Bounded per load: past SEED_TRIES, only a later apply reads the spot again.
-local function ArmSeedRetry()
-    if seedTimer or seedTries >= SEED_TRIES or not (C_Timer and C_Timer.NewTimer) then return end
-    seedTries = seedTries + 1
-    seedTimer = C_Timer.NewTimer(SEED_RETRY, SeedRetry)
-end
-
-function SeedRetry()
-    seedTimer = nil
-    if not (active and X.XPEnabled()) then return end
-    if X.SeedPosition() then
-        Place("xp")
-    else
-        ArmSeedRetry()
-    end
-end
-
 -- Saves the session, then cancels every timer, unregisters every event,
 -- leaves the visibility service and hides both bars.
 local function Stop()
@@ -669,10 +645,6 @@ local function Stop()
     if questTimer then
         questTimer:Cancel()
         questTimer = nil
-    end
-    if seedTimer then
-        seedTimer:Cancel()
-        seedTimer = nil
     end
     if clock then
         clock:Cancel()
@@ -720,7 +692,7 @@ function X.Apply(claim)
     ReconcileEvents()
     if xpOn then
         X.SessionListen(true)
-        if not X.SeedPosition() then ArmSeedRetry() end
+        X.SeedPosition()
         -- XP earned while the bar was off joins the session, which kept
         -- counting time: time and XP cover the same span.
         X.OnXP()

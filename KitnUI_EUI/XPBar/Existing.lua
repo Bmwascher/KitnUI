@@ -80,6 +80,41 @@ local function SyncBlizzard(release)
 end
 
 ---------------------------------------------------------------------------------
+-- First position
+---------------------------------------------------------------------------------
+
+-- A frame's live center on screen, in UIParent's units, whatever it is
+-- anchored to; nil when it has no rect.
+local function ScreenCenter(frame)
+    if not (frame and frame.GetCenter and frame.GetEffectiveScale) then return nil end
+    local ok, x, y = pcall(frame.GetCenter, frame)
+    if not ok or type(x) ~= "number" or type(y) ~= "number" then return nil end
+    local s, u = frame:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    if type(s) ~= "number" or type(u) ~= "number" or u <= 0 then return nil end
+    return x * s / u, y * s / u
+end
+
+-- Stores a found spot as the XP bar's first position while the player has
+-- never placed it. Returns whether it stored one.
+local function Seed(x, y)
+    if not x or X.Get("xpPos") ~= nil then return false end
+    X.Set("xpPos", { point = "CENTER", relPoint = "BOTTOMLEFT", x = floor(x + 0.5), y = floor(y + 0.5) })
+    return true
+end
+
+-- Blizzard's tracking bar is hidden without a click, so with Hide Existing on
+-- its spot is the XP bar's first one. EllesmereUI's bar is hidden only on a
+-- click, and its spot is taken at that write: until then the XP bar keeps its
+-- default spot, clear of the bar still on screen. Returns whether a spot was
+-- stored.
+function X.SeedPosition()
+    if X.Get("xpPos") ~= nil or X.Get("xpHideExisting") ~= true or EUIBars() then return false end
+    local x, y = ScreenCenter(_G.MainStatusTrackingBarContainer)
+    if not x then x, y = ScreenCenter(_G.StatusTrackingBarManager) end
+    return Seed(x, y)
+end
+
+---------------------------------------------------------------------------------
 -- EllesmereUI's bars
 ---------------------------------------------------------------------------------
 
@@ -137,9 +172,9 @@ local function SelectionKey(sel)
     return table.concat(keys, ",")
 end
 
--- Returns whether a note changed, and whether an editing session held the
--- write back, in which case the claim waits for the next pass. claim is the
--- kept claim record, or nil.
+-- Returns whether a note changed; whether an editing session held the write
+-- back, in which case the claim waits for the next pass; and whether the XP
+-- bar was given its first spot. claim is the kept claim record, or nil.
 local function SyncEUI(kind, claim, release)
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.GetVisibilitySelection and EUI.SetVisibilitySelection) then return false end
@@ -197,8 +232,11 @@ local function SyncEUI(kind, claim, release)
         local rec = ns.EUISnap(XP_SECTION, kind)
         if not rec then return false end
         rec.prev = sel
+        -- The XP bar takes the spot of the bar it now replaces, read before
+        -- that bar is hidden.
+        local moved = kind == "xp" and Seed(ScreenCenter(_G.EllesmereEAB_XPBar))
         Write(EUI, store, NEVER, eab)
-        return true
+        return true, false, moved
     end
     if never then Write(EUI, store, note.prev, eab) end
     note.prev = nil
@@ -286,13 +324,17 @@ function X.SyncExisting(claim, release)
     end
     if regenFrame then regenFrame:UnregisterEvent("PLAYER_REGEN_ENABLED") end
     SyncBlizzard(release)
-    local changed = false
+    local changed, placed = false, false
     for i = 1, #KINDS do
         local kind = KINDS[i]
-        local did, waiting = SyncEUI(kind, pending[kind], release)
+        local did, waiting, moved = SyncEUI(kind, pending[kind], release)
         if did then changed = true end
+        if moved then placed = true end
         if not waiting then pending[kind] = nil end
     end
+    -- An apply places the bars before this sync, and a claim that waited out
+    -- combat lands with no apply at all.
+    if placed and X.ApplyVisibility then X.ApplyVisibility() end
     if changed and ns.EUIRebuildForOwnership then ns.EUIRebuildForOwnership("XP Bar") end
 end
 
@@ -303,38 +345,3 @@ ns.EUIRegisterHeld(XP_SECTION, function(noteKey, _, add)
     for i = 1, #VIS_FIELDS do add(base .. VIS_FIELDS[i]) end
 end)
 
----------------------------------------------------------------------------------
--- First position
----------------------------------------------------------------------------------
-
--- A frame's live center on screen, in UIParent's units, whatever it is
--- anchored to; nil when it has no rect.
-local function ScreenCenter(frame)
-    if not (frame and frame.GetCenter and frame.GetEffectiveScale) then return nil end
-    local ok, x, y = pcall(frame.GetCenter, frame)
-    if not ok or type(x) ~= "number" or type(y) ~= "number" then return nil end
-    local s, u = frame:GetEffectiveScale(), UIParent:GetEffectiveScale()
-    if type(s) ~= "number" or type(u) ~= "number" or u <= 0 then return nil end
-    return x * s / u, y * s / u
-end
-
--- With Hide Existing on, the XP bar's first spot is the live spot of the bar
--- it replaces, read before that bar is hidden; with it off, both would share
--- one spot, so Bar.lua's default places it. Nothing is stored when no spot
--- is found, so a later apply tries again. Returns false only while
--- EllesmereUI's XP bar has no spot yet, so the caller can try again soon.
-function X.SeedPosition()
-    if X.Get("xpPos") ~= nil or X.Get("xpHideExisting") ~= true then return true end
-    local x, y
-    if EUIBars() then
-        x, y = ScreenCenter(_G.EllesmereEAB_XPBar)
-        if not x then return false end
-    else
-        x, y = ScreenCenter(_G.MainStatusTrackingBarContainer)
-        if not x then x, y = ScreenCenter(_G.StatusTrackingBarManager) end
-    end
-    if x then
-        X.Set("xpPos", { point = "CENTER", relPoint = "BOTTOMLEFT", x = floor(x + 0.5), y = floor(y + 0.5) })
-    end
-    return true
-end

@@ -485,26 +485,70 @@ check(manager.parent ~= _G.UIParent, "blizzard: the move lands when combat ends"
 ---------------------------------------------------------------------------------
 
 _G.UIParent.GetEffectiveScale = function() return 1 end
+local placed = 0
+X.ApplyVisibility = function() placed = placed + 1 end
+local function spot(x, y)
+    return { GetCenter = function() return x, y end, GetEffectiveScale = function() return 1 end }
+end
+
+-- EllesmereUI's bar stays on screen until a click hides it, so until then the
+-- XP bar keeps its own default spot.
 reset(); euiBars()
 settings.xpEnabled = true
+_G.EllesmereEAB_XPBar = spot(400.4, 60.6)
+eq(X.SeedPosition(), false, "seed, EllesmereUI's bars: no spot is taken without a click")
+eq(settings.xpPos, nil, "seed, EllesmereUI's bars: nothing is stored without a click")
+X.SyncExisting()
+eq(settings.xpPos, nil, "seed, EllesmereUI's bars: an unclaimed sync stores nothing")
+eq(xpBar().barVisibility, "always", "seed, EllesmereUI's bars: and that bar stays on screen")
+placed = 0
+X.SyncExisting("xp")
+eq(xpBar().barVisibility, "never", "seed, claim: EllesmereUI's bar is hidden")
+eq(settings.xpPos and settings.xpPos.x, 400, "seed, claim: the XP bar takes its spot")
+eq(settings.xpPos and settings.xpPos.y, 61, "seed, claim: in UIParent's units, rounded")
+eq(placed, 1, "seed, claim: the XP bar is placed on it")
+
+reset(); euiBars()
+settings.xpEnabled = true
+settings.xpPos = { point = "TOP", relPoint = "TOP", x = 0, y = -300 }
+X.SyncExisting("xp")
+eq(settings.xpPos.y, -300, "seed, claim: a spot the player placed is kept")
+
+reset(); euiBars()
+settings.xpEnabled, settings.fbEnabled = true, true
+X.SyncExisting("rep")
+eq(settings.xpPos, nil, "seed, reputation claim: the XP bar is not moved")
+
+reset(); euiBars(); inCombat = true
+settings.xpEnabled = true
+X.SyncExisting("xp")
+eq(settings.xpPos, nil, "seed, claim in combat: nothing moves in combat")
+placed = 0
+inCombat = false
+regen()
+eq(settings.xpPos and settings.xpPos.x, 400, "seed, claim in combat: the spot is taken when the hide lands")
+eq(placed, 1, "seed, claim in combat: and the XP bar is placed on it")
+
+-- Blizzard's tracking bar is hidden without a click, so its spot is taken on
+-- the apply.
 _G.EllesmereEAB_XPBar = nil
-eq(X.SeedPosition(), false, "seed: EllesmereUI's XP bar not built yet asks for a retry")
-eq(settings.xpPos, nil, "seed: nothing is stored before that bar exists")
-_G.EllesmereEAB_XPBar = {
-    GetCenter = function() return 400.4, 60.6 end,
-    GetEffectiveScale = function() return 1 end,
-}
-eq(X.SeedPosition(), true, "seed: EllesmereUI's XP bar built settles the seed")
-eq(settings.xpPos and settings.xpPos.x, 400, "seed: its center is stored")
-eq(settings.xpPos and settings.xpPos.y, 61, "seed: in UIParent's units, rounded")
-_G.EllesmereEAB_XPBar = nil
-eq(X.SeedPosition(), true, "seed: a stored spot is never read again")
 reset(); profile, eab = { useBlizzardDataBars = true }, nil
 settings.xpEnabled = true
-eq(X.SeedPosition(), true, "seed: the Blizzard path never asks for a retry")
-eq(settings.xpPos, nil, "seed: and stores nothing without a spot")
-settings.xpHideExisting = false
-eq(X.SeedPosition(), true, "seed: Hide Existing off needs no seed")
+_G.MainStatusTrackingBarContainer = spot(200.2, 30.6)
+eq(X.SeedPosition(), true, "seed, Blizzard's bars: the spot is taken without a click")
+eq(settings.xpPos and settings.xpPos.x, 200, "seed, Blizzard's bars: its tracking bar's center is stored")
+eq(settings.xpPos and settings.xpPos.y, 31, "seed, Blizzard's bars: rounded")
+_G.MainStatusTrackingBarContainer = spot(500, 500)
+eq(X.SeedPosition(), false, "seed, Blizzard's bars: a stored spot is never read again")
+eq(settings.xpPos.x, 200, "seed, Blizzard's bars: and stays")
+reset(); profile, eab = { useBlizzardDataBars = true }, nil
+settings.xpEnabled, settings.xpHideExisting = true, false
+eq(X.SeedPosition(), false, "seed, Hide Existing off: no spot is taken")
+eq(settings.xpPos, nil, "seed, Hide Existing off: nothing is stored")
+_G.MainStatusTrackingBarContainer = nil
+settings.xpHideExisting = true
+eq(X.SeedPosition(), false, "seed, Blizzard's bars without a spot: nothing is stored")
+eq(settings.xpPos, nil, "seed, Blizzard's bars without a spot: the XP bar keeps its default")
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
