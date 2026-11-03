@@ -135,6 +135,129 @@ eq(outdatedVersion(retail, "BigWigs"), nil, "outdated: retail at the retail vers
 eq(outdatedVersion(forever, "BigWigs"), "F1", "outdated: Forever offers its own version over a retail import")
 eq(outdatedVersion(forever, "NSRT"), nil, "outdated: a reused retail string at the retail version is current on Forever")
 
+---------------------------------------------------------------------------------
+-- The TOC lines and the Forever manifest
+---------------------------------------------------------------------------------
+
+local function readLines(path)
+    local handle = io.open(path, "r")
+    if not handle then return nil end
+    local lines = {}
+    for line in handle:lines() do lines[#lines + 1] = (line:gsub("\r$", "")) end
+    handle:close()
+    return lines
+end
+
+local function hasLine(lines, wanted)
+    for _, line in ipairs(lines) do
+        if line == wanted then return true end
+    end
+    return false
+end
+
+local tocLines = readLines("KitnUI.toc") or {}
+local euiTocLines = readLines("KitnUI_EUI/KitnUI_EUI.toc") or {}
+
+check(hasLine(tocLines, "## Interface: 120105, 16001"), "toc: KitnUI lists retail and Forever")
+check(hasLine(euiTocLines, "## Interface: 120105, 16001"), "toc: KitnUI_EUI lists retail and Forever")
+
+local FOREVER_MANIFEST_LINE = "Data\\Data-Forever.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]"
+local retailManifestAt, foreverManifestAt
+for i, line in ipairs(tocLines) do
+    if line == "Data\\Data.xml" then retailManifestAt = i end
+    if line == FOREVER_MANIFEST_LINE then foreverManifestAt = i end
+end
+check(foreverManifestAt ~= nil, "toc: the Forever manifest is tagged to load on Forever only")
+check(retailManifestAt ~= nil and foreverManifestAt ~= nil and foreverManifestAt > retailManifestAt,
+    "toc: it loads after the retail manifest, so its payloads replace the retail ones")
+
+-- Every Forever payload file ships with its step's Forever version line, and
+-- every Forever version line belongs to a step a Forever file ships. A file
+-- belongs to the versioned keys it assigns; its other keys (BigWigs_Bosses,
+-- Blizzard_EditMode_Lulu) share that step's version. Blizzard CDM fingerprints
+-- its strings and has no line. Every read goes through the shipped lookup, so
+-- an empty line counts as none here exactly as it does in game, and any
+-- non-empty value is a valid version.
+local function payloadFiles(manifestPath)
+    local files = {}
+    for _, line in ipairs(readLines(manifestPath) or {}) do
+        local scriptFile = line:match('<Script%s+file="([^"]+)"')
+        if scriptFile then
+            local path = "Data/" .. (scriptFile:gsub("\\", "/"))
+            local payloadChunk, payloadErr = loadfile(path)
+            check(payloadChunk ~= nil, "manifest: " .. path .. " loads", payloadErr)
+            if payloadChunk then
+                local payloadNS = { data = {} }
+                payloadChunk("KitnUI", payloadNS)
+                files[#files + 1] = { path = path, data = payloadNS.data }
+            end
+        end
+    end
+    return files
+end
+
+check(readLines("Data/Data-Forever.xml") ~= nil, "manifest: Data/Data-Forever.xml exists")
+local retailFiles = payloadFiles("Data/Data.xml")
+local foreverFiles = payloadFiles("Data/Data-Forever.xml")
+check(#retailFiles > 0, "manifest: the retail manifest lists its payloads")
+
+-- The shipped TOC's own lines, values as written.
+for header in pairs(metadata) do metadata[header] = nil end
+metadata.Version = "test"
+local foreverLineCount = 0
+for _, line in ipairs(tocLines) do
+    local header, value = line:match("^## (X%-[^:]+):%s*(.-)%s*$")
+    if header then
+        metadata[header] = value
+        if header:match("%-Forever%-Version$") and value ~= "" then
+            foreverLineCount = foreverLineCount + 1
+        end
+    end
+end
+local tocRetail = loadCore(120105)
+local tocForever = loadCore(16001)
+
+local function versioned(key) return tocRetail.GetAddonDataVersion(key) ~= nil end
+
+-- A player who imported the retail string on Forever holds the retail version,
+-- and the update offer needs a different one, so a Forever line that repeats
+-- its retail line counts as none.
+local function hasForeverLine(key)
+    local retailVersion = tocRetail.GetAddonDataVersion(key)
+    return retailVersion ~= nil and tocForever.GetAddonDataVersion(key) ~= retailVersion
+end
+
+local shippedOnForever = {}
+for _, payloadFile in ipairs(foreverFiles) do
+    local owners = 0
+    for key in pairs(payloadFile.data) do
+        if versioned(key) then
+            owners = owners + 1
+            shippedOnForever[key] = true
+            check(hasForeverLine(key),
+                "pairing: " .. payloadFile.path .. " ships " .. key .. " with a Forever version line that differs from its retail line")
+        end
+    end
+    check(owners > 0 or payloadFile.data.BlizzardCDM ~= nil,
+        "pairing: " .. payloadFile.path .. " assigns a versioned step or Blizzard CDM")
+end
+
+local stepKeys = {}
+for _, files in ipairs({ retailFiles, foreverFiles }) do
+    for _, payloadFile in ipairs(files) do
+        for key in pairs(payloadFile.data) do stepKeys[key] = true end
+    end
+end
+local linesRead = 0
+for key in pairs(stepKeys) do
+    if hasForeverLine(key) then
+        linesRead = linesRead + 1
+        check(shippedOnForever[key], "pairing: the Forever version line for " .. key .. " has a Forever payload")
+    end
+end
+eq(linesRead, foreverLineCount,
+    "pairing: every non-empty Forever version line names a step and differs from its retail line")
+
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
     os.exit(1)
