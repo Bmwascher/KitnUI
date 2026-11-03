@@ -228,6 +228,19 @@ for _, payloadFile in ipairs(retailFiles) do
 end
 eq(#foreverFiles, #retailFiles, "pairing: the Forever manifest lists one file per retail payload")
 
+-- Forever has nine classes, each with one spec.
+local FOREVER_CLASSES = { 1, 2, 3, 4, 5, 7, 8, 9, 11 }
+local foreverCDMFile = foreverByPath["Data/Forever/Classes/BlizzardCDM.lua"]
+local foreverCDM = foreverCDMFile and foreverCDMFile.data.BlizzardCDM or {}
+local cdmClasses = 0
+for _ in pairs(foreverCDM) do cdmClasses = cdmClasses + 1 end
+eq(cdmClasses, #FOREVER_CLASSES, "cdm: Forever's layouts cover nine classes")
+for _, classId in ipairs(FOREVER_CLASSES) do
+    local specs = foreverCDM[classId]
+    check(type(specs) == "table" and type(specs[1]) == "string" and next(specs, 1) == nil,
+        "cdm: Forever class " .. classId .. " has one spec")
+end
+
 -- A retail version bump must never offer Forever an update its own string did
 -- not get, so every versioned step has its own Forever line. Read with the
 -- retail lines removed, so the shipped fallback cannot answer for a missing
