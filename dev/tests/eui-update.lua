@@ -647,6 +647,46 @@ text = ns.EUIConfirmText(plan)
 check(text:find("Your previous backup will be replaced.", 1, true), "confirm: the backup line")
 check(text:find("keybind", 1, true), "confirm: the moved line")
 
+-- On Forever the client reports one spec per class, and the importer reads the
+-- first of the class's retail specs that has an assignment, after the backup's
+-- assignments are gone.
+local CLASS_SPECS = { 262, 263, 264 }
+E.SpecHasEntry = function(id, tbl) return tbl ~= nil and tbl[id] ~= nil end
+E.SpecFor = function(raw, pred, arg)
+    if raw ~= 1487 then return raw end
+    for _, id in ipairs(CLASS_SPECS) do
+        if pred and pred(id, arg) then return id end
+    end
+    return CLASS_SPECS[1]
+end
+ns.IS_FOREVER = true
+game.specID = 1487
+
+freshInstall()
+db.specProfiles[263] = "Other"
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+eq(plan.willLock, true, "forever: the class's assigned retail spec locks")
+
+freshInstall()
+db.profiles[ns.EUIBackupName] = base()
+db.specProfiles[262] = ns.EUIBackupName
+db.specProfiles[263] = "Other"
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+eq(plan.willLock, true, "forever: with the backup's assignment gone the next spec's assignment locks")
+
+freshInstall()
+db.profiles[ns.EUIBackupName] = base()
+db.specProfiles[262] = ns.EUIBackupName
+ns.EUIStartDecodes()
+plan = ns.EUIPrepareUpdate()
+eq(plan.willLock, false, "forever: only the backup assigned does not lock")
+
+ns.IS_FOREVER = nil
+game.specID = 71
+E.SpecFor, E.SpecHasEntry = nil, nil
+
 -- The confirm's groups and colors, on the one-conflict update: the player's
 -- live font against KitnUI's.
 freshInstall()
