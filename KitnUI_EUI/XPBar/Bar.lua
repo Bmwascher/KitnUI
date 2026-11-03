@@ -15,11 +15,7 @@ local M = X.Math
 
 local format, floor, max, min = string.format, math.floor, math.max, math.min
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 ---------------------------------------------------------------------------------
 -- Storage helpers: the only functions that touch an xp* or fb* key.

@@ -39,6 +39,10 @@ local activeProfile, snapsAll = "Kitn", { Kitn = snaps }
 local generation = 0
 
 local ns = { XPBar = {} }
+ns.EUIPlain = function(v)
+    if v ~= nil and _G.issecretvalue and _G.issecretvalue(v) then return nil end
+    return v
+end
 ns.EUIActiveProfileName = function() return activeProfile end
 ns.EUIProfileGeneration = function() return generation end
 ns.XPBar.Get = function(key)

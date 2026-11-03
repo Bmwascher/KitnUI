@@ -14,11 +14,7 @@ local X = ns.XPBar
 -- How far a text's X and Y offsets reach, in pixels.
 local OFFSET_MAX = 100
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 -- values and order for a dropdown, from key, label pairs.
 local function Choices(...)

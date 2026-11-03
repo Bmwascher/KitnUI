@@ -20,11 +20,7 @@ local HIT_FRAME, HIT_BODY, HIT_FILL, HIT_TEXT = 20, 21, 22, 30
 -- How far the frame's overlay reaches past the bar.
 local RING_OUT = 4
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 -- wrap is UNSCALED and centered on the stage; content holds the fit scale at
 -- offset 0,0 inside it. An offset on a scaled frame is in its own scaled

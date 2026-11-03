@@ -574,11 +574,7 @@ end
 -- decidable from the static reference, so nothing here depends on it.
 ---------------------------------------------------------------------------------
 
-local function Plain(v)
-    if v == nil then return nil end
-    if issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 -- The exact path: classID -> classFile -> RAID_CLASS_COLORS. Guild members and
 -- Battle.net friends both carry a numeric classID, and C_CreatureInfo

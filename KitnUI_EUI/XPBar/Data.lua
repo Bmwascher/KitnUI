@@ -20,11 +20,7 @@ local MAX_REACTION = 8
 -- headers open cannot loop forever.
 local CATALOG_GUARD = 500
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 local function Num(v)
     v = Plain(v)
