@@ -4,4 +4,5 @@
     <!-- Load order matters: each file reads the ones above it. -->
     <Script file="Math.lua" />
     <Script file="Data.lua" />
+    <Script file="Session.lua" />
 </Ui>
