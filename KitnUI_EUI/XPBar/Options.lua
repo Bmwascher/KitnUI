@@ -43,7 +43,7 @@ local OUTLINE_V, OUTLINE_O = Choices("", "EllesmereUI Outline", "NONE", "None", 
 local SOURCE_V, SOURCE_O = Choices("watched", "Watched Reputation", "companion", "Current Delve Companion",
     "pinned", "Pinned Reputation")
 local FBFILL_V, FBFILL_O = Choices("custom", "Custom Color", "standing", "Standing Color")
-local BAR_V, BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar")
+X.BAR_V, X.BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar")
 local STYLE_NAMES = { eui = "EUI Border", prof = "Profession Frame", classic = "Classic", forever = "Forever", blizzard = "Blizzard" }
 local STYLE_ORDER = { "eui", "prof", "classic", "forever", "blizzard" }
 
@@ -361,7 +361,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
 
     -- Without the header's picker the page carries its own.
     if not prebuild and not (X.SelectorShown and X.SelectorShown()) then
-        Row({ type = "dropdown", text = "Bar", values = BAR_V, order = BAR_O,
+        Row({ type = "dropdown", text = "Bar", values = X.BAR_V, order = X.BAR_O,
               tooltip = "The bar this page and its preview show.",
               getValue = function() return X.SelectedBar and X.SelectedBar() or "xp" end,
               setValue = function(v) if X.SelectBar then X.SelectBar(v) end end },

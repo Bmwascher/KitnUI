@@ -253,4 +253,6 @@ local KitnUITopBar
 ---@field BuildPreviewHeader fun(parent: table, width: number): number
 ---@field PreviewRefresh fun()
 ---@field PreviewRestore fun()
+---@field BAR_V table<string, string>   # the bar picker's labels, by bar key
+---@field BAR_O string[]
 local KitnUIXPBar

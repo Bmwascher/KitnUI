@@ -282,6 +282,7 @@ do
             if type(left) == "table" and left.text then
                 page.rows[left.text] = row
                 page.full[left.text] = right == nil
+                if left.text == "Bar" then page.barValues = left.values end
             end
             return row, 30
         end,
@@ -340,6 +341,7 @@ check(page.rows["Reset Session on Reload"] ~= nil and page.rows["Reset Session o
 eq(page.full["Reset XP Session Now"], true, "page, XP view: Reset XP Session Now has a row of its own")
 eq(page.full["Position: use EUI Unlock Mode"], true, "page, XP view: the Unlock Mode line has a row of its own")
 check(page.rows.Bar ~= nil, "page, XP view: without the header's picker the page carries its own")
+check(page.barValues ~= nil and page.barValues == X.BAR_V, "page, XP view: its picker reads the shared labels")
 eq(#page.hooks, 0, "page, XP view: no script hook")
 eq(#frames, previewFrames, "page, XP view: no frame beyond the preview's own")
 eq(#page.cogs, 5, "page, XP view: a cogwheel on the amount and on each around-text")
@@ -774,6 +776,7 @@ do
         check(X.SelectorShown(), "the bar picker: the header holds it")
         eq(picked and table.concat(picked.order, ","), "xp,fb", "the bar picker: the XP bar, then the faction bar")
         eq(picked and picked.values.fb, "Reputation Bar", "the bar picker: names the reputation bar")
+        check(picked ~= nil and picked.values == X.BAR_V and picked.order == X.BAR_O, "the bar picker: reads the shared labels")
         eq(picked and picked.get(), "xp", "the bar picker: reads the selection")
         if picked then picked.set("fb") end
         eq(X.SelectedBar(), "fb", "the bar picker: a pick selects the bar")

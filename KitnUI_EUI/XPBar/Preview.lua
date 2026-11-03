@@ -32,9 +32,6 @@ local availW = 1
 -- The bar the page and the preview show, kept for the session only.
 local selected = "xp"
 
-local BAR_V = { xp = "XP Bar", fb = "Reputation Bar" }
-local BAR_O = { "xp", "fb" }
-
 -- Every piece visible: quest XP, rested XP, both times and a rate, even on a
 -- character at max level or with no rested XP.
 local sampleXP = {
@@ -90,7 +87,7 @@ end
 local function MountPicker(parent)
     local level = (Plain(parent:GetFrameLevel()) or 0) + 5
     if not picker and EllesmereUI and EllesmereUI.BuildDropdownControl then
-        local ok, btn = pcall(EllesmereUI.BuildDropdownControl, parent, PICK_W, level, BAR_V, BAR_O,
+        local ok, btn = pcall(EllesmereUI.BuildDropdownControl, parent, PICK_W, level, X.BAR_V, X.BAR_O,
             X.SelectedBar, X.SelectBar)
         if ok and btn then picker = btn end
     end
