@@ -75,6 +75,9 @@ methods.GetStatusBarTexture = function(self)
 end
 methods.SetFont = function() return true end
 methods.IsPlaying = function() return false end
+methods.EnableMouse = function(self, on) self.click, self.motion = on and true or false, on and true or false end
+methods.SetMouseClickEnabled = function(self, on) self.click = on and true or false end
+methods.SetMouseMotionEnabled = function(self, on) self.motion = on and true or false end
 
 _G.CreateFrame = function(kind)
     local f = Obj(kind)
@@ -97,7 +100,14 @@ _G.StatusTrackingBarManager = Obj("Frame")
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 _G.CreateColor = function() return { SetRGBA = NOOP } end
 _G.InCombatLockdown = function() return false end
-_G.hooksecurefunc = NOOP
+-- Runs fn after the hooked function, as the client's does.
+_G.hooksecurefunc = function(t, name, fn)
+    local orig = t[name]
+    t[name] = function(...)
+        orig(...)
+        fn(...)
+    end
+end
 _G.GetTime = function() return 1000 end
 _G.time = function() return 50000 end
 _G.UnitLevel = function() return 10 end
@@ -345,6 +355,16 @@ combat = true
 for fn in pairs(updaters) do fn() end
 combat = false
 check(tipHidden, "combat starts: the open XP tooltip comes down")
+
+-- EllesmereUI's mouseover reveal enables the whole mouse, then shows the
+-- bar; on a bar already shown that Show runs no OnShow.
+check(xpFrame ~= nil and xpFrame.shown == true, "mouseover reveal: the XP bar is already shown")
+if xpFrame then
+    xpFrame:EnableMouse(true)
+    xpFrame:Show()
+    eq(xpFrame.click, false, "mouseover reveal on a shown bar: clicks still pass through")
+    eq(xpFrame.motion, true, "mouseover reveal on a shown bar: hovering still reaches the tooltip")
+end
 
 settings.xpEnabled, settings.fbEnabled = false, true
 ok, why = pcall(X.Apply)

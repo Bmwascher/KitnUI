@@ -439,8 +439,9 @@ local function DropTooltips()
 end
 
 -- Hover only: clicks pass through to whatever is under the bar. Applied on
--- every show too, because the hover service enables the whole mouse when it
--- reveals a frame.
+-- every show and after every EnableMouse: the hover service enables the
+-- whole mouse when it reveals a frame, and on a bar already shown that
+-- reveal runs no OnShow.
 local function SetMouse(frame)
     local tip = Get(frame.kuiPrefix .. "Tooltip") == true
     if frame.SetMouseMotionEnabled then frame:SetMouseMotionEnabled(tip) end
@@ -461,6 +462,7 @@ local function MakeWidget(kind)
     local w = X.NewWidget(UIParent, kind)
     local frame = w.frame
     frame.kuiPrefix = kind
+    hooksecurefunc(frame, "EnableMouse", SetMouse)
     frame:SetFrameStrata("LOW")
     frame:SetClampedToScreen(true)
     frame:Hide()
