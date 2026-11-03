@@ -242,6 +242,22 @@ eq(start.max, 1000, "the level's total")
 eq(start.level, 10, "and the level")
 _G.GetTime, _G.UnitXP, _G.UnitXPMax, _G.UnitLevel = realGetTime, nil, nil, nil
 
+-- A reload flag that is secret counts as a login. The capture reads GetTime,
+-- which the line above has just put back to its plain-Lua nil.
+local SECRET_FLAG = {}
+_G.issecretvalue = function(v) return v == SECRET_FLAG end
+_G.GetTime = function() return 600 end
+local secretBoot = boot(newEUI(true))
+for _, h in ipairs(loginHandlers) do
+    if h.frame.events.PLAYER_ENTERING_WORLD then
+        local ok, why = pcall(h.fn, h.frame, "PLAYER_ENTERING_WORLD", false, SECRET_FLAG)
+        check(ok, "PLAYER_ENTERING_WORLD with a secret reload flag runs without an error", why)
+    end
+end
+eq(secretBoot.EUILoginKind, "login", "a secret reload flag counts as a login")
+eq(secretBoot.EUILoadStart and secretBoot.EUILoadStart.time, 600, "a secret reload flag: the load's start is still captured")
+_G.issecretvalue, _G.GetTime = nil, realGetTime
+
 -- The contents generation, bumped by the two hooks that replace a profile's
 -- contents and by nothing else.
 local hookFns = {}

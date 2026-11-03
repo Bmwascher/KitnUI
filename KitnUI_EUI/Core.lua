@@ -1262,7 +1262,10 @@ boot:RegisterEvent("PLAYER_ENTERING_WORLD")
 boot:SetScript("OnEvent", function(self, event, _, isReloadingUi)
     if event == "PLAYER_ENTERING_WORLD" then
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        SetLoginKind(isReloadingUi and "reload" or "login")
+        -- A flag that cannot be read counts as a login: the session then
+        -- starts fresh rather than continuing a save it cannot vouch for.
+        local secret = issecretvalue and issecretvalue(isReloadingUi)
+        SetLoginKind((not secret and isReloadingUi == true) and "reload" or "login")
         return
     end
     self:UnregisterEvent("PLAYER_LOGIN")
