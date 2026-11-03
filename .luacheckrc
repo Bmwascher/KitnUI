@@ -56,6 +56,9 @@ read_globals = {
     "tinsert", "tremove", "wipe", "CopyTable", "tContains",
     "select", "math",
 
+    -- Client build: the interface number tells retail from Forever
+    "GetBuildInfo",
+
     -- Frame and UI
     "CreateFrame", "UIParent", "Settings", "CreateColor",
     "PluginInstallFrame", "UISpecialFrames",

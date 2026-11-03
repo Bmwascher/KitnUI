@@ -17,6 +17,7 @@
 ---@field profileName string    # profile name written into each addon's SV
 ---@field version string        # addon version (TOC metadata, "2.0" fallback)
 ---@field FONT string           # Expressway font path
+---@field IS_FOREVER boolean    # running on the WoW Forever client (interface 16000-19999)
 ---@field data table<string, any>   # per-addon profile payloads (Data/*.lua)
 ---@field db KitnUIDB               # SavedVariables (KitnUIDB)
 ---@field Wizard KitnUIWizard       # installer wizard singleton
