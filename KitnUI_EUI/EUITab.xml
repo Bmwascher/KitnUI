@@ -10,4 +10,5 @@
     <Script file="Gameplay.lua" />
     <Script file="Nameplates.lua" />
     <Include file="TopBar\TopBar.xml" />
+    <Include file="XPBar\XPBar.xml" />
 </Ui>
