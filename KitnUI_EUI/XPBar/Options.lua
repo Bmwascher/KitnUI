@@ -94,8 +94,8 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
     local y = yOffset
     -- One bar at a time; the search prebuild indexes both. The index keeps one
     -- entry per label, so an appearance row both bars share lists once and lands
-    -- on the selected bar's copy. Per-bar names would add a result whose row is
-    -- not built while the other bar is selected.
+    -- in the selected bar's section. Per-bar names would add a result whose row
+    -- is not built while the other bar is selected.
     local prebuild = EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild() == true
     local bar = X.SelectedBar and X.SelectedBar() or "xp"
     local showXP, showFB = prebuild or bar == "xp", prebuild or bar == "fb"

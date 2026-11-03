@@ -192,9 +192,8 @@ ns.EUIPages["Top Bar"] = function(parent, yOffset)
           setValue = function(v) ns.TopBar.Set("tbBackdrop", v and true or false); ns.TopBar.Apply(); if ns.TopBar.PreviewRefresh then ns.TopBar.PreviewRefresh() end end }
     );                                                                             y = y - h
 
-    -- The swatch rides this toggle's row and shows only while the override is
-    -- on. The setter seeds from the live accent when the override is turned on,
-    -- so the color does not jump.
+    -- The setter seeds from the live accent when the override is turned on, so
+    -- the color does not jump.
     -- Forward-declared so the setter, built first, can reach the swatch and its
     -- repaint function built just below.
     local accentSwatch, updateAccentSwatch
