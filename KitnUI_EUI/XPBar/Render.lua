@@ -409,14 +409,10 @@ local function MaskBar(w, bar, on)
     bar.kuiMasked = on and tex or nil
 end
 
--- The Blizzard style's silhouette on every texture that can paint inside
--- the bar: the status bars, the gap segments' copies, the profession tiles,
--- the gap strips and the divider lines are masked; the backgrounds, the
--- body's and each gap copy's, are hidden as the style hides the body's,
--- since its own frame art is the background. Undone again when the style
--- changes. Runs after the gaps, tiles and lines are made, so a texture made
--- in this draw is covered too. The divider labels are text and stay as they
--- are.
+-- The Blizzard style's silhouette on every texture that can paint inside the
+-- bar; the backgrounds are hidden instead, since the style's frame art is the
+-- background. Undone when the style changes. Runs after the gaps, tiles and
+-- lines are made, so textures made in this draw are covered.
 local function SyncMasks(w, on)
     if not (on or w.blizzMask) then return end
     if on and not w.blizzMask then

@@ -150,7 +150,7 @@ for _, order in ipairs(ORDERS) do
     end
 end
 
--- Each sequence a review raised, as { readings, the true gain }. The first
+-- Mixed-reading sequences, as { readings, the true gain }. The first
 -- reading is the baseline.
 local function sum(readings)
     local s, total = {}, 0

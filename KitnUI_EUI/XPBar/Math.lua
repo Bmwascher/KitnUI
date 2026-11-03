@@ -123,16 +123,11 @@ end
 
 -- One reading per call; returns the XP gained since the last one, and the
 -- level counted to when this reading counted a level-up. Within a level the
--- XP sums reading to reading, signed, so a reading that turns out to be
--- mixed still adds up. A level's total changes only on a level-up, so a
--- level-up shows as two signals, the total changing and the level rising, in
--- either order and with the XP on either side. The first counts the level
--- once: the rest of the old level by the last reading, plus the XP read now.
--- The second is expected and counts no level. A total changing first raises
--- the counted level at once, so the level reading that reaches it is no
--- rise; a level rising first leaves the total's change due. Two levels with
--- equal totals are counted by the level number. More than one level in one
--- step counts as one.
+-- XP sums signed, reading to reading, so a mixed reading still adds up. A
+-- level-up arrives as two signals, the total changing and the level rising,
+-- in either order: the first counts the level once (the rest of the old
+-- level plus the XP read now), the second counts nothing. Equal totals are
+-- told apart by the level number; several levels in one step count as one.
 -- s: x, m, level (the last reading, at the counted level), wait ("total"
 -- while the counted level's new total is still due).
 function M.Track(s, cur, total, level)

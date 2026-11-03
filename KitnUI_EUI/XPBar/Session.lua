@@ -81,17 +81,13 @@ local function Counted(upTo)
 end
 
 -- Once per load, when the XP bar first runs. A fresh session counts from the
--- start of the load, which Core captured: the real login, even when the bar
--- is turned on an hour later. Its XP is then the XP since that start, so the
--- session's time and XP cover the same span. A /reload within the window of
--- its save continues the saved session instead, each time advanced by the gap, and
--- its XP adds everything since the save's own reading, so XP earned between
--- the save and the bar's first run is not lost. The time this level
--- continues from that save even with Reset Session on Reload on: that switch
--- resets the session, not the level. Anything else leaves the time this
--- level unknown. The tracker runs on from a recent save through the load's
--- start to now whichever session wins, so a level-up half reported before
--- the save counts once.
+-- load's start that Core captured, so it spans the real login even when the
+-- bar is turned on later, and its XP covers the same span. A /reload within
+-- the window of the save continues the saved session, advanced by the gap,
+-- with every XP since the save's own reading. The time this level continues
+-- from that save even with Reset Session on Reload on, which resets only the
+-- session. The tracker runs on from a recent save either way, so a level-up
+-- half reported before the save counts once.
 function X.SessionStart(kind)
     if started then return end
     started = true
@@ -251,15 +247,10 @@ local function Mute()
 end
 
 -- Two asks. The login ask runs at most once, in a load that began with a
--- login, muted as Mute /played in Chat says. The ask again runs once each
--- time an unseen level-up made the time this level unknown, in any load,
--- and always muted: the player did not type it. When both are due, the ask
--- again wins and its one request spends the login ask too. Either runs only
--- while the time this level is unknown, no request waits for its reply, and
--- the line is drawn: the XP bar is on, its switch is on, and the player is
--- below max level with XP gain on. A request that raises never reached the
--- server, so nothing is spent. Otherwise a /reload's time this level comes
--- from the saved session, or reads "--" until a level-up or a typed /played.
+-- login, muted as Mute /played in Chat says. The ask again runs after each
+-- unseen level-up, in any load, always muted since the player did not type
+-- it; when both are due it wins and spends the login ask too. A request that
+-- raises never reached the server, so nothing is spent.
 function X.RequestPlayed()
     if not (started and listening) or levelStart or pending then return end
     local again = askAgain
