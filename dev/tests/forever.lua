@@ -258,6 +258,139 @@ end
 eq(linesRead, foreverLineCount,
     "pairing: every non-empty Forever version line names a step and differs from its retail line")
 
+---------------------------------------------------------------------------------
+-- The Forever Essentials switches
+---------------------------------------------------------------------------------
+
+local ESSENTIALS_ON = { "spellUprank", "junkList", "activeForm", "gatherSkill", "worldMapReveal",
+    "mapTravel", "questRewards", "zoneLevels", "petSummon", "macroManager" }
+local ESSENTIALS_OFF = { "classicSpellbook", "classicTalents", "simplifiedStats", "worldMapFade",
+    "threatMeter", "lootFeed" }
+
+local imports = 0
+local importAccepted = true
+_G.EllesmereUI = {
+    ImportProfileSilent = function()
+        imports = imports + 1
+        return importAccepted, "refused"
+    end,
+    SetProfile = function() end,
+    RefreshAllAddons = function() end,
+}
+
+local setupNS = {
+    title = "KitnUI",
+    profileName = "KitnUI",
+    version = "test",
+    data = { EllesmereUI = "shipped-string" },
+    EUIReady = function() return true end,
+    GetAddonDataVersion = function() return "test" end,
+    DecideAccountTheme = function() end,
+}
+local setupChunk, setupErr = loadfile("Installer/Setup.lua")
+if not setupChunk then
+    print("FAIL  could not load Installer/Setup.lua: " .. tostring(setupErr))
+    os.exit(1)
+end
+setupChunk("KitnUI", setupNS)
+check(type(setupNS.ApplyForeverEssentials) == "function", "essentials: ns.ApplyForeverEssentials is defined")
+local applyEssentials = setupNS.ApplyForeverEssentials or function() end
+
+local function countKeys(t)
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
+end
+
+local function snapshot(value)
+    if type(value) ~= "table" then return tostring(value) end
+    local keys = {}
+    for k in pairs(value) do keys[#keys + 1] = k end
+    table.sort(keys)
+    local parts = {}
+    for _, k in ipairs(keys) do parts[#parts + 1] = k .. "=" .. snapshot(value[k]) end
+    return "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- Retail writes nothing and creates nothing.
+setupNS.IS_FOREVER = false
+_G.EllesmereUIDB = { lootFeed = { pos = { x = 1 } } }
+applyEssentials()
+eq(countKeys(_G.EllesmereUIDB), 1, "essentials: retail creates no table")
+eq(_G.EllesmereUIDB.lootFeed.enabled, nil, "essentials: retail writes no switch")
+
+-- Forever writes the listed fields and nothing else.
+setupNS.IS_FOREVER = true
+_G.EllesmereUIDB = {
+    junkList = { freeSlotThreshold = 8 },
+    lootFeed = { enabled = true, pos = { x = 1 } },
+    flightTimer = { enabled = true, x = 2 },
+    fishing = { reel = true },
+    petSummon = 5,
+    profiles = { KitnUI = {} },
+}
+applyEssentials()
+local edb = _G.EllesmereUIDB
+
+-- nil unless the feature's table exists, so a missing table never reads as off.
+local function switchOf(key)
+    local settings = edb[key]
+    if type(settings) ~= "table" then return nil end
+    return settings.enabled
+end
+
+for _, key in ipairs(ESSENTIALS_ON) do
+    if key ~= "petSummon" then
+        eq(switchOf(key), true, "essentials: " .. key .. " is on")
+    end
+end
+for _, key in ipairs(ESSENTIALS_OFF) do
+    eq(switchOf(key), false, "essentials: " .. key .. " is off")
+end
+eq(edb.junkList.onlyLowBagSpace, true, "essentials: Junk Items waits for nearly full bags")
+eq(edb.junkList.freeSlotThreshold, 8, "essentials: the player's free-slot threshold is kept")
+eq(edb.lootFeed.pos.x, 1, "essentials: a feature's other settings are kept")
+eq(edb.flightTimer.enabled, true, "essentials: Flight Timer's switch is not touched")
+eq(edb.flightTimer.x, 2, "essentials: nor its settings")
+eq(edb.fishing.enabled, nil, "essentials: Fishing gets no switch")
+eq(edb.petSummon, 5, "essentials: a key holding something other than a table is left alone")
+eq(countKeys(edb), 19, "essentials: only the listed features gain a table")
+
+local before = snapshot(edb)
+applyEssentials()
+eq(snapshot(edb), before, "essentials: a second run changes nothing")
+
+_G.EllesmereUIDB = nil
+check(pcall(applyEssentials), "essentials: no EllesmereUIDB raises nothing")
+
+-- The EllesmereUI import writes them on Forever; a refused import and a load
+-- do not.
+local function quietly(fn)
+    local realPrint = _G.print
+    _G.print = function() end
+    local result = fn()
+    _G.print = realPrint
+    return result
+end
+
+setupNS.db = { profiles = {}, addonVersions = {}, perChar = {} }
+_G.EllesmereUIDB = { profiles = {} }
+check(setupNS.SetupAddon("EllesmereUI", true) ~= false, "import: the EllesmereUI import succeeds")
+eq(_G.EllesmereUIDB.spellUprank and _G.EllesmereUIDB.spellUprank.enabled, true, "import: the import sets the switches")
+
+importAccepted = false
+setupNS.db = { profiles = {}, addonVersions = {}, perChar = {} }
+_G.EllesmereUIDB = { profiles = {} }
+eq(quietly(function() return setupNS.SetupAddon("EllesmereUI", true) end), false, "import: a refused import fails")
+eq(_G.EllesmereUIDB.spellUprank, nil, "import: a refused import sets no switch")
+importAccepted = true
+
+_G.EllesmereUIDB = { profiles = { KitnUI = {} } }
+check(setupNS.SetupAddon("EllesmereUI", false) ~= false, "import: the load succeeds")
+eq(_G.EllesmereUIDB.spellUprank, nil, "import: a load sets no switch")
+eq(imports, 2, "import: the load imports nothing")
+setupNS.IS_FOREVER = false
+
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
     os.exit(1)

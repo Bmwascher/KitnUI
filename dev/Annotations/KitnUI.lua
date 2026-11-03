@@ -18,6 +18,7 @@
 ---@field version string        # addon version (TOC metadata, "2.0" fallback)
 ---@field FONT string           # Expressway font path
 ---@field IS_FOREVER boolean    # running on the WoW Forever client (interface 16000-19999)
+---@field ApplyForeverEssentials fun()   # Forever only: sets the Forever Essentials switches on an EllesmereUI import
 ---@field data table<string, any>   # per-addon profile payloads (Data/*.lua)
 ---@field db KitnUIDB               # SavedVariables (KitnUIDB)
 ---@field Wizard KitnUIWizard       # installer wizard singleton
