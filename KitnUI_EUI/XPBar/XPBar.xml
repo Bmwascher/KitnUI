@@ -6,4 +6,5 @@
     <Script file="Data.lua" />
     <Script file="Session.lua" />
     <Script file="Existing.lua" />
+    <Script file="Render.lua" />
 </Ui>
