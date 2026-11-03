@@ -1629,9 +1629,8 @@ end
 -- these with a dedicated addon or leaves the job to Blizzard. Disabling Blizz
 -- UI Enhanced also takes its Dragon Riding skin, which lives in the same folder.
 --
--- DataBars is the "leaves the job to Blizzard" case: the Edit Mode payload
--- already places Blizzard's own StatusTrackingBarManager, so the module is a
--- second experience and reputation bar competing with the one KitnUI ships.
+-- DataBars is EllesmereUI's information bar (clock, gold and similar blocks),
+-- a second bar doing the job of the Top Bar KitnUI ships.
 local ALWAYS_DISABLED = {
     "EllesmereUIQoL",
     "EllesmereUIAuraBuffReminders",
