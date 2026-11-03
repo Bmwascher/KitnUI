@@ -134,6 +134,18 @@ eq(count(E, "RegisterModule"), 0, "nothing registers through the panel's own mod
 eq(#E.ADDON_GROUPS, 0, "nothing is written into the panel's sidebar groups")
 eq(E._addonInfoByFolder, nil, "nor into its sidebar info table")
 eq(E._syncExempt, nil, "nor into its sync exemptions")
+eq(ns.EUIPageOrder and ns.EUIPageOrder[#ns.EUIPageOrder], "XP Bar", "XP Bar is the last page")
+if spec then
+    local m = spec.modules and spec.modules[1] or {}
+    local restored = 0
+    local function xpHeader() end
+    ns.XPBar = { BuildPreviewHeader = xpHeader, PreviewRestore = function() restored = restored + 1 end }
+    eq(m.getHeaderBuilder and m.getHeaderBuilder("XP Bar"), xpHeader, "the XP Bar page supplies its preview header")
+    if m.onPageCacheRestore then m.onPageCacheRestore("XP Bar") end
+    eq(restored, 1, "and restores its preview on a cached revisit")
+    eq(m.getHeaderBuilder and m.getHeaderBuilder("General"), nil, "a page without a preview supplies no header")
+    ns.XPBar = nil
+end
 
 local key = "plugin:KitnUI:" .. ((spec and spec.modules and spec.modules[1] and spec.modules[1].key) or "?")
 E.calls = {}
@@ -168,6 +180,117 @@ E.calls = {}
 _G.KitnCommands.options()
 eq(count(E, "ShowModule"), 0, "/kitn options opens nothing there")
 check(printed[1] and printed[1]:find("needs EllesmereUI 9.4", 1, true), "and says the tab needs a newer EllesmereUI", printed[1])
+
+---------------------------------------------------------------------------------
+-- XP and faction bar defaults
+---------------------------------------------------------------------------------
+
+for _, forever in ipairs({ true, false }) do
+    core.IS_FOREVER = forever
+    local defaults = boot(newEUI(true)).EUI_DEFAULTS or {}
+    local client = forever and "Forever" or "retail"
+    eq(defaults.xpEnabled, forever, "the XP bar's default on " .. client)
+    eq(defaults.fbEnabled, forever, "the faction bar's default on " .. client)
+end
+core.IS_FOREVER = nil
+local booted = boot(newEUI(true))
+local xpDefaults = booted.EUI_DEFAULTS or {}
+eq(xpDefaults.xpFrameStyle, "", "the XP bar's frame style defaults to the client's own")
+eq(xpDefaults.fbFrameStyle, "", "and the faction bar's")
+eq(xpDefaults.xpTexture, "KitnUI", "the XP bar's texture defaults to KitnUI's own")
+eq(xpDefaults.fbTexture, "KitnUI", "the faction bar's texture defaults to KitnUI's own")
+eq(xpDefaults.xpWidth, 600, "the XP bar defaults to 600 wide")
+eq(xpDefaults.xpHeight, 30, "the XP bar defaults to 30 high")
+eq(xpDefaults.fbWidth, 600, "the reputation bar defaults to 600 wide, as the XP bar")
+eq(xpDefaults.fbHeight, 27, "the reputation bar defaults to 27 high")
+eq(xpDefaults.fbFillMode, "standing", "the reputation bar defaults to Standing Color")
+eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
+for _, stem in ipairs({ "xpAmount", "xpLevelTime", "xpSessionTime", "xpRate", "xpCompRested", "fbName", "fbAmount" }) do
+    eq(xpDefaults[stem .. "OffX"], 0, "the default " .. stem .. "OffX leaves the text where it was")
+    eq(xpDefaults[stem .. "OffY"], 0, "the default " .. stem .. "OffY leaves the text where it was")
+end
+for defaultKey, defaultValue in pairs(xpDefaults) do
+    local prefix = type(defaultKey) == "string" and defaultKey:sub(1, 2)
+    if prefix == "xp" or prefix == "fb" then
+        check(type(defaultValue) ~= "table", "the default " .. defaultKey .. " is a scalar")
+    end
+end
+eq(xpDefaults.xpPos, nil, "the XP bar's position has no default")
+eq(xpDefaults.fbPos, nil, "nor the faction bar's")
+
+---------------------------------------------------------------------------------
+-- Helpers the XP bars read
+---------------------------------------------------------------------------------
+
+check(type(booted.EUIActiveProfileName) == "function" and type(booted.EUIActiveProfileName()) == "string",
+    "Core publishes the active profile's name")
+local tipFn = booted.EUIOwnershipTip or function() return "" end
+local tip = tipFn("Base.", "xpbar", true, "the bar", function() return true end)
+check(tip:find("is holding the bar", 1, true) ~= nil, "an ownership tip takes the caller's own holding test", tip)
+tip = tipFn("Base.", "xpbar", true, "the bar", function() return false end)
+check(tip:find("not holding the bar", 1, true) ~= nil, "and says so when the caller's test holds nothing", tip)
+
+-- The load's start, captured once on the first PLAYER_ENTERING_WORLD.
+local realGetTime = _G.GetTime
+_G.GetTime = function() return 500 end
+_G.UnitXP = function() return 100 end
+_G.UnitXPMax = function() return 1000 end
+_G.UnitLevel = function() return 10 end
+local seen
+if booted.EUIWhenLoginKnown then booted.EUIWhenLoginKnown(function(kind) seen = kind end) end
+eq(seen, nil, "a login waiter waits for PLAYER_ENTERING_WORLD")
+for _, h in ipairs(loginHandlers) do
+    if h.frame.events.PLAYER_ENTERING_WORLD then
+        local ok, why = pcall(h.fn, h.frame, "PLAYER_ENTERING_WORLD", true, false)
+        check(ok, "PLAYER_ENTERING_WORLD runs without an error", why)
+    end
+end
+eq(seen, "login", "a login waiter runs with the load's kind")
+eq(booted.EUILoginKind, "login", "the load's kind is a login")
+local start = booted.EUILoadStart or {}
+eq(start.time, 500, "the load's start time is captured")
+eq(start.xp, 100, "with the XP")
+eq(start.max, 1000, "the level's total")
+eq(start.level, 10, "and the level")
+_G.GetTime, _G.UnitXP, _G.UnitXPMax, _G.UnitLevel = realGetTime, nil, nil, nil
+
+-- A reload flag that is secret counts as a login. The capture reads GetTime,
+-- which the line above has just put back to its plain-Lua nil.
+local SECRET_FLAG = {}
+_G.issecretvalue = function(v) return v == SECRET_FLAG end
+_G.GetTime = function() return 600 end
+local secretBoot = boot(newEUI(true))
+for _, h in ipairs(loginHandlers) do
+    if h.frame.events.PLAYER_ENTERING_WORLD then
+        local ok, why = pcall(h.fn, h.frame, "PLAYER_ENTERING_WORLD", false, SECRET_FLAG)
+        check(ok, "PLAYER_ENTERING_WORLD with a secret reload flag runs without an error", why)
+    end
+end
+eq(secretBoot.EUILoginKind, "login", "a secret reload flag counts as a login")
+eq(secretBoot.EUILoadStart and secretBoot.EUILoadStart.time, 600, "a secret reload flag: the load's start is still captured")
+_G.issecretvalue, _G.GetTime = nil, realGetTime
+
+-- The contents generation, bumped by the two hooks that replace a profile's
+-- contents and by nothing else.
+local hookFns = {}
+local realHook = _G.hooksecurefunc
+_G.hooksecurefunc = function(_, name, fn)
+    hooked[name] = true
+    hookFns[name] = fn
+end
+local genE = newEUI(true)
+genE.ApplyProfileData = function() end
+genE.OnSpecSwitchComplete = function() end
+local genNs = boot(genE)
+_G.hooksecurefunc = realHook
+local genOf = genNs.EUIProfileGeneration or function() return -1 end
+local g0 = genOf()
+if hookFns.ApplyProfileData then hookFns.ApplyProfileData({ addons = {} }) end
+eq(genOf(), g0 + 1, "an import into the active profile bumps the contents generation")
+if hookFns.SwitchProfile then hookFns.SwitchProfile("Other") end
+eq(genOf(), g0 + 2, "and so does a profile switch")
+if hookFns.OnSpecSwitchComplete then hookFns.OnSpecSwitchComplete() end
+eq(genOf(), g0 + 2, "a spec switch alone does not")
 
 io.write(string.format("%d checks, %d failures\n", checks, failures))
 os.exit(failures == 0 and 0 or 1)

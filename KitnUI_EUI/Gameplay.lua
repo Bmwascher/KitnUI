@@ -297,6 +297,10 @@ local function ApplyModeStored(settings, mode)
     settings.combatShowEnabled = (mode == "in_combat")
 end
 
+-- Published for the XP bars' restore into an action bar module that is not
+-- loaded.
+ns.EUIApplyVisModeStored = ApplyModeStored
+
 -- The OFF path for a module that is not loaded, kept separate from the live one
 -- because the table it works on is not the same kind of table.
 --
