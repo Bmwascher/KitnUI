@@ -596,6 +596,46 @@ state.layer = nil
 untouched("B")
 
 ---------------------------------------------------------------------------------
+-- B2: on Forever the client's own spec ID reads as the retail spec EllesmereUI
+-- translates it to. B3: without the translation there is no live hold, and no
+-- error.
+---------------------------------------------------------------------------------
+
+local FOREVER_SPEC = 1487
+local function inAnyGroup() return true end
+local predicateSeen
+
+fresh()
+core.IS_FOREVER = true
+EUI._SO_InAnyGroup = inAnyGroup
+EUI.SpecFor = function(raw, pred)
+    predicateSeen = pred
+    if raw == FOREVER_SPEC then return 262 end
+    return raw
+end
+EUI._specID = FOREVER_SPEC
+ns.SetBiteMode(true)
+eq(A(262), 0, "B2: the claim holds spec 262's map")
+eq(bars[3].addOffsetY, 0, "B2: the Forever spec reads as 262, so the held value is live")
+eq(predicateSeen, inAnyGroup, "B2: the translation is asked with the spec-override predicate")
+ns.SetBiteMode(false)
+eq(bars[3].addOffsetY, 21, "B2: the release gives the live value back")
+
+fresh()
+core.IS_FOREVER = true
+EUI._SO_InAnyGroup = inAnyGroup
+EUI.SpecFor = nil
+EUI._specID = FOREVER_SPEC
+local biteOk = pcall(ns.SetBiteMode, true)
+check(biteOk, "B3: with no translation the switch raises nothing")
+eq(bars[3].addOffsetY, 21, "B3: with no translation the Forever spec is no swap spec")
+ns.SetBiteMode(false)
+
+core.IS_FOREVER = nil
+EUI._SO_InAnyGroup = nil
+EUI.SpecFor = nil
+
+---------------------------------------------------------------------------------
 -- C: the release with the panel closed
 ---------------------------------------------------------------------------------
 
