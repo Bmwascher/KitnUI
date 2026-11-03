@@ -17,6 +17,17 @@
 
 - New K icon in the addon list, purple fading to pink
 
+### WoW Forever
+
+- KitnUI and its EllesmereUI tab load on WoW Forever, installing the retail
+  profiles until Forever ones are ready
+- On Forever, the EllesmereUI step turns on ten Forever Essentials, among
+  them spell upranking, quest rewards, map reveal and the junk list (which
+  clears junk only when your bags are nearly full), and turns off six more
+- On Forever, the Top Bar hides the portal, vault, housing and journal
+  buttons, and the achievements button opens the Legacy window
+- Bite Mode and **Update Profile** read your spec correctly on Forever
+
 ---
 
 ## v2.2.1
