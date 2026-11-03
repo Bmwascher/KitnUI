@@ -161,23 +161,12 @@ local euiTocLines = readLines("KitnUI_EUI/KitnUI_EUI.toc") or {}
 check(hasLine(tocLines, "## Interface: 120105, 16001"), "toc: KitnUI lists retail and Forever")
 check(hasLine(euiTocLines, "## Interface: 120105, 16001"), "toc: KitnUI_EUI lists retail and Forever")
 
-local FOREVER_MANIFEST_LINE = "Data\\Data-Forever.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]"
-local retailManifestAt, foreverManifestAt
-for i, line in ipairs(tocLines) do
-    if line == "Data\\Data.xml" then retailManifestAt = i end
-    if line == FOREVER_MANIFEST_LINE then foreverManifestAt = i end
-end
-check(foreverManifestAt ~= nil, "toc: the Forever manifest is tagged to load on Forever only")
-check(retailManifestAt ~= nil and foreverManifestAt ~= nil and foreverManifestAt > retailManifestAt,
-    "toc: it loads after the retail manifest, so its payloads replace the retail ones")
+check(hasLine(tocLines, "Data\\Data.xml [AllowLoadGameType standard]"),
+    "toc: the retail manifest is tagged to load on retail only")
+check(hasLine(tocLines, "Data\\Data-Forever.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]"),
+    "toc: the Forever manifest is tagged to load on Forever only")
+check(not hasLine(tocLines, "Data\\Data.xml"), "toc: no untagged manifest loads on both clients")
 
--- Every Forever payload file ships with its step's Forever version line, and
--- every Forever version line belongs to a step a Forever file ships. A file
--- belongs to the versioned keys it assigns; its other keys (BigWigs_Bosses,
--- Blizzard_EditMode_Lulu) share that step's version. Blizzard CDM fingerprints
--- its strings and has no line. Every read goes through the shipped lookup, so
--- an empty line counts as none here exactly as it does in game, and any
--- non-empty value is a valid version.
 local function payloadFiles(manifestPath)
     local files = {}
     for _, line in ipairs(readLines(manifestPath) or {}) do
@@ -215,48 +204,57 @@ for _, line in ipairs(tocLines) do
     end
 end
 local tocRetail = loadCore(120105)
-local tocForever = loadCore(16001)
 
-local function versioned(key) return tocRetail.GetAddonDataVersion(key) ~= nil end
-
--- A player who imported the retail string on Forever holds the retail version,
--- and the update offer needs a different one, so a Forever line that repeats
--- its retail line counts as none.
-local function hasForeverLine(key)
-    local retailVersion = tocRetail.GetAddonDataVersion(key)
-    return retailVersion ~= nil and tocForever.GetAddonDataVersion(key) ~= retailVersion
+-- Each client loads only its own manifest, so every retail payload has a
+-- Forever file at the same path under Data/Forever/ assigning the same keys.
+-- Their strings may differ: a Forever export replaces its copy.
+local function keyList(data)
+    local keys = {}
+    for key in pairs(data) do keys[#keys + 1] = key end
+    table.sort(keys)
+    return table.concat(keys, ",")
 end
 
-local shippedOnForever = {}
-for _, payloadFile in ipairs(foreverFiles) do
-    local owners = 0
+local foreverByPath = {}
+for _, payloadFile in ipairs(foreverFiles) do foreverByPath[payloadFile.path] = payloadFile end
+for _, payloadFile in ipairs(retailFiles) do
+    local foreverPath = (payloadFile.path:gsub("^Data/", "Data/Forever/"))
+    local foreverFile = foreverByPath[foreverPath]
+    check(foreverFile ~= nil, "pairing: " .. payloadFile.path .. " has a Forever file at " .. foreverPath)
+    if foreverFile then
+        eq(keyList(foreverFile.data), keyList(payloadFile.data),
+            "pairing: " .. foreverPath .. " assigns the same keys as its retail file")
+    end
+end
+eq(#foreverFiles, #retailFiles, "pairing: the Forever manifest lists one file per retail payload")
+
+-- A retail version bump must never offer Forever an update its own string did
+-- not get, so every versioned step has its own Forever line. Read with the
+-- retail lines removed, so the shipped fallback cannot answer for a missing
+-- one. Keys that share a step's version (BigWigs_Bosses,
+-- Blizzard_EditMode_Lulu) and Blizzard CDM, which fingerprints its strings,
+-- have no line.
+local versionedKeys = {}
+for _, payloadFile in ipairs(retailFiles) do
     for key in pairs(payloadFile.data) do
-        if versioned(key) then
-            owners = owners + 1
-            shippedOnForever[key] = true
-            check(hasForeverLine(key),
-                "pairing: " .. payloadFile.path .. " ships " .. key .. " with a Forever version line that differs from its retail line")
-        end
+        if tocRetail.GetAddonDataVersion(key) ~= nil then versionedKeys[#versionedKeys + 1] = key end
     end
-    check(owners > 0 or payloadFile.data.BlizzardCDM ~= nil,
-        "pairing: " .. payloadFile.path .. " assigns a versioned step or Blizzard CDM")
 end
 
-local stepKeys = {}
-for _, files in ipairs({ retailFiles, foreverFiles }) do
-    for _, payloadFile in ipairs(files) do
-        for key in pairs(payloadFile.data) do stepKeys[key] = true end
+local retailLines = {}
+for header, value in pairs(metadata) do
+    if header:match("^X%-.-%-Version$") and not header:match("%-Forever%-Version$") then
+        retailLines[header] = value
     end
 end
-local linesRead = 0
-for key in pairs(stepKeys) do
-    if hasForeverLine(key) then
-        linesRead = linesRead + 1
-        check(shippedOnForever[key], "pairing: the Forever version line for " .. key .. " has a Forever payload")
-    end
+local foreverOnly = loadCore(16001)
+for header in pairs(retailLines) do metadata[header] = nil end
+
+for _, key in ipairs(versionedKeys) do
+    check(foreverOnly.GetAddonDataVersion(key) ~= nil, "versions: " .. key .. " has a Forever version line")
 end
-eq(linesRead, foreverLineCount,
-    "pairing: every non-empty Forever version line names a step and differs from its retail line")
+for header, value in pairs(retailLines) do metadata[header] = value end
+eq(#versionedKeys, foreverLineCount, "versions: every non-empty Forever version line names a versioned step")
 
 ---------------------------------------------------------------------------------
 -- The Forever Essentials switches

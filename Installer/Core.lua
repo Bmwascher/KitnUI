@@ -129,8 +129,8 @@ local addonVersionHeaders = {
 -- fingerprinting the string it ships -- see the block below.
 
 -- Forever reads its own line first, so an update to one client's string never
--- prompts the other. A key with no Forever line reads the retail one, because
--- Forever then ships the retail string. Built from the retail names, so every
+-- prompts the other. A key with no Forever line falls back to the retail one,
+-- though every shipped step has one. Built from the retail names, so every
 -- step has a Forever name and the read below never passes a nil header.
 local addonForeverVersionHeaders = {}
 for addonKey, header in pairs(addonVersionHeaders) do
