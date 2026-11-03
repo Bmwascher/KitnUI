@@ -160,6 +160,8 @@ for _, file in ipairs(files) do load("KitnUI_EUI/XPBar/" .. file) end
 local X = ns.XPBar
 check(type(X) == "table" and type(X.Apply) == "function", "the XP Bar module loads with its Apply funnel")
 check(type(ns.EUIPages) == "table" and type(ns.EUIPages["XP Bar"]) == "function", "the XP Bar page registers its builder")
+check(type(X.BuildPreviewHeader) == "function" and type(X.PreviewRefresh) == "function"
+    and type(X.PreviewRestore) == "function", "the XP Bar page has its preview header")
 if not (type(X) == "table" and type(X.Apply) == "function") then finish() end
 
 local XP_EVENTS = {
@@ -206,6 +208,20 @@ ok, why = pcall(X.SetHideExisting, "xp", true)
 check(ok, "and so does the click back", why)
 combat = false
 quiet("a Hide Existing click in combat with both bars off")
+
+-- Opening the XP Bar page with both bars off: the preview draws its sample
+-- bars, which are options-page frames, and starts nothing.
+ok, why = pcall(X.BuildPreviewHeader, Obj("Frame"), 800)
+check(ok, "the preview opens with both bars off", why)
+eq(#timers, 0, "preview with both bars off: no timer")
+eq(eventNames(), "PLAYER_ENTERING_WORLD,PLAYER_LOGIN", "preview with both bars off: only Core's boot events")
+check(next(updaters) == nil, "preview with both bars off: no visibility updater")
+eq(unlocks, 0, "preview with both bars off: no Unlock Mode element")
+eq(accents, 0, "preview with both bars off: no accent callback")
+local previewFrames = #frames
+ok, why = pcall(X.PreviewRefresh)
+check(ok, "preview with both bars off: a redraw runs without a Lua error", why)
+eq(#frames, previewFrames, "preview with both bars off: a redraw creates no frame")
 
 ---------------------------------------------------------------------------------
 -- The XP bar alone

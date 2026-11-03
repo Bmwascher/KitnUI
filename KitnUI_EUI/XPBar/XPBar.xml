@@ -9,4 +9,5 @@
     <Script file="Render.lua" />
     <Script file="Bar.lua" />
     <Script file="Options.lua" />
+    <Script file="Preview.lua" />
 </Ui>
