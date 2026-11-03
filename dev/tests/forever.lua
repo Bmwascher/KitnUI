@@ -391,6 +391,88 @@ eq(_G.EllesmereUIDB.spellUprank, nil, "import: a load sets no switch")
 eq(imports, 2, "import: the load imports nothing")
 setupNS.IS_FOREVER = false
 
+---------------------------------------------------------------------------------
+-- The Top Bar on each client
+---------------------------------------------------------------------------------
+
+-- A fresh registry per client, with the frames that load created.
+local function loadElements(isForever)
+    local first = #frames + 1
+    local elementsNS = {
+        EUI_INERT = false,
+        EUI_TB_DEFAULT_ORDER = {},
+        IS_FOREVER = isForever,
+        TopBar = { Apply = function() end },
+    }
+    local chunk, err = loadfile("KitnUI_EUI/TopBar/Elements.lua")
+    if not chunk then
+        print("FAIL  could not load KitnUI_EUI/TopBar/Elements.lua: " .. tostring(err))
+        os.exit(1)
+    end
+    chunk("KitnUI_EUI", elementsNS)
+    local made = {}
+    for i = first, #frames do made[#made + 1] = frames[i] end
+    return elementsNS.TopBar.ById, made
+end
+
+local function macroText(el)
+    local button = { attributes = {} }
+    function button:SetAttribute(name, value) self.attributes[name] = value end
+    el.attrs(button)
+    return button.attributes.macrotext1
+end
+
+local function housingEvents(made)
+    for _, frame in ipairs(made) do
+        if frame.events.PLAYER_HOUSE_LIST_UPDATED then return frame.events end
+    end
+    return nil
+end
+
+local function onBar(el)
+    if not el.requires then return true end
+    return el.requires() and true or false
+end
+
+local HIDDEN_ON_FOREVER = { "portals", "vault", "home", "journal" }
+local HOUSING_EVENTS = { "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_HOUSE_LIST_UPDATED",
+    "HOUSE_PLOT_ENTERED", "HOUSE_PLOT_EXITED" }
+
+-- A host season list, so portals has a list to show on retail even in a
+-- season where KitnUI's own table is emptied to defer to the host's.
+_G.EllesmereUI.SEASON_PORTALS = { { spellID = 1, short = "T", mapID = 1, names = { "test" } } }
+_G.LEGACY_BUTTON = "Legacy"
+
+local retailBar, retailFrames = loadElements(nil)
+eq(macroText(retailBar.achievements), "/click AchievementMicroButton", "topbar: retail achievements is unchanged")
+eq(retailBar.achievements.label, "Achievements", "topbar: retail keeps the Achievements name")
+eq(macroText(retailBar.talents), "/click PlayerSpellsMicroButton", "topbar: retail talents is unchanged")
+for _, id in ipairs(HIDDEN_ON_FOREVER) do
+    eq(onBar(retailBar[id]), true, "topbar: retail shows " .. id)
+end
+local retailEvents = housingEvents(retailFrames)
+check(retailEvents ~= nil, "topbar: retail registers the housing watcher")
+for _, event in ipairs(HOUSING_EVENTS) do
+    eq(retailEvents and retailEvents[event], true, "topbar: the retail watcher has " .. event)
+end
+
+local foreverBar, foreverFrames = loadElements(true)
+eq(macroText(foreverBar.achievements), "/click LegacyMicroButton", "topbar: Forever achievements opens Progress Legacy")
+eq(foreverBar.achievements.label, "Legacy", "topbar: Forever names it as its own button does")
+eq(macroText(foreverBar.talents), "/click TalentMicroButton", "topbar: Forever talents clicks its talent button")
+for _, id in ipairs(HIDDEN_ON_FOREVER) do
+    eq(onBar(foreverBar[id]), false, "topbar: Forever hides " .. id)
+end
+eq(housingEvents(foreverFrames), nil, "topbar: Forever registers no housing events")
+for _, id in ipairs({ "friends", "guild", "groupfinder", "toybox", "character", "spellbook",
+    "professions", "volume", "euiconfig", "gamemenu" }) do
+    eq(foreverBar[id] and onBar(foreverBar[id]), true, "topbar: Forever still shows " .. id)
+end
+
+_G.LEGACY_BUTTON = nil
+local unnamedBar = loadElements(true)
+eq(unnamedBar.achievements.label, "Achievements", "topbar: with no Forever name the button keeps Achievements")
+
 if failures > 0 then
     print(failures .. " of " .. checks .. " checks FAILED")
     os.exit(1)
