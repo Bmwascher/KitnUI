@@ -8,6 +8,20 @@
   background, and the title is centered with the small sidebar cat removed
 - The icon beside each page title is the new purple-to-pink K
 
+### XP Bar
+
+- **NEW:** KitnUI draws its own XP bar and Reputation Bar, set up on an
+  **XP Bar** tab in KitnUI's EllesmereUI page with a live, clickable preview.
+  Both are off by default on retail and on by default on WoW Forever
+- **NEW:** The XP bar shows completed-quest and rested XP, time this level
+  and this session, your leveling rate, and a tooltip with kills to level
+- **NEW:** The Reputation Bar follows your watched reputation, your delve
+  companion or one you pin, in its standing color by default
+- **NEW:** Hide Existing hides Blizzard's tracking bar or EllesmereUI's own
+  XP and reputation bars, and gives them back when you turn it off
+- **NEW:** Frame styles, fill styles, dividers, text positions and offsets,
+  and every size are settings; move and resize both bars in Unlock Mode
+
 ### Options Themes
 
 - The KitnUI options backgrounds carry the same redrawn cat and centered
