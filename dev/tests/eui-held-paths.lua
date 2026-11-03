@@ -56,7 +56,7 @@ _G.EllesmereUI = { Lite = { _dbRegistry = {
 } } }
 
 local PAGE_FILES = { "KitnUI_EUI/Lulu.lua", "KitnUI_EUI/Bite.lua", "KitnUI_EUI/General.lua",
-    "KitnUI_EUI/Gameplay.lua", "KitnUI_EUI/Nameplates.lua" }
+    "KitnUI_EUI/Gameplay.lua", "KitnUI_EUI/Nameplates.lua", "KitnUI_EUI/XPBar/Existing.lua" }
 local ns = {}
 for _, file in ipairs({ "KitnUI_EUI/Core.lua", unpack(PAGE_FILES) }) do
     local chunk, err = loadfile(file)
@@ -148,6 +148,16 @@ sameSet(heldFor("lulu", "KitnUI", { minimapShape = { prev = "square" }, clockOff
     { "addons.EllesmereUIMinimap.minimap.shape", "addons.EllesmereUIMinimap.minimap.clockOffsetY" }, "lulu minimap")
 sameSet(heldFor("nameplates", "KitnUI", { euiArrows = { prev = true } }),
     { "addons.EllesmereUINameplates.showTargetArrows" }, "target arrows")
+sameSet(heldFor("xpbar", "KitnUI", { xp = { prev = { mouseover = true } } }), {
+    "addons.EllesmereUIActionBars.bars.XPBar.barVisibility",
+    "addons.EllesmereUIActionBars.bars.XPBar.alwaysHidden",
+    "addons.EllesmereUIActionBars.bars.XPBar.mouseoverEnabled",
+    "addons.EllesmereUIActionBars.bars.XPBar.mouseoverAlpha",
+    "addons.EllesmereUIActionBars.bars.XPBar._savedBarAlpha",
+    "addons.EllesmereUIActionBars.bars.XPBar.combatHideEnabled",
+    "addons.EllesmereUIActionBars.bars.XPBar.combatShowEnabled",
+    "addons.EllesmereUIActionBars.bars.XPBar.visibilityModes",
+}, "xp bar hide")
 
 sameSet(heldFor("bite", "KitnUI", { showSpellText = {} }), {}, "a released note holds nothing")
 sameSet(heldFor("nameplates", BACKUP, { euiArrows = { prev = true } }),
