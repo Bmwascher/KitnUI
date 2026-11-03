@@ -83,13 +83,21 @@ end
 -- First position
 ---------------------------------------------------------------------------------
 
+-- nil for a secret value, the value otherwise.
+local function Plain(v)
+    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 -- A frame's live center on screen, in UIParent's units, whatever it is
--- anchored to; nil when it has no rect.
+-- anchored to; nil when it has no rect or any part of it is secret.
 local function ScreenCenter(frame)
     if not (frame and frame.GetCenter and frame.GetEffectiveScale) then return nil end
     local ok, x, y = pcall(frame.GetCenter, frame)
-    if not ok or type(x) ~= "number" or type(y) ~= "number" then return nil end
-    local s, u = frame:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    if not ok then return nil end
+    x, y = Plain(x), Plain(y)
+    if type(x) ~= "number" or type(y) ~= "number" then return nil end
+    local s, u = Plain(frame:GetEffectiveScale()), Plain(UIParent:GetEffectiveScale())
     if type(s) ~= "number" or type(u) ~= "number" or u <= 0 then return nil end
     return x * s / u, y * s / u
 end

@@ -15,6 +15,12 @@ local M = X.Math
 
 local format, floor, max, min = string.format, math.floor, math.max, math.min
 
+-- nil for a secret value, the value otherwise.
+local function Plain(v)
+    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 ---------------------------------------------------------------------------------
 -- Storage helpers: the only functions that touch an xp* or fb* key.
 ---------------------------------------------------------------------------------
@@ -323,7 +329,7 @@ end
 -- switches: at max level only the session time is drawn.
 function X.UpdateClock()
     local w = widgets.xp
-    local need = active and w and w.frame:IsShown() and X.XPEnabled()
+    local need = active and w and Plain(w.frame:IsShown()) == true and X.XPEnabled()
         and (xpData.levelTime or xpData.sessionTime or xpData.rate) ~= nil
     if not need then
         if clock then
@@ -432,7 +438,7 @@ end
 local function DropTooltips()
     if not (GameTooltip and GameTooltip.IsOwned) then return end
     for kind, w in pairs(widgets) do
-        if GameTooltip:IsOwned(w.frame) and not (w.frame:IsShown() and TipAllowed(kind)) then
+        if GameTooltip:IsOwned(w.frame) and not (Plain(w.frame:IsShown()) == true and TipAllowed(kind)) then
             GameTooltip:Hide()
         end
     end

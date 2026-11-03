@@ -356,6 +356,23 @@ for fn in pairs(updaters) do fn() end
 combat = false
 check(tipHidden, "combat starts: the open XP tooltip comes down")
 
+-- A shown state that is secret counts as hidden: the open tooltip comes down
+-- and the minute clock stops.
+local SECRET_STATE = {}
+_G.issecretvalue = function(v) return v == SECRET_STATE end
+local realIsShown = methods.IsShown
+methods.IsShown = function() return SECRET_STATE end
+tipHidden = false
+local canceledBefore = 0
+for _, t in ipairs(timers) do if t.canceled then canceledBefore = canceledBefore + 1 end end
+for fn in pairs(updaters) do fn() end
+local canceledAfter = 0
+for _, t in ipairs(timers) do if t.canceled then canceledAfter = canceledAfter + 1 end end
+check(tipHidden, "a secret shown state: the open XP tooltip comes down")
+check(canceledAfter > canceledBefore, "a secret shown state: the minute clock stops")
+methods.IsShown = realIsShown
+_G.issecretvalue = nil
+
 -- EllesmereUI's mouseover reveal enables the whole mouse, then shows the
 -- bar; on a bar already shown that Show runs no OnShow.
 check(xpFrame ~= nil and xpFrame.shown == true, "mouseover reveal: the XP bar is already shown")
@@ -447,5 +464,49 @@ drawTwice("profession frame and fill")
 check(lookups > 0, "profession frame and fill: the first draw looks its atlases up")
 settings.xpFrameStyle = "blizzard"
 drawTwice("Blizzard frame")
+
+---------------------------------------------------------------------------------
+-- Secret geometry
+---------------------------------------------------------------------------------
+
+-- A secret text width, frame level or visibility is never used: a text counts
+-- as no width, a level falls back to the bottom, and the preview does not
+-- redraw.
+local SECRET_WIDTH, SECRET_LEVEL, SECRET_VISIBLE = 5000, 7, {}
+_G.issecretvalue = function(v) return v == SECRET_WIDTH or v == SECRET_LEVEL or v == SECRET_VISIBLE end
+methods.GetStringWidth = function() return SECRET_WIDTH end
+methods.SetWidth = function(self, v) self.width = v end
+ok, why = pcall(X.Draw, atlasWidget, X.Get, atlasData)
+check(ok, "a secret text width: the draw runs", why)
+local capped = 0
+for _, fs in pairs(atlasWidget.texts) do
+    if (fs.width or 0) ~= 0 then capped = capped + 1 end
+end
+eq(capped, 0, "a secret text width: no text is capped by it")
+methods.GetStringWidth, methods.SetWidth = nil, nil
+
+local realLevel = methods.GetFrameLevel
+methods.GetFrameLevel = function() return SECRET_LEVEL end
+local levelWidget = X.NewWidget(_G.UIParent, "fb")
+eq(levelWidget.base, 0, "a secret frame level: a new bar's layers count from 0")
+local levels = {}
+methods.SetFrameLevel = function(_, v) levels[#levels + 1] = v end
+ok, why = pcall(X.BuildPreviewHeader, Obj("Frame"), 800)
+check(ok, "a secret frame level: the preview builds", why)
+eq(levels[1], 0, "a secret frame level: the preview's stage sits at the bottom")
+methods.GetFrameLevel, methods.SetFrameLevel = realLevel, nil
+
+local realVisible = methods.IsVisible
+methods.IsVisible = function() return SECRET_VISIBLE end
+local draws = 0
+local drawFn = X.Draw
+X.Draw = function(...)
+    draws = draws + 1
+    return drawFn(...)
+end
+ok, why = pcall(X.PreviewRefresh)
+check(ok, "a secret visibility: the refresh runs", why)
+eq(draws, 0, "a secret visibility: the preview does not redraw")
+X.Draw, methods.IsVisible, _G.issecretvalue = drawFn, realVisible, nil
 
 finish()

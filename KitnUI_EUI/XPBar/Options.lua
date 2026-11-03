@@ -11,6 +11,12 @@ if ns.EUI_INERT then return end
 ns.XPBar = ns.XPBar or {}
 local X = ns.XPBar
 
+-- nil for a secret value, the value otherwise.
+local function Plain(v)
+    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 -- values and order for a dropdown, from key, label pairs.
 local function Choices(...)
     local values, order = {}, {}
@@ -341,7 +347,8 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         -- would let the same click build a fresh one and show it again.
         pinControl:HookScript("OnMouseDown", function()
             local menu = pinControl._ddMenu
-            if menu and menu.IsShown and menu:IsShown() then return end
+            -- A shown state that cannot be read counts as open.
+            if menu and menu.IsShown and Plain(menu:IsShown()) ~= false then return end
             FillPinned(true)
             if pinControl._invalidateMenu then pcall(pinControl._invalidateMenu) end
         end)

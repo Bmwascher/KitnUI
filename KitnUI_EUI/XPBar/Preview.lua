@@ -14,6 +14,12 @@ local X = ns.XPBar
 local STAGE_PAD_Y = 14
 local BAR_GAP = 18
 
+-- nil for a secret value, the value otherwise.
+local function Plain(v)
+    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 -- wrap is UNSCALED and centered on the stage; content holds the fit scale at
 -- offset 0,0 inside it. An offset on a scaled frame is in its own scaled
 -- space, so the centering must not live on the scaled frame.
@@ -97,7 +103,7 @@ function X.BuildPreviewHeader(parent, width)
         end
     end
     stage:SetParent(parent)
-    stage:SetFrameLevel(math.max(0, wrap:GetFrameLevel() - 1))
+    stage:SetFrameLevel(math.max(0, (Plain(wrap:GetFrameLevel()) or 1) - 1))
     stage:ClearAllPoints()
     stage:SetPoint("TOP", parent, "TOP", 0, 0)
     stage:Show()
@@ -118,7 +124,7 @@ end
 -- screen: the accent callback reaches here from any page, and the shared
 -- header area may belong to another page.
 function X.PreviewRefresh()
-    if not content or not content:IsVisible() then return end
+    if not content or Plain(content:IsVisible()) ~= true then return end
     local h = Layout()
     if EllesmereUI and EllesmereUI.UpdateContentHeaderHeight then
         EllesmereUI:UpdateContentHeaderHeight(h)

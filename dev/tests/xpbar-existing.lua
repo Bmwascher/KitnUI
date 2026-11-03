@@ -550,5 +550,27 @@ settings.xpHideExisting = true
 eq(X.SeedPosition(), false, "seed, Blizzard's bars without a spot: nothing is stored")
 eq(settings.xpPos, nil, "seed, Blizzard's bars without a spot: the XP bar keeps its default")
 
+-- A secret center or scale is never used: the XP bar keeps its default.
+local SECRET = { [777.5] = true, [0.5] = true }
+_G.issecretvalue = function(v) return SECRET[v] == true end
+reset(); profile, eab = { useBlizzardDataBars = true }, nil
+settings.xpEnabled = true
+_G.MainStatusTrackingBarContainer = spot(777.5, 60)
+eq(X.SeedPosition(), false, "seed, a secret center: nothing is stored")
+_G.MainStatusTrackingBarContainer = { GetCenter = function() return 200, 30 end, GetEffectiveScale = function() return 0.5 end }
+eq(X.SeedPosition(), false, "seed, a secret scale: nothing is stored")
+_G.MainStatusTrackingBarContainer = spot(200, 30)
+_G.UIParent.GetEffectiveScale = function() return 0.5 end
+eq(X.SeedPosition(), false, "seed, a secret screen scale: nothing is stored")
+eq(settings.xpPos, nil, "seed, secret geometry: the XP bar keeps its default")
+_G.UIParent.GetEffectiveScale = function() return 1 end
+reset(); euiBars()
+settings.xpEnabled = true
+_G.EllesmereEAB_XPBar = spot(777.5, 60)
+X.SyncExisting("xp")
+eq(xpBar().barVisibility, "never", "seed, claim with a secret center: EllesmereUI's bar is still hidden")
+eq(settings.xpPos, nil, "seed, claim with a secret center: nothing is stored")
+_G.EllesmereEAB_XPBar, _G.MainStatusTrackingBarContainer, _G.issecretvalue = nil, nil, nil
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

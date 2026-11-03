@@ -15,6 +15,12 @@ local M = X.Math
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 
+-- nil for a secret value, the value otherwise.
+local function Plain(v)
+    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local PROF_FRAME = "Professions-skillbar-frame"
 local BLIZZ_BG, BLIZZ_MASK = "UI-HUD-CoolDownManager-Bar-BG", "UI-HUD-CoolDownManager-Bar"
@@ -160,7 +166,7 @@ end
 -- and no script: the caller adds what a live bar needs.
 function X.NewWidget(parent, kind)
     local frame = CreateFrame("Frame", nil, parent or UIParent)
-    local base = frame:GetFrameLevel()
+    local base = Plain(frame:GetFrameLevel()) or 0
     local w = { kind = kind, frame = frame, texts = {}, bars = {}, base = base }
     w.body = CreateFrame("Frame", nil, frame)
     w.body:SetFrameLevel(base + 1)
@@ -781,7 +787,8 @@ local function SetText(fs, text, font, size, flags)
 end
 
 local function TextWidth(fs)
-    local width = fs and fs:IsShown() and fs:GetStringWidth()
+    if not (fs and Plain(fs:IsShown()) == true) then return 0 end
+    local width = Plain(fs:GetStringWidth())
     return type(width) == "number" and width or 0
 end
 
