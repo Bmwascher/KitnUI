@@ -197,6 +197,13 @@ local booted = boot(newEUI(true))
 local xpDefaults = booted.EUI_DEFAULTS or {}
 eq(xpDefaults.xpFrameStyle, "", "the XP bar's frame style defaults to the client's own")
 eq(xpDefaults.fbFrameStyle, "", "and the faction bar's")
+eq(xpDefaults.xpTexture, "KitnUI", "the XP bar's texture defaults to KitnUI's own")
+eq(xpDefaults.fbTexture, "KitnUI", "the faction bar's texture defaults to KitnUI's own")
+eq(xpDefaults.xpWidth, 600, "the XP bar defaults to 600 wide")
+eq(xpDefaults.xpHeight, 30, "the XP bar defaults to 30 high")
+eq(xpDefaults.fbWidth, 400, "the faction bar defaults to 400 wide")
+eq(xpDefaults.fbHeight, 20, "the faction bar defaults to 20 high")
+eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
 for defaultKey, defaultValue in pairs(xpDefaults) do
     local prefix = type(defaultKey) == "string" and defaultKey:sub(1, 2)
     if prefix == "xp" or prefix == "fb" then
