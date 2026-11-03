@@ -416,13 +416,13 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
 
         Header("SESSION")
         Row(Toggle("Reset Session on Reload", "xpResetOnReload", "Starts a new session on every /reload instead of continuing it."),
-            { type = "labeledButton", text = "Reset XP Session Now", buttonText = "Reset", width = 100,
+            Toggle("Mute /played in Chat", "xpMutePlayed", "Keeps the played-time lines KitnUI asks for out of chat."))
+        Row({ type = "labeledButton", text = "Reset XP Session Now", buttonText = "Reset", width = 100,
               tooltip = "Sets this session's XP and time back to zero. The time this level is kept.",
               onClick = function()
                   X.ResetSession()
                   Changed()
               end })
-        Row(Toggle("Mute /played in Chat", "xpMutePlayed", "Keeps the played-time lines KitnUI asks for out of chat."), Spacer())
     end
 
     if showFB then
@@ -509,8 +509,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
           tooltip = "Both bars are moved and resized in EllesmereUI's Unlock Mode.",
           onClick = function()
               if EllesmereUI and EllesmereUI.OpenUnlockMode then pcall(EllesmereUI.OpenUnlockMode, EllesmereUI) end
-          end },
-        Spacer())
+          end })
 
     -- The search prebuild's rows are never on screen.
     if not prebuild then

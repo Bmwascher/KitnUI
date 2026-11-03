@@ -239,7 +239,7 @@ eq(#frames, previewFrames, "preview with both bars off: a redraw creates no fram
 -- builds only the selected bar's sections, and the search prebuild builds
 -- both; its one script hook goes on the faction view's Pinned dropdown, a
 -- control of the options window.
-local page = { hooks = {}, headers = {}, headerAt = {}, rows = {}, cogs = {}, texts = {}, mounts = 0 }
+local page = { hooks = {}, headers = {}, headerAt = {}, rows = {}, cogs = {}, texts = {}, full = {}, mounts = 0 }
 do
     local function Control()
         local c = Obj("Control")
@@ -279,7 +279,10 @@ do
             Touch(right)
             local row = { _leftRegion = { _control = Control() }, _rightRegion = { _control = Control() } }
             if type(right) == "table" and right.text then page.rows[right.text] = row end
-            if type(left) == "table" and left.text then page.rows[left.text] = row end
+            if type(left) == "table" and left.text then
+                page.rows[left.text] = row
+                page.full[left.text] = right == nil
+            end
             return row, 30
         end,
     }
@@ -296,7 +299,7 @@ do
 end
 local function buildPage(label)
     page.hooks, page.headers, page.headerAt, page.rows, page.cogs, page.touchErr = {}, {}, {}, {}, {}, nil
-    page.texts = {}
+    page.texts, page.full = {}, {}
     local height
     ok, why = pcall(function() height = ns.EUIPages["XP Bar"](Obj("Frame"), -10) end)
     check(ok, label .. ": the page builds", why)
@@ -332,6 +335,10 @@ check(has("FRAME") and has("FILL") and has("TEXT") and has("SIZE") and has("DIVI
 check(not has("REPUTATION SOURCE") and not has("REPUTATION DISPLAY"), "page, XP view: no faction section")
 check(has("POSITION"), "page, XP view: the position line")
 eq(factionWord(), nil, "page, XP view: no word on the page reads faction")
+check(page.rows["Reset Session on Reload"] ~= nil and page.rows["Reset Session on Reload"] == page.rows["Mute /played in Chat"],
+    "page, XP view: the two session switches share a row")
+eq(page.full["Reset XP Session Now"], true, "page, XP view: Reset XP Session Now has a row of its own")
+eq(page.full["Position: use EUI Unlock Mode"], true, "page, XP view: the Unlock Mode line has a row of its own")
 check(page.rows.Bar ~= nil, "page, XP view: without the header's picker the page carries its own")
 eq(#page.hooks, 0, "page, XP view: no script hook")
 eq(#frames, previewFrames, "page, XP view: no frame beyond the preview's own")
@@ -354,6 +361,7 @@ check(has("REPUTATION BAR") and has("REPUTATION VISIBILITY") and has("REPUTATION
     and has("FRAME") and has("DIVIDERS"), "page, faction view: the reputation bar's sections")
 check(not has("XP DISPLAY") and not has("SESSION"), "page, faction view: no XP section")
 eq(factionWord(), nil, "page, faction view: every label reads reputation, none faction")
+eq(page.full["Position: use EUI Unlock Mode"], true, "page, faction view: the Unlock Mode line has a row of its own")
 eq(#page.hooks, 1, "page, faction view: one script hook")
 eq(page.hooks[1] and page.hooks[1].name, "OnMouseDown", "page, faction view: on the Pinned dropdown's press")
 if page.hooks[1] then
