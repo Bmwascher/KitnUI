@@ -40,9 +40,13 @@ if [ -n "$(git diff --cached --name-only --diff-filter=AM -- "${eui_files[@]}")"
         echo "[pre-commit] BLOCKED: the Extra Frames clean of the EllesmereUI strings did not run." >&2
         exit 1
     fi
+    eui_reported=0
     for eui_data in "${eui_files[@]}"; do
         if ! git diff --quiet -- "$eui_data"; then
-            echo "$eui_out" >&2
+            if [ "$eui_reported" -eq 0 ]; then
+                echo "$eui_out" >&2
+                eui_reported=1
+            fi
             git add -- "$eui_data" || exit 1
             echo "[pre-commit] $eui_data cleaned and re-staged." >&2
         fi
