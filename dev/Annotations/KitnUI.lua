@@ -62,6 +62,13 @@
 ---@field LuluReconcile fun()   # prompts to apply and reload when Lulu reads on but its action bar half is not in force
 ---@field EUI_INERT boolean      # KitnUI_EUI only: set by its Core.lua when KitnUI's shared namespace is unreachable, and every other file in that addon stops on it
 ---@field TopBar KitnUITopBar    # KitnUI_EUI only: the Top Bar module (KitnUI_EUI/TopBar/), reached through the EXPORTS bridge in KitnUI_EUI/Core.lua
+---@field XPBar KitnUIXPBar      # KitnUI_EUI only: the XP and faction bars (KitnUI_EUI/XPBar/); nothing in KitnUI proper calls it, so it is not exported
+---@field EUILoginKind "login"|"reload"|nil   # KitnUI_EUI only: how this UI load began, set on the first PLAYER_ENTERING_WORLD
+---@field EUIWhenLoginKnown fun(fn: fun(kind: string))   # KitnUI_EUI only: runs fn(kind) now, or once the kind is known
+---@field EUIApplyVisModeStored fun(settings: table, mode: string)   # KitnUI_EUI only: Gameplay.lua's port of the action bar ApplyMode, for a module that is not loaded
+---@field EUIActiveProfileName fun(): string   # KitnUI_EUI only: the EllesmereUI profile the snapshot store keys by
+---@field EUIProfileGeneration fun(): number   # KitnUI_EUI only: moves on every switch or import that replaces the active profile's contents
+---@field EUILoadStart { time: number, xp: number?, max: number?, level: number? }?   # KitnUI_EUI only: when this UI load began (login or /reload) and the XP then, set on the first PLAYER_ENTERING_WORLD
 ---@field GetAddonDataVersion fun(addonKey: string): string?
 ---@field CanSkipStep fun(addonKey: string): boolean
 ---@field IsStepSkipped fun(addonKey: string): boolean
@@ -113,7 +120,7 @@ local KitnUINS
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field skipped table<string, string>?         # [addonKey] = shipped X-header version at the moment of the skip; absent on a DB from before the feature
 ---@field installedVersion string?
----@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, editModeApplied = boolean, layoutWatchOff = { [specIndex] = true } }
+---@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, editModeApplied = boolean, layoutWatchOff = { [specIndex] = true }, xp = { gained, lastXP, lastMax, lastLevel, lastWait, elapsed, savedAt, levelTime, levelOf, kills } }
 ---@field cdmLimitPending table<string, string[]>  # [charName-realm] = spec names the CDM layout cap blocked, raised as a popup at that character's next login
 ---@field devMode boolean
 ---@field dismissedVersion string?
@@ -187,3 +194,61 @@ local KitnUIWizard
 ---@field PreviewRefresh fun()   # rebuilds the preview's slot rows from current settings; a no-op unless the preview is mounted AND visible
 ---@field PreviewRestore fun()   # calls PreviewRefresh after an ordinary page revisit restores the cached header from _pageCache
 local KitnUITopBar
+
+-- XP and faction bars (KitnUI_EUI/XPBar/). KitnUI_EUI only. Every member is
+-- called dot-style.
+
+---@class KitnUIXPBar
+---@field Math table   # pure helpers (Math.lua)
+---@field Get fun(key: string, fallback: any): any   # falls back to ns.EUI_DEFAULTS
+---@field Set fun(key: string, v: any)
+---@field XPEnabled fun(): boolean
+---@field FactionEnabled fun(): boolean
+---@field SetXPEnabled fun(v: boolean)   # writes xpEnabled and applies with an "xp" claim
+---@field SetFactionEnabled fun(v: boolean)   # writes fbEnabled and applies with a "rep" claim
+---@field SetHideExisting fun(kind: "xp"|"rep", v: boolean)
+---@field RANGES table<string, number[]>
+---@field Apply fun(claim: "xp"|"rep"|nil)
+---@field ApplyVisibility fun()
+---@field UpdateClock fun()
+---@field Teardown fun()
+---@field WantedEvents fun(out: table, xpOn: boolean, fbOn: boolean, opts: table): table
+---@field XPView fun(raw: table, view: fun(key: string): any, out: table): table
+---@field FactionView fun(rec: table?, view: fun(key: string): any, out: table): table
+---@field ReadXP fun(): table
+---@field ScanQuestXP fun(): number, number
+---@field ResolveFaction fun(source: string, pinnedID: number?): table?
+---@field FactionName fun(id: number): string?
+---@field FactionCatalog fun(): table?, number[]?
+---@field ParseKillXP fun(text: any): number?
+---@field SessionStart fun(kind: string)
+---@field SessionSave fun()
+---@field SessionStop fun()
+---@field SessionListen fun(on: boolean)   # the XP bar's events are registered (true) or gone (false)
+---@field SessionElapsed fun(): number
+---@field SessionGained fun(): number
+---@field SessionStarted fun(): boolean
+---@field LevelTime fun(): number?
+---@field Kills fun(): number[]
+---@field OnXP fun()
+---@field OnLevelUp fun(newLevel: number?)
+---@field OnKill fun(xp: number)
+---@field OnPlayed fun(total: number?, thisLevel: number?)
+---@field ResetSession fun()
+---@field RequestPlayed fun()
+---@field SyncExisting fun(claim: "xp"|"rep"|nil, release: boolean?)
+---@field HoldsExisting fun(kind: "xp"|"rep"): boolean
+---@field UsesEUIBars fun(): boolean
+---@field SeedPosition fun(): boolean
+---@field PROFESSIONS string[]
+---@field StyleAvailable fun(style: string): boolean
+---@field ResolveStyle fun(stored: string?): string
+---@field ProfessionAvailable fun(name: string): boolean
+---@field LSMList fun(kind: string): string[]?
+---@field NewWidget fun(parent: table?, kind: "xp"|"fb"): table
+---@field Draw fun(w: table, view: fun(key: string): any, data: table)
+---@field PlayGain fun(w: table)
+---@field BuildPreviewHeader fun(parent: table, width: number): number
+---@field PreviewRefresh fun()
+---@field PreviewRestore fun()
+local KitnUIXPBar
