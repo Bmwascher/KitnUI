@@ -44,10 +44,10 @@ local DIV_V, DIV_O = Choices("off", "Off", "gaps", "20 Gaps", "lines", "Lines")
 local TICK_V, TICK_O = Choices("dashed", "Dashed", "dotted", "Dotted", "solid", "Solid", "none", "None")
 local OUTLINE_V, OUTLINE_O = Choices("", "EllesmereUI Outline", "NONE", "None", "OUTLINE", "Outline",
     "THICKOUTLINE", "Thick Outline")
-local SOURCE_V, SOURCE_O = Choices("watched", "Watched Faction", "companion", "Current Delve Companion",
-    "pinned", "Pinned Faction")
+local SOURCE_V, SOURCE_O = Choices("watched", "Watched Reputation", "companion", "Current Delve Companion",
+    "pinned", "Pinned Reputation")
 local FBFILL_V, FBFILL_O = Choices("custom", "Custom Color", "standing", "Standing Color")
-local BAR_V, BAR_O = Choices("xp", "XP Bar", "fb", "Faction Bar")
+local BAR_V, BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar")
 local STYLE_NAMES = { eui = "EUI Border", prof = "Profession Frame", classic = "Classic", forever = "Forever", blizzard = "Blizzard" }
 local STYLE_ORDER = { "eui", "prof", "classic", "forever", "blizzard" }
 
@@ -426,8 +426,8 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
     end
 
     if showFB then
-        Header("FACTION BAR")
-        Row({ type = "toggle", text = "Enable Faction Bar", tooltip = "Draws KitnUI's faction bar. Move it in EllesmereUI's Unlock Mode.",
+        Header("REPUTATION BAR")
+        Row({ type = "toggle", text = "Enable Reputation Bar", tooltip = "Draws KitnUI's reputation bar. Move it in EllesmereUI's Unlock Mode.",
               getValue = function() return X.FactionEnabled() end,
               setValue = function(v)
                   X.SetFactionEnabled(v)
@@ -437,11 +437,11 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
               getValue = function() return X.Get("fbHideExisting") == true end,
               setValue = function(v) X.SetHideExisting("rep", v) end })
 
-        Header("FACTION VISIBILITY")
-        Row(Drop("Visibility", "fbVisibility", VIS_V, VIS_O, "When the faction bar shows, with the same choices as EllesmereUI's own frames."),
+        Header("REPUTATION VISIBILITY")
+        Row(Drop("Visibility", "fbVisibility", VIS_V, VIS_O, "When the reputation bar shows, with the same choices as EllesmereUI's own frames."),
             Toggle("Show at Max Standing", "fbShowAtMax", "Keeps the bar at maximum standing. A progressing paragon track always shows."))
 
-        Header("FACTION SOURCE")
+        Header("REPUTATION SOURCE")
         -- Filled from the faction catalog each time the dropdown opens, so a
         -- faction met since the last opening is listed even on a cached page: the
         -- catalog opens reputation headers, so it is not run on every page build.
@@ -460,13 +460,13 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             end
             local cur = tonumber(X.Get("fbFactionID")) or 0
             if cur ~= 0 and not pinV[cur] then
-                pinV[cur] = X.FactionName(cur) or ("Faction " .. cur)
+                pinV[cur] = X.FactionName(cur) or ("Reputation " .. cur)
                 pinO[#pinO + 1] = cur
             end
         end
         FillPinned(false)
         local sourceRow = Row({ type = "dropdown", text = "Source", values = SOURCE_V, order = SOURCE_O,
-              tooltip = "Current Delve Companion uses the companion's faction inside a delve and the watched faction elsewhere.",
+              tooltip = "Current Delve Companion uses the companion's reputation inside a delve and the watched reputation elsewhere.",
               itemDisabled = function(v) return v == "companion" and ns.IS_FOREVER == true end,
               getValue = function() return X.Get("fbSource") end,
               setValue = function(v)
@@ -474,7 +474,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
                   Changed()
                   RefreshWidgets()
               end },
-            Drop("Pinned Faction", "fbFactionID", pinV, pinO, "The faction the bar shows with the Pinned source.",
+            Drop("Pinned Reputation", "fbFactionID", pinV, pinO, "The reputation the bar shows with the Pinned source.",
                 Unless("fbSource", "pinned")))
         local pinControl = sourceRow and sourceRow._rightRegion and sourceRow._rightRegion._control
         if pinControl and pinControl.HookScript then
@@ -489,16 +489,16 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             end)
         end
 
-        local displayHdr = Header("FACTION DISPLAY")
-        local posRow = Row(Drop("Name Position", "fbNamePos", POS_V, POS_O, "Where the faction's name, standing and percent sit.", nil, true),
-            Drop("Amount Position", "fbAmountPos", POS_V, POS_O, "Where the faction's values sit.", nil, true))
+        local displayHdr = Header("REPUTATION DISPLAY")
+        local posRow = Row(Drop("Name Position", "fbNamePos", POS_V, POS_O, "Where the reputation's name, standing and percent sit.", nil, true),
+            Drop("Amount Position", "fbAmountPos", POS_V, POS_O, "Where the reputation's values sit.", nil, true))
         Cog(posRow, "left", "Name Position", Offsets("fbName"), Hidden("fbNamePos"),
             "Choose a position other than Hidden to move the name.")
         Cog(posRow, "right", "Amount Position", Offsets("fbAmount"), Hidden("fbAmountPos"),
             "Choose a position other than Hidden to move the values.")
         Nav("left", displayHdr, posRow, "left")
         Nav("right", displayHdr, posRow, "right")
-        Row(Toggle("Show Tooltip", "fbTooltip", "Shows the faction's details when you hover the bar.", nil, true),
+        Row(Toggle("Show Tooltip", "fbTooltip", "Shows the reputation's details when you hover the bar.", nil, true),
             Toggle("Hide Tooltip in Combat", "fbTooltipCombat", nil, Off("fbTooltip")))
 
         Appearance("fb")

@@ -239,15 +239,25 @@ eq(#frames, previewFrames, "preview with both bars off: a redraw creates no fram
 -- builds only the selected bar's sections, and the search prebuild builds
 -- both; its one script hook goes on the faction view's Pinned dropdown, a
 -- control of the options window.
-local page = { hooks = {}, headers = {}, headerAt = {}, rows = {}, cogs = {}, mounts = 0 }
+local page = { hooks = {}, headers = {}, headerAt = {}, rows = {}, cogs = {}, texts = {}, mounts = 0 }
 do
     local function Control()
         local c = Obj("Control")
         c.HookScript = function(_, name, fn) page.hooks[#page.hooks + 1] = { name = name, fn = fn } end
         return c
     end
+    -- Every word the page shows the player: labels, tooltips, buttons, choices.
+    local function Shown(text)
+        if type(text) == "string" then page.texts[#page.texts + 1] = text end
+    end
     local function Touch(cfg)
         if type(cfg) ~= "table" then return end
+        Shown(cfg.text)
+        Shown(cfg.tooltip)
+        Shown(cfg.buttonText)
+        if type(cfg.values) == "table" then
+            for _, label in pairs(cfg.values) do Shown(label) end
+        end
         for _, key in ipairs({ "getValue", "disabled" }) do
             if type(cfg[key]) == "function" then
                 local done, err = pcall(cfg[key])
@@ -261,6 +271,7 @@ do
             f.GetPoint = function() return "TOPLEFT", nil, "TOPLEFT", 0, y end
             page.headers[#page.headers + 1] = text
             page.headerAt[text] = f
+            Shown(text)
             return f, 20
         end,
         DualRow = function(_, _parent, _y, left, right)
@@ -272,7 +283,12 @@ do
             return row, 30
         end,
     }
-    EUI.BuildInlineCog = function(rgn, opts) page.cogs[#page.cogs + 1] = { rgn = rgn, opts = opts } end
+    EUI.BuildInlineCog = function(rgn, opts)
+        page.cogs[#page.cogs + 1] = { rgn = rgn, opts = opts }
+        Shown(opts and opts.title)
+        Shown(opts and opts.disabledTooltip)
+        for _, row in ipairs(opts and opts.rows or {}) do Shown(row.label) end
+    end
     function EUI.SetContentHeader(_, builder)
         page.mounts = page.mounts + 1
         builder(Obj("Frame"), 800)
@@ -280,6 +296,7 @@ do
 end
 local function buildPage(label)
     page.hooks, page.headers, page.headerAt, page.rows, page.cogs, page.touchErr = {}, {}, {}, {}, {}, nil
+    page.texts = {}
     local height
     ok, why = pcall(function() height = ns.EUIPages["XP Bar"](Obj("Frame"), -10) end)
     check(ok, label .. ": the page builds", why)
@@ -298,6 +315,13 @@ local function cogTitled(title)
     end
     return nil
 end
+-- The first word on the page a player would read as "faction", or nil.
+local function factionWord()
+    for _, t in ipairs(page.texts) do
+        if t:lower():find("faction", 1, true) then return t end
+    end
+    return nil
+end
 local aftersAtPage = afters
 
 buildPage("page, XP view")
@@ -305,8 +329,9 @@ eq(page.mounts, 1, "page, XP view: it mounts the preview header once")
 check(has("XP BAR") and has("XP DISPLAY") and has("XP TOOLTIP") and has("SESSION"), "page, XP view: the XP bar's sections")
 check(has("FRAME") and has("FILL") and has("TEXT") and has("SIZE") and has("DIVIDERS") and not has("XP APPEARANCE"),
     "page, XP view: the appearance in five sections")
-check(not has("FACTION SOURCE") and not has("FACTION DISPLAY"), "page, XP view: no faction section")
+check(not has("REPUTATION SOURCE") and not has("REPUTATION DISPLAY"), "page, XP view: no faction section")
 check(has("POSITION"), "page, XP view: the position line")
+eq(factionWord(), nil, "page, XP view: no word on the page reads faction")
 check(page.rows.Bar ~= nil, "page, XP view: without the header's picker the page carries its own")
 eq(#page.hooks, 0, "page, XP view: no script hook")
 eq(#frames, previewFrames, "page, XP view: no frame beyond the preview's own")
@@ -325,9 +350,10 @@ check(page.rows["Time This Level Position"] == nil, "page, XP view: no separate 
 
 X.SelectBar("fb")
 buildPage("page, faction view")
-check(has("FACTION BAR") and has("FACTION SOURCE") and has("FACTION DISPLAY") and has("FRAME") and has("DIVIDERS"),
-    "page, faction view: the faction bar's sections")
+check(has("REPUTATION BAR") and has("REPUTATION VISIBILITY") and has("REPUTATION SOURCE") and has("REPUTATION DISPLAY")
+    and has("FRAME") and has("DIVIDERS"), "page, faction view: the reputation bar's sections")
 check(not has("XP DISPLAY") and not has("SESSION"), "page, faction view: no XP section")
+eq(factionWord(), nil, "page, faction view: every label reads reputation, none faction")
 eq(#page.hooks, 1, "page, faction view: one script hook")
 eq(page.hooks[1] and page.hooks[1].name, "OnMouseDown", "page, faction view: on the Pinned dropdown's press")
 if page.hooks[1] then
@@ -345,7 +371,8 @@ eq(#frames, factionFrames, "page, faction view: a rebuild creates no frame")
 
 EUI.IsSearchPrebuild = function() return true end
 buildPage("page, search prebuild")
-check(has("XP DISPLAY") and has("FACTION SOURCE"), "page, search prebuild: both bars' sections, so search finds every setting")
+check(has("XP DISPLAY") and has("REPUTATION SOURCE"), "page, search prebuild: both bars' sections, so search finds every setting")
+eq(factionWord(), nil, "page, search prebuild: no word search lists reads faction")
 EUI.IsSearchPrebuild = nil
 X.SelectBar("xp")
 
@@ -452,6 +479,8 @@ for _, e in ipairs(XP_EVENTS) do check(evFrame.events[e], "XP bar on: registered
 for _, e in ipairs(FACTION_EVENTS) do check(not evFrame.events[e], "XP bar on: no faction event " .. e) end
 check(next(updaters) ~= nil, "XP bar on: the bar joins the visibility service")
 eq(unlocks, 1, "XP bar on: the Unlock Mode elements register on the first enabled apply")
+eq(unlockList and unlockList[2] and unlockList[2].label, "KitnUI Reputation Bar",
+    "XP bar on: the reputation bar's Unlock Mode element reads Reputation Bar")
 
 -- Runs each timer still waiting, once. A Lua error in a callback is a
 -- failure, never swallowed.
@@ -716,7 +745,7 @@ do
         local pickHeight = X.BuildPreviewHeader(Obj("Frame"), 800)
         check(X.SelectorShown(), "the bar picker: the header holds it")
         eq(picked and table.concat(picked.order, ","), "xp,fb", "the bar picker: the XP bar, then the faction bar")
-        eq(picked and picked.values.fb, "Faction Bar", "the bar picker: names the faction bar")
+        eq(picked and picked.values.fb, "Reputation Bar", "the bar picker: names the reputation bar")
         eq(picked and picked.get(), "xp", "the bar picker: reads the selection")
         if picked then picked.set("fb") end
         eq(X.SelectedBar(), "fb", "the bar picker: a pick selects the bar")

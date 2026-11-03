@@ -36,7 +36,7 @@ local availW = 1
 -- The bar the page and the preview show, kept for the session only.
 local selected = "xp"
 
-local BAR_V = { xp = "XP Bar", fb = "Faction Bar" }
+local BAR_V = { xp = "XP Bar", fb = "Reputation Bar" }
 local BAR_O = { "xp", "fb" }
 
 -- Every piece visible: quest XP, rested XP, both times and a rate, even on a

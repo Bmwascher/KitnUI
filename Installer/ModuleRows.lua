@@ -499,11 +499,17 @@ local function cdmSpellID(list, key, value, labels)
 end
 
 -- XP Bar settings the tidied key would misname. Any other xp or fb key reads
--- as its tidied name without the prefix, a faction key with "Faction " first.
+-- as its tidied name without the prefix, an fb key with "Reputation " first:
+-- the page names that bar the Reputation Bar.
 local XP_NAMES = {
-    xpEnabled = "XP bar on", fbEnabled = "Faction bar on",
-    xpPos = "XP bar position", fbPos = "Faction bar position",
+    xpEnabled = "XP bar on", fbEnabled = "Reputation bar on",
+    xpPos = "XP bar position", fbPos = "Reputation bar position",
+    fbFactionID = "Pinned reputation",
 }
+
+-- The XP Bar's Unlock Mode elements, for a walk with no label for them: a bar
+-- never turned on this session registers none.
+local XP_UNLOCK_NAMES = { KitnUI_XPBar = "KitnUI XP Bar", KitnUI_FactionBar = "KitnUI Reputation Bar" }
 
 -- Top Bar settings the tidied key would misname. Any other tb key reads as
 -- its tidied name without the prefix: "tbIconSize" is "Icon size".
@@ -546,7 +552,7 @@ local function kitnItem(parts)
     local item = TOP_BAR_NAMES[key] or XP_NAMES[key]
     if not item then
         local name = tidy(key:sub(3))
-        item = key:sub(1, 2) == "fb" and ("Faction " .. name) or capital(name)
+        item = key:sub(1, 2) == "fb" and ("Reputation " .. name) or capital(name)
     end
     if last > 3 then
         local below = {}
@@ -602,7 +608,7 @@ function ns.EUISettingLabel(path, row, labels, value)
     if path == "uiScale" then return "General", "ui scale" end
     if path == "Spec Overrides" then return "Spec Overrides", "override set" end
     local child = path:match("^unlockLayout%.[^.]+%.(.+)$")
-    if child then return "Positions", unlock[child] or capital(tidy(child)) end
+    if child then return "Positions", unlock[child] or XP_UNLOCK_NAMES[child] or capital(tidy(child)) end
 
     local parts = {}
     for part in path:gmatch("[^.]+") do parts[#parts + 1] = part end
