@@ -37,9 +37,9 @@ end
 -- Page files register themselves here rather than Core listing them, so adding
 -- a page never edits this file. Order is separate because the router is keyed.
 ns.EUIPages = ns.EUIPages or {}
--- Top Bar goes last because it configures KitnUI's own frame, while the three
--- above it configure EllesmereUI.
-ns.EUIPageOrder = { "General", "Gameplay", "Nameplates", "Top Bar" }
+-- Top Bar and XP Bar go last because they configure KitnUI's own frames, while
+-- the three above them configure EllesmereUI.
+ns.EUIPageOrder = { "General", "Gameplay", "Nameplates", "Top Bar", "XP Bar" }
 
 ---------------------------------------------------------------------------------
 -- EllesmereUI database access
@@ -106,6 +106,10 @@ local function ActiveProfileName()
     end
     return (_G.EllesmereUIDB and EllesmereUIDB.activeProfile) or "Default"
 end
+
+-- For a claim that waits out combat or an editing session: it may only land
+-- in the profile it was made in.
+ns.EUIActiveProfileName = ActiveProfileName
 
 -- The same table ns.EUIProfile returns, read out of EllesmereUI's saved
 -- variables instead of its live registry. A module that is switched off is in
@@ -261,6 +265,141 @@ local DEFAULTS = {
         tbHearthRight           = "140192",
         -- tbPos and tbSysPos get NO default. They are absent until dragged, and
         -- absent is their meaningful "not set" state.
+
+        -- XP and faction bars: xp* is the XP bar, fb* the faction bar, and every
+        -- value is a scalar. The two switches are on by default on Forever only,
+        -- where nobody has KitnUI yet, so no screen changes on an update. Frame
+        -- style "" is the client's own default: an export carries live values,
+        -- and a retail profile imported on Forever must not carry retail art
+        -- across. xpPos and fbPos get NO default, as tbPos above.
+        xpEnabled               = ns.IS_FOREVER and true or false,
+        fbEnabled               = ns.IS_FOREVER and true or false,
+        xpHideExisting          = true,
+        fbHideExisting          = true,
+        xpVisibility            = "always",
+        fbVisibility            = "always",
+        xpShowAtMax             = true,
+        fbShowAtMax             = false,
+        xpAmountPos             = "inside",
+        xpNumberStyle           = "full",
+        xpShowRemaining         = true,
+        xpShowLevelTime         = true,
+        xpLevelTimePos          = "above",
+        xpShowSessionTime       = true,
+        xpSessionTimePos        = "above",
+        xpShowRate              = true,
+        xpRatePos               = "below",
+        xpShowCompRested        = true,
+        xpCompRestedPos         = "below",
+        xpShowQuest             = true,
+        fbNamePos               = "inside",
+        fbAmountPos             = "inside",
+        fbSource                = "watched",
+        fbFactionID             = 0,
+        xpFont                  = "",
+        fbFont                  = "",
+        xpOutline               = "",
+        fbOutline               = "",
+        xpFontSize              = 14,
+        fbFontSize              = 12,
+        xpTexture               = "",
+        fbTexture               = "",
+        xpWidth                 = 600,
+        xpHeight                = 24,
+        fbWidth                 = 400,
+        fbHeight                = 20,
+        xpFrameStyle            = "",
+        fbFrameStyle            = "",
+        xpBorderTexture         = "solid",
+        fbBorderTexture         = "solid",
+        xpBorderSize            = 1,
+        fbBorderSize            = 1,
+        xpBorderR               = 0,
+        xpBorderG               = 0,
+        xpBorderB               = 0,
+        xpBorderA               = 1,
+        fbBorderR               = 0,
+        fbBorderG               = 0,
+        fbBorderB               = 0,
+        fbBorderA               = 1,
+        xpFillStyle             = "gradient",
+        xpGradDir               = "HORIZONTAL",
+        xpGradStartR            = 0.335,
+        xpGradStartG            = 0.388,
+        xpGradStartB            = 1.0,
+        xpGradEndR              = 0.773,
+        xpGradEndG              = 0.380,
+        xpGradEndB              = 1.0,
+        xpSolidR                = 0.335,
+        xpSolidG                = 0.388,
+        xpSolidB                = 1.0,
+        xpProfFill              = "Alchemy",
+        xpProfPlay              = "gain",
+        xpProfStretch           = false,
+        xpQuestR                = 1.0,
+        xpQuestG                = 0.589,
+        xpQuestB                = 0.0,
+        xpQuestA                = 0.9,
+        xpRestedR               = 0.309,
+        xpRestedG               = 0.562,
+        xpRestedB               = 1.0,
+        xpRestedA               = 0.55,
+        fbFillMode              = "custom",
+        fbR                     = 0.435,
+        fbG                     = 0.294,
+        fbB                     = 1.0,
+        xpDivider               = "off",
+        fbDivider               = "off",
+        xpGapSize               = 2,
+        fbGapSize               = 2,
+        xpTick5Style            = "dashed",
+        fbTick5Style            = "dashed",
+        xpTick5R                = 0.863,
+        xpTick5G                = 0.655,
+        xpTick5B                = 0.498,
+        xpTick5A                = 0.9,
+        fbTick5R                = 0.863,
+        fbTick5G                = 0.655,
+        fbTick5B                = 0.498,
+        fbTick5A                = 0.9,
+        xpTick10R               = 1,
+        xpTick10G               = 1,
+        xpTick10B               = 1,
+        xpTick10A               = 0.9,
+        fbTick10R               = 1,
+        fbTick10G               = 1,
+        fbTick10B               = 1,
+        fbTick10A               = 0.9,
+        xpTickLabels            = false,
+        fbTickLabels            = false,
+        xpTickLabelSize         = 8,
+        fbTickLabelSize         = 8,
+        xpTickLabelR            = 1,
+        xpTickLabelG            = 1,
+        xpTickLabelB            = 1,
+        fbTickLabelR            = 1,
+        fbTickLabelG            = 1,
+        fbTickLabelB            = 1,
+        xpTickLabelOffX         = 0,
+        xpTickLabelOffY         = 0,
+        fbTickLabelOffX         = 0,
+        fbTickLabelOffY         = 0,
+        xpSmartTicks            = false,
+        fbSmartTicks            = false,
+        xpBgR                   = 0.06,
+        xpBgG                   = 0.06,
+        xpBgB                   = 0.08,
+        xpBgA                   = 0.85,
+        fbBgR                   = 0.06,
+        fbBgG                   = 0.06,
+        fbBgB                   = 0.08,
+        fbBgA                   = 0.85,
+        xpTooltip               = true,
+        fbTooltip               = true,
+        xpTooltipCombat         = true,
+        fbTooltipCombat         = true,
+        xpResetOnReload         = false,
+        xpMutePlayed            = true,
     },
 }
 
@@ -535,12 +674,16 @@ end
 -- The cost of a string is that it is fixed when the page is BUILT, and the host
 -- re-shows a cached page rather than rebuilding it. So every caller must force a
 -- rebuild once an ownership change has COMPLETED, or this sentence goes stale.
-function ns.EUIOwnershipTip(base, section, enabled, thing)
+-- holds, when given, answers "is this switch's own note held?" for a section
+-- that two switches share.
+function ns.EUIOwnershipTip(base, section, enabled, thing, holds)
     local on = enabled
     if type(enabled) == "function" then on = enabled() end
     if not on then return base end
 
-    if ns.EUIHolds(section) then
+    local held
+    if type(holds) == "function" then held = holds() else held = ns.EUIHolds(section) end
+    if held then
         return base .. "\n\nKitnUI is holding " .. thing
             .. " for you. Turn this off and your own setting comes back."
     end
@@ -808,11 +951,13 @@ function ns.EUIResetAll()
         return false
     end
 
-    -- Give EllesmereUI's own FPS counter back and clear KitnUI's bar before
-    -- anything else is torn down. Both refusal gates above have passed, so this
-    -- only runs on a reset that is really happening. Nil-guarded and pcall'd:
-    -- TopBar/ may be absent, and this function must not throw.
+    -- Give EllesmereUI's own FPS counter back and clear KitnUI's bars before
+    -- anything else is torn down; the XP bars bring back the bars they hid
+    -- while the snapshots still exist. Both refusal gates above have passed, so
+    -- this only runs on a reset that is really happening. Nil-guarded and
+    -- pcall'd: either module may be absent, and this function must not throw.
     if ns.TopBar and ns.TopBar.Teardown then pcall(ns.TopBar.Teardown) end
+    if ns.XPBar and ns.XPBar.Teardown then pcall(ns.XPBar.Teardown) end
 
     if ns.LuluTearDown then pcall(ns.LuluTearDown) end
 
@@ -1033,15 +1178,93 @@ end
 
 ns.EUIRegisterReapply(FoldRetiredAccentKey)
 
+-- Counts every replacement of the active profile's contents: a switch, and
+-- an import, which can refill the active profile under its own name. A
+-- write that waited for combat or an editing session compares it, so it
+-- never lands in contents that arrived after the click.
+local profileGeneration = 0
+
+function ns.EUIProfileGeneration()
+    return profileGeneration
+end
+
+-- A post-hook: it runs once the replacement is complete, before the queued
+-- re-apply.
+local function OnProfileContent()
+    profileGeneration = profileGeneration + 1
+    ns.EUIQueueReapply()
+end
+
 ---------------------------------------------------------------------------------
 -- Boot
 ---------------------------------------------------------------------------------
 
+-- How this UI load began, "login" or "reload", read off the first
+-- PLAYER_ENTERING_WORLD, with the moment and the XP it began at. The boot
+-- frame registers that event for every player: it costs one event once per
+-- load, and it spares a module a frame of its own just to learn this. The
+-- start lets the XP session count from the real login even when the bar is
+-- turned on later.
+local loginWaiters = {}
+
+local function Num(v)
+    if type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then return nil end
+    return v
+end
+
+local function ReadNum(fn, ...)
+    if type(fn) ~= "function" then return nil end
+    local ok, v = pcall(fn, ...)
+    return ok and Num(v) or nil
+end
+
+local function SetLoginKind(kind)
+    ns.EUILoadStart = {
+        time = GetTime(),
+        xp = ReadNum(_G.UnitXP, "player"),
+        max = ReadNum(_G.UnitXPMax, "player"),
+        level = ReadNum(_G.UnitLevel, "player"),
+    }
+    ns.EUILoginKind = kind
+    for i = 1, #loginWaiters do
+        local fn = loginWaiters[i]
+        loginWaiters[i] = nil
+        pcall(fn, kind)
+    end
+end
+
+-- Runs fn(kind) now when the kind is known, otherwise once it is.
+function ns.EUIWhenLoginKnown(fn)
+    if type(fn) ~= "function" then return end
+    if ns.EUILoginKind then
+        pcall(fn, ns.EUILoginKind)
+        return
+    end
+    loginWaiters[#loginWaiters + 1] = fn
+end
+
+-- The pages with a pinned preview header, and the module that draws each.
+local HEADER_MODULES = { ["Top Bar"] = "TopBar", ["XP Bar"] = "XPBar" }
+
+local function HeaderModule(pageName)
+    local name = HEADER_MODULES[pageName]
+    local mod = name and ns[name]
+    return type(mod) == "table" and mod or nil
+end
+
 -- PLAYER_LOGIN, matching every EllesmereUI options file: page builders read
--- ns.db, which Installer/Core.lua only fills at login.
+-- ns.db, which Installer/Core.lua only fills at login. PLAYER_ENTERING_WORLD
+-- is handled first, above every capability guard: how the UI loaded has
+-- nothing to do with the panel.
 local boot = CreateFrame("Frame")
 boot:RegisterEvent("PLAYER_LOGIN")
-boot:SetScript("OnEvent", function(self)
+boot:RegisterEvent("PLAYER_ENTERING_WORLD")
+boot:SetScript("OnEvent", function(self, event, _, isReloadingUi)
+    if event == "PLAYER_ENTERING_WORLD" then
+        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        SetLoginKind(isReloadingUi and "reload" or "login")
+        return
+    end
     self:UnregisterEvent("PLAYER_LOGIN")
 
     -- ABOVE the capability guard, deliberately. Migration needs only ns.db and
@@ -1077,9 +1300,9 @@ boot:SetScript("OnEvent", function(self)
     -- Each guarded on the exact function it hooks: EllesmereUI dropping any one
     -- of these must cost that behaviour, not the tab.
     local EUI = _G.EllesmereUI
-    if EUI.SwitchProfile        then hooksecurefunc(EUI, "SwitchProfile",        ns.EUIQueueReapply) end
+    if EUI.SwitchProfile        then hooksecurefunc(EUI, "SwitchProfile",        OnProfileContent) end
     if EUI.OnSpecSwitchComplete then hooksecurefunc(EUI, "OnSpecSwitchComplete", ns.EUIQueueReapply) end
-    if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     ns.EUIQueueReapply) end
+    if EUI.ApplyProfileData     then hooksecurefunc(EUI, "ApplyProfileData",     OnProfileContent) end
     if EUI.SetDarkModeAll       then hooksecurefunc(EUI, "SetDarkModeAll",       ns.EUIQueueReapply) end
 
     -- Not a hook: a callback list the panel fires as it closes. It is the only
@@ -1121,18 +1344,18 @@ boot:SetScript("OnEvent", function(self)
             if not ok or type(height) ~= "number" then return math.abs(yOffset) end
             return height
         end,
-        -- Only the Top Bar page has a pinned header; any other page returns nil
-        -- and EllesmereUI leaves the header area alone. This does NOT mount
-        -- anything -- SelectPage calls it after the cold build only to stash the
-        -- builder in its page cache. Options.lua does the mounting.
+        -- Only the pages in HEADER_MODULES have a pinned header; any other page
+        -- returns nil and EllesmereUI leaves the header area alone. This does
+        -- NOT mount anything -- SelectPage calls it after the cold build only to
+        -- stash the builder in its page cache. Each page's Options.lua does the
+        -- mounting.
         getHeaderBuilder = function(pageName)
-            if pageName ~= "Top Bar" then return nil end
-            return ns.TopBar and ns.TopBar.BuildPreviewHeader
+            local mod = HeaderModule(pageName)
+            return mod and mod.BuildPreviewHeader or nil
         end,
         onPageCacheRestore = function(pageName)
-            if pageName == "Top Bar" and ns.TopBar and ns.TopBar.PreviewRestore then
-                ns.TopBar.PreviewRestore()
-            end
+            local mod = HeaderModule(pageName)
+            if mod and mod.PreviewRestore then mod.PreviewRestore() end
         end,
     }
     EUI.RegisterPlugin(PLUGIN_ID, { label = "KitnUI", position = "top", modules = { module } })
