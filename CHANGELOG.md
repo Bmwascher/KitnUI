@@ -11,8 +11,9 @@
 ### XP Bar
 
 - **NEW:** KitnUI draws its own XP bar and Reputation Bar, set up on an
-  **XP Bar** tab in KitnUI's EllesmereUI page with a live, clickable preview.
-  Both are off by default on retail and on by default on WoW Forever
+  **XP Bar** tab in KitnUI's EllesmereUI page with a live, clickable
+  preview. Both are off by default on retail and on by default on WoW
+  Forever
 - **NEW:** The XP bar shows completed-quest and rested XP, time this level
   and this session, your leveling rate, and a tooltip with kills to level
 - **NEW:** The Reputation Bar follows your watched reputation, your delve
