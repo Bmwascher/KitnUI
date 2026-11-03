@@ -3,6 +3,8 @@
 -- ║  Purpose: Gate for the XP bars' cost: nothing exists until   ║
 -- ║           a bar is on, the XP bar alone registers only its   ║
 -- ║           events, and turning both off takes it all down.    ║
+-- ║           Also the page and preview with both bars off, the  ║
+-- ║           preview's sample level and atlas lookups per draw. ║
 -- ║           Loads the SHIPPED code, never a copy.              ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
@@ -222,6 +224,57 @@ local previewFrames = #frames
 ok, why = pcall(X.PreviewRefresh)
 check(ok, "preview with both bars off: a redraw runs without a Lua error", why)
 eq(#frames, previewFrames, "preview with both bars off: a redraw creates no frame")
+
+-- The page builder itself with both bars off. Its one script hook goes on its
+-- own Pinned dropdown, a control of the options window.
+local hooks, mounts = {}, 0
+local touchErr
+local function Control()
+    local c = Obj("Control")
+    c.HookScript = function(_, name, fn) hooks[#hooks + 1] = { name = name, fn = fn } end
+    return c
+end
+local function Touch(cfg)
+    if type(cfg) ~= "table" then return end
+    for _, key in ipairs({ "getValue", "disabled" }) do
+        if type(cfg[key]) == "function" then
+            local done, err = pcall(cfg[key])
+            if not done and not touchErr then touchErr = key .. ": " .. tostring(err) end
+        end
+    end
+end
+EUI.Widgets = {
+    SectionHeader = function() return Obj("Frame"), 20 end,
+    DualRow = function(_, _parent, _y, left, right)
+        Touch(left)
+        Touch(right)
+        return { _rightRegion = { _control = Control() } }, 30
+    end,
+}
+function EUI.SetContentHeader(_, builder)
+    mounts = mounts + 1
+    builder(Obj("Frame"), 800)
+end
+local aftersAtPage = afters
+local height
+ok, why = pcall(function() height = ns.EUIPages["XP Bar"](Obj("Frame"), -10) end)
+check(ok, "the page builds with both bars off", why)
+check(type(height) == "number" and height > 10, "page with both bars off: it returns its height", height)
+eq(mounts, 1, "page with both bars off: it mounts the preview header once")
+check(touchErr == nil, "page with both bars off: every control reads its value and state", touchErr)
+eq(#hooks, 1, "page with both bars off: one script hook")
+eq(hooks[1] and hooks[1].name, "OnMouseDown", "page with both bars off: on the Pinned dropdown's press")
+if hooks[1] then
+    ok, why = pcall(hooks[1].fn)
+    check(ok, "page with both bars off: a press on the Pinned dropdown runs", why)
+end
+eq(#frames, previewFrames, "page with both bars off: no frame beyond the preview's own")
+eq(#timers, 0, "page with both bars off: no timer")
+eq(afters, aftersAtPage, "page with both bars off: no next-frame work")
+eq(eventNames(), "PLAYER_ENTERING_WORLD,PLAYER_LOGIN", "page with both bars off: only Core's boot events")
+check(next(updaters) == nil, "page with both bars off: no visibility updater")
+eq(unlocks, 0, "page with both bars off: no Unlock Mode element")
+eq(accents, 0, "page with both bars off: no accent callback")
 
 -- The preview's sample level: 85, or five below a lower cap.
 local realDraw = X.Draw
