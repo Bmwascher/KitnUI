@@ -934,4 +934,342 @@ do
     _G.C_Reputation, _G.C_GossipInfo, _G.C_MajorFactions = nil, nil, nil
 end
 
+---------------------------------------------------------------------------------
+-- The effects on the live bars
+---------------------------------------------------------------------------------
+
+do
+    local listener
+    EUI.RegisterUnlockModeListener = function(_, _owner, fn) listener = fn end
+    EUI.UnregisterUnlockModeListener = function() listener = nil end
+    local xpNow = 100
+    _G.UnitXP = function() return xpNow end
+
+    local live
+    local drawReal = X.Draw
+    local liveDraws = 0
+    X.Draw = function(w, view, data)
+        if w.frame == xpFrame then
+            live = w
+            liveDraws = liveDraws + 1
+        end
+        return drawReal(w, view, data)
+    end
+    local levelPlays, gainPlays, passes, gainAmount = 0, 0, 0, nil
+    local levelReal, gainReal, passReal = X.PlayLevelEffect, X.PlayGainEffect, X.PlayGain
+    X.PlayLevelEffect = function(...)
+        levelPlays = levelPlays + 1
+        return levelReal(...)
+    end
+    X.PlayGainEffect = function(...)
+        gainPlays = gainPlays + 1
+        gainAmount = select(6, ...)
+        return gainReal(...)
+    end
+    X.PlayGain = function(...)
+        passes = passes + 1
+        return passReal(...)
+    end
+    local function send(name, ...)
+        ok, why = pcall(evFrame.scripts.OnEvent, evFrame, name, ...)
+        check(ok, name .. " runs without a Lua error", why)
+    end
+
+    settings.xpEnabled = true
+    ok, why = pcall(X.Apply)
+    check(ok, "effects: an apply with the XP bar on runs", why)
+    check(listener ~= nil, "effects: one Unlock Mode listener while a bar is on")
+    check(live ~= nil, "effects: the live bar draws")
+    eq(live and live.fxClip, nil, "effects: the first draw makes no effect frame while not ready")
+    eq(evFrame.events.QUEST_TURNED_IN, true, "effects: default settings register QUEST_TURNED_IN")
+
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: Quest Turn-Ins Only off does not")
+    settings.xpGainQuestsOnly = nil
+    settings.xpGainEffect = "off"
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: a gain effect off does not")
+    settings.xpGainEffect = nil
+    _G.UnitLevel = function() return 90 end
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: nor at max level when not already listening")
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, true, "effects: back below max it does")
+
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 0, "effects: the first reading after an apply plays nothing")
+    xpNow = 150
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 0, "effects: a kill plays nothing with Quest Turn-Ins Only on")
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    eq(gainPlays, 1, "effects: a quest after its reading plays")
+    eq(gainAmount, 50, "effects: with the quest's amount")
+    check(live and live.fxQuest ~= nil, "effects: the effect is active")
+
+    X.Apply()
+    eq(live and live.fxQuest, nil, "effects: a settings apply stops it")
+
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    eq(gainPlays, 2, "effects: a quest before its reading plays at once")
+    xpNow = 200
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 2, "effects: and its reading plays nothing more")
+    X.Apply()
+    xpNow = 250
+    send("PLAYER_XP_UPDATE")
+    send("QUEST_TURNED_IN", 1234, 0, 0)
+    eq(gainPlays, 2, "effects: a quest with no XP plays nothing")
+
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    xpNow = 300
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 3, "effects: with the switch off every gain plays")
+    settings.xpGainQuestsOnly = nil
+
+    settings.xpGainEffect = "off"
+    X.Apply()
+    local before = passes
+    xpNow = 350
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 3, "effects: a gain effect off plays none")
+    eq(passes, before + 1, "effects: the profession fill's pass runs on its own")
+    settings.xpGainEffect = nil
+
+    send("PLAYER_LEVEL_UP", 12)
+    eq(levelPlays, 1, "effects: a level-up plays its effect")
+    check(live and live.fxBusy ~= nil, "effects: and it runs")
+    settings.xpLevelEffect = "off"
+    X.Apply()
+    send("PLAYER_LEVEL_UP", 13)
+    eq(live and live.fxBusy, nil, "effects: and none with it off")
+    settings.xpLevelEffect = nil
+
+    X.Apply()
+    settings.xpGainQuestsOnly = false
+    if listener then listener(true) end
+    eq(X.UnlockActive, true, "effects: Unlock Mode is noted")
+    xpNow = 400
+    send("PLAYER_XP_UPDATE")
+    eq(live and live.fxBusy, nil, "effects: Unlock Mode blocks a play")
+    local drawsBefore = liveDraws
+    if listener then listener(false) end
+    eq(X.UnlockActive, false, "effects: leaving Unlock Mode is noted")
+    check(liveDraws > drawsBefore, "effects: and redraws, which brings Ready Glow back")
+    settings.xpGainQuestsOnly = nil
+
+    -- A level whose completed quests cover the rest, for Ready Glow alone.
+    local scan = X.ScanQuestXP
+    settings.xpTooltip, settings.xpShowQuest, settings.xpShowCompRested = false, false, false
+    X.Apply()
+    eq(evFrame.events.QUEST_LOG_UPDATE, true, "effects: Ready Glow alone keeps the quest totals current")
+    X.ScanQuestXP = function() return 5000, 0 end
+    send("QUEST_LOG_UPDATE")
+    fire()
+    eq(live and live.fxReady and live.fxReady.on, true, "effects: Ready Glow starts when quests cover the level")
+    X.ScanQuestXP = function() return 0, 0 end
+    send("QUEST_LOG_UPDATE")
+    fire()
+    eq(live and live.fxReady and live.fxReady.on, false, "effects: and stops when they no longer do")
+    X.ScanQuestXP = scan
+    settings.xpTooltip, settings.xpShowQuest, settings.xpShowCompRested = nil, nil, nil
+
+    -- Two turn-ins close together, with each side first, play both gains.
+    local gainsBefore = gainPlays
+    X.Apply()
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    send("QUEST_TURNED_IN", 1235, 50, 0)
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, gainsBefore + 2, "effects: two quests before their readings play both")
+    X.Apply()
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    send("QUEST_TURNED_IN", 1235, 50, 0)
+    eq(gainPlays, gainsBefore + 4, "effects: two readings before their quests play both")
+
+    -- A kill close to a turn-in, on either side, adds no play and no amount.
+    gainsBefore = gainPlays
+    X.Apply()
+    xpNow = xpNow + 10
+    send("PLAYER_XP_UPDATE")
+    send("QUEST_TURNED_IN", 1234, 77, 0)
+    xpNow = xpNow + 77
+    send("PLAYER_XP_UPDATE")
+    xpNow = xpNow + 10
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, gainsBefore + 1, "effects: one play for a quest between two kills")
+    eq(gainAmount, 77, "effects: with the quest's amount")
+
+    -- A turn-in that levels plays beside the level effect, with either first; a
+    -- level-up with no turn-in plays its effect alone.
+    gainsBefore = gainPlays
+    X.Apply()
+    send("PLAYER_LEVEL_UP", 12)
+    eq(gainPlays, gainsBefore, "effects: a level-up with no turn-in plays no gain")
+    eq(live and live.fxQuest, nil, "effects: so its effect runs alone")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 1, "effects: a turn-in after the level-up event plays")
+    eq(gainAmount, 5000, "effects: with its amount")
+    check(live and live.fxQuest ~= nil and live.fxBusy ~= nil, "effects: beside the level effect")
+    X.Apply()
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    send("PLAYER_LEVEL_UP", 12)
+    eq(gainPlays, gainsBefore + 2, "effects: a turn-in before the level-up event plays")
+    check(live and live.fxQuest ~= nil and live.fxBusy ~= nil, "effects: and the level effect leaves it running")
+
+    -- Reaching max leaves one turn-in to hear, with the bar kept there, in each
+    -- order of the level-up, the new level reading and the turn-in.
+    gainsBefore = gainPlays
+    X.Apply()
+    _G.UnitLevel = function() return 90 end
+    send("PLAYER_LEVEL_UP", 90)
+    eq(evFrame.events.QUEST_TURNED_IN, true, "max level: the level-up leaves one turn-in to hear")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 1, "max level: the quest that reached it plays")
+    eq(gainAmount, 5000, "max level: with its amount")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: and nothing after it is heard")
+
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    _G.UnitLevel = function() return 91 end
+    send("PLAYER_LEVEL_UP", 91)
+    send("QUEST_TURNED_IN", 1234, 0, 0)
+    eq(gainPlays, gainsBefore + 1, "max level: a turn-in with no XP plays nothing")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: and ends the listening too")
+
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    send("PLAYER_LEVEL_UP", 92)
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 2, "max level: a turn-in with the level still reading old plays")
+    _G.UnitLevel = function() return 92 end
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 2, "max level: and it spent the listening, so the next plays nothing")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: which ends it")
+
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    _G.UnitLevel = function() return 93 end
+    send("UPDATE_EXHAUSTION")
+    eq(evFrame.events.QUEST_TURNED_IN, true, "max level: a new level reading before the level-up keeps listening")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 3, "max level: and a turn-in before the level-up plays")
+    send("PLAYER_LEVEL_UP", 93)
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: and the level-up after it does not reopen")
+    _G.UnitLevel = function() return 11 end
+
+    -- With the switch off, a gain inside a level is its reading's, and any XP that
+    -- crosses a level, kill or quest, plays the level effect alone.
+    settings.xpGainQuestsOnly = false
+    gainsBefore = gainPlays
+    X.Apply()
+    xpNow = xpNow + 77
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, gainsBefore + 1, "switch off: a reading inside a level plays once")
+    eq(gainAmount, 77, "switch off: with its rise")
+    send("QUEST_TURNED_IN", 1234, 77, 0)
+    eq(gainPlays, gainsBefore + 1, "switch off: and a stray quest event adds nothing")
+    local xpBefore = xpNow
+    X.Apply()
+    gainsBefore = gainPlays
+    xpNow = 60
+    _G.UnitLevel = function() return 12 end
+    send("PLAYER_XP_UPDATE")
+    send("PLAYER_LEVEL_UP", 12)
+    eq(gainPlays, gainsBefore, "switch off: XP across a level plays no gain")
+    check(live and live.fxBusy ~= nil, "switch off: and plays the level effect")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore, "switch off: nor does a stray quest event add one")
+    eq(live and live.fxQuest, nil, "switch off: so the level effect runs alone")
+    xpNow = xpBefore
+    _G.UnitLevel = function() return 11 end
+    settings.xpGainQuestsOnly = nil
+
+    -- The reputation reading path
+    local renown, standing, missing = 5, 100, false
+    _G.C_Reputation = {
+        GetFactionDataByID = function()
+            if missing then return nil end
+            return { name = "Test", reaction = 5, currentStanding = standing, currentReactionThreshold = 0, nextReactionThreshold = 3000 }
+        end,
+        IsMajorFaction = function() return true end,
+        IsFactionParagonForCurrentPlayer = function() return false end,
+    }
+    _G.C_MajorFactions = {
+        GetMajorFactionData = function()
+            return { renownLevel = renown, renownReputationEarned = standing, renownLevelThreshold = 2500 }
+        end,
+        HasMaximumRenown = function() return false end,
+    }
+    settings.fbEnabled, settings.fbSource, settings.fbFactionID = true, "pinned", 5
+    X.Apply()
+    levelPlays, gainPlays = 0, 0
+    send("UPDATE_FACTION")
+    eq(levelPlays + gainPlays, 0, "reputation effects: the first reading after an apply plays nothing")
+    renown, standing = 6, 0
+    send("MAJOR_FACTION_RENOWN_LEVEL_CHANGED", 5, 6)
+    eq(levelPlays, 1, "reputation effects: the renown event first plays the rank")
+    send("UPDATE_FACTION")
+    eq(levelPlays, 1, "reputation effects: and UPDATE_FACTION after it plays nothing more")
+    renown = 7
+    send("UPDATE_FACTION")
+    eq(levelPlays, 2, "reputation effects: UPDATE_FACTION first plays the rank")
+    send("MAJOR_FACTION_RENOWN_LEVEL_CHANGED", 5, 7)
+    eq(levelPlays, 2, "reputation effects: and the renown event after it plays nothing more")
+    standing = 40
+    send("UPDATE_FACTION")
+    eq(gainPlays, 1, "reputation effects: a rise is a gain")
+    standing = 30
+    send("UPDATE_FACTION")
+    eq(gainPlays, 1, "reputation effects: a loss plays nothing")
+    missing = true
+    send("UPDATE_FACTION")
+    missing, renown = false, 9
+    send("UPDATE_FACTION")
+    eq(levelPlays, 2, "reputation effects: a reading after no reputation only seeds")
+
+    local fbFrame = unlockList[2].getFrame()
+    check(fbFrame ~= nil, "reputation effects: the reputation bar exists")
+
+    -- A hidden bar stops what it was playing.
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    check(live and live.fxBusy ~= nil, "effects: playing before the hide")
+    xpFrame.scripts.OnHide(xpFrame)
+    eq(live and live.fxBusy, nil, "effects: a hidden bar stops its effects")
+    settings.xpGainQuestsOnly = nil
+
+    settings.xpEnabled, settings.fbEnabled, settings.fbSource, settings.fbFactionID = false, false, nil, nil
+    X.Apply()
+    eq(listener, nil, "effects: both bars off leaves Unlock Mode's listeners")
+    eq(X.UnlockActive, false, "effects: and clears its note")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: and unregisters QUEST_TURNED_IN")
+    _G.C_Reputation, _G.C_MajorFactions = nil, nil
+    X.Draw, X.PlayLevelEffect, X.PlayGainEffect, X.PlayGain = drawReal, levelReal, gainReal, passReal
+    _G.UnitXP = function() return 100 end
+    EUI.RegisterUnlockModeListener, EUI.UnregisterUnlockModeListener = nil, nil
+end
+
+-- Every new setting's default
+for _, key in ipairs({
+    "xpTickerEnabled", "xpTickerVisibility", "xpTickerHideResting", "xpTickerShowCurrent", "xpTickerHistoryRows",
+    "xpTickerShowPlayed", "xpTickerShowPace", "xpTickerFont", "xpTickerOutline", "xpTickerFontSize", "xpTickerBackground",
+    "xpGainEffect", "fbGainEffect", "xpGainQuestsOnly", "xpGainShowAmount", "fbGainShowAmount", "xpGainTextSize",
+    "fbGainTextSize", "xpGainMatchBar", "fbGainMatchBar", "xpGainColorR", "xpGainColorG", "xpGainColorB", "fbGainColorR",
+    "fbGainColorG", "fbGainColorB", "xpLevelEffect", "fbLevelEffect", "xpGlowSize", "fbGlowSize", "xpReadyGlow",
+    "xpStarSize", "xpRestedStripes", "xpStripeSize",
+}) do
+    check(ns.EUI_DEFAULTS[key] ~= nil, "the default " .. key .. " exists")
+end
+
 finish()
