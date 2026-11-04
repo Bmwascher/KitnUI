@@ -74,6 +74,10 @@ local ART_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Backg
 -- geometry -- panel rectangle, sidebar divider and header band all land on the
 -- same pixels -- so the crop and the overlay positions below serve both.
 local ART_PATH_ALT = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Rasta.png"
+-- Forever's marks: transparent images on the same canvas, drawn over the art with
+-- the same crop. dev/art/build_forever_art.py draws them.
+local MARK_PATH = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Forever.png"
+local MARK_PATH_ALT = "Interface\\AddOns\\KitnUI\\Media\\Background\\KitnUI-EUI-Background-Rasta-Forever.png"
 local ART_CROP = { 0.0395, 0.9605, 0.0696, 0.9304 }  -- left, right, top, bottom (0..1)
 local PANEL_W, PANEL_H = 800, 590                     -- 1.356:1, matches the cropped panel
 local TITLE_ICON = "Interface\\AddOns\\KitnUI\\Media\\Textures\\KitnUI_Icon.tga"
@@ -113,6 +117,25 @@ local function paintArt(tex)
     end
 end
 
+-- Retail never creates this layer. BACKGROUND 1 sits over the art and under every
+-- live control.
+local function paintMark(frame)
+    if not ns.IS_FOREVER then return end
+    local tex = frame.markLayer
+    if not tex then
+        tex = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+        tex:SetAllPoints()
+        frame.markLayer = tex
+    end
+    tex:SetTexture(ns.UsesAltTheme() and MARK_PATH_ALT or MARK_PATH)
+    if tex:GetTexture() then
+        tex:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
+        tex:Show()
+    else
+        tex:Hide()
+    end
+end
+
 local function euiReady()
     return _G.EllesmereUI and EllesmereUI.MakeBorder and EllesmereUI.MakeStyledButton
         and EllesmereUI.SolidTex and EllesmereUI.MakeFont
@@ -140,6 +163,7 @@ local function skin(frame)
     frame.artLayer = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
     frame.artLayer:SetAllPoints()
     paintArt(frame.artLayer)
+    paintMark(frame)
     -- border
     if EllesmereUI.MakeBorder then
         EllesmereUI.MakeBorder(frame, BORDER_COL[1], BORDER_COL[2], BORDER_COL[3], BORDER_COL[4], EllesmereUI.PanelPP)
@@ -948,6 +972,7 @@ function W:RefreshTheme()
     if not W.frame then return end
     accent = ns.UsesAltTheme() and RASTA_AMBER or KITN_PINK
     paintArt(W.frame.artLayer)
+    paintMark(W.frame)
     for _, paint in ipairs(accentPainters) do paint(accent) end
     W:SetPage(W.page or 1)
 end

@@ -218,18 +218,26 @@ for _, theme in ipairs(THEMES) do
     end
 end
 
--- The only artwork left in the folder is the two shipped themes; a comparison
--- candidate left behind would ship to players as dead weight.
+-- The only artwork left in the folder is the two shipped themes and their Forever
+-- marks; a comparison candidate left behind would ship to players as dead weight.
 do
     local listed = io.popen('dir /b "KitnUI_EUI\\Media\\Backgrounds"')
     if listed then
-        local shipped = {}
+        local known = {}
+        for _, theme in ipairs(THEMES) do
+            known[theme.file] = true
+            known[(theme.file:gsub("%.png$", "-Forever.png"))] = true
+        end
+        local count = 0
         for line in listed:lines() do
             line = line:gsub("%s+$", "")
-            if line ~= "" then shipped[#shipped + 1] = line end
+            if line ~= "" then
+                count = count + 1
+                check(known[line], "no leftover comparison artwork ships", line)
+            end
         end
         listed:close()
-        eq(#shipped, #THEMES, "no leftover comparison artwork ships")
+        eq(count, #THEMES * 2, "each theme ships its artwork and its Forever mark")
     end
 end
 

@@ -13,21 +13,27 @@ local MEDIA = "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\"
 -- artwork and nothing else. Tying an accent to a theme would make picking a
 -- picture silently recolour the panel and the Top Bar, which follows the host
 -- accent by default. The accent is chosen on the KitnUI page instead.
+-- mark is Forever's transparent image on the same canvas, drawn over the artwork.
 local THEMES = {
-    { name = "KitnUI",       texture = MEDIA .. "KitnUI-EUI-Options.png" },
-    { name = "KitnUI Rasta", texture = MEDIA .. "KitnUI-EUI-Options-Rasta.png" },
+    { name = "KitnUI",       texture = MEDIA .. "KitnUI-EUI-Options.png",
+      mark = MEDIA .. "KitnUI-EUI-Options-Forever.png" },
+    { name = "KitnUI Rasta", texture = MEDIA .. "KitnUI-EUI-Options-Rasta.png",
+      mark = MEDIA .. "KitnUI-EUI-Options-Rasta-Forever.png" },
 }
 local DEFAULT_THEME = THEMES[1].name
 
-local textureFor = {}
-for _, theme in ipairs(THEMES) do textureFor[theme.name] = theme.texture end
+local textureFor, markFor = {}, {}
+for _, theme in ipairs(THEMES) do
+    textureFor[theme.name] = theme.texture
+    markFor[theme.name] = theme.mark
+end
 
 -- The installer picks between these by character and hands one back to
 -- ns.ApplyEUIOptionsTheme. Crossing the addon bridge, so the name is listed in
 -- the EXPORTS table in Core.lua; a missing entry there fails silently.
 ns.EUIThemeNames = { default = DEFAULT_THEME, alt = THEMES[2].name }
 
-local overlay, overlayTexture
+local overlay, overlayTexture, overlayMark
 
 local function RegisterTheme()
     local EUI = _G.EllesmereUI
@@ -95,6 +101,11 @@ local function SyncOverlay()
 
         overlayTexture = overlay:CreateTexture(nil, "BACKGROUND")
         overlayTexture:SetAllPoints()
+
+        if ns.IS_FOREVER then
+            overlayMark = overlay:CreateTexture(nil, "BACKGROUND", nil, 1)
+            overlayMark:SetAllPoints()
+        end
     end
 
     if not (overlay and overlayTexture) then return end
@@ -103,6 +114,7 @@ local function SyncOverlay()
     local texture = active and textureFor[active]
     if texture then
         overlayTexture:SetTexture(texture)
+        if overlayMark then overlayMark:SetTexture(markFor[active]) end
         overlay:Show()
     else
         overlay:Hide()
