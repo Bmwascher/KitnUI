@@ -126,7 +126,7 @@ local function fresh(opts)
     framesMade = 0
     reading = { level = 59, cur = 94410, max = 209800, atMax = false, xpOff = false, resting = false }
     local ns = { db = opts.db or { perChar = {} } }
-    ns.GetCharKey = function() return "Me-Realm" end
+    ns.GetCharKey = function() return not opts.noKey and "Me-Realm" or nil end
     function ns.EUIPlain(v)
         if v ~= nil and _G.issecretvalue and _G.issecretvalue(v) then return nil end
         return v
@@ -668,6 +668,22 @@ do
     card:Hide()
     X.TickerAccent()
     eq(card.urgent, nil, "accent: a hidden card reads it at its next show")
+    X.TickerStop()
+end
+
+---------------------------------------------------------------------------------
+-- No character key
+---------------------------------------------------------------------------------
+
+do
+    local perChar = { ["Near-Realm"] = { xpHistory = { reached = { [59] = 1000, [60] = 2000 } } } }
+    local X = fresh({ noKey = true, db = { perChar = perChar }, settings = { xpTickerShowPace = true } })
+    X.SessionStart("login")
+    X.OnPlayed(1400)
+    local card = showCard(X, rawRecord())
+    tipLines = 0
+    card.paceHover.scripts.OnEnter(card.paceHover)
+    eq(tipLines, 1, "no key: the tooltip has no line without a name")
     X.TickerStop()
 end
 

@@ -318,7 +318,8 @@ local function Mute()
         muteTimer:Cancel()
         muteTimer = nil
     end
-    for i = 1, tonumber(NUM_CHAT_WINDOWS) or 10 do
+    local constants = _G.Constants and _G.Constants.ChatFrameConstants
+    for i = 1, tonumber(constants and constants.MaxChatWindows) or 10 do
         local frame = _G["ChatFrame" .. i]
         if frame and frame.IsEventRegistered and frame:IsEventRegistered("TIME_PLAYED_MSG") then
             frame:UnregisterEvent("TIME_PLAYED_MSG")

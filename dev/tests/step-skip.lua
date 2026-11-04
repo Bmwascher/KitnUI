@@ -340,6 +340,14 @@ end
 
 local charKey = ns.GetCharKey()
 
+do
+    local realName = _G.UnitName
+    _G.UnitName = function() return "Hidden" end
+    _G.issecretvalue = function(v) return v == "Hidden" end
+    eq(ns.GetCharKey(), nil, "a secret character name gives no key")
+    _G.UnitName, _G.issecretvalue = realName, nil
+end
+
 -- Only BigWigs ships a payload here, so nothing else can be reported new and
 -- hold the popup open for a reason these checks do not name.
 ns.data = { BigWigs = "payload" }

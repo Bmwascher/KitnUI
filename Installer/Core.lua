@@ -598,6 +598,7 @@ local defaults = {
 function ns.GetCharKey()
     local name = UnitName("player")
     local realm = GetRealmName()
+    if issecretvalue and issecretvalue(name) then return nil end
     if type(name) ~= "string" or name == "" then return nil end
     if type(realm) ~= "string" or realm == "" then return nil end
     return name .. "-" .. realm

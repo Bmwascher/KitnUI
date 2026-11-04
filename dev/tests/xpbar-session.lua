@@ -46,7 +46,7 @@ function chat:IsEventRegistered() return self.on end
 function chat:UnregisterEvent() self.on = false end
 function chat:RegisterEvent() self.on = true end
 _G.ChatFrame1 = chat
-_G.NUM_CHAT_WINDOWS = 1
+_G.Constants = { ChatFrameConstants = { MaxChatWindows = 1 } }
 
 local function XP(cur, max, level, atMax)
     return { cur = cur, max = max, level = level, atMax = atMax or false, xpOff = false }

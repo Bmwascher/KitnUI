@@ -413,7 +413,7 @@ local function ShowPaceTip(self)
     table.sort(list, CloserFirst)
     for i = #list, TIP_ROWS, -1 do list[i] = nil end
     local me = ns.GetCharKey and ns.GetCharKey()
-    list[#list + 1] = { key = me, gap = 0, own = true }
+    if me then list[#list + 1] = { key = me, gap = 0, own = true } end
     table.sort(list, FurthestAheadFirst)
     local chars = ns.db and ns.db.perChar
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
