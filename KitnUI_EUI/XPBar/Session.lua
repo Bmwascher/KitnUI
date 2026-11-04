@@ -331,22 +331,32 @@ local function Mute()
     end
 end
 
--- Two asks. The login ask runs at most once, in a load that began with a
--- login, muted as Mute /played in Chat says. The ask again runs after each
--- unseen level-up, in any load, always muted since the player did not type
--- it; when both are due it wins and spends the login ask too. A request that
--- raises never reached the server, so nothing is spent.
+-- Asks only for something wanted and unknown: the clock, for the level-time
+-- line or the card's Current Level row, or the total, for its Played or Pace
+-- row. Two asks. The first runs at most once per load: in a load that began
+-- with a login, muted as Mute /played in Chat says, or in any other load only
+-- for a card row no save supplied, always muted. The ask again runs after each
+-- unseen level-up, in any load, always muted since the player did not type it;
+-- when both are due it wins and spends the first too. A request that raises
+-- never reached the server, so nothing is spent.
 function X.RequestPlayed()
-    if not (started and listening) or levelStart or pending then return end
+    if not (started and listening) or pending then return end
+    local cardOn = X.Get("xpTickerEnabled") == true
+    local cardClock = cardOn and X.Get("xpTickerShowCurrent") == true
+    local wantTotal = cardOn and (X.Get("xpTickerShowPlayed") == true or X.Get("xpTickerShowPace") == true)
+    local noClock = not levelStart
+    local noTotal = wantTotal and not playedBase
+    if not ((noClock and (X.Get("xpShowLevelTime") == true or cardClock)) or noTotal) then return end
     local again = askAgain
-    local login = loadKind == "login" and not playedAsked
-    if not (again or login) then return end
-    if X.Get("xpShowLevelTime") ~= true or type(RequestTimePlayed) ~= "function" then return end
+    local login = loadKind == "login"
+    local first = not playedAsked and (login or (noClock and cardClock) or noTotal)
+    if not (again or first) then return end
+    if type(RequestTimePlayed) ~= "function" then return end
     local t = X.ReadXP()
     if t.atMax or t.xpOff then return end
     local spent = playedAsked
     playedAsked, askAgain, pending = true, false, again and "again" or "login"
-    if again or X.Get("xpMutePlayed") == true then Mute() end
+    if again or not login or X.Get("xpMutePlayed") == true then Mute() end
     if not pcall(RequestTimePlayed) then
         playedAsked, askAgain, pending = spent, again, nil
         Unmute()

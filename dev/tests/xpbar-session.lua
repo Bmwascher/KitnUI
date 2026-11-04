@@ -614,5 +614,58 @@ do
     _G.issecretvalue = nil
 end
 
+-- The asks with the card on
+clock, wall, played = 1000, 50000, 0
+X = load({ settings = { xpShowLevelTime = false, xpTickerEnabled = true, xpTickerShowPlayed = true },
+    xp = XP(600, 1000, 10) })
+X.SessionStart("login")
+X.RequestPlayed()
+X.RequestPlayed()
+eq(played, 1, "card ask: the Played row alone asks once after a login")
+eq(chat.on, true, "card ask: a login ask follows the mute switch, off")
+
+played = 0
+X = load({ settings = { xpShowLevelTime = false, xpTickerEnabled = true, xpTickerShowPlayed = true, xpMutePlayed = true },
+    xp = XP(600, 1000, 10) })
+X.SessionStart("login")
+X.RequestPlayed()
+eq(played, 1, "card ask: and asks with the mute switch on")
+eq(chat.on, false, "card ask: a login ask follows the mute switch, on")
+
+played = 0
+X = load({ settings = { xpTickerEnabled = true, xpTickerShowPace = true }, xp = XP(600, 1000, 10) })
+X.SessionStart("login")
+X.OnLevelUp(10)
+X.RequestPlayed()
+eq(played, 1, "card ask: a known clock with an unknown total asks")
+
+played = 0
+X = load({ settings = { xpTickerEnabled = true, xpTickerShowCurrent = true, xpMutePlayed = false }, xp = XP(600, 1000, 10) })
+X.SessionStart("reload")
+X.RequestPlayed()
+X.RequestPlayed()
+eq(played, 1, "card ask: a /reload load with a card row wanting a missing value asks once")
+eq(chat.on, false, "card ask: muted, whatever the switch says")
+
+played = 0
+X = load({ xp = XP(600, 1000, 10) })
+X.SessionStart("reload")
+X.RequestPlayed()
+eq(played, 0, "card ask: the same load with the card off does not ask")
+
+played = 0
+X = load({ rec = { savedAt = wall - 5, levelTime = 100, levelOf = 10, played = 5000, lastXP = 600, lastMax = 1000,
+        lastLevel = 10, gained = 0, elapsed = 10 },
+    settings = { xpTickerEnabled = true, xpTickerShowCurrent = true, xpTickerShowPlayed = true }, xp = XP(600, 1000, 10) })
+X.SessionStart("reload")
+X.RequestPlayed()
+eq(played, 0, "card ask: a recent save holding both does not ask")
+
+played = 0
+X = load({ settings = { xpShowLevelTime = false, xpTickerEnabled = false, xpTickerShowPlayed = true }, xp = XP(600, 1000, 10) })
+X.SessionStart("login")
+X.RequestPlayed()
+eq(played, 0, "card ask: with the card off and the level-time line off, nothing asks")
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
