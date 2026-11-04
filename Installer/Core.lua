@@ -872,15 +872,21 @@ end
 ---------------------------------------------------------------------------------
 
 local function ConfirmOverwriteInstall(fn)
-    -- Refused rather than degraded. Reading a nil key as "no record" would skip
-    -- the confirmation below and overwrite the user's profiles unasked.
+    -- Refused rather than degraded: with no key the wizard could not record the
+    -- install on this character.
     local key = ns.GetCharKey()
     if not key then
         print(ns.title .. ": Could not identify this character, so nothing was started. Try again in a moment.")
         return
     end
 
-    if ns.db and ns.db.perChar[key] then
+    -- The loaded field, not the record: the XP session, the installer theme and
+    -- the layout watcher all create the record on characters with no install.
+    -- The profile list too: profiles are account-wide, so an alt that never
+    -- loaded them still overwrites them.
+    local db = ns.db
+    local rec = db and db.perChar[key]
+    if (rec and rec.loaded) or (db and db.profiles and next(db.profiles)) then
         StaticPopupDialogs["KITNUI_OVERWRITE_CONFIRM"] = {
             text = ns.title .. ": You have already installed profiles. This will overwrite any local changes. If you just want to load profiles on a new character, use " .. ns.Color("/kitn load") .. " instead.\n\nContinue?",
             button1 = "Yes",
