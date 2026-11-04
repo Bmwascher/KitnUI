@@ -206,11 +206,32 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             disabledTooltip = reason, rawTooltip = reason and true or nil })
     end
 
-    local function CogSlider(label, key)
-        return { type = "slider", label = label, min = -OFFSET_MAX, max = OFFSET_MAX, step = 1,
+    local function CogSlider(label, key, lo, hi, tip)
+        return { type = "slider", label = label, min = lo or -OFFSET_MAX, max = hi or OFFSET_MAX, step = 1, tooltip = tip,
             get = function() return tonumber(X.Get(key)) or 0 end,
             set = function(v)
                 X.Set(key, v)
+                Changed()
+            end }
+    end
+
+    local function CogToggle(label, key, tip)
+        return { type = "toggle", label = label, tooltip = tip,
+            get = function() return X.Get(key) == true end,
+            set = function(v)
+                X.Set(key, v and true or false)
+                Changed()
+            end }
+    end
+
+    local function CogColor(label, stem, tip, disabled, reason)
+        return { type = "colorpicker", label = label, hasAlpha = false, tooltip = tip,
+            disabled = disabled, disabledTooltip = reason, rawTooltip = reason and true or nil,
+            get = function() return X.Get(stem .. "R"), X.Get(stem .. "G"), X.Get(stem .. "B") end,
+            set = function(r, g, b)
+                X.Set(stem .. "R", r)
+                X.Set(stem .. "G", g)
+                X.Set(stem .. "B", b)
                 Changed()
             end }
     end
@@ -407,31 +428,36 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             "gain", X.ResolveGainEffect)
         local levelDrop = EffectDrop(levelName .. " Effect", p .. "LevelEffect", LEVEL_V, LEVEL_O,
             "What plays across the whole bar at that moment.", "level")
-        local showAmount = Toggle("Show +N", p .. "GainShowAmount", "Floats the amount gained above the bar.", NoGain, true)
-        local amountSize = Slider("+N Text Size", p .. "GainTextSize", 8, 32, nil, NoAmount)
-        local matchBar = Toggle("Match Bar Color", p .. "GainMatchBar", "Tints the gain effect to the bar's fill.", NoGain, true)
-        local effectColor = Color("Effect Color", p .. "GainColor", false, "The gain effect's color when it does not match the bar.", NoCustom)
-        local glowSize = Slider("Glow Size", p .. "GlowSize", 2, 32, "How far the Sweep's glow reaches past the bar.", NoSweep)
+        local showAmount = Toggle("Show Amount Gained", p .. "GainShowAmount", "Floats the amount gained above the bar.", NoGain, true)
         Header("EFFECTS")
+        local gainRow, levelRow, amountRow
         if p == "xp" then
-            Row(gainDrop, Toggle("Quest Turn-Ins Only", "xpGainQuestsOnly", "Plays the gain effect for a quest and not for a kill.", NoGain))
-            Row(showAmount, amountSize)
-            Row(matchBar, effectColor)
-            Row(levelDrop, glowSize)
-            Row(Toggle("Ready Glow", "xpReadyGlow", "Pulses the rest of the bar while completed quests cover the level.", nil, true),
-                Slider("Star Size", "xpStarSize", 8, 48, nil, Off("xpReadyGlow")))
-            Row(Toggle("Rested Stripes", "xpRestedStripes", "Draws still stripes on the rested part of the bar.", nil, true),
-                Slider("Stripe Size", "xpStripeSize", 4, 32, nil, Off("xpRestedStripes")))
+            gainRow = Row(gainDrop, Toggle("Quest Turn-Ins Only", "xpGainQuestsOnly", "Plays the gain effect for a quest and not for a kill.", NoGain))
+            levelRow = Row(levelDrop, showAmount)
+            amountRow = levelRow
+            local stripesRow = Row(Toggle("Ready Glow", "xpReadyGlow", "Pulses the rest of the bar while completed quests cover the level."),
+                Toggle("Rested Stripes", "xpRestedStripes", "Draws still stripes on the rested part of the bar.", nil, true))
+            Cog(stripesRow, "right", "Rested Stripes", { CogSlider("Stripe Size", "xpStripeSize", 4, 32) },
+                Off("xpRestedStripes"), "Turn on Rested Stripes to size its stripes.")
             Row(PlayButton("Play Gain", "gain", "Plays the gain effect on the preview."),
                 PlayButton("Play Level-Up", "level", "Plays the level-up effect on the preview."))
         else
-            Row(gainDrop, showAmount)
-            Row(amountSize, matchBar)
-            Row(effectColor, levelDrop)
-            Row(glowSize, Spacer())
+            gainRow = Row(gainDrop, showAmount)
+            levelRow = Row(levelDrop, Spacer())
+            amountRow = gainRow
             Row(PlayButton("Play Gain", "gain", "Plays the gain effect on the preview."),
                 PlayButton("Play Rank-Up", "level", "Plays the rank-up effect on the preview."))
         end
+        Cog(gainRow, "left", "Gain Effect",
+            { CogToggle("Match Bar Color", p .. "GainMatchBar", "Tints the gain effect to the bar's fill."),
+              CogColor("Effect Color", p .. "GainColor", "The gain effect's color when it does not match the bar.",
+                  NoCustom, "Turn off Match Bar Color to choose a color.") },
+            NoGain, "Choose a gain effect to change its color.")
+        Cog(levelRow, "left", levelName .. " Effect",
+            { CogSlider("Glow Size", p .. "GlowSize", 2, 32, "How far the Sweep's glow reaches past the bar.") },
+            NoSweep, "Choose Sweep to size its glow.")
+        Cog(amountRow, "right", "Show Amount Gained", { CogSlider("Amount Text Size", p .. "GainTextSize", 8, 32) },
+            NoAmount, "Choose a gain effect and turn on Show Amount Gained to size its text.")
     end
 
     -- Without the header's picker the page carries its own.

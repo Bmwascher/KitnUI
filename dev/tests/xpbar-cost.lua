@@ -349,7 +349,7 @@ check(page.rows.Bar ~= nil, "page, XP view: without the header's picker the page
 check(page.barValues ~= nil and page.barValues == X.BAR_V, "page, XP view: its picker reads the shared labels")
 eq(#page.hooks, 0, "page, XP view: no script hook")
 eq(#frames, previewFrames, "page, XP view: no frame beyond the preview's own")
-eq(#page.cogs, 5, "page, XP view: a cogwheel on the amount and on each around-text")
+eq(#page.cogs, 9, "page, XP view: a cogwheel on the amount, on each around-text and on the effects' four")
 local amountCog, levelCog = cogTitled("Amount Position"), cogTitled("Time This Level")
 check(amountCog ~= nil and amountCog.rgn == (page.rows["Amount Position"] or {})._leftRegion,
     "page, XP view: the amount's cogwheel sits on Amount Position")
@@ -375,7 +375,7 @@ if page.hooks[1] then
     ok, why = pcall(page.hooks[1].fn)
     check(ok, "page, faction view: a press on the Pinned dropdown runs", why)
 end
-eq(#page.cogs, 2, "page, faction view: a cogwheel on each text position")
+eq(#page.cogs, 5, "page, faction view: a cogwheel on each text position and on the effects' three")
 local nameCog = cogTitled("Name Position")
 check(nameCog ~= nil and nameCog.rgn == (page.rows["Name Position"] or {})._leftRegion,
     "page, faction view: the name's cogwheel sits on Name Position")
@@ -406,7 +406,7 @@ end
 
 EUI.IsSearchPrebuild = function() return true end
 buildPage("page, search prebuild")
-check(has("XP DISPLAY") and has("REPUTATION SOURCE"), "page, search prebuild: both bars' sections, so search finds every setting")
+check(has("XP DISPLAY") and has("REPUTATION SOURCE"), "page, search prebuild: both bars' sections, so search finds every row")
 eq(factionWord(), nil, "page, search prebuild: no word search lists reads faction")
 EUI.IsSearchPrebuild = nil
 X.SelectBar("xp")
@@ -1530,14 +1530,97 @@ do
     check(before("EFFECTS", "XP TOOLTIP"), "effects: before XP TOOLTIP")
     check(page.rows["Gain Effect"] ~= nil and page.rows["Gain Effect"] == page.rows["Quest Turn-Ins Only"],
         "effects: Gain Effect and Quest Turn-Ins Only share a row")
-    check(page.rows["Level-Up Effect"] ~= nil and page.rows["Level-Up Effect"] == page.rows["Glow Size"],
-        "effects: Level-Up Effect and Glow Size share a row")
-    check(page.rows["Ready Glow"] ~= nil and page.rows["Ready Glow"] == page.rows["Star Size"],
-        "effects: Ready Glow and Star Size share a row")
-    check(page.rows["Rested Stripes"] ~= nil and page.rows["Rested Stripes"] == page.rows["Stripe Size"],
-        "effects: Rested Stripes and Stripe Size share a row")
+    check(page.rows["Level-Up Effect"] ~= nil and page.rows["Level-Up Effect"] == page.rows["Show Amount Gained"],
+        "effects: Level-Up Effect and Show Amount Gained share a row")
+    check(page.rows["Ready Glow"] ~= nil and page.rows["Ready Glow"] == page.rows["Rested Stripes"],
+        "effects: Ready Glow and Rested Stripes share a row")
     check(page.rows["Play Gain"] ~= nil and page.rows["Play Gain"] == page.rows["Play Level-Up"],
         "effects: the two play buttons share a row")
+    for _, text in ipairs({ "Show +N", "+N Text Size", "Amount Text Size", "Match Bar Color", "Effect Color", "Glow Size",
+        "Star Size", "Stripe Size" }) do
+        eq(page.rows[text], nil, "effects: " .. text .. " has no row on the page")
+    end
+
+    local function wheel(title, rowText, side)
+        local cog = cogTitled(title)
+        local row = page.rows[rowText] or {}
+        check(cog ~= nil and cog.rgn == row[side], "effects: the " .. title .. " cogwheel sits on " .. rowText)
+        check(cog ~= nil and type(cog.opts.disabledTooltip) == "string" and cog.opts.rawTooltip == true,
+            "effects: the " .. title .. " cogwheel grays with its reason, shown as written")
+        return cog
+    end
+    local function grayed(cog)
+        return cog and cog.opts.disabled and cog.opts.disabled()
+    end
+    local function cogRow(cog, label)
+        for _, entry in ipairs(cog and cog.opts.rows or {}) do
+            if entry.label == label then return entry end
+        end
+        return nil
+    end
+    local function spans(cog, label)
+        local row = cogRow(cog, label)
+        return row and (row.min .. "-" .. row.max)
+    end
+    local function writes(cog, label, key, expected, ...)
+        local row = cogRow(cog, label)
+        local redrawn = false
+        local previewRefresh = X.PreviewRefresh
+        X.PreviewRefresh = function() redrawn = true end
+        if row then row.set(...) end
+        X.PreviewRefresh = previewRefresh
+        eq(settings[key], expected, "effects: " .. label .. " saves " .. key)
+        eq(redrawn, true, "effects: " .. label .. " redraws the preview, for " .. key)
+    end
+    local function checkWheels(p, levelName)
+        local gainWheel = wheel("Gain Effect", "Gain Effect", "_leftRegion")
+        local levelWheel = wheel(levelName, levelName, "_leftRegion")
+        local amountWheel = wheel("Show Amount Gained", "Show Amount Gained", "_rightRegion")
+        local color = cogRow(gainWheel, "Effect Color")
+
+        settings[p .. "GainEffect"], settings[p .. "GainMatchBar"], settings[p .. "GainShowAmount"] = "off", true, true
+        eq(grayed(gainWheel), true, p .. " effects: the gain cogwheel grays with no gain effect")
+        eq(grayed(amountWheel), true, p .. " effects: and the amount's")
+        settings[p .. "GainEffect"] = "pulse"
+        eq(grayed(gainWheel), false, p .. " effects: a gain effect opens the gain cogwheel")
+        eq(grayed(amountWheel), false, p .. " effects: and the amount's, with the amount on")
+        settings[p .. "GainShowAmount"] = false
+        eq(grayed(amountWheel), true, p .. " effects: the amount's grays with the amount off")
+
+        eq(color and color.disabled(), true, p .. " effects: Effect Color grays while it matches the bar")
+        check(color ~= nil and type(color.disabledTooltip) == "string" and color.rawTooltip == true,
+            p .. " effects: with its reason, shown as written")
+        writes(gainWheel, "Match Bar Color", p .. "GainMatchBar", false, false)
+        eq(color and color.disabled(), false, p .. " effects: Match Bar Color off opens Effect Color")
+        writes(gainWheel, "Effect Color", p .. "GainColorG", 0.2, 0.1, 0.2, 0.3)
+        eq(color and select(2, color.get()), 0.2, p .. " effects: Effect Color reads what it saved")
+
+        settings[p .. "LevelEffect"] = "flash"
+        eq(grayed(levelWheel), true, p .. " effects: Glow Size has nothing to offer unless the effect is Sweep")
+        settings[p .. "LevelEffect"] = "sweep"
+        eq(grayed(levelWheel), false, p .. " effects: Sweep opens its cogwheel")
+        eq(spans(levelWheel, "Glow Size"), "2-32", p .. " effects: Glow Size's range")
+        writes(levelWheel, "Glow Size", p .. "GlowSize", 20, 20)
+
+        eq(spans(amountWheel, "Amount Text Size"), "8-32", p .. " effects: Amount Text Size's range")
+        writes(amountWheel, "Amount Text Size", p .. "GainTextSize", 20, 20)
+
+        for _, key in ipairs({ "GainEffect", "GainMatchBar", "GainShowAmount", "GainColorR", "GainColorG", "GainColorB",
+            "LevelEffect", "GlowSize", "GainTextSize" }) do
+            settings[p .. key] = nil
+        end
+    end
+
+    checkWheels("xp", "Level-Up Effect")
+    eq(cogTitled("Ready Glow"), nil, "effects: Ready Glow has no cogwheel")
+    local stripeWheel = wheel("Rested Stripes", "Rested Stripes", "_rightRegion")
+    settings.xpRestedStripes = false
+    eq(grayed(stripeWheel), true, "effects: the stripes' cogwheel grays with the stripes off")
+    settings.xpRestedStripes = true
+    eq(grayed(stripeWheel), false, "effects: and opens with them on")
+    eq(spans(stripeWheel, "Stripe Size"), "4-32", "effects: Stripe Size's range")
+    writes(stripeWheel, "Stripe Size", "xpStripeSize", 20, 20)
+    settings.xpRestedStripes, settings.xpStripeSize = nil, nil
     check(not has("XP TICKER"), "effects: the XP bar's page has no card section")
 
     X.SelectBar("fb")
@@ -1545,6 +1628,10 @@ do
     check(has("EFFECTS"), "effects: the reputation bar's page has the section")
     check(before("DIVIDERS", "EFFECTS"), "effects: after its appearance sections")
     check(page.rows["Rank-Up Effect"] ~= nil, "effects: the reputation bar's moment is a rank-up")
+    check(page.rows["Gain Effect"] ~= nil and page.rows["Gain Effect"] == page.rows["Show Amount Gained"],
+        "effects: Gain Effect and Show Amount Gained share a row")
+    eq(page.rows["Amount Text Size"], nil, "effects: Amount Text Size has no row on the page")
+    checkWheels("fb", "Rank-Up Effect")
     check(page.rows["Play Gain"] ~= nil and page.rows["Play Gain"] == page.rows["Play Rank-Up"],
         "effects: its two play buttons share a row")
     eq(page.rows["Ready Glow"], nil, "effects: Ready Glow is the XP bar's")
@@ -1604,7 +1691,7 @@ do
     EUI.IsSearchPrebuild = function() return true end
     buildPage("page, search prebuild with the card")
     check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("XP TICKER") and has("ROWS"),
-        "search prebuild: all three views, so search finds every setting")
+        "search prebuild: all three views, so search finds every row")
     check(lastIndexOf("EFFECTS") ~= indexOf("EFFECTS"), "search prebuild: both bars' EFFECTS")
     EUI.IsSearchPrebuild = nil
 

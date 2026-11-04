@@ -192,7 +192,7 @@ do
     if set then finished(set) end
     w.fxAmount:Hide()
     X.PlayGainEffect(w, view, data, 30, 40, 5)
-    eq(w.fxAmount.shown, false, "Show +N off: no amount")
+    eq(w.fxAmount.shown, false, "Show Amount Gained off: no amount")
 end
 
 ---------------------------------------------------------------------------------
