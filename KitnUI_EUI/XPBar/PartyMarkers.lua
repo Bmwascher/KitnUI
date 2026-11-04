@@ -115,7 +115,7 @@ function X.SyncMarkers(w, view, list)
         w.ptMarks = {}
     end
     if not w.ptHost then return end
-    local size = tonumber(view("xpPartyLabelSize")) or 11
+    local size = tonumber(view("xpPartyLabelSize")) or 12
     local gap = ceil(size * GAP_SCALE)
     local below = view("xpPartyLabelSide") == "below"
     local oy = tonumber(view("xpPartyLabelOffY")) or 0
@@ -127,7 +127,7 @@ function X.SyncMarkers(w, view, list)
     local inset = w.insetY or 0
     look.y = below and (oy - (w.textBelow + gap + inset)) or (oy + w.textAbove + gap + inset)
     local px = X.Pixel()
-    local tickW = L.MarkerWidth(tonumber(view("xpPartyMarkerWidth")) or 2, px)
+    local tickW = L.MarkerWidth(tonumber(view("xpPartyMarkerWidth")) or 3, px)
     local labels = false
     for i = 1, n do
         local mark = w.ptMarks[i]

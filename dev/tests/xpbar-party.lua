@@ -307,10 +307,11 @@ do
     eq(first.x, X.PartyLogic.MarkerX(91.2, w.bw, 2.25, 0.75), "a tick snaps at the UI's pixel size")
     eq(first.x % 0.75, 0, "to a whole pixel")
     eq(first.tick.width, 2.25, "with a whole-pixel width")
-    settings.xpPartyMarkerWidth = nil
     _G.EllesmereUI.PP = nil
     X.SyncMarkers(w, X.Get, data.markers)
-    eq(first.tick.width, 3, "and returns with it")
+    eq(first.tick.width, 2, "and returns with it")
+    settings.xpPartyMarkerWidth = nil
+    X.SyncMarkers(w, X.Get, data.markers)
 
     settings.xpPartyLabel = "name"
     X.Draw(w, X.Get, data)
