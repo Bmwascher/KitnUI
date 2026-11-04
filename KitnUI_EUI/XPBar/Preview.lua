@@ -15,7 +15,7 @@ local STAGE_PAD_Y = 14
 -- The bar picker above the stage: its gap from the top, width, height, and
 -- the gap below it.
 local PICK_TOP, PICK_W, PICK_H, PICK_GAP = 14, 260, 30, 12
--- Overlay levels above a bar's base, over its top layer (the texts, at 13).
+-- Overlay levels above a bar's base, over its top layer (the texts, at 14).
 local HIT_FRAME, HIT_BODY, HIT_FILL, HIT_TEXT = 20, 21, 22, 30
 -- How far the frame's overlay reaches past the bar.
 local RING_OUT = 4

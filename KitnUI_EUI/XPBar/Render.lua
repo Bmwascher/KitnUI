@@ -143,12 +143,16 @@ local function BarTexture(name)
     return WHITE
 end
 
+X.BarTexture = BarTexture
+
 -- One physical pixel: the width of every border and divider line.
 local function Pixel()
     local EUI = _G.EllesmereUI
     local m = EUI and EUI.PP and tonumber(EUI.PP.mult)
     return (m and m > 0) and m or 1
 end
+
+X.Pixel = Pixel
 
 ---------------------------------------------------------------------------------
 -- The widget
@@ -186,10 +190,10 @@ function X.NewWidget(parent, kind)
     w.dividers:SetFrameLevel(base + 10)
     w.border = CreateFrame("Frame", nil, frame)
     w.border:SetAllPoints(frame)
-    w.border:SetFrameLevel(base + 12)
+    w.border:SetFrameLevel(base + 13)
     w.textHost = CreateFrame("Frame", nil, frame)
     w.textHost:SetAllPoints(frame)
-    w.textHost:SetFrameLevel(base + 13)
+    w.textHost:SetFrameLevel(base + 14)
     for _, key in ipairs(kind == "xp" and XP_TEXTS or FB_TEXTS) do
         local fs = w.textHost:CreateFontString(nil, "OVERLAY")
         fs:SetWordWrap(false)
@@ -969,4 +973,6 @@ function X.Draw(w, view, data)
     SyncMasks(w, style == "blizzard")
     X.SyncReady(w, view, data, bw, bh)
     LayoutTexts(w, view, p, data, font, flags, width, bw)
+    w.textAbove, w.textBelow, w.insetY = w.above, w.below, iy
+    if p == "xp" and X.SyncMarkers then X.SyncMarkers(w, view, data.markers) end
 end
