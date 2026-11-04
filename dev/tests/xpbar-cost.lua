@@ -885,4 +885,53 @@ do
     X.Draw = drawBar
 end
 
+-- Each kind's rank and total, on the one reused record
+do
+    local kind
+    _G.C_Reputation = {
+        GetFactionDataByID = function()
+            return { name = "Test", reaction = 6, currentStanding = 4000, currentReactionThreshold = 3000, nextReactionThreshold = 9000 }
+        end,
+        IsFactionParagonForCurrentPlayer = function() return kind == "paragon" end,
+        GetFactionParagonInfo = function() return 25000, 10000, nil, false end,
+        IsMajorFaction = function() return kind == "renown" end,
+    }
+    _G.C_GossipInfo = {
+        GetFriendshipReputation = function()
+            if kind ~= "friendship" then return nil end
+            return { friendshipFactionID = 5, standing = 700, reactionThreshold = 500, nextThreshold = 900, reaction = "Buddy" }
+        end,
+        GetFriendshipReputationRanks = function() return { currentLevel = 3 } end,
+    }
+    _G.C_MajorFactions = {
+        GetMajorFactionData = function() return { renownLevel = 12, renownReputationEarned = 800, renownLevelThreshold = 2500 } end,
+        HasMaximumRenown = function() return false end,
+    }
+    local function read(name)
+        kind = name
+        local rec = X.ResolveFaction("pinned", 5) or {}
+        return rec.kind, rec.rank, rec.total
+    end
+    local k, rank, total = read("friendship")
+    eq(k, "friendship", "faction reading: a friendship")
+    eq(rank, 3, "faction reading: its rank is the friendship level")
+    eq(total, 700, "faction reading: its total is the standing")
+    k, rank, total = read("paragon")
+    eq(k, "paragon", "faction reading: a paragon track")
+    eq(rank, 2, "faction reading: its rank counts the rewards")
+    eq(total, 25000, "faction reading: its total runs on")
+    k, rank, total = read("renown")
+    eq(k, "renown", "faction reading: a renown track")
+    eq(rank, 12, "faction reading: its rank is the renown level")
+    eq(total, 800, "faction reading: its total is the XP into that level")
+    k, rank, total = read("standard")
+    eq(k, "standard", "faction reading: a plain reputation")
+    eq(rank, 6, "faction reading: its rank is the standing")
+    eq(total, 4000, "faction reading: its total is the standing's value")
+    _G.C_GossipInfo.GetFriendshipReputationRanks = function() return nil end
+    local _, fallback = read("friendship")
+    eq(fallback, 500, "faction reading: a friendship with no level falls back to its threshold")
+    _G.C_Reputation, _G.C_GossipInfo, _G.C_MajorFactions = nil, nil, nil
+end
+
 finish()
