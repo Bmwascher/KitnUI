@@ -204,9 +204,9 @@ end
 ---------------------------------------------------------------------------------
 
 local sampleSelf = { name = "You", class = "MAGE", level = 59, online = true, view = {} }
-local sampleData = { name = "Mirelle", class = "MAGE", level = 58, online = true, view = {} }
-local sampleMax = { name = "Dornak", class = "WARRIOR", online = true, view = {} }
-local sampleNone = { name = "Vess", class = "DRUID", level = 57, online = true, view = {} }
+local sampleData = { name = "Milkers", class = "MAGE", level = 58, online = true, view = {} }
+local sampleNone = { name = "Snorlock", class = "WARLOCK", level = 57, online = true, view = {} }
+local sampleMax = { name = "Bite", class = "HUNTER", level = SAMPLE_CAP, online = true, view = {} }
 local SELF_PCT, DATA_PCT = 45, 91.2
 local sampleRows = {}
 local sampleMarks = { n = 1, { name = sampleData.name, class = sampleData.class, level = sampleData.level, pct = DATA_PCT } }
@@ -218,18 +218,16 @@ function X.PartySampleRows(view)
     local _, class = X.ReadPlain(_G.UnitClass, "player")
     sampleSelf.name = name or sampleSelf.name
     sampleSelf.class = class or sampleSelf.class
-    local cap = X.LevelCap() or SAMPLE_CAP
-    sampleMax.level = cap
-    L.RowView(sampleSelf.view, sampleSelf, selfHeard, cap, false)
-    L.RowView(sampleData.view, sampleData, dataHeard, cap, false)
-    L.RowView(sampleMax.view, sampleMax, nil, cap, false)
-    L.RowView(sampleNone.view, sampleNone, nil, cap, false)
+    L.RowView(sampleSelf.view, sampleSelf, selfHeard, SAMPLE_CAP, false)
+    L.RowView(sampleData.view, sampleData, dataHeard, SAMPLE_CAP, false)
+    L.RowView(sampleNone.view, sampleNone, nil, SAMPLE_CAP, false)
+    L.RowView(sampleMax.view, sampleMax, nil, SAMPLE_CAP, false)
     local n = 0
     if view("xpPartyShowSelf") == true then
         n = 1
         sampleRows[n] = sampleSelf
     end
-    sampleRows[n + 1], sampleRows[n + 2], sampleRows[n + 3] = sampleData, sampleMax, sampleNone
+    sampleRows[n + 1], sampleRows[n + 2], sampleRows[n + 3] = sampleData, sampleNone, sampleMax
     return sampleRows, n + 3
 end
 
