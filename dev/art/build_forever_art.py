@@ -13,7 +13,7 @@ Language, in canvas pixels:
   curve       x = cos t (1 + Q sin^2 t), y = sin 2t (1 + K cos 2t), width 2, aspect 2.4833
   comet       starts at width 0 at 78 percent of the arc length, head at 5 percent
   small mark  ring, comet and head star only; no crossing star, no dust
-  detail floor  a stroke under 1.5 px or a dust point under radius 1.1 is dropped
+  detail floor  a ring under 2.1 px or a dust point under radius 1.1 is dropped; a comet core may taper to 1.1 px
   clearance   anything at alpha 40 or more stays 4 px from title, Skip, slider, thanks and rails
 
 Run: python -I dev/art/build_forever_art.py   (needs NumPy, Pillow, Edge, Segoe UI Black)

@@ -39,12 +39,12 @@ local function PngHeader(path)
     return {
         width      = b[17] * 16777216 + b[18] * 65536 + b[19] * 256 + b[20],
         height     = b[21] * 16777216 + b[22] * 65536 + b[23] * 256 + b[24],
-        colourType = b[26],
+        colorType  = b[26],
     }
 end
 
 -- Each mark shares its background's canvas, which is what lets it take the same
--- crop and the same anchors. Colour type 6 is RGBA: a mark without alpha would
+-- crop and the same anchors. Color type 6 is RGBA: a mark without alpha would
 -- cover the art.
 for _, pair in ipairs({
     { "Media/Background/KitnUI-EUI-Background.png", "Media/Background/KitnUI-EUI-Background-Forever.png" },
@@ -58,26 +58,33 @@ for _, pair in ipairs({
     if art and mark then
         eq(mark.width, art.width, pair[2] .. " has its background's width")
         eq(mark.height, art.height, pair[2] .. " has its background's height")
-        eq(mark.colourType, 6, pair[2] .. " carries alpha")
+        eq(mark.colorType, 6, pair[2] .. " carries alpha")
     end
 end
 
 -- The wizard's real function, lifted out of the file and run against a fake frame.
 do
     local source = read("Installer/Wizard.lua")
+    local helper = source:match("(local function paintCropped%(tex, path, altPath%).-\nend\n)")
     local body = source:match("(local function paintMark%(frame%).-\nend\n)")
+    check(helper ~= nil, "the wizard defines paintCropped")
     check(body ~= nil, "the wizard defines paintMark")
     local paths = {}
     for name, path in source:gmatch('local (MARK_PATH[_ALT]*) = "([^"]+)"') do paths[name] = path end
     check(paths.MARK_PATH and paths.MARK_PATH:find("Background%-Forever%.png$"), "the wizard names the default mark")
     check(paths.MARK_PATH_ALT and paths.MARK_PATH_ALT:find("Background%-Rasta%-Forever%.png$"), "the wizard names the alternate mark")
-    local _, repaints = source:gsub("paintMark%(", "")
-    eq(repaints, 3, "the wizard paints the mark at build and on a theme swap")
-    check(source:find("paintMark(W.frame)", 1, true) ~= nil, "a theme swap repaints the mark")
 
-    if body and paths.MARK_PATH then
+    -- Each site that paints the art must paint the mark in the same function.
+    local skin = source:match("local function skin%(frame%).-\nend\n")
+    local refresh = source:match("function W:RefreshTheme%(%).-\nend\n")
+    check(skin and skin:find("paintMark(frame)", 1, true), "building the window paints the mark")
+    check(refresh and refresh:find("paintMark(W.frame)", 1, true), "a theme swap repaints the mark")
+    local _, artSites = source:gsub("paintCropped%([%w%.]+artLayer, ART_PATH, ART_PATH_ALT%)", "")
+    eq(artSites, 2, "the art is painted only at the two sites that also paint the mark")
+
+    if helper and body and paths.MARK_PATH then
         local chunk = assert(loadstring(
-            "local ns, MARK_PATH, MARK_PATH_ALT, ART_CROP = ...\n" .. body .. "return paintMark\n"))
+            "local ns, MARK_PATH, MARK_PATH_ALT, ART_CROP = ...\n" .. helper .. body .. "return paintMark\n"))
         local crop = { 0.1, 0.9, 0.2, 0.8 }
 
         local function Run(isForever, alt, loads)
@@ -152,7 +159,13 @@ do
             if parent then overlay = frame end
             return frame
         end
-        _G.hooksecurefunc = function() end
+        _G.hooksecurefunc = function(tbl, key, hook)
+            local original = tbl[key]
+            tbl[key] = function(...)
+                original(...)
+                hook(...)
+            end
+        end
         _G.EllesmereUI = {
             THEME_PRESETS = {},
             THEME_ORDER = { "EllesmereUI" },
@@ -168,6 +181,8 @@ do
             overlay = function() return overlay end,
             show = function() onShow() end,
             setActive = function(theme) active = theme end,
+            apply = ns.ApplyEUIOptionsTheme,
+            pick = function(theme) _G.EllesmereUI.SetActiveTheme(theme) end,
         }
     end
 
@@ -198,6 +213,16 @@ do
             "a theme swap changes the artwork")
         eq(mark.path, "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\KitnUI-EUI-Options-Rasta-Forever.png",
             "a theme swap changes the mark with it")
+
+        -- The dropdown reaches the art through the hook on the host's setter.
+        forever.pick("KitnUI")
+        eq(mark.path, "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\KitnUI-EUI-Options-Forever.png",
+            "picking a theme in the dropdown changes the mark")
+
+        -- The installer reaches it through the bridge.
+        eq(forever.apply("KitnUI Rasta"), true, "the installer can apply a theme")
+        eq(mark.path, "Interface\\AddOns\\KitnUI_EUI\\Media\\Backgrounds\\KitnUI-EUI-Options-Rasta-Forever.png",
+            "a theme applied by the installer changes the mark")
 
         forever.setActive("EllesmereUI")
         forever.show()

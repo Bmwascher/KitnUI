@@ -105,15 +105,15 @@ local BTN_COLOURS = {
     1, 1, 1, 0.55,              1, 1, 1, 0.70,
 }
 
--- Point the background at the theme in force. Called again on a theme swap, so a
--- texture that failed once is retried rather than left hidden.
-local function paintArt(tex)
-    tex:SetTexture(ns.UsesAltTheme() and ART_PATH_ALT or ART_PATH)
+-- Point a layer at the theme in force. Called again on a theme swap, so a texture
+-- that failed once is retried rather than left hidden.
+local function paintCropped(tex, path, altPath)
+    tex:SetTexture(ns.UsesAltTheme() and altPath or path)
     if tex:GetTexture() then
         tex:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
         tex:Show()
     else
-        tex:Hide()  -- art failed to load; fall back to the drawn fill/gradient
+        tex:Hide()  -- failed to load; fall back to what is drawn beneath
     end
 end
 
@@ -127,13 +127,7 @@ local function paintMark(frame)
         tex:SetAllPoints()
         frame.markLayer = tex
     end
-    tex:SetTexture(ns.UsesAltTheme() and MARK_PATH_ALT or MARK_PATH)
-    if tex:GetTexture() then
-        tex:SetTexCoord(ART_CROP[1], ART_CROP[2], ART_CROP[3], ART_CROP[4])
-        tex:Show()
-    else
-        tex:Hide()
-    end
+    paintCropped(tex, MARK_PATH, MARK_PATH_ALT)
 end
 
 local function euiReady()
@@ -162,7 +156,7 @@ local function skin(frame)
     -- margin; the frame aspect matches the cropped panel so nothing stretches.
     frame.artLayer = frame:CreateTexture(nil, "BACKGROUND", nil, 0)
     frame.artLayer:SetAllPoints()
-    paintArt(frame.artLayer)
+    paintCropped(frame.artLayer, ART_PATH, ART_PATH_ALT)
     paintMark(frame)
     -- border
     if EllesmereUI.MakeBorder then
@@ -971,7 +965,7 @@ end
 function W:RefreshTheme()
     if not W.frame then return end
     accent = ns.UsesAltTheme() and RASTA_AMBER or KITN_PINK
-    paintArt(W.frame.artLayer)
+    paintCropped(W.frame.artLayer, ART_PATH, ART_PATH_ALT)
     paintMark(W.frame)
     for _, paint in ipairs(accentPainters) do paint(accent) end
     W:SetPage(W.page or 1)
