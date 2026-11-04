@@ -694,7 +694,6 @@ local function VisUpdater()
     DropTooltips()
 end
 
--- Unlock Mode stops every effect and blocks new ones until it ends.
 local function OnUnlockMode(on)
     X.UnlockActive = on == true
     for _, w in pairs(widgets) do X.StopEffects(w) end

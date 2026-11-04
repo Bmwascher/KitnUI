@@ -32,7 +32,6 @@ local pending
 local listening = false
 local muted = {}
 local muteTimer
--- When the card's Pause froze the session.
 local pausedAt
 -- The total played, from a reply or a recent save, and when it was current.
 local playedBase, playedAt
@@ -331,13 +330,10 @@ local function Mute()
     end
 end
 
--- Asks only for something wanted and unknown: the clock, for the level-time
--- line or the card's Current Level row, or the total, for its Played or Pace
--- row. Two asks. The first runs at most once per load: in a load that began
--- with a login, muted as Mute /played in Chat says, or in any other load only
--- for a card row no save supplied, always muted. The ask again runs after each
--- unseen level-up, in any load, always muted since the player did not type it;
--- when both are due it wins and spends the first too. A request that raises
+-- Two asks, both only for something a row wants and no save supplied. The first
+-- runs once per load: after a login, muted as Mute /played in Chat says; in any
+-- other load only for a card row, always muted. The ask again runs after each
+-- unseen level-up, always muted, and spends the first too. A request that raises
 -- never reached the server, so nothing is spent.
 function X.RequestPlayed()
     if not (started and listening) or pending then return end

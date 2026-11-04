@@ -34,7 +34,6 @@ local BACKGROUNDS = { card = { 0.05, 0.05, 0.05, 0.85 }, soft = { 0, 0, 0, 0.35 
 -- Where a card sits until it is moved, clear of the bars' default spots.
 local FIRST_X, FIRST_Y = 40, 120
 
--- The live card and what it draws from.
 local live, timer, liveRaw
 local cardData, trendState = {}, {}
 local hist = { n = 0, levels = {}, texts = {} }

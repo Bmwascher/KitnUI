@@ -214,7 +214,6 @@ local function SetBarTexture(bar, tex)
     return bar:GetStatusBarTexture()
 end
 
--- EllesmereUI's accent, else KitnUI's pink, else nil.
 function X.AccentColor()
     local EUI = _G.EllesmereUI
     if EUI and EUI.GetAccentColor then
