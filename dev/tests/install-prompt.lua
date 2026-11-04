@@ -120,6 +120,8 @@ expectFresh("a Finish with nothing imported")
 
 account(nil)
 ns.CompleteSetup("BigWigs")
+-- The login load prompt reads this.
+eq(ns.db.perChar[KEY].loaded, true, "an imported profile sets loaded")
 expectPrompt("an imported profile")
 
 -- The order a real character meets them in: the XP row first, the install after.
