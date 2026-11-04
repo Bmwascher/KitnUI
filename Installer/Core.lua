@@ -572,7 +572,7 @@ local defaults = {
     extras = {},            -- [extraKey] = true once the user opted in; account-wide so /kitn load repeats it on an alt
     skipped = {},           -- [addonKey] = shipped X-header version at the moment of the skip
     installedVersion = nil, -- addon version at last install
-    perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true }, installerTheme = "default"/"alt" }
+    perChar = {},           -- [charName-realm] = { loaded = true/false, editModeApplied = true, layoutWatchOff = { [specIndex] = true }, installerTheme = "default"/"alt", xp = { XP session save } }
     pendingMessages = {},   -- lines to print after the next reload (see ns.QueueMessage)
     cdmLimitPending = {},   -- [charName-realm] = spec names the CDM layout cap blocked, reminded about at that character's next login
     euiSettings = {},       -- [profileName] = { accent = {...}, lulu = true } config tab switches
@@ -880,13 +880,12 @@ local function ConfirmOverwriteInstall(fn)
         return
     end
 
-    -- The loaded field, not the record: the XP session, the installer theme and
-    -- the layout watcher all create the record on characters with no install.
-    -- The profile list too: profiles are account-wide, so an alt that never
-    -- loaded them still overwrites them.
+    -- The account's profile list, because profiles are account-wide and an alt
+    -- that never loaded them still overwrites them. Not the character's record:
+    -- other features create it, and a Finish with nothing imported sets its
+    -- loaded field.
     local db = ns.db
-    local rec = db and db.perChar[key]
-    if (rec and rec.loaded) or (db and db.profiles and next(db.profiles)) then
+    if db and db.profiles and next(db.profiles) then
         StaticPopupDialogs["KITNUI_OVERWRITE_CONFIRM"] = {
             text = ns.title .. ": You have already installed profiles. This will overwrite any local changes. If you just want to load profiles on a new character, use " .. ns.Color("/kitn load") .. " instead.\n\nContinue?",
             button1 = "Yes",
