@@ -1352,16 +1352,31 @@ do
     onEvent(evFrame, "PLAYER_LEVEL_UP", 12)
     X.SessionPause(true)
     eq(X.SessionPaused(), true, "reaching max level: paused on the way")
+    local frozen = X.SessionGained()
     onEvent(evFrame, "PLAYER_LEVEL_UP", 90)
-    eq(X.SessionPaused(), false, "reaching max level: the level-up ends it while the level still reads old")
-    check(shownTime ~= nil and not shownTime:find("paused", 1, true),
-        "reaching max level: and the bar stops saying paused")
-    onEvent(evFrame, "PLAYER_LEVEL_UP", 12)
-    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "reaching max level: a level-up with the level still reading old waits for its reading")
     _G.UnitLevel = function() return 90 end
     onEvent(evFrame, "PLAYER_XP_UPDATE")
-    eq(X.SessionPaused(), false, "reaching max level: so does a reading of it")
-    _G.UnitLevel = function() return 11 end
+    eq(X.SessionPaused(), false, "reaching max level: and its reading ends the pause")
+    eq(X.SessionGained(), frozen, "reaching max level: with the XP still frozen")
+    check(shownTime ~= nil and not shownTime:find("paused", 1, true),
+        "reaching max level: and the bar stops saying paused")
+
+    -- A level past the purchased limit that can still level, as a timerunner's.
+    _G.GameRulesUtil = {
+        IsPlayerAtEffectiveMaxLevel = function() return false end,
+        CanShowExperienceBar = function() return true end,
+    }
+    _G.UnitLevel = function() return 91 end
+    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "past the purchased limit: Pause works")
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 92)
+    eq(X.SessionPaused(), true, "past the purchased limit: a level-up keeps the pause")
+    X.SessionPause(false)
+    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "past the purchased limit: Pause works after that level-up too")
+    X.SessionPause(false)
+    _G.GameRulesUtil, _G.UnitLevel = nil, function() return 11 end
     X.Draw = drawForTime
     settings.xpEnabled, settings.xpShowSessionTime = false, nil
     X.Apply()

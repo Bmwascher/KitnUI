@@ -33,6 +33,8 @@ local listening = false
 local muted = {}
 local muteTimer
 local pausedAt
+-- A pause has ended at max level; XP counted there since is its level-up's tail.
+local endedAtMax = false
 -- The total played, from a reply or a recent save, and when it was current.
 local playedBase, playedAt
 -- The clock a reading-first level-up dropped, kept for its PLAYER_LEVEL_UP.
@@ -123,17 +125,19 @@ local function Counted(upTo)
     return true
 end
 
--- The reading, or the level PLAYER_LEVEL_UP named while UnitLevel still reads
--- the old one.
-local function AtMax(t)
-    return t.atMax or (t.cap and levelOf and levelOf >= t.cap)
-end
-
 -- Moves the session's start past the pause, so every reader of the elapsed time
 -- needs nothing more.
 local function Resume()
     sessionStart = sessionStart + (GetTime() - pausedAt)
     pausedAt = nil
+end
+
+-- The card that holds Start hides at max level, so a pause ends there. Only a
+-- reading of max level ends it: Track has then seen the level-up during the
+-- pause, so the rest of the old level stays out of the session.
+local function ResumeAtMax()
+    Resume()
+    endedAtMax = true
 end
 
 -- Once per load, when the XP bar first runs. A fresh session counts from the
@@ -200,7 +204,7 @@ function X.SessionStart(kind)
             gained, sessionStart = 0, now
         end
     end
-    if pausedAt and AtMax(t) then Resume() end
+    if pausedAt and t.atMax then ResumeAtMax() end
 end
 
 -- Takes one reading first, so XP earned since the last event is in the save.
@@ -246,9 +250,8 @@ function X.OnXP()
     if not started then return end
     local t = X.ReadXP()
     local gain, upTo = M.Track(track, t.cur, t.max, t.level)
-    if not pausedAt then gained = gained + gain end
-    -- The card that holds Start hides at max level, so a pause ends there.
-    if pausedAt and AtMax(t) then Resume() end
+    if not pausedAt and not (endedAtMax and t.atMax) then gained = gained + gain end
+    if pausedAt and t.atMax then ResumeAtMax() end
     if Counted(upTo) and listening and C_Timer and C_Timer.After then C_Timer.After(0, AskAgain) end
 end
 
@@ -280,7 +283,7 @@ function X.SessionPause(on)
     if not started or (on and true or false) == (pausedAt ~= nil) then return end
     X.OnXP()
     if on then
-        if not AtMax(X.ReadXP()) then pausedAt = GetTime() end
+        if not X.ReadXP().atMax then pausedAt = GetTime() end
     elseif pausedAt then
         Resume()
     end
