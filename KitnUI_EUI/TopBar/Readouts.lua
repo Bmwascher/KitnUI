@@ -121,8 +121,13 @@ sysText:SetPoint("CENTER")
 -- nothing else here ever calls SetText before this line runs.
 sysText:SetFont(STANDARD_TEXT_FONT, Get("tbSysSize", ns.EUI_DEFAULTS.tbSysSize), "OUTLINE")
 
+-- A session's drag or arrow key lives only on the frame until Save & Exit reads it
+-- back from there, so while Unlock Mode is open the readout stays put, and closing
+-- places it again.
+local sysUnlockOn = false
+
 local function ApplyReadoutPosition()
-    if not sysFrame then return end
+    if sysUnlockOn or not sysFrame then return end
     sysFrame:ClearAllPoints()
     local pos = Get("tbSysPos")
     if type(pos) == "table" then
@@ -1443,11 +1448,22 @@ end
 -- saved tbSysPos wins. ns.TopBar.ResetPositions() (Bar.lua) clears both.
 ---------------------------------------------------------------------------------
 
+local sysElement
+
+-- While noInitHook is up, Unlock Mode's position pass, which runs on every zone
+-- change, skips the element, and its resize path, which this readout's ticker can
+-- reach every second, calls only applyPos, which holds.
+local function OnSysUnlock(active)
+    sysUnlockOn = active == true
+    if sysElement then sysElement.noInitHook = sysUnlockOn end
+    if not sysUnlockOn then ns.TopBar.PlaceAfterSession("KitnUI_TopBarFPS", ApplyReadoutPosition) end
+end
+
 local function RegisterSysUnlock()
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.RegisterUnlockElements and EUI.MakeUnlockElement) then return end
 
-    EUI:RegisterUnlockElements({
+    local sysElements = {
         EUI.MakeUnlockElement({
             key   = "KitnUI_TopBarFPS",
             label = "KitnUI FPS / MS Readout",
@@ -1474,10 +1490,17 @@ local function RegisterSysUnlock()
                 if type(p) ~= "table" then return nil end
                 return { point = p.point, relPoint = p.relPoint, x = p.x, y = p.y }
             end,
+            -- Spec layouts read these instead of loadPos and savePos, and call
+            -- applyPos straight after a write.
+            loadRawPos = function() return ns.XPBar.Math.RawSpot(Get("tbSysPos")) end,
+            saveRawPos = function(_, banked) Set("tbSysPos", ns.XPBar.Math.StoredSpot(banked)) end,
             clearPos = function() Set("tbSysPos", nil) end,
             applyPos = ApplyReadoutPosition,
         }),
-    }, "KitnUI_EUI")
+    }
+    sysElement = sysElements[1]
+    EUI:RegisterUnlockElements(sysElements, "KitnUI_EUI")
+    if EUI.RegisterUnlockModeListener then EUI:RegisterUnlockModeListener("KitnUI_TopBarFPS", OnSysUnlock) end
 end
 
 local unlockBoot = CreateFrame("Frame")

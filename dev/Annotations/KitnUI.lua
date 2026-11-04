@@ -181,6 +181,7 @@ local KitnUIWizard
 ---@field ResetPositions fun()
 ---@field Teardown fun()
 ---@field SizeClockButton fun()
+---@field PlaceAfterSession fun(key: string, place: fun())
 ---@field SuppressEUIFps fun(on: boolean)
 ---@field FriendsTooltip fun(tt: table)
 ---@field GuildTooltip fun(tt: table)
