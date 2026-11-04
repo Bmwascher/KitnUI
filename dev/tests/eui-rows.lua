@@ -1358,6 +1358,43 @@ do
         { addons = { [TOP_BAR] = { tbOpacity = 60, xpTickerFontSize = 16 } } })
     eq(tb2, 1, "xp walk: a card key does not change the Top Bar row's count")
     eq(xp2, 1, "xp walk: it counts in the XP row")
+
+    eq(xpLabelOf("xpPartyShare"), "Share my XP", "xp label: Share My XP is named")
+    eq(xpLabelOf("xpPartyCard"), "Party card on", "xp label: the card's switch is named")
+    eq(xpLabelOf("xpPartyMarkers"), "Party markers on", "xp label: the markers' switch is named")
+    eq(xpLabelOf("xpPartyTooltip"), "Party tooltip lines on", "xp label: the lines' switch is named")
+    eq(xpLabelOf("xpPartyVisibility"), "Party card visibility", "xp label: the card's Visibility is named")
+    eq(xpLabelOf("xpPartyPos"), "Party card position", "xp label: the card's position is named")
+    eq(xpLabelOf("xpPartyFontSize"), "Party font size", "xp label: a party key reads as tidied")
+    eq(xpLabelOf("xpPartyMarkerWidth"), "Party marker width", "xp label: and another")
+    eq(xpLabelOf("xpPartyLabelSide"), "Party label side", "xp label: and another")
+    eq(xpLabelOf("xpPartyFill"), "Party fill", "xp label: the Fill dropdown")
+    eq(xpLabelOf("xpPartyFillColor"), "Party fill color", "xp label: apart from the color's stem")
+
+    local partyKeys = { KitnUI_PartyXP = TOP_BAR, KitnUI_TopBar = TOP_BAR }
+    eq(ns.EUIRowOf("addons." .. TOP_BAR .. ".xpPartyFontSize", partyKeys), XP, "xp owner: a party key")
+    eq(ns.EUIRowOf("unlockLayout.anchors.KitnUI_PartyXP", partyKeys), XP, "xp owner: the card's Unlock element")
+    local partyGroup, partyItem = ns.EUISettingLabel("unlockLayout.anchors.KitnUI_PartyXP", { id = XP })
+    eq(partyGroup, "Positions", "xp label: the card's position is a position")
+    eq(partyItem, "KitnUI Party XP", "xp label: with no Unlock Mode label known")
+
+    local function partySide(y)
+        return {
+            addons = { [TOP_BAR] = { xpPartyFontSize = y } },
+            unlockLayout = { anchors = { KitnUI_PartyXP = { y = y } } },
+        }
+    end
+    local partyMoved = partySide(600)
+    ns.EUIKeepSlices(partyMoved, { conflicts = {} }, partySide(900), xpRows, { [TOP_BAR] = true }, partyKeys)
+    eq(partyMoved.unlockLayout.anchors.KitnUI_PartyXP.y, 900, "xp keep: the card's position stays the player's with the XP row kept")
+    partyMoved = partySide(600)
+    ns.EUIKeepSlices(partyMoved, { conflicts = {} }, partySide(900), xpRows, { [XP] = true }, partyKeys)
+    eq(partyMoved.unlockLayout.anchors.KitnUI_PartyXP.y, 600, "xp keep: and takes KitnUI's with the XP row taken")
+
+    local tb3, xp3 = counts({ addons = { [TOP_BAR] = { tbOpacity = 85, xpPartyFontSize = 12 } } },
+        { addons = { [TOP_BAR] = { tbOpacity = 60, xpPartyFontSize = 16 } } })
+    eq(tb3, 1, "xp walk: a party key does not change the Top Bar row's count")
+    eq(xp3, 1, "xp walk: it counts in the XP row")
 end
 
 print(string.format("%d checks, %d failures", checks, failures))
