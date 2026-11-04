@@ -205,6 +205,10 @@ for _, forever in ipairs({ true, false }) do
     local client = forever and "Forever" or "retail"
     eq(defaults.xpEnabled, forever, "the XP bar's default on " .. client)
     eq(defaults.fbEnabled, forever, "the faction bar's default on " .. client)
+    eq(defaults.xpPartyCard, forever, "the Party Card's default on " .. client)
+    eq(defaults.xpPartyMarkers, forever, "the Party Markers' default on " .. client)
+    eq(defaults.xpPartyTooltip, false, "the Party Tooltip Lines' default on " .. client)
+    eq(defaults.xpPartyShare, true, "Share My XP's default on " .. client)
     eq(defaults.xpTickerEnabled, forever, "the XP ticker's default on " .. client)
 end
 core.IS_FOREVER = nil
@@ -220,6 +224,20 @@ eq(xpDefaults.fbWidth, 600, "the reputation bar defaults to 600 wide, as the XP 
 eq(xpDefaults.fbHeight, 27, "the reputation bar defaults to 27 high")
 eq(xpDefaults.fbFillMode, "standing", "the reputation bar defaults to Standing Color")
 eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
+eq(xpDefaults.xpPartyVisibility, "always", "the Party Card's Visibility defaults to Always")
+eq(xpDefaults.xpPartyShowSelf, true, "the Party Card shows the player by default")
+eq(xpDefaults.xpPartyWidth, 264, "the Party Card defaults to 264 wide")
+eq(xpDefaults.xpPartyFill, "accent", "the Party Card's fill defaults to the accent")
+eq(xpDefaults.xpPartyBackground, "card", "the Party Card's background defaults to Card")
+eq(xpDefaults.xpPartyMarkerWidth, 2, "a marker defaults to 2 wide")
+eq(xpDefaults.xpPartyLabel, "namelevel", "a marker's label defaults to Name and Level")
+eq(xpDefaults.xpPartyLabelSide, "above", "a marker's label defaults to Above")
+eq(xpDefaults.xpPartyPos, nil, "the Party Card has no default position")
+for defaultKey, defaultValue in pairs(xpDefaults) do
+    if defaultKey:find("^xpParty") then
+        check(type(defaultValue) ~= "table", "a party default is a scalar: " .. defaultKey)
+    end
+end
 eq(xpDefaults.xpGainEffect, "wave", "the XP bar's gain effect defaults to Energy Wave")
 eq(xpDefaults.xpGainMatchBar, true, "the XP bar's gain effect matches the bar by default")
 eq(xpDefaults.fbGainEffect, "off", "the reputation bar's gain effect defaults to off")

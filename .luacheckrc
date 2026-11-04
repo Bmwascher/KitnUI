@@ -207,6 +207,8 @@ read_globals = {
     "C_Reputation", "C_GossipInfo", "C_MajorFactions", "C_DelvesUI", "C_PartyInfo",
     "RequestTimePlayed", "BreakUpLargeNumbers", "COMBATLOG_XPGAIN_FIRSTPERSON",
     "FACTION_BAR_COLORS", "StatusTrackingBarManager", "time", "IsInGroup", "IsInRaid",
+    "UnitFullName", "UnitIsConnected", "UnitIsPlayer", "UnitInPartyIsAI", "GetNormalizedRealmName",
+    "LE_PARTY_CATEGORY_HOME", "LE_PARTY_CATEGORY_INSTANCE",
 
     -- Misc
     "ReloadUI", "print",
