@@ -277,6 +277,7 @@ local KitnUITopBar
 ---@field TickerView fun(raw: table, view: fun(key: string): any, out: table): table
 ---@field TickerApply fun()
 ---@field TickerRefresh fun(raw: table)
+---@field TickerAccent fun()   # a new accent: Ding's color is read again
 ---@field TickerVisibility fun()
 ---@field TickerStop fun()
 ---@field TickerElement fun(EUI: table): table

@@ -240,7 +240,7 @@ local function RefreshXP()
     local t = X.ReadXP()
     raw.level, raw.cur, raw.max, raw.rested = t.level, t.cur, t.max, t.rested
     raw.atMax, raw.xpOff = t.atMax, t.xpOff
-    raw.resting, raw.paused = t.resting, X.SessionPaused()
+    raw.paused = X.SessionPaused()
     raw.quest = questDone
     raw.levelTime, raw.elapsed, raw.gained = X.LevelTime(), X.SessionElapsed(), X.SessionGained()
     X.XPView(raw, Get, xpData)
@@ -678,6 +678,7 @@ local function RegisterAccent()
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.RegAccent) then return end
     EUI.RegAccent({ type = "callback", fn = function()
+        X.TickerAccent()
         if Get("xpFillStyle") ~= "accent" then return end
         if active and X.XPEnabled() then RefreshXP() end
         if X.PreviewRefresh then X.PreviewRefresh() end

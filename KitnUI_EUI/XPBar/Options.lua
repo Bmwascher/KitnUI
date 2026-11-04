@@ -583,6 +583,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         local enable = Toggle("Enable XP Ticker", "xpTickerEnabled", "Shows a small card with your XP per hour, time to level and completed levels.",
             function() return not X.XPEnabled() end)
         enable.disabledTooltip = "Turn on the XP bar first. To see only the card, set the XP bar's Visibility to Never."
+        enable.rawTooltip = true
         Row(enable, Spacer())
 
         Header("VISIBILITY")

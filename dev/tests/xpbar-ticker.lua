@@ -75,6 +75,7 @@ methods.SetText = function(self, v)
 end
 methods.SetMouseClickEnabled = function(self, on) self.click = on end
 methods.SetMouseMotionEnabled = function(self, on) self.motion = on end
+methods.SetTextColor = function(self, r, g, b) self.colorR, self.colorG, self.colorB = r, g, b end
 
 _G.CreateFrame = function(kind)
     framesMade = framesMade + 1
@@ -646,6 +647,27 @@ do
     eq(raw.elapsed, X.SessionElapsed(), "a show: the session's time is current")
     eq(raw.gained, X.SessionGained(), "a show: and its XP")
     eq(raw.paused, true, "a show: and its pause")
+    X.TickerStop()
+end
+
+---------------------------------------------------------------------------------
+-- A new accent
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    X.SessionStart("login")
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    raw.gained, raw.elapsed, raw.cur = 90000, 3600, 209000
+    X.TickerRefresh(raw)
+    eq(card.topR.colorG, 0, "accent: an urgent Ding takes the accent")
+    X.AccentColor = function() return 0, 1, 0 end
+    X.TickerAccent()
+    eq(card.topR.colorG, 1, "accent: and follows a new one")
+    card:Hide()
+    X.TickerAccent()
+    eq(card.urgent, nil, "accent: a hidden card reads it at its next show")
     X.TickerStop()
 end
 

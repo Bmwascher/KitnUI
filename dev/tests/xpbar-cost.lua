@@ -122,6 +122,7 @@ _G.GetMaxLevelForPlayerExpansion = function() return 90 end
 _G.GetMaxPlayerLevel = function() return 90 end
 
 local updaters, unlocks, accents = {}, 0, 0
+local accentFn
 local EUI = {
     Lite = { NewDB = function() return { profile = {} } end, _dbRegistry = {} },
     RegisterVisibilityUpdater = function(fn) updaters[fn] = true end,
@@ -130,7 +131,10 @@ local EUI = {
     UnregisterMouseoverTarget = NOOP,
     EvalVisibility = function() return true end,
     MakeUnlockElement = function(opts) return opts end,
-    RegAccent = function() accents = accents + 1 end,
+    RegAccent = function(entry)
+        accents = accents + 1
+        accentFn = entry.fn
+    end,
     GetFontPath = function() return "Fonts\\FRIZQT__.TTF" end,
     GetFontOutlineFlag = function() return "" end,
 }
@@ -1048,9 +1052,13 @@ do
     eq(live and live.fxBusy, nil, "effects: and none with it off")
     settings.xpLevelEffect = nil
 
-    X.Apply()
     settings.xpGainQuestsOnly = false
+    X.Apply()
+    xpNow = 375
+    send("PLAYER_XP_UPDATE")
+    check(live and live.fxBusy ~= nil, "effects: a gain is playing when Unlock Mode opens")
     if listener then listener(true) end
+    eq(live and live.fxBusy, nil, "effects: opening Unlock Mode stops it")
     eq(X.UnlockActive, true, "effects: Unlock Mode is noted")
     xpNow = 400
     send("PLAYER_XP_UPDATE")
@@ -1313,6 +1321,12 @@ do
     settings.xpEnabled = false
     X.Apply()
     eq(card and card.shown, false, "card: both bars off hides it")
+    local tickerAccent, accentCalls = X.TickerAccent, 0
+    X.TickerAccent = function() accentCalls = accentCalls + 1 end
+    settings.xpFillStyle = "solid"
+    if accentFn then accentFn() end
+    eq(accentCalls, 1, "card: a new accent reaches it whatever the bar's fill style")
+    X.TickerAccent, settings.xpFillStyle = tickerAccent, nil
     settings.xpTickerEnabled = nil
 
     local running, paused = {}, {}
@@ -1516,6 +1530,7 @@ do
     check(enable ~= nil, "card view: Enable XP Ticker is built")
     eq(enable and enable.disabled(), true, "card view: grayed with the XP bar off")
     check(enable and type(enable.disabledTooltip) == "string", "card view: with a reason")
+    eq(enable and enable.rawTooltip, true, "card view: shown as written, not wrapped")
     settings.xpEnabled = true
     eq(enable and enable.disabled(), false, "card view: usable with the XP bar on")
     settings.xpEnabled = false

@@ -520,6 +520,14 @@ function X.TickerRefresh(raw)
     if live and Plain(live:IsShown()) == true then Redraw() end
 end
 
+-- Ding keeps its color while its urgency holds, so a new accent forgets the kept
+-- answer.
+function X.TickerAccent()
+    if not live then return end
+    live.urgent = nil
+    if liveRaw and Plain(live:IsShown()) == true then Redraw() end
+end
+
 function X.TickerStop()
     StopTimer()
     if not live then return end
