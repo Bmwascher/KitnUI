@@ -1272,4 +1272,57 @@ for _, key in ipairs({
     check(ns.EUI_DEFAULTS[key] ~= nil, "the default " .. key .. " exists")
 end
 
+---------------------------------------------------------------------------------
+-- The card through the funnel
+---------------------------------------------------------------------------------
+
+do
+    settings.xpEnabled, settings.xpTickerEnabled = true, false
+    ok, why = pcall(X.Apply)
+    check(ok, "card off: an apply runs", why)
+    local element = unlockList[3]
+    eq(element and element.key, "KitnUI_XPTicker", "card: its Unlock element registers with the bars'")
+    eq(element and element.noResize, true, "card: with no resize controls")
+    eq(element and element.getFrame(), nil, "card off: no frame")
+    settings.xpTickerEnabled = true
+    ok, why = pcall(X.Apply)
+    check(ok, "card on: an apply runs", why)
+    local card = element and element.getFrame()
+    check(card ~= nil, "card on: the card exists")
+    eq(card and card.shown, true, "card on: and shows")
+    settings.xpVisibility = "never"
+    X.Apply()
+    eq(card and card.shown, true, "card on: the XP bar's Visibility of Never leaves it showing")
+    settings.xpVisibility = nil
+
+    X.SessionStart("login")
+    X.SessionPause(true)
+    settings.xpTickerEnabled = false
+    X.Apply()
+    eq(X.SessionPaused(), false, "card off: a pause with no Start ends")
+    eq(card and card.shown, false, "card off: and it hides")
+
+    settings.xpTickerEnabled = true
+    settings.xpEnabled, settings.fbEnabled = false, true
+    X.Apply()
+    eq(card and card.shown, false, "card: the XP bar off under the reputation bar hides it")
+    settings.xpEnabled, settings.fbEnabled = true, false
+    X.Apply()
+    eq(card and card.shown, true, "card: and it returns with the XP bar")
+    settings.xpEnabled = false
+    X.Apply()
+    eq(card and card.shown, false, "card: both bars off hides it")
+    settings.xpTickerEnabled = nil
+
+    local running, paused = {}, {}
+    local function withTime(key)
+        if key == "xpShowSessionTime" then return true end
+        return X.Get(key)
+    end
+    X.XPView({ level = 10, cur = 1, max = 10, elapsed = 120, gained = 1 }, withTime, running)
+    X.XPView({ level = 10, cur = 1, max = 10, elapsed = 120, gained = 1, paused = true }, withTime, paused)
+    check(running.sessionTime ~= nil and running.sessionTime ~= paused.sessionTime,
+        "paused: the session time carries a mark")
+end
+
 finish()

@@ -9,6 +9,7 @@
     <Script file="Render.lua" />
     <Script file="Effects.lua" />
     <Script file="Bar.lua" />
+    <Script file="Ticker.lua" />
     <Script file="Options.lua" />
     <Script file="Preview.lua" />
 </Ui>

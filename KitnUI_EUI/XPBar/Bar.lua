@@ -189,7 +189,9 @@ function X.XPView(r, view, out)
     out.level = format("Level %d", r.level or 0)
     out.right, out.levelTime, out.rate, out.compRested = nil, nil, nil, nil
     out.readyEnd = nil
-    out.sessionTime = view("xpShowSessionTime") and ("Time this session: " .. M.TimeText(r.elapsed)) or nil
+    -- A frozen time otherwise reads as a defect.
+    out.sessionTime = view("xpShowSessionTime")
+        and ("Time this session: " .. M.TimeText(r.elapsed) .. (r.paused and " (paused)" or "")) or nil
     if r.atMax or mx <= 0 then
         out.fill, out.questEnd, out.restedEnd = 100, 0, 0
         out.center = "Max Level"
@@ -238,11 +240,13 @@ local function RefreshXP()
     local t = X.ReadXP()
     raw.level, raw.cur, raw.max, raw.rested = t.level, t.cur, t.max, t.rested
     raw.atMax, raw.xpOff = t.atMax, t.xpOff
+    raw.resting, raw.paused = t.resting, X.SessionPaused()
     raw.quest = questDone
     raw.levelTime, raw.elapsed, raw.gained = X.LevelTime(), X.SessionElapsed(), X.SessionGained()
     X.XPView(raw, Get, xpData)
     X.Draw(w, Get, xpData)
     xpShown = t.applies or Get("xpShowAtMax") == true
+    X.TickerRefresh(raw)
 end
 
 local function RefreshFaction()
@@ -279,6 +283,8 @@ local function Eval(mode)
     return true
 end
 
+X.EvalVisibility = Eval
+
 local function XPWantsMouseover()
     return active and X.XPEnabled() and xpShown and Get("xpVisibility") == "mouseover"
 end
@@ -307,27 +313,28 @@ end
 
 local UNLOCK_KEY = { xp = "KitnUI_XPBar", fb = "KitnUI_FactionBar" }
 
--- An Unlock Mode anchor link is an anchored bar's only placing authority, as
--- it is for EUI's own frames: the bar is put back on its link, never on its
--- saved spot. An unanchored bar sits on its own saved spot.
+-- An Unlock Mode anchor link is an anchored frame's only placing authority, as
+-- it is for EUI's own frames: the frame is put back on its link, never on its
+-- saved spot. An unanchored frame sits on its own saved spot.
+function X.PlaceFrame(frame, unlockKey, pos, defaultPoint, x, y)
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.IsAnchored and EUI.IsAnchored(unlockKey) then
+        if EUI.ReapplyOwnAnchor then EUI.ReapplyOwnAnchor(unlockKey) end
+        return
+    end
+    frame:ClearAllPoints()
+    if type(pos) == "table" then
+        local point = pos.point or defaultPoint
+        frame:SetPoint(point, UIParent, pos.relPoint or point, tonumber(pos.x) or 0, tonumber(pos.y) or 0)
+    else
+        frame:SetPoint(defaultPoint, UIParent, defaultPoint, x, y)
+    end
+end
+
 local function Place(kind)
     local w = widgets[kind]
     if not w then return end
-    local frame = w.frame
-    local EUI = _G.EllesmereUI
-    if EUI and EUI.IsAnchored and EUI.IsAnchored(UNLOCK_KEY[kind]) then
-        if EUI.ReapplyOwnAnchor then EUI.ReapplyOwnAnchor(UNLOCK_KEY[kind]) end
-        return
-    end
-    local pos = Get(kind == "xp" and "xpPos" or "fbPos")
-    local fallbackY = DEFAULT_Y[kind]
-    frame:ClearAllPoints()
-    if type(pos) == "table" then
-        local point = pos.point or "TOP"
-        frame:SetPoint(point, UIParent, pos.relPoint or point, tonumber(pos.x) or 0, tonumber(pos.y) or 0)
-    else
-        frame:SetPoint("TOP", UIParent, "TOP", 0, fallbackY)
-    end
+    X.PlaceFrame(w.frame, UNLOCK_KEY[kind], Get(kind == "xp" and "xpPos" or "fbPos"), "TOP", 0, DEFAULT_Y[kind])
 end
 
 local function Tick()
@@ -368,6 +375,7 @@ function X.ApplyVisibility()
         Place("fb")
     end
     X.UpdateClock()
+    X.TickerVisibility()
 end
 
 ---------------------------------------------------------------------------------
@@ -662,6 +670,7 @@ local function RegisterUnlock()
     EUI:RegisterUnlockElements({
         UnlockElement(EUI, "xp", UNLOCK_KEY.xp, "KitnUI XP Bar", 3, "xpPos", "xpWidth", "xpHeight", X.XPEnabled),
         UnlockElement(EUI, "fb", UNLOCK_KEY.fb, "KitnUI Reputation Bar", 4, "fbPos", "fbWidth", "fbHeight", X.FactionEnabled),
+        X.TickerElement(EUI),
     }, "KitnUI_EUI")
 end
 
@@ -699,6 +708,7 @@ local function OnLoginKnown(kind)
     X.SessionStart(kind)
     if active then ReconcileEvents() end
     if active and X.XPEnabled() then
+        X.TickerApply()
         RefreshXP()
         SeedEffects(true, X.FactionEnabled())
         X.RequestPlayed()
@@ -738,6 +748,7 @@ local function Stop()
     X.SessionListen(false)
     X.SessionSave()
     X.SessionStop()
+    X.TickerStop()
     xpWasOn = false
     if questTimer then
         questTimer:Cancel()
@@ -793,6 +804,7 @@ function X.Apply(claim)
     end
     xpWasOn = xpOn
     ReconcileEvents()
+    X.TickerApply()
     if xpOn then
         X.SessionListen(true)
         X.SeedPosition()

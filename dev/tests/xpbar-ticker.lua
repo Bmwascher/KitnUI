@@ -1,0 +1,576 @@
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║  xpbar-ticker.lua                                            ║
+-- ║  Purpose: Gate for the XP ticker card: its texts, history    ║
+-- ║           and peers, its timer, what shows it, and its cost  ║
+-- ║           per tick. Loads the SHIPPED code, never a copy.    ║
+-- ╚══════════════════════════════════════════════════════════════╝
+--
+-- Run from the repo root:
+--   lua dev/tests/xpbar-ticker.lua
+
+local failures = 0
+local checks = 0
+
+local function check(ok, label, detail)
+    checks = checks + 1
+    if not ok then
+        failures = failures + 1
+        print("FAIL  " .. label .. (detail and ("  [" .. tostring(detail) .. "]") or ""))
+    end
+end
+
+local function eq(actual, expected, label)
+    check(actual == expected, label, "got " .. tostring(actual) .. ", wanted " .. tostring(expected))
+end
+
+---------------------------------------------------------------------------------
+-- Recording stubs
+---------------------------------------------------------------------------------
+
+local NOOP = function() end
+local methods = {}
+local framesMade, setTexts = 0, 0
+local tickers = {}
+local tipLines = 0
+
+-- A capitalized method is a no-op unless listed below; a data field reads nil.
+local function Obj(kind)
+    return setmetatable({ kind = kind, shown = true, scripts = {} }, {
+        __index = function(_, key)
+            if methods[key] then return methods[key] end
+            if type(key) == "string" and key:match("^%u") then return NOOP end
+            return nil
+        end,
+    })
+end
+
+methods.SetScript = function(self, name, fn) self.scripts[name] = fn end
+-- As the client does, a change of shown state runs the script.
+methods.Show = function(self)
+    if self.shown then return end
+    self.shown = true
+    if self.scripts.OnShow then self.scripts.OnShow(self) end
+end
+methods.Hide = function(self)
+    if not self.shown then return end
+    self.shown = false
+    if self.scripts.OnHide then self.scripts.OnHide(self) end
+end
+methods.SetShown = function(self, v)
+    if v then self:Show() else self:Hide() end
+end
+methods.IsShown = function(self) return self.shown end
+methods.IsMouseOver = function(self) return self.over end
+methods.CreateTexture = function() return Obj("Texture") end
+methods.CreateFontString = function() return Obj("FontString") end
+-- As the client does, a FontString with no font refuses text.
+methods.SetFont = function(self)
+    self.fontSet = true
+    return true
+end
+methods.SetText = function(self, v)
+    if not self.fontSet then error("Font not set") end
+    self.text = v
+    setTexts = setTexts + 1
+end
+methods.SetMouseClickEnabled = function(self, on) self.click = on end
+methods.SetMouseMotionEnabled = function(self, on) self.motion = on end
+
+_G.CreateFrame = function(kind)
+    framesMade = framesMade + 1
+    return Obj(kind)
+end
+_G.UIParent = Obj("Frame")
+_G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
+_G.hooksecurefunc = NOOP
+_G.GameTooltip = Obj("GameTooltip")
+_G.GameTooltip.AddDoubleLine = function() tipLines = tipLines + 1 end
+_G.GameTooltip.IsOwned = function() return true end
+_G.UnitClass = function() return "Hunter", "HUNTER" end
+
+local clock, wall = 1000, 50000
+_G.GetTime = function() return clock end
+_G.time = function() return wall end
+_G.C_Timer = {
+    After = NOOP,
+    NewTimer = function() return { Cancel = NOOP } end,
+    NewTicker = function(_, fn)
+        local t = { fn = fn, canceled = false }
+        function t.Cancel(self) self.canceled = true end
+        tickers[#tickers + 1] = t
+        return t
+    end,
+}
+
+local mouseover = 0
+local EUI = {
+    MakeUnlockElement = function(opts) return opts end,
+    RegisterMouseoverTarget = function() mouseover = mouseover + 1 end,
+    UnregisterMouseoverTarget = function() mouseover = mouseover - 1 end,
+}
+_G.EllesmereUI = EUI
+
+local DEFAULTS = {
+    xpTickerEnabled = true, xpTickerVisibility = "always", xpTickerHideResting = true, xpTickerShowCurrent = true,
+    xpTickerHistoryRows = 5, xpTickerShowPlayed = true, xpTickerShowPace = false, xpTickerFontSize = 12,
+    xpTickerBackground = "card",
+}
+local reading
+
+local function view(key) return DEFAULTS[key] end
+
+local function fresh(opts)
+    opts = opts or {}
+    local settings = opts.settings or {}
+    framesMade = 0
+    reading = { level = 59, cur = 94410, max = 209800, atMax = false, xpOff = false, resting = false }
+    local ns = { db = opts.db or { perChar = {} } }
+    ns.GetCharKey = function() return "Me-Realm" end
+    function ns.EUIPlain(v)
+        if v ~= nil and _G.issecretvalue and _G.issecretvalue(v) then return nil end
+        return v
+    end
+    local function run(file)
+        local chunk, err = loadfile(file)
+        if not chunk then
+            print("FAIL  could not load " .. file .. ": " .. tostring(err))
+            os.exit(1)
+        end
+        chunk("KitnUI_EUI", ns)
+    end
+    run("KitnUI_EUI/XPBar/Math.lua")
+    local X = ns.XPBar
+    X.Get = function(key)
+        local v = settings[key]
+        if v == nil then v = DEFAULTS[key] end
+        return v
+    end
+    X.Set = function(key, v) settings[key] = v end
+    X.ReadXP = function() return reading end
+    X.XPEnabled = function() return settings.xpEnabled ~= false end
+    X.EvalVisibility = function(mode)
+        if mode == "never" then return false end
+        if mode == "mouseover" then return "mouseover" end
+        return true
+    end
+    X.PlaceFrame = function() X.placed = (X.placed or 0) + 1 end
+    X.FontPath = function() return "font" end
+    X.OutlineFlag = function() return "" end
+    X.AccentColor = function() return 1, 0, 0 end
+    X.Apply = function() X.applied = (X.applied or 0) + 1 end
+    run("KitnUI_EUI/XPBar/Session.lua")
+    run("KitnUI_EUI/XPBar/Ticker.lua")
+    X.SessionListen(true)
+    return X, settings
+end
+
+local function rawRecord()
+    return { level = 59, cur = 94410, max = 209800, levelTime = 1200, elapsed = 3600, gained = 90000 }
+end
+
+-- Brings the live card up from a raw record, as Bar.lua's funnel does.
+local function showCard(X, raw)
+    X.TickerRefresh(raw)
+    X.TickerVisibility()
+    return X.TickerElement(EUI).getFrame()
+end
+
+---------------------------------------------------------------------------------
+-- The texts
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    local out = {}
+    X.TickerView(rawRecord(), view, out)
+    eq(out.rate, "90.0K xp/hr", "view: XP per hour")
+    eq(out.ding, "Ding 1h 16m", "view: time to level")
+    eq(out.urgent, false, "view: over 10 minutes is not urgent")
+    eq(out.n, 2, "view: the current level and Played, with nothing else known")
+    eq(out.left[1], "Level 59", "view: the current level")
+    eq(out.right[1], "20:00  45%", "view: with its clock and percent")
+    eq(out.right[2], "--", "view: an unknown total reads --")
+
+    local r = rawRecord()
+    r.trend = "up"
+    X.TickerView(r, view, out)
+    eq(out.arrow, "up", "view: the arrow")
+
+    r.cur = 209000
+    X.TickerView(r, view, out)
+    eq(out.urgent, true, "view: under 10 minutes is urgent")
+
+    r = rawRecord()
+    r.trend, r.paused = "up", true
+    X.TickerView(r, view, out)
+    eq(out.rate, "90.0K xp/hr", "view, paused: the rate holds")
+    eq(out.ding, "paused", "view, paused: the right slot says so")
+    eq(out.arrow, nil, "view, paused: no arrow")
+    eq(out.pauseText, "Start", "view, paused: the button reads Start")
+
+    r = rawRecord()
+    r.gained, r.trend = 0, "up"
+    X.TickerView(r, view, out)
+    eq(out.rate, "no XP yet", "view, no XP: the left says so")
+    eq(out.ding, "Ding --", "view, no XP: no time to level")
+    eq(out.arrow, nil, "view, no XP: no arrow")
+    eq(out.pauseText, "Pause", "view: the button reads Pause")
+
+    r = rawRecord()
+    r.levelTime = nil
+    X.TickerView(r, view, out)
+    eq(out.right[1], "--  45%", "view: an unknown clock reads --")
+
+    local X2, set = fresh()
+    set.xpTickerShowCurrent, set.xpTickerShowPlayed = false, false
+    X2.TickerView(rawRecord(), X2.Get, out)
+    eq(out.n, 0, "view: every row switched off")
+    set.xpTickerShowPace = true
+    r = rawRecord()
+    r.pace = 3600
+    X2.TickerView(r, X2.Get, out)
+    eq(out.right[1], "1h 0m ahead", "view: the Pace row")
+    eq(out.keys[1], "tkPace", "view: names its setting")
+end
+
+---------------------------------------------------------------------------------
+-- History rows
+---------------------------------------------------------------------------------
+
+do
+    local db = { perChar = { ["Me-Realm"] = { xpHistory = { splits = { [58] = 100, [56] = 200, [55] = 300 }, reached = {} } } } }
+    local X = fresh({ db = db, settings = { xpTickerHistoryRows = 2 } })
+    X.SessionStart("login")
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    eq(card.left[1].text, "Level 59", "history: the current level first")
+    eq(card.left[2].text, "Level 58", "history: the newest completed level next")
+    eq(card.right[2].text, "1:40", "history: with its time")
+    eq(card.left[3].text, "Level 56", "history: a missing level is skipped")
+    eq(card.left[4].text, "Played", "history: capped by the slider")
+    eq(raw.hist.n, 2, "history: two rows kept")
+    eq(card.left[5].shown, false, "history: rows past the last hide")
+end
+
+---------------------------------------------------------------------------------
+-- Peers
+---------------------------------------------------------------------------------
+
+do
+    local perChar = {
+        ["Me-Realm"] = { xpHistory = { reached = { [59] = 1, [60] = 2 } } },
+        ["Near-Realm"] = { xpHistory = { class = "MAGE", reached = { [59] = 1000, [60] = 2000 } } },
+        ["Far-Realm"] = { xpHistory = { class = "ROGUE", reached = { [59] = 1000, [60] = 1300 } } },
+        ["OneEnd-Realm"] = { xpHistory = { reached = { [59] = 1000 } } },
+        ["Odd-Realm"] = 5,
+        ["Odder-Realm"] = { xpHistory = 7 },
+        ["Oddest-Realm"] = { xpHistory = { reached = { [59] = "x", [60] = 2 } } },
+    }
+    local walks = 0
+    local realPairs = pairs
+    _G.pairs = function(t)
+        if t == perChar then walks = walks + 1 end
+        return realPairs(t)
+    end
+    local X = fresh({ db = { perChar = perChar }, settings = { xpTickerShowPace = true } })
+    X.SessionStart("login")
+    X.OnPlayed(1400)
+    local raw = rawRecord()
+    raw.cur = 104900
+    local card = showCard(X, raw)
+    eq(card.left[3].text, "Pace", "peers: the Pace row is last")
+    eq(card.right[3].text, "1m ahead", "peers: it shows the closest gap")
+    eq(walks, 1, "peers: one walk when the row first shows")
+    local tick = tickers[#tickers].fn
+    tick()
+    tick()
+    eq(walks, 1, "peers: no walk on a tick")
+    raw.level = 60
+    X.TickerRefresh(raw)
+    eq(walks, 2, "peers: one walk when the level changes")
+    eq(card.right[3].text, "--", "peers: with no character at both ends of that level")
+    raw.level = 59
+    X.TickerRefresh(raw)
+    eq(walks, 3, "peers: and one coming back")
+
+    tipLines = 0
+    check(card.paceHover.shown, "peers: the Pace row has its hover")
+    card.paceHover.scripts.OnEnter(card.paceHover)
+    eq(tipLines, 3, "peers: the tooltip lists the two that count, and the player")
+    card.paceHover.scripts.OnLeave(card.paceHover)
+
+    for i = 1, 12 do
+        perChar["More" .. i .. "-Realm"] = { xpHistory = { reached = { [59] = 1000 + i, [60] = 2000 } } }
+    end
+    raw.level = 60
+    X.TickerRefresh(raw)
+    raw.level = 59
+    X.TickerRefresh(raw)
+    tipLines = 0
+    card.paceHover.scripts.OnEnter(card.paceHover)
+    eq(tipLines, 8, "peers: the tooltip lists up to 8")
+    _G.pairs = realPairs
+end
+
+---------------------------------------------------------------------------------
+-- The timer and a tick's cost
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    X.SessionStart("login")
+    X.OnPlayed(5000, 300)
+    local raw = rawRecord()
+    local count = #tickers
+    local card = showCard(X, raw)
+    eq(#tickers, count + 1, "timer: one while on screen")
+    local timer = tickers[#tickers]
+    local tick = timer.fn
+    tick()
+    tick()
+    local texts = setTexts
+    for _ = 1, 5 do tick() end
+    eq(setTexts, texts, "tick: no SetText for an unchanged text")
+
+    collectgarbage("collect")
+    collectgarbage("stop")
+    local before = collectgarbage("count")
+    for _ = 1, 200 do tick() end
+    local grown = collectgarbage("count") - before
+    collectgarbage("restart")
+    check(grown < 1, "tick: makes no table", grown)
+
+    clock = clock + 1
+    tick()
+    clock = clock - 1
+    check(setTexts > texts, "tick: a text that changed is set")
+
+    card:Hide()
+    eq(timer.canceled, true, "timer: a Hide cancels it, as the mouseover service's does")
+    card:Show()
+    eq(#tickers, count + 2, "timer: a Show starts it again")
+    X.TickerStop()
+    eq(tickers[#tickers].canceled, true, "stop: cancels it")
+    eq(card.shown, false, "stop: and hides")
+end
+
+---------------------------------------------------------------------------------
+-- What shows the card
+---------------------------------------------------------------------------------
+
+do
+    local X, set = fresh({ settings = { xpTickerEnabled = false } })
+    X.TickerVisibility()
+    eq(framesMade, 0, "off: no frame")
+    eq(X.TickerElement(EUI).getFrame(), nil, "off: its Unlock element creates none")
+    eq(X.TickerElement(EUI).isHidden(), true, "off: and is hidden")
+    set.xpTickerEnabled = true
+    local card = showCard(X, rawRecord())
+    check(card ~= nil, "on: the card exists")
+    eq(card.shown, true, "on: and shows")
+    eq(card.click, false, "mouse: clicks pass through")
+    eq(card.motion, true, "mouse: hovering reaches it")
+    eq(X.TickerElement(EUI).isHidden(), false, "on: its Unlock element is not hidden")
+
+    local function shownWhen(key, value, field)
+        local t = field and reading or set
+        local old = t[key]
+        t[key] = value
+        X.TickerVisibility()
+        local shown = card.shown
+        t[key] = old
+        X.TickerVisibility()
+        return shown
+    end
+    eq(shownWhen("atMax", true, true), false, "shows: not at max level")
+    eq(shownWhen("xpOff", true, true), false, "shows: not with XP gain off")
+    eq(shownWhen("resting", true, true), false, "shows: not while resting, with the switch")
+    eq(shownWhen("xpTickerVisibility", "never"), false, "shows: not under Never")
+    eq(shownWhen("xpEnabled", false), false, "shows: not with the XP bar off")
+    set.xpTickerHideResting = false
+    eq(shownWhen("resting", true, true), true, "shows: while resting, with the switch off")
+    eq(card.shown, true, "shows: back on")
+
+    local before = mouseover
+    set.xpTickerVisibility = "mouseover"
+    X.TickerVisibility()
+    eq(mouseover, before + 1, "mouseover: joins the service")
+    X.TickerVisibility()
+    eq(mouseover, before + 1, "mouseover: once")
+    set.xpTickerVisibility = "always"
+    X.TickerVisibility()
+    eq(mouseover, before, "mouseover: and leaves it")
+
+    local element = X.TickerElement(EUI)
+    eq(element.key, "KitnUI_XPTicker", "unlock: its key")
+    eq(element.label, "KitnUI XP Ticker", "unlock: its label")
+    eq(element.noResize, true, "unlock: no resize controls")
+    eq(element.order, 5, "unlock: after the bars")
+    local w, h = element.getSize()
+    eq(w, card.kuiW, "unlock: its width")
+    eq(h, card.kuiH, "unlock: its height")
+    local placed = X.placed
+    element.savePos(nil, "LEFT", "LEFT", 7, 8)
+    eq(set.xpTickerPos and set.xpTickerPos.x, 7, "unlock: a move is saved")
+    check(X.placed > placed, "unlock: and placed")
+    eq(element.loadPos().y, 8, "unlock: and read back")
+    element.clearPos()
+    eq(set.xpTickerPos, nil, "unlock: and cleared")
+    X.TickerStop()
+end
+
+---------------------------------------------------------------------------------
+-- Pause with its Start gone, and the card's buttons
+---------------------------------------------------------------------------------
+
+do
+    local X, set = fresh()
+    X.SessionStart("login")
+    X.SessionPause(true)
+    X.TickerApply()
+    eq(X.SessionPaused(), true, "no-Start rule: the card on keeps the pause")
+    set.xpEnabled = false
+    X.TickerApply()
+    eq(X.SessionPaused(), true, "no-Start rule: the XP bar off keeps it")
+    set.xpEnabled = nil
+    set.xpTickerEnabled = false
+    X.TickerApply()
+    eq(X.SessionPaused(), false, "no-Start rule: the switch off ends it")
+    set.xpTickerEnabled = nil
+    X.SessionPause(true)
+    set.xpTickerVisibility = "never"
+    X.TickerApply()
+    eq(X.SessionPaused(), false, "no-Start rule: Never ends it")
+    set.xpTickerVisibility = nil
+
+    local card = showCard(X, rawRecord())
+    eq(card.pauseBtn.shown, false, "hover: the buttons wait")
+    card.scripts.OnEnter(card)
+    eq(card.pauseBtn.shown, true, "hover: Pause shows")
+    eq(card.resetBtn.shown, true, "hover: and Reset")
+    card.over = true
+    card.scripts.OnLeave(card)
+    eq(card.pauseBtn.shown, true, "hover: moving onto a button keeps them")
+    card.over = false
+    card.pauseBtn.scripts.OnLeave(card.pauseBtn)
+    eq(card.pauseBtn.shown, false, "hover: leaving the card hides them")
+    card.scripts.OnEnter(card)
+    local SECRET = {}
+    _G.issecretvalue = function(v) return v == SECRET end
+    card.over = SECRET
+    card.scripts.OnLeave(card)
+    eq(card.pauseBtn.shown, false, "hover: a secret answer counts as not hovered")
+    _G.issecretvalue = nil
+
+    local applied = X.applied or 0
+    card.pauseBtn.scripts.OnClick(card.pauseBtn)
+    eq(X.SessionPaused(), true, "buttons: Pause pauses")
+    eq(X.applied, applied + 1, "buttons: and applies")
+    card.pauseBtn.scripts.OnClick(card.pauseBtn)
+    eq(X.SessionPaused(), false, "buttons: Start resumes")
+    card.resetBtn.scripts.OnClick(card.resetBtn)
+    eq(X.SessionGained(), 0, "buttons: Reset zeroes the session")
+    eq(X.applied, applied + 3, "buttons: and applies")
+
+    card.scripts.OnEnter(card)
+    card:Hide()
+    eq(card.pauseBtn.shown, false, "hover: the buttons stop with the card")
+    X.TickerStop()
+end
+
+---------------------------------------------------------------------------------
+-- The trend across a hide and a reset
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    X.SessionStart("login")
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    -- Time and XP pass on the session, which is what the trend reads.
+    local function pass(seconds, xp)
+        clock = clock + seconds
+        reading.cur = reading.cur + xp
+        X.OnXP()
+        X.TickerRefresh(raw)
+    end
+    local function twoWindows()
+        X.ResetSession()
+        pass(0, 0)
+        pass(180, 1000)
+        pass(180, 2000)
+    end
+
+    twoWindows()
+    eq(raw.trend, "up", "trend: a faster second window points up")
+
+    card:Hide()
+    pass(10, 100)
+    card:Show()
+    eq(raw.trend, nil, "trend: a hide starts it over, however short")
+    pass(180, 1000)
+    eq(raw.trend, nil, "trend: and the first window after it sets none")
+    pass(180, 2000)
+    eq(raw.trend, "up", "trend: the next compares two windows the card saw")
+
+    twoWindows()
+    pass(20, 100)
+    card:Hide()
+    pass(120, 100)
+    card:Show()
+    pass(40, 2000)
+    eq(raw.trend, nil, "trend: a window with a hide in it, at the time it would have closed, is not compared")
+
+    twoWindows()
+    card:Hide()
+    X.ResetSession()
+    pass(500, 9000)
+    card:Show()
+    eq(raw.trend, nil, "trend: a reset while hidden starts it over, though both numbers passed the kept ones")
+
+    twoWindows()
+    X.ResetSession()
+    pass(1, 10)
+    eq(raw.trend, nil, "trend: a reset on screen starts it over too")
+
+    twoWindows()
+    pass(600, 3000)
+    eq(raw.trend, nil, "trend: a window closing too late, with the card on screen, is dropped")
+    pass(180, 1000)
+    eq(raw.trend, nil, "trend: and the first window after it sets none")
+    pass(180, 2000)
+    eq(raw.trend, "up", "trend: the next compares the two after it")
+    X.TickerStop()
+end
+
+---------------------------------------------------------------------------------
+-- A card drawn from a view
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    local count = #tickers
+    local card = X.NewCard(_G.UIParent)
+    local out = {}
+    local r = rawRecord()
+    r.trend = "up"
+    X.TickerView(r, view, out)
+    X.DrawCard(card, view, out)
+    eq(card.top.text, "90.0K xp/hr", "draw: the top line's left")
+    eq(card.topR.text, "Ding 1h 16m", "draw: and right")
+    eq(card.arrow.shown, true, "draw: the arrow")
+    check(card.kuiW == X.Math.TickerWidth(12), "draw: the width follows the font size")
+    local h = card.kuiH
+    r.trend = nil
+    r.played = 100
+    r.pace = 100
+    X.TickerView(r, function(key) if key == "xpTickerShowPace" then return true end return view(key) end, out)
+    X.DrawCard(card, view, out)
+    eq(card.arrow.shown, false, "draw: the arrow goes with the trend")
+    check(card.kuiH > h, "draw: a row more makes the card taller")
+    eq(card.paceHover.shown, false, "draw: only the live card has a Pace hover")
+    eq(#tickers, count, "draw: starts no timer")
+end
+
+print(string.format("%d checks, %d failures", checks, failures))
+os.exit(failures == 0 and 0 or 1)
