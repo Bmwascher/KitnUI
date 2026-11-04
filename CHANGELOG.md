@@ -7,6 +7,8 @@
 - A redrawn constellation cat sits in the center of the installer
   background, and the title is centered with the small sidebar cat removed
 - The icon beside each page title is the new purple-to-pink K
+- `/kitn install` no longer warns about installed profiles when the account
+  has none, and now warns on every character once it has some
 
 ### XP Bar
 
