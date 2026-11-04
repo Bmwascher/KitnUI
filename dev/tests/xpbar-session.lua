@@ -57,7 +57,7 @@ end
 local function load(opts)
     later, chat.on = {}, true
     local ns = { db = { perChar = {} }, EUILoadStart = opts.start }
-    ns.GetCharKey = function() return "Tester-Realm" end
+    ns.GetCharKey = function() return not opts.noKey and "Tester-Realm" or nil end
     if opts.rec then ns.db.perChar["Tester-Realm"] = { xp = opts.rec } end
     for _, file in ipairs({ "KitnUI_EUI/XPBar/Math.lua", "KitnUI_EUI/XPBar/Session.lua" }) do
         local chunk, err = loadfile(file)
@@ -404,6 +404,215 @@ X.SessionStart("login")
 X.OnLevelUp()
 X.RequestPlayed()
 eq(played, 0, "played: not asked while the time this level is known")
+
+-- Pause
+clock, wall, played = 1000, 50000, 0
+X, setXP = load({ xp = XP(100, 1000, 10) })
+X.SessionPause(true)
+eq(X.SessionPaused(), false, "pause: nothing before the session starts")
+X.SessionStart("login")
+setXP(XP(200, 1000, 10))
+clock = 1100
+X.SessionPause(true)
+eq(X.SessionPaused(), true, "pause: on")
+eq(X.SessionGained(), 100, "pause: XP up to the click counts")
+eq(X.SessionElapsed(), 100, "pause: time up to the click counts")
+setXP(XP(500, 1000, 10))
+clock = 1300
+X.OnXP()
+eq(X.SessionGained(), 100, "pause: XP during it is dropped")
+eq(X.SessionElapsed(), 100, "pause: the elapsed time is frozen")
+X.SessionPause(false)
+eq(X.SessionPaused(), false, "start: off")
+eq(X.SessionGained(), 100, "start: XP during the pause stays out")
+eq(X.SessionElapsed(), 100, "start: resumes from the frozen time")
+setXP(XP(600, 1000, 10))
+clock = 1350
+X.OnXP()
+eq(X.SessionGained(), 200, "start: later XP counts")
+eq(X.SessionElapsed(), 150, "start: and later time")
+
+-- The time this level runs through a pause, and a level-up during one
+clock, wall = 1000, 50000
+X, setXP = load({ xp = XP(100, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(5000, 300)
+X.SessionPause(true)
+clock = 1060
+eq(X.LevelTime(), 360, "pause: the level clock keeps running")
+setXP(XP(50, 1200, 11))
+X.OnLevelUp(11)
+eq(X.SessionGained(), 0, "pause: a level-up during it counts no XP")
+eq(X.History().splits[10], 360, "pause: and is still recorded")
+eq(X.LevelTime(), 0, "pause: and the clock restarts")
+eq(X.SessionPaused(), true, "pause: and it holds")
+
+-- Reset while paused
+clock = 1000
+X, setXP = load({ xp = XP(100, 1000, 10) })
+X.SessionStart("login")
+setXP(XP(200, 1000, 10))
+clock = 1100
+X.SessionPause(true)
+clock = 1200
+X.ResetSession()
+eq(X.SessionGained(), 0, "reset while paused: zero XP")
+eq(X.SessionElapsed(), 0, "reset while paused: zero time")
+eq(X.SessionPaused(), true, "reset while paused: stays paused")
+clock = 1300
+eq(X.SessionElapsed(), 0, "reset while paused: and frozen")
+X.SessionPause(false)
+clock = 1350
+eq(X.SessionElapsed(), 50, "reset while paused: Start counts from there")
+
+-- A save, and a /reload, while paused
+do
+    local record = {}
+    clock, wall = 1000, 50000
+    X, setXP = load({ rec = record, xp = XP(100, 1000, 10) })
+    X.SessionStart("login")
+    X.OnPlayed(5000, 300)
+    setXP(XP(300, 1000, 10))
+    clock, wall = 1100, 50100
+    X.SessionPause(true)
+    clock, wall = 1200, 50200
+    X.SessionSave()
+    eq(record.paused, true, "save: records the pause")
+    eq(record.elapsed, 100, "save: and the frozen time")
+    eq(record.played, 5200, "save: and the total")
+
+    clock, wall = 2000, 50230
+    local start = { time = 1995, xp = 700, max = 1000, level = 10 }
+    X = load({ rec = record, start = start, xp = XP(700, 1000, 10) })
+    X.SessionStart("reload")
+    eq(X.SessionPaused(), true, "reload while paused: stays paused")
+    eq(X.SessionGained(), 200, "reload while paused: the same XP, without what came since")
+    eq(X.SessionElapsed(), 100, "reload while paused: the same time, without the gap")
+    eq(X.PlayedTotal(), 5230, "reload while paused: the total advances by the gap")
+    eq(X.LevelTime(), 530, "reload while paused: the level clock advances by the gap")
+
+    X = load({ rec = record, start = start, settings = { xpResetOnReload = true }, xp = XP(700, 1000, 10) })
+    X.SessionStart("reload")
+    eq(X.SessionPaused(), true, "reset on reload while paused: stays paused")
+    eq(X.SessionGained(), 0, "reset on reload while paused: at zero XP")
+    eq(X.SessionElapsed(), 0, "reset on reload while paused: at zero time")
+
+    X = load({ rec = record, xp = XP(700, 1000, 10) })
+    X.SessionStart("login")
+    eq(X.SessionPaused(), false, "login after a paused save: running")
+    eq(X.PlayedTotal(), nil, "login: the saved total is not restored")
+
+    wall = 60000
+    X = load({ rec = record, xp = XP(700, 1000, 10) })
+    X.SessionStart("reload")
+    eq(X.SessionPaused(), false, "an old save: running")
+end
+
+-- The XP bar going off and on while paused
+clock, wall = 1000, 50000
+X, setXP = load({ rec = {}, xp = XP(100, 1000, 10) })
+X.SessionStart("login")
+X.SessionPause(true)
+X.SessionListen(false)
+setXP(XP(400, 1000, 10))
+X.SessionSave()
+X.SessionListen(true)
+X.OnXP()
+eq(X.SessionPaused(), true, "bar off and on while paused: stays paused")
+eq(X.SessionGained(), 0, "bar off and on while paused: adds nothing")
+
+-- The level history
+_G.UnitClass = function() return "Hunter", "HUNTER" end
+clock = 1000
+X, setXP = load({ xp = XP(900, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(nil, 100)
+clock = 1200
+local genBefore = X.HistoryGen()
+setXP(XP(900, 1200, 11))
+X.OnLevelUp(11)
+setXP(XP(50, 1200, 11))
+X.OnXP()
+eq(X.History().splits[10], 300, "history, event first: the split")
+eq(X.History().class, "HUNTER", "history: the class is stored")
+check(X.HistoryGen() > genBefore, "history: the counter moves")
+
+clock = 1000
+X, setXP = load({ xp = XP(900, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(nil, 100)
+clock = 1200
+setXP(XP(50, 1200, 11))
+X.OnXP()
+eq(X.LevelTime(), nil, "history, reading first: the clock drops")
+X.OnLevelUp(11)
+eq(X.History().splits[10], 300, "history, reading first: the same split")
+flush()
+
+X, setXP = load({ xp = XP(900, 1000, 10) })
+X.SessionStart("reload")
+setXP(XP(50, 1200, 11))
+X.OnLevelUp(11)
+eq(X.History(), nil, "history: a clock unknown at the level-up writes nothing")
+
+clock = 1000
+X, setXP = load({ xp = XP(900, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(nil, 100)
+X.SessionListen(false)
+setXP(XP(50, 1200, 11))
+X.OnXP()
+X.SessionListen(true)
+X.OnPlayed(nil, 20)
+clock = 1100
+setXP(XP(10, 1400, 12))
+X.OnLevelUp(12)
+eq(X.History().splits[10], nil, "history: a level passed while the bar was off writes nothing")
+eq(X.History().splits[11], 120, "history: the next seen level-up with a clock writes its own")
+
+clock = 1000
+X, setXP = load({ noKey = true, xp = XP(900, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(5000, 100)
+setXP(XP(50, 1200, 11))
+X.OnLevelUp(11)
+eq(X.History(true), nil, "history: a nil character key writes nothing")
+
+X, setXP = load({ xp = XP(900, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(nil, 100)
+setXP(XP(50, 1200, 11))
+X.OnLevelUp(11)
+_G.UnitClass = function() return "Mage", "MAGE" end
+X.OnPlayed(nil, 100)
+setXP(XP(50, 1400, 12))
+X.OnLevelUp(12)
+eq(X.History().class, "HUNTER", "history: the class is stored once")
+_G.UnitClass = nil
+
+-- The total
+clock = 1000
+X, setXP = load({ xp = XP(900, 1000, 10) })
+X.SessionStart("login")
+X.OnPlayed(5000, 300)
+eq(X.PlayedTotal(), 5000, "total: a reply keeps it")
+eq(X.History().reached[10], 4700, "total: and writes the counted level's start")
+clock = 1100
+eq(X.PlayedTotal(), 5100, "total: it advances")
+setXP(XP(50, 1200, 11))
+X.OnLevelUp(11)
+eq(X.History().reached[11], 5100, "total: a level-up writes the new level's start")
+
+do
+    local SECRET_TOTAL = 123456
+    _G.issecretvalue = function(v) return v == SECRET_TOTAL end
+    X = load({ xp = XP(900, 1000, 10) })
+    X.SessionStart("login")
+    X.OnPlayed(SECRET_TOTAL, 300)
+    eq(X.PlayedTotal(), nil, "total: a secret one is not kept")
+    eq(X.LevelTime(), 300, "total: and the time this level still seeds")
+    _G.issecretvalue = nil
+end
 
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
