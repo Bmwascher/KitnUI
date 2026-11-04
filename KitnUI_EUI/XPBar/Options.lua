@@ -14,11 +14,7 @@ local X = ns.XPBar
 -- How far a text's X and Y offsets reach, in pixels.
 local OFFSET_MAX = 100
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 -- values and order for a dropdown, from key, label pairs.
 local function Choices(...)
@@ -47,7 +43,7 @@ local OUTLINE_V, OUTLINE_O = Choices("", "EllesmereUI Outline", "NONE", "None", 
 local SOURCE_V, SOURCE_O = Choices("watched", "Watched Reputation", "companion", "Current Delve Companion",
     "pinned", "Pinned Reputation")
 local FBFILL_V, FBFILL_O = Choices("custom", "Custom Color", "standing", "Standing Color")
-local BAR_V, BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar")
+X.BAR_V, X.BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar")
 local STYLE_NAMES = { eui = "EUI Border", prof = "Profession Frame", classic = "Classic", forever = "Forever", blizzard = "Blizzard" }
 local STYLE_ORDER = { "eui", "prof", "classic", "forever", "blizzard" }
 
@@ -96,7 +92,10 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
     local W = EllesmereUI and EllesmereUI.Widgets
     if not W then return math.abs(yOffset) end
     local y = yOffset
-    -- One bar at a time; the search prebuild indexes both.
+    -- One bar at a time; the search prebuild indexes both. The index keeps one
+    -- entry per label, so an appearance row both bars share lists once and lands
+    -- in the selected bar's section. Per-bar names would add a result whose row
+    -- is not built while the other bar is selected.
     local prebuild = EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild() == true
     local bar = X.SelectedBar and X.SelectedBar() or "xp"
     local showXP, showFB = prebuild or bar == "xp", prebuild or bar == "fb"
@@ -365,7 +364,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
 
     -- Without the header's picker the page carries its own.
     if not prebuild and not (X.SelectorShown and X.SelectorShown()) then
-        Row({ type = "dropdown", text = "Bar", values = BAR_V, order = BAR_O,
+        Row({ type = "dropdown", text = "Bar", values = X.BAR_V, order = X.BAR_O,
               tooltip = "The bar this page and its preview show.",
               getValue = function() return X.SelectedBar and X.SelectedBar() or "xp" end,
               setValue = function(v) if X.SelectBar then X.SelectBar(v) end end },

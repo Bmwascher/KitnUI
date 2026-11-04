@@ -61,6 +61,7 @@
 ---@field SetLuluMode fun(on: boolean)
 ---@field LuluReconcile fun()   # prompts to apply and reload when Lulu reads on but its action bar half is not in force
 ---@field EUI_INERT boolean      # KitnUI_EUI only: set by its Core.lua when KitnUI's shared namespace is unreachable, and every other file in that addon stops on it
+---@field EUIPlain fun(v: any): any   # KitnUI_EUI only: nil for a secret value, the value otherwise
 ---@field TopBar KitnUITopBar    # KitnUI_EUI only: the Top Bar module (KitnUI_EUI/TopBar/), reached through the EXPORTS bridge in KitnUI_EUI/Core.lua
 ---@field XPBar KitnUIXPBar      # KitnUI_EUI only: the XP and faction bars (KitnUI_EUI/XPBar/); nothing in KitnUI proper calls it, so it is not exported
 ---@field EUILoginKind "login"|"reload"|nil   # KitnUI_EUI only: how this UI load began, set on the first PLAYER_ENTERING_WORLD
@@ -252,4 +253,6 @@ local KitnUITopBar
 ---@field BuildPreviewHeader fun(parent: table, width: number): number
 ---@field PreviewRefresh fun()
 ---@field PreviewRestore fun()
+---@field BAR_V table<string, string>   # the bar picker's labels, by bar key
+---@field BAR_O string[]
 local KitnUIXPBar

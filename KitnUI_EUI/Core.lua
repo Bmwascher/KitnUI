@@ -25,6 +25,12 @@ if not core then
 end
 setmetatable(ns, { __index = core })
 
+-- nil for a secret value, the value otherwise.
+function ns.EUIPlain(v)
+    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 -- The plugin id and its one module's key. EllesmereUI files the module under a
 -- key of its own, which ModuleKey asks it for.
 local PLUGIN_ID, PLUGIN_MODULE = "KitnUI", "Options"
@@ -1224,8 +1230,8 @@ end
 local loginWaiters = {}
 
 local function Num(v)
-    if type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then return nil end
-    return v
+    v = ns.EUIPlain(v)
+    return type(v) == "number" and v or nil
 end
 
 local function ReadNum(fn, ...)

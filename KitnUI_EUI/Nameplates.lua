@@ -456,7 +456,7 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
     );                                                                             y = y - h
 
     -- The swatch rides the enable toggle rather than taking a row of its own:
-    -- DualRow has no colour entry type, and a lone swatch row reads as clutter.
+    -- a lone swatch row reads as clutter.
     -- Anchored to the LEFT of that half's control, which is where EllesmereUI puts
     -- the swatch for its own target arrow colour.
     local leftRgn = row and row._leftRegion

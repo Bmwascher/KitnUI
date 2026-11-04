@@ -15,11 +15,7 @@ local M = X.Math
 
 local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local PROF_FRAME = "Professions-skillbar-frame"

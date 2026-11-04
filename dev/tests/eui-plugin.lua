@@ -115,6 +115,20 @@ end
 
 local E = newEUI(true)
 local ns = boot(E)
+
+-- The secret-value guard the tab's files share.
+local SECRET = {}
+_G.issecretvalue = function(v)
+    assert(v ~= nil, "the check never sees nil")
+    return v == SECRET
+end
+eq(ns.EUIPlain(SECRET), nil, "the secret guard: a secret value reads nil")
+eq(ns.EUIPlain(5), 5, "the secret guard: a plain value passes")
+eq(ns.EUIPlain(false), false, "the secret guard: false stays false")
+eq(ns.EUIPlain(nil), nil, "the secret guard: nil stays nil")
+_G.issecretvalue = nil
+eq(ns.EUIPlain(SECRET), SECRET, "the secret guard: a client without the check passes the value")
+
 eq(count(E, "RegisterPlugin"), 1, "the tab registers one plugin")
 local spec = E.registered and E.registered.KitnUI
 check(spec ~= nil, "under the id KitnUI")

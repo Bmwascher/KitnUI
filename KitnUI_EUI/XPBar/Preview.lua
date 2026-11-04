@@ -20,11 +20,7 @@ local HIT_FRAME, HIT_BODY, HIT_FILL, HIT_TEXT = 20, 21, 22, 30
 -- How far the frame's overlay reaches past the bar.
 local RING_OUT = 4
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 -- wrap is UNSCALED and centered on the stage; content holds the fit scale at
 -- offset 0,0 inside it. An offset on a scaled frame is in its own scaled
@@ -35,9 +31,6 @@ local hits, hitsBuilt = { xp = {}, fb = {} }, {}
 local availW = 1
 -- The bar the page and the preview show, kept for the session only.
 local selected = "xp"
-
-local BAR_V = { xp = "XP Bar", fb = "Reputation Bar" }
-local BAR_O = { "xp", "fb" }
 
 -- Every piece visible: quest XP, rested XP, both times and a rate, even on a
 -- character at max level or with no rested XP.
@@ -94,7 +87,7 @@ end
 local function MountPicker(parent)
     local level = (Plain(parent:GetFrameLevel()) or 0) + 5
     if not picker and EllesmereUI and EllesmereUI.BuildDropdownControl then
-        local ok, btn = pcall(EllesmereUI.BuildDropdownControl, parent, PICK_W, level, BAR_V, BAR_O,
+        local ok, btn = pcall(EllesmereUI.BuildDropdownControl, parent, PICK_W, level, X.BAR_V, X.BAR_O,
             X.SelectedBar, X.SelectBar)
         if ok and btn then picker = btn end
     end

@@ -83,11 +83,7 @@ end
 -- First position
 ---------------------------------------------------------------------------------
 
--- nil for a secret value, the value otherwise.
-local function Plain(v)
-    if v ~= nil and issecretvalue and issecretvalue(v) then return nil end
-    return v
-end
+local Plain = ns.EUIPlain
 
 -- A frame's live center on screen, in UIParent's units, whatever it is
 -- anchored to; nil when it has no rect or any part of it is secret.
