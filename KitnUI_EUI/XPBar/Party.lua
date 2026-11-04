@@ -29,7 +29,7 @@ local inParty, memberBelowMax, anyBelowMax = false, false, false
 local memberCount, lastCount = 0, 0
 
 local members = {}
-for i = 1, #UNITS do members[i] = { unit = UNITS[i], present = false, view = {} } end
+for i = 1, #UNITS do members[i] = { present = false, view = {} } end
 local me = { online = true, view = {} }
 local myHeard = {}
 local byKey, heard = {}, {}
