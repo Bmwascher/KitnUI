@@ -715,5 +715,28 @@ do
     X.TickerStop()
 end
 
+---------------------------------------------------------------------------------
+-- Negative session XP
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    local M = X.Math
+    local out = {}
+    local r = rawRecord()
+    r.gained = -900
+    X.TickerView(r, view, out)
+    eq(out.rate, "no XP yet", "negative session XP: the card's rate reads no XP yet")
+    eq(out.ding, "Ding --", "negative session XP: and its time to level --")
+    eq(M.Rate(-900, 60, 100), nil, "negative session XP: no rate")
+    eq(M.Number(-1900, "short"), "-1900", "negative session XP: the short number")
+    eq(M.Number(-1900, "plain"), "-1900", "negative session XP: the plain number")
+    eq(M.Number(-1900, "full"), "-1,900", "negative session XP: the full number")
+    local state = {}
+    eq(M.Trend(state, -900, 0, 180), nil, "negative session XP: the trend seeds")
+    eq(M.Trend(state, -800, 180, 180), nil, "negative session XP: and sets no arrow from one window")
+    eq(M.Trend(state, -700, 360, 180), nil, "negative session XP: nor from a steady rate")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

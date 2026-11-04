@@ -566,9 +566,19 @@ do
     setXP(reading(900, 90))
     X.OnXP()
     eq(X.SessionPaused(), false, "max level: a reading with the new level and the old XP ends the pause")
+
+    clock = 1000
+    X, setXP = load({ xp = reading(100, 89) })
+    X.SessionStart("login")
+    X.SessionPause(true)
     setXP(reading(0, 90))
     X.OnXP()
-    eq(X.SessionGained(), 0, "max level: and the correction after it stays out")
+    setXP(XP(0, 1000, 90))
+    X.OnXP()
+    X.ResetSession()
+    setXP(XP(0, 1000, 91, true))
+    X.OnXP()
+    eq(X.SessionGained(), 1000, "max level: after the limit rises, a later level-up to it counts in full")
 
     clock = 1000
     X, setXP = load({ xp = reading(900, 89) })
@@ -632,13 +642,6 @@ do
     eq(X.SessionElapsed(), 100, "max level: and the frozen time")
     clock = 2050
     eq(X.SessionElapsed(), 150, "max level: and it runs from there")
-
-    clock, wall = 2000, 50130
-    X, setXP = load({ rec = record, xp = reading(300, 90) })
-    X.SessionStart("reload")
-    setXP(reading(0, 90))
-    X.OnXP()
-    eq(X.SessionGained(), 200, "max level: a /reload there drops the correction too")
 
     clock = 2000
     X = load({ rec = record, settings = { xpResetOnReload = true }, xp = reading(0, 90) })
