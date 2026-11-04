@@ -1012,6 +1012,7 @@ do
     eq(gainPlays, 1, "effects: a quest after its reading plays")
     eq(gainAmount, 50, "effects: with the quest's amount")
     check(live and live.fxQuest ~= nil, "effects: the effect is active")
+    eq(live and live.fxQuest == (live.fxSets and live.fxSets.wave), true, "effects: Energy Wave, the default")
 
     X.Apply()
     eq(live and live.fxQuest, nil, "effects: a settings apply stops it")
@@ -1046,6 +1047,7 @@ do
     send("PLAYER_LEVEL_UP", 12)
     eq(levelPlays, 1, "effects: a level-up plays its effect")
     check(live and live.fxBusy ~= nil, "effects: and it runs")
+    eq(live and live.fxBusy == (live.fxSets and live.fxSets.sweep), true, "effects: Sweep, the default")
     settings.xpLevelEffect = "off"
     X.Apply()
     send("PLAYER_LEVEL_UP", 13)
@@ -1490,7 +1492,7 @@ do
     eq(bar and bar.fxReady and bar.fxReady.on, false, "playback: and Ready Glow")
     X.SelectBar("xp")
     X.PreviewPlay("level")
-    check(bar and bar.fxBusy == (bar.fxSets and bar.fxSets.flash), "playback: Play Level-Up plays on the sample")
+    check(bar and bar.fxBusy ~= nil and bar.fxBusy.isLevel == true, "playback: Play Level-Up plays on the sample")
     local content = bar and bar.frame.parent
     check(content and content.scripts.OnHide ~= nil, "playback: the preview's content stops what plays when it hides")
     if content and content.scripts.OnHide then content.scripts.OnHide(content) end
