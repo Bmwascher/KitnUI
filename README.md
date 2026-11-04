@@ -2,14 +2,16 @@
 
 A guided **EllesmereUI** profile installer — one-click setup for a complete, curated interface.
 
-KitnUI walks you through configuring EllesmereUI and its companion addons with a step-by-step, EllesmereUI-skinned installer. Import each profile with a single click, run a few optional cleanups, and load the whole set on every alt. Apart from its own top bar, KitnUI creates no UI — it installs pre-configured profiles into the addons you already have and silently skips the rest.
+KitnUI walks you through configuring EllesmereUI and its companion addons with a step-by-step, EllesmereUI-skinned installer. Import each profile with a single click, run a few optional cleanups, and load the whole set on every alt. Apart from its own top bar and XP bars, KitnUI creates no UI — it installs pre-configured profiles into the addons you already have and silently skips the rest.
 
 ## Features
 
 - **Step-by-step installer** — an EllesmereUI-skinned wizard with a clickable step sidebar; jump straight to any step to (re)install a single profile
 - **One EllesmereUI profile** — every spec, healer included, is baked into a single import; swap between the **Dark** and **Colored** looks from KitnUI's own tab in the EllesmereUI panel
 - **Top bar** — KitnUI's own bar across the top of the screen: clock, FPS and latency, friend and guild counts, Great Vault progress, a hearthstone roller, a Mythic+ portal flyout, and one-click launchers for the panels you open most
-- **Settings tab** — a KitnUI tab inside EllesmereUI's config panel with four pages: General, Gameplay, Nameplates and Top Bar
+- **XP and Reputation bars** — KitnUI's own bars with an XP Ticker card, bar effects and Party XP; off by default on retail and on by default on WoW Forever
+- **Settings tab** — a KitnUI tab inside EllesmereUI's config panel with five pages: General, Gameplay, Nameplates, Top Bar and XP Bar
+- **WoW Forever (beta)** — KitnUI loads on WoW Forever and installs copies of the retail profiles until Forever ones are ready
 - **Lulu Mode** — an alternate layout with a round minimap, Blizzard's own action bars, and its own Edit Mode layout
 - **One-click loading** — apply every installed profile to a new character with `/kitn load`
 - **Smart updates** — reimport only the profiles that have changed

@@ -1,8 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
-## v2.2.2
+## v2.3.0
 
-### Installer
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been tested on the live
+> Forever client yet. Expect bugs, and please report any you find.
+
+#### Installer
 
 - A redrawn constellation cat sits in the center of the installer
   background, and the title is centered with the small sidebar cat removed
@@ -10,13 +15,13 @@
 - `/kitn install` no longer warns about installed profiles when the account
   has none, and now warns on every character once it has some
 
-### Top Bar
+#### Top Bar
 
 - A Top Bar or FPS readout dragged in Unlock Mode keeps its spot through
   zoning until Save & Exit
 - A spot saved in one spec's layout no longer reaches your other layouts
 
-### XP Bar
+#### XP Bar
 
 - **NEW:** KitnUI draws its own XP bar and Reputation Bar, set up on an
   **XP Bar** tab in KitnUI's EllesmereUI page with a live, clickable
@@ -40,7 +45,7 @@
   quests cover the rest of the level, and Rested Stripes
 - The XP bar starts with Energy Wave on quest turn-ins with the amount
   gained, Sweep on level-up and Ready Glow; the Reputation Bar starts with
-  Flash on rank-up. A bar you already turned on starts with these too
+  Flash on rank-up
 - **NEW:** Party XP: see your party's level and XP on a **Party Card** under
   the XP Ticker, as ticks on your XP bar, and as lines in its tooltip. Each
   has its own switch, all off by default on retail and on by default on WoW
@@ -48,28 +53,28 @@
 - KitnUI players below max level share their level and XP with their party
   by default; **Share My XP** turns that off
 
-### Options Themes
+#### Options Themes
 
 - The KitnUI options backgrounds carry the same redrawn cat and centered
   title
 
-### General
+#### General
 
 - New K icon in the addon list, purple fading to pink
 
-### WoW Forever
+### WoW Forever only
 
 - KitnUI and its EllesmereUI tab load on WoW Forever, installing copies of
   the retail profiles until Forever ones are ready; Blizzard CDM layouts for
   Forever's classes come later
-- On Forever, the EllesmereUI step turns on ten Forever Essentials, among
-  them spell upranking, quest rewards, map reveal and the junk list (which
-  clears junk only when your bags are nearly full), and turns off six more
-- On Forever, the Top Bar hides the portal, vault, housing and journal
-  buttons, and the achievements button opens the Legacy window
-- Bite Mode and **Update Profile** read your spec correctly on Forever
-- On Forever, the installer and KitnUI options backgrounds carry an infinity
-  mark in the header and beside the title, with the word FOREVER below it
+- The EllesmereUI step turns on ten Forever Essentials, among them spell
+  upranking, quest rewards, map reveal and the junk list (which clears junk
+  only when your bags are nearly full), and turns off six more
+- The Top Bar hides the portal, vault, housing and journal buttons, and the
+  achievements button opens the Legacy window
+- Bite Mode and **Update Profile** read your spec correctly
+- The installer and KitnUI options backgrounds carry an infinity mark in the
+  header and beside the title, with the word FOREVER below it
 
 ---
 
