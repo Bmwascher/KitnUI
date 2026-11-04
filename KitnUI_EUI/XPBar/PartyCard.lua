@@ -37,7 +37,7 @@ local FIRST_X, FIRST_Y = 40, -40
 -- Both cards' backgrounds meet, so the two read as one box.
 local STACK_GAP = 0
 X.PARTY_STACK_GAP = STACK_GAP
--- For the sample, on a client whose cap cannot be read.
+-- The samples' own cap, on every client.
 local SAMPLE_CAP = 60
 
 local live, liveRows
