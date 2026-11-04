@@ -234,3 +234,98 @@ function M.ParseKill(text, fmt, isSecret)
     if not n or n <= 0 then return nil end
     return floor(n)
 end
+
+-- One XP reading against the effects' own kept one, compared only within one
+-- level and one total. Returns the gain and its span in percent, or nil. XP only
+-- falls at a level-up. s: x, m, level, and for M.QuestSpan the last rise or
+-- level-up reading (gainAt, gainBase, gainFrom, gainTo).
+function M.XPGainStep(s, cur, total, level, now)
+    if type(cur) ~= "number" or type(total) ~= "number" or type(level) ~= "number" then return nil end
+    local x, m, l = s.x, s.m, s.level
+    s.x, s.m, s.level = cur, total, level
+    if x == nil then return nil end
+    if m ~= total or l ~= level or cur < x then
+        local fill = total > 0 and min(100, cur * 100 / total) or 0
+        s.gainAt, s.gainBase, s.gainFrom, s.gainTo = now, 0, 0, fill
+        return nil
+    end
+    if total <= 0 or cur == x then return nil end
+    local from, to = min(100, x * 100 / total), min(100, cur * 100 / total)
+    s.gainAt, s.gainBase, s.gainFrom, s.gainTo = now, x, from, to
+    return cur - x, from, to
+end
+
+-- Where a turn-in's gain sits on the bar, in percent, read against the kept
+-- reading since the game can report the event and the XP in either order. Past
+-- a level-up it draws only what is on the bar after it. It only places the gain:
+-- every turn-in has a place.
+function M.QuestSpan(s, cur, total, level, reward, now, window)
+    if type(cur) ~= "number" or type(total) ~= "number" or type(reward) ~= "number" or total <= 0 then return nil end
+    local x = s.x
+    local fill = min(100, cur * 100 / total)
+    if x == nil or s.level ~= level or s.m ~= total or cur < x then return 0, fill end
+    if cur > x then return min(100, x * 100 / total), fill end
+    if s.gainAt and now - s.gainAt <= window and s.gainBase + reward < total then
+        return s.gainFrom, s.gainTo
+    end
+    local after = cur + reward
+    if after >= total then return 0, min(100, (after - total) * 100 / total) end
+    return fill, after * 100 / total
+end
+
+-- One reputation reading against the kept one: "rank", or "gain" with the
+-- amount and the percent it began at, or nil. A nil id, a new id or a change
+-- of kind only seeds, but a track turning into paragon has just finished its
+-- last rank. s: id, kind, rank, total, pct.
+function M.FactionStep(s, id, kind, rank, total, pct, isMax)
+    local lastID, lastKind, lastRank, lastTotal, lastPct = s.id, s.kind, s.rank, s.total, s.pct
+    s.id, s.kind, s.rank, s.total, s.pct = id, kind, rank, total, pct
+    if id == nil or id ~= lastID then return nil end
+    if kind ~= lastKind then return kind == "paragon" and "rank" or nil end
+    if type(rank) == "number" and type(lastRank) == "number" then
+        if rank > lastRank then return "rank" end
+        if rank < lastRank then return nil end
+    elseif rank ~= lastRank then
+        return nil
+    end
+    if not isMax and type(total) == "number" and type(lastTotal) == "number" and total > lastTotal then
+        return "gain", total - lastTotal, lastPct or 0
+    end
+    return nil
+end
+
+-- A span's left and width in pixels: at least minW, inside the bar, growing
+-- left from its end when too short.
+function M.EffectSpan(fromPct, toPct, barW, minW)
+    local left = max(0, min(100, tonumber(fromPct) or 0)) * barW / 100
+    local right = max(0, min(100, tonumber(toPct) or 0)) * barW / 100
+    if right < left then left, right = right, left end
+    local width = right - left
+    local least = min(minW or 0, barW)
+    if width < least then
+        width = least
+        left = max(0, min(barW - width, right - width))
+    end
+    return left, width
+end
+
+function M.AmountX(pct, barW, margin)
+    if barW < 2 * margin then return barW / 2 end
+    return max(margin, min(barW - margin, (tonumber(pct) or 0) * barW / 100))
+end
+
+-- From absolute x, so a repeating tile stays still as its segment grows and
+-- every gap's copy of the segment lines up.
+function M.StripeCoords(leftPx, rightPx, tile)
+    local size = max(1, tonumber(tile) or 1)
+    return leftPx / size, rightPx / size
+end
+
+function M.ReadyToLevel(cur, total, quest)
+    if type(cur) ~= "number" or type(total) ~= "number" or type(quest) ~= "number" then return false end
+    return total > 0 and quest > 0 and quest >= total - cur
+end
+
+function M.Lift(c)
+    return min(1, (tonumber(c) or 0) * 1.6)
+end

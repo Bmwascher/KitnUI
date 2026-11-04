@@ -247,5 +247,169 @@ eq(M.ShouldContinue("reload", true, 4800, 5000, 300), false, "session: reset on 
 eq(M.ShouldContinue("reload", false, 4000, 5000, 300), false, "session: an old save starts fresh")
 eq(M.ShouldContinue("reload", false, nil, 5000, 300), false, "session: no save starts fresh")
 
+-- One reading against the effects' own kept one
+do
+    local kept = {}
+    eq(M.XPGainStep(kept, 100, 1000, 10), nil, "gain step: a first reading seeds")
+    local gain, from, to = M.XPGainStep(kept, 150, 1000, 10)
+    eq(gain, 50, "gain step: a rise returns the gain")
+    eq(from, 10, "gain step: and where it began, in percent")
+    eq(to, 15, "gain step: and where it ended")
+    eq(M.XPGainStep(kept, 150, 1000, 10), nil, "gain step: a repeated reading returns nil")
+    eq(M.XPGainStep(kept, 120, 1000, 10), nil, "gain step: a fall returns nil")
+    eq(M.XPGainStep(kept, 130, 1200, 10), nil, "gain step: a new total returns nil")
+    eq(M.XPGainStep(kept, 140, 1200, 11), nil, "gain step: a new level returns nil")
+    eq(M.XPGainStep(kept, 150, 1200, 11), 10, "gain step: the next rise counts from the last reading")
+    eq(M.XPGainStep(kept, nil, 1200, 11), nil, "gain step: a missing reading returns nil")
+
+    -- A level-up's three signals, one reading each, in all six orders, and the
+    -- rise after them. XP that lands above the old XP reads as a kill in each.
+    local function gainsIn(order, newXP)
+        local st = {}
+        M.XPGainStep(st, 900, 1000, 10)
+        local x, m, level = 900, 1000, 10
+        local gains = 0
+        for i = 1, 3 do
+            local signal = order:sub(i, i)
+            if signal == "x" then x = newXP elseif signal == "m" then m = 1200 else level = 11 end
+            if M.XPGainStep(st, x, m, level) then gains = gains + 1 end
+        end
+        return gains, M.XPGainStep(st, newXP + 10, 1200, 11) ~= nil
+    end
+    local function orderIs(order, newXP, wantGains)
+        local gains, nextPlays = gainsIn(order, newXP)
+        eq(gains, wantGains, "gain step: a level-up in order " .. order .. " to " .. newXP)
+        eq(nextPlays, true, "gain step: the rise after order " .. order .. " to " .. newXP)
+    end
+    for _, order in ipairs({ "xml", "xlm", "mxl", "lxm", "mlx", "lmx" }) do
+        orderIs(order, 100, 0)
+        orderIs(order, 950, 1)
+    end
+end
+
+-- Where a turn-in's gain sits on the bar, on a window of 0.5 seconds
+do
+    local function seeded(cur)
+        local kept = {}
+        M.XPGainStep(kept, cur, 1000, 10, 0)
+        return kept
+    end
+    local function spanIs(label, wantFrom, wantTo, ...)
+        local from, to = M.QuestSpan(...)
+        eq(from, wantFrom, "quest span: " .. label)
+        eq(to, wantTo, "quest span: " .. label .. ", its end")
+    end
+
+    local st = seeded(100)
+    spanIs("the XP still to come runs ahead of the fill", 10, 15, st, 100, 1000, 10, 50, 10, 0.5)
+    spanIs("the XP already there, not yet reported", 10, 15, st, 150, 1000, 10, 50, 10, 0.5)
+    eq(M.XPGainStep(st, 150, 1000, 10, 10), 50, "quest span: the reading arrives")
+    spanIs("the XP reported just before takes that reading's span", 10, 15, st, 150, 1000, 10, 50, 10.2, 0.5)
+    spanIs("a reading outside the window does not", 15, 20, st, 150, 1000, 10, 50, 11, 0.5)
+
+    st = seeded(700)
+    M.XPGainStep(st, 900, 1000, 10, 10)
+    spanIs("a quest's own reading near the top still lends its span", 70, 90, st, 900, 1000, 10, 200, 10.2, 0.5)
+
+    -- A quest that crosses a level draws only what is on the bar after it, in
+    -- each order of its signals.
+    st = seeded(990)
+    spanIs("XP to come past the top draws what is left over", 0, 4, st, 990, 1000, 10, 50, 10, 0.5)
+    st = seeded(890)
+    M.XPGainStep(st, 900, 1000, 10, 10)
+    spanIs("a kill's reading does not hide a reward past the top", 0, 10, st, 900, 1000, 10, 200, 10.2, 0.5)
+    st = seeded(900)
+    spanIs("a new level not yet reported draws the new fill", 0, 5, st, 60, 1200, 11, 150, 10, 0.5)
+    spanIs("a new total not yet reported", 0, 5, st, 60, 1200, 10, 150, 10, 0.5)
+    spanIs("a fall not yet reported", 0, 10, st, 100, 1000, 10, 150, 10, 0.5)
+    st = seeded(900)
+    M.XPGainStep(st, 60, 1200, 11, 10)
+    spanIs("a level-up reading just before draws the new fill", 0, 5, st, 60, 1200, 11, 150, 10.2, 0.5)
+    spanIs("for the next quest inside the window too", 0, 5, st, 60, 1200, 11, 60, 10.3, 0.5)
+    spanIs("and a quest well after it runs ahead of the fill", 5, 17.5, st, 60, 1200, 11, 150, 11, 0.5)
+    st = seeded(900)
+    M.XPGainStep(st, 100, 1000, 10, 10)
+    spanIs("a fall just before counts as a level-up", 0, 10, st, 100, 1000, 10, 50, 10.2, 0.5)
+
+    spanIs("no kept reading draws the fill", 0, 10, {}, 100, 1000, 10, 50, 10, 0.5)
+    spanIs("a missing reading", nil, nil, seeded(100), nil, 1000, 10, 50, 10, 0.5)
+    spanIs("no total", nil, nil, seeded(100), 100, 0, 10, 50, 10, 0.5)
+    spanIs("no reward", nil, nil, seeded(100), 100, 1000, 10, nil, 10, 0.5)
+end
+
+-- One reputation reading
+do
+    local kept = {}
+    eq(M.FactionStep(kept, 5, "standard", 6, 4000, 40, false), nil, "faction step: a first reading plays nothing")
+    local moment, amount, from = M.FactionStep(kept, 5, "standard", 6, 4100, 41, false)
+    eq(moment, "gain", "faction step: a rise is a gain")
+    eq(amount, 100, "faction step: with its amount")
+    eq(from, 40, "faction step: and where it began")
+    eq(M.FactionStep(kept, 5, "standard", 6, 4050, 40.5, false), nil, "faction step: a loss plays nothing")
+    eq(M.FactionStep(kept, 5, "standard", 7, 9000, 1, false), "rank", "faction step: a higher standing is a rank")
+    eq(M.FactionStep(kept, 5, "standard", 6, 3000, 90, false), nil, "faction step: a lower rank plays nothing")
+    eq(M.FactionStep(kept, 9, "standard", 2, 100, 5, false), nil, "faction step: a new id plays nothing")
+    eq(M.FactionStep(kept, nil), nil, "faction step: a nil reading plays nothing")
+    eq(M.FactionStep(kept, 9, "standard", 3, 200, 5, false), nil, "faction step: nor the reading after it")
+    eq(M.FactionStep(kept, 9, "standard", 3, 300, 100, true), nil, "faction step: no gain at max")
+
+    kept = {}
+    M.FactionStep(kept, 7, "friendship", 2, 500, 10, false)
+    eq(M.FactionStep(kept, 7, "friendship", 3, 900, 1, false), "rank", "faction step: a higher friendship rank is a rank")
+    kept = {}
+    M.FactionStep(kept, 7, "renown", 4, 2400, 96, false)
+    eq(M.FactionStep(kept, 7, "renown", 5, 10, 1, false), "rank", "faction step: a higher renown level is a rank")
+    kept = {}
+    M.FactionStep(kept, 7, "paragon", 2, 29000, 90, false)
+    eq(M.FactionStep(kept, 7, "paragon", 3, 30100, 1, false), "rank", "faction step: a paragon reward is a rank")
+    kept = {}
+    M.FactionStep(kept, 7, "renown", 25, 2500, 100, true)
+    eq(M.FactionStep(kept, 7, "paragon", 0, 10, 1, false), "rank", "faction step: a change to paragon on one id is a rank")
+    kept = {}
+    M.FactionStep(kept, 7, "standard", 6, 4000, 40, false)
+    eq(M.FactionStep(kept, 7, "renown", 1, 100, 4, false), nil, "faction step: another change of kind plays nothing")
+end
+
+-- Effect geometry
+do
+    local spanX, width = M.EffectSpan(10, 15, 200, 4)
+    eq(spanX, 20, "effect span: the left in pixels")
+    eq(width, 10, "effect span: the width in pixels")
+    spanX, width = M.EffectSpan(10, 10.5, 200, 4)
+    eq(spanX, 17, "effect span: a short span grows left from its end")
+    eq(width, 4, "effect span: to the least width")
+    spanX, width = M.EffectSpan(0, 0.1, 200, 4)
+    eq(spanX, 0, "effect span: stays inside at the left")
+    eq(width, 4, "effect span: at the least width")
+    spanX, width = M.EffectSpan(99.9, 100, 200, 4)
+    eq(spanX, 196, "effect span: stays inside at the right")
+    eq(width, 4, "effect span: there too at the least width")
+    spanX, width = M.EffectSpan(0, 100, 2, 4)
+    eq(spanX, 0, "effect span: on a bar below the least width, from the left")
+    eq(width, 2, "effect span: at the bar's width")
+
+    eq(M.AmountX(50, 200, 10), 100, "amount x: follows the percent")
+    eq(M.AmountX(1, 200, 10), 10, "amount x: clamped at the left")
+    eq(M.AmountX(99, 200, 10), 190, "amount x: clamped at the right")
+    eq(M.AmountX(50, 10, 10), 5, "amount x: centered on a bar too narrow to clamp")
+
+    local u1, u2 = M.StripeCoords(0, 50, 10)
+    eq(u1, 0, "stripe coords: from absolute x")
+    eq(u2, 5, "stripe coords: to absolute x")
+    local u3 = M.StripeCoords(50, 80, 10)
+    eq(u3, u2, "stripe coords: two spans sharing a pixel agree there")
+    eq(select(2, M.StripeCoords(0, 8, 0)), 8, "stripe coords: a tile of 0 counts as 1")
+
+    eq(M.ReadyToLevel(900, 1000, 0), false, "ready: no quest XP")
+    eq(M.ReadyToLevel(900, 1000, 100), true, "ready: exact cover")
+    eq(M.ReadyToLevel(900, 1000, 150), true, "ready: over")
+    eq(M.ReadyToLevel(900, 1000, 99), false, "ready: under")
+    eq(M.ReadyToLevel(nil, 1000, 99), false, "ready: a missing reading")
+
+    eq(M.Lift(0.5), 0.8, "lift: raises a channel")
+    eq(M.Lift(0.9), 1, "lift: capped at 1")
+    eq(M.Lift(nil), 0, "lift: a missing channel")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
