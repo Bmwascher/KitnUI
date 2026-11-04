@@ -130,9 +130,7 @@ function X.NewCard(parent)
     return card
 end
 
-local function SetFont(fs, font, size, flags)
-    if not fs:SetFont(font, size, flags) then fs:SetFont(STANDARD_TEXT_FONT, size, flags) end
-end
+local SetFont = X.SetFont
 
 -- Only when a setting changed: every size is a multiple of the font size.
 local function StyleCard(card, view)

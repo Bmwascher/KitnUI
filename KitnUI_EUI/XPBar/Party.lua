@@ -378,8 +378,9 @@ function X.PartyMarkerList()
     return marks
 end
 
--- As the card's offline name.
+-- An offline member's gray, on the card's name and the tooltip's status.
 local OFFLINE_GRAY = 0.5
+X.PARTY_OFFLINE_GRAY = OFFLINE_GRAY
 
 -- The bar's own rows always come first, so the blank line is never the top one.
 function X.PartyTooltipLines(tip)
