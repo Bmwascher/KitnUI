@@ -1470,6 +1470,70 @@ do
     X.PreviewRefresh()
     eq(#frames, cardCount, "sample card: a redraw makes no frame")
     eq(X.PreviewPlay("gain"), nil, "sample card: a play with the card selected does nothing")
+
+    -- The party card under the ticker's sample, and the sample XP bar under both.
+    local drawnN, partyCard, barData, barWidget
+    local drawParty, drawSample = X.DrawPartyCard, X.Draw
+    X.DrawPartyCard = function(card, view, rows, n)
+        partyCard, drawnN = card, n
+        return drawParty(card, view, rows, n)
+    end
+    X.Draw = function(w, view, data)
+        if w.kind == "xp" then barData, barWidget = data, w end
+        return drawSample(w, view, data)
+    end
+    methods.SetPoint = function(self, point, rel, relPoint, x, y) self.pt = { point, rel, relPoint, x, y } end
+
+    settings.xpPartyMarkers = true
+    X.PreviewRefresh()
+    eq(drawnN, 4, "party preview: four sample rows")
+    eq(partyCard and partyCard.shown, true, "party preview: the card shows")
+    eq(cardShown and cardShown.shown, true, "party preview: with the ticker's sample")
+    eq(partyCard and partyCard.pt[2], cardShown, "party preview: stacked on it")
+    eq(partyCard and partyCard.pt[3], "BOTTOMLEFT", "party preview: at its bottom left")
+    eq(partyCard and partyCard.pt[5], 0, "party preview: with no gap")
+    eq(barWidget and barWidget.frame.shown, true, "party preview: the sample bar shows with Party Markers on")
+    eq(barWidget and barWidget.ptMarks and barWidget.ptMarks[1].on, true, "party preview: with its tick")
+    local pairWidth = math.max(cardShown.kuiW, partyCard and partyCard.kuiW or 0)
+    eq(cardShown.pt[4], (X.Get("xpWidth") - pairWidth) / 2, "party preview: the two cards center as a pair over the bar")
+
+    settings.xpPartyMarkers = false
+    X.PreviewRefresh()
+    eq(barWidget and barWidget.frame.shown, false, "party preview: the sample bar hides with Party Markers off")
+    eq(cardShown.pt[4], 0, "party preview: and the cards fill the width")
+    settings.xpPartyMarkers = true
+    X.PreviewRefresh()
+    eq(barWidget and barWidget.frame.shown, true, "party preview: and returns")
+
+    settings.xpPartyShowSelf = false
+    X.PreviewRefresh()
+    eq(drawnN, 3, "party preview: Show Self off drops a row")
+    eq(overlays.pxName4 and overlays.pxName4.btn.shown, false, "party preview: and its overlay")
+    settings.xpPartyShowSelf = nil
+    X.PreviewRefresh()
+    eq(overlays.pxName4 and overlays.pxName4.btn.shown, true, "party preview: which returns with it")
+
+    if overlays.pxBack then overlays.pxBack.navigate("pxBack") end
+    eq(navTo, "pxBack", "party preview: the background leads to its own")
+    if overlays.pxName1 then overlays.pxName1.navigate() end
+    eq(navTo, "pxFont", "party preview: a name leads to Party Font")
+    if overlays.pxBar2 then overlays.pxBar2.navigate() end
+    eq(navTo, "pxFill", "party preview: a bar leads to Party Fill")
+    if overlays.pxText3 then overlays.pxText3.navigate() end
+    eq(navTo, "pxSize", "party preview: a text leads to Party Font Size")
+
+    local partyCount = #frames
+    X.PreviewRefresh()
+    eq(#frames, partyCount, "party preview: a redraw makes no frame")
+
+    X.SelectBar("xp")
+    eq(partyCard and partyCard.shown, false, "party preview: the card hides when a bar is selected")
+    eq(barData and barData.markers, nil, "the XP view's preview draws no ticks")
+    eq(barWidget and barWidget.ptMarks and barWidget.ptMarks[1].on, false, "and hides the sample's")
+    settings.xpPartyMarkers = nil
+    X.SelectBar("tk")
+    methods.SetPoint = nil
+    X.DrawPartyCard, X.Draw = drawParty, drawSample
     X.NavigateToSetting = navReal
 
     local bar
