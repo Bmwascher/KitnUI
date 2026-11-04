@@ -732,4 +732,747 @@ end
 check(X.LiveXPWidget() == nil, "no XP bar yet: no live widget")
 check(type(X.CARD_BACKGROUNDS) == "table" and X.CARD_BACKGROUNDS.card ~= nil, "the card shares the ticker's backgrounds")
 
+---------------------------------------------------------------------------------
+-- The party path's world
+---------------------------------------------------------------------------------
+
+local LE_HOME, LE_INSTANCE = 1, 2
+_G.LE_PARTY_CATEGORY_HOME, _G.LE_PARTY_CATEGORY_INSTANCE = LE_HOME, LE_INSTANCE
+local group = { home = false, instance = false, raid = false }
+local units = {}
+local me = { level = 10, xp = 100, max = 1000 }
+local rosterReads = 0
+local chat = { sends = {}, prefixes = 0, prefixResult = 0, result = 0, locked = false, raises = false }
+
+_G.IsInRaid = function() return group.raid end
+_G.IsInGroup = function(category)
+    if category == LE_HOME then return group.home end
+    if category == LE_INSTANCE then return group.instance end
+    return group.home or group.instance
+end
+_G.GetNormalizedRealmName = function() return "Realm" end
+_G.UnitExists = function(u)
+    rosterReads = rosterReads + 1
+    return units[u] ~= nil
+end
+_G.UnitInPartyIsAI = function(u) return units[u] ~= nil and units[u].ai == true end
+_G.UnitIsPlayer = function(u) return units[u] ~= nil and units[u].ai ~= true end
+_G.UnitIsConnected = function(u) return units[u] ~= nil and units[u].online ~= false end
+_G.UnitFullName = function(u)
+    if u == "player" then return "Tester", "Realm" end
+    local p = units[u]
+    if not p then return nil end
+    if p.secretName then return SECRET, SECRET end
+    return p.name, p.realm
+end
+_G.UnitClass = function(u)
+    if u == "player" then return "Mage", "MAGE" end
+    local p = units[u]
+    if not p then return nil end
+    if p.secretName then return SECRET, SECRET end
+    return p.class, p.class
+end
+_G.UnitLevel = function(u)
+    if u == "player" then return me.level end
+    return units[u] and units[u].level
+end
+_G.UnitXP = function() return me.xp end
+_G.UnitXPMax = function() return me.max end
+_G.C_ChatInfo = {
+    RegisterAddonMessagePrefix = function()
+        chat.prefixes = chat.prefixes + 1
+        return chat.prefixResult
+    end,
+    SendAddonMessage = function(prefix, text, channel)
+        if chat.raises then error("refused") end
+        chat.sends[#chat.sends + 1] = { prefix = prefix, text = text, channel = channel }
+        return chat.result
+    end,
+    InChatMessagingLockdown = function() return chat.locked end,
+}
+
+local loginQueues = 0
+local whenKnown = ns.EUIWhenLoginKnown
+ns.EUIWhenLoginKnown = function(fn)
+    loginQueues = loginQueues + 1
+    return whenKnown(fn)
+end
+
+-- The card's last refresh, kept on the way through.
+local lastRows, lastN, lastWanted, refreshes
+refreshes = 0
+local refreshReal = X.PartyCardRefresh
+X.PartyCardRefresh = function(rows, n, wanted)
+    lastRows, lastN, lastWanted = rows, n, wanted
+    refreshes = refreshes + 1
+    return refreshReal(rows, n, wanted)
+end
+
+local function rowOf(name)
+    for i = 1, lastN or 0 do
+        if lastRows[i].name == name then return lastRows[i] end
+    end
+    return nil
+end
+
+-- Runs each timer still waiting, once. A Lua error in a callback is a failure.
+local function fire()
+    local due = {}
+    for _, t in ipairs(timers) do
+        if not t.canceled and not t.fired then due[#due + 1] = t end
+    end
+    for _, t in ipairs(due) do
+        t.fired = true
+        local done, why = pcall(t.fn)
+        check(done, "a timer callback runs without a Lua error", why)
+    end
+end
+
+local function waiting()
+    local n = 0
+    for _, t in ipairs(timers) do
+        if not t.canceled and not t.fired then n = n + 1 end
+    end
+    return n
+end
+
+local partyFrame
+
+local function ev(event, ...)
+    local done, why = pcall(partyFrame.scripts.OnEvent, partyFrame, event, ...)
+    check(done, event .. " runs without a Lua error", why)
+end
+
+local function eventList()
+    local names = {}
+    for e in pairs(partyFrame.events) do names[#names + 1] = e end
+    table.sort(names)
+    return table.concat(names, ",")
+end
+
+local function member(name, class, level)
+    return { name = name, class = class, level = level }
+end
+
+local function join(...)
+    units = {}
+    for i = 1, select("#", ...) do units["party" .. i] = select(i, ...) end
+    group.home = true
+    ev("GROUP_ROSTER_UPDATE")
+end
+
+local function reset()
+    X.PartyStop()
+    units = {}
+    group.home, group.instance, group.raid = false, false, false
+    me.level, me.xp, me.max = 10, 100, 1000
+    chat.sends, chat.result, chat.locked, chat.raises = {}, 0, false, false
+    for k in pairs(settings) do
+        if k:find("^xpParty") then settings[k] = nil end
+    end
+end
+
+local function say(text, sender, channel, prefix)
+    ev("CHAT_MSG_ADDON", prefix or "KitnUIXP", text, channel or "PARTY", sender or "Mirelle-Realm")
+end
+
+---------------------------------------------------------------------------------
+-- What each state costs
+---------------------------------------------------------------------------------
+
+do
+    -- At max level with every display off: nothing, however many applies run.
+    me.level = 90
+    local frameCount = #frames
+    X.PartyApply()
+    X.PartyApply()
+    X.PartyApply()
+    eq(#frames, frameCount, "at max, displays off: no frame")
+    eq(#chat.sends, 0, "at max, displays off: no message")
+    eq(chat.prefixes, 0, "at max, displays off: no prefix")
+    eq(waiting(), 0, "at max, displays off: no timer")
+    eq(loginQueues, 1, "the login read is queued once")
+
+    -- Below max with Share My XP off and no display: the same.
+    me.level = 10
+    settings.xpPartyShare = false
+    X.PartyApply()
+    eq(#frames, frameCount, "Share off, no display: no frame")
+    settings.xpPartyShare = nil
+
+    -- Below max, solo, by default: one frame watching for a group.
+    X.PartyApply()
+    eq(#frames, frameCount + 1, "below max, solo: one frame")
+    partyFrame = frames[#frames]
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "below max, solo: one event")
+    eq(waiting(), 0, "below max, solo: no timer")
+    eq(#chat.sends, 0, "below max, solo: no message")
+
+    -- Reaching max level alone has no event of its own: the watcher stays until
+    -- the next apply or roster change, and either ends it.
+    me.level = 90
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "solo, reached max: the watcher stays")
+    X.PartyApply()
+    eq(eventList(), "", "solo, reached max: an apply ends it")
+    me.level = 10
+    X.PartyApply()
+    me.level = 90
+    join(member("Mirelle", "MAGE", 58))
+    eq(eventList(), "", "solo, reached max: joining a party ends it")
+    eq(waiting(), 0, "solo, reached max: with no timer")
+    eq(#chat.sends, 0, "solo, reached max: and no message")
+    reset()
+    X.PartyApply()
+
+    -- A prefix the client refuses goes no further, until it is held.
+    chat.prefixResult = 3
+    join(member("Mirelle", "MAGE", 58))
+    eq(waiting(), 0, "a refused prefix: nothing is armed")
+    fire()
+    eq(#chat.sends, 0, "a refused prefix: nothing is sent")
+    chat.prefixResult = 0
+    ev("GROUP_ROSTER_UPDATE")
+    eq(waiting(), 1, "a prefix held late: it arrives as if entering")
+    fire()
+    eq(chat.sends[1] and chat.sends[1].text, "R", "a prefix held late: it asks")
+    reset()
+
+    -- Joining a party shares.
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 58), member("Dornak", "WARRIOR", 90))
+    local has = eventList()
+    for _, e in ipairs({ "CHAT_MSG_ADDON", "GROUP_ROSTER_UPDATE", "UNIT_LEVEL", "UNIT_CONNECTION", "UNIT_NAME_UPDATE",
+        "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "ENABLE_XP_GAIN", "DISABLE_XP_GAIN" }) do
+        check(has:find(e, 1, true), "in a party, sharing: registered " .. e)
+    end
+    check(not has:find("ADDON_RESTRICTION", 1, true), "in a party, sharing: no restriction event")
+    eq(waiting(), 1, "joining arms one slot")
+    fire()
+    eq(chat.sends[1] and chat.sends[1].text, "R", "the first message asks")
+    eq(chat.sends[1] and chat.sends[1].channel, "PARTY", "on PARTY")
+    eq(chat.sends[1] and chat.sends[1].prefix, "KitnUIXP", "with the prefix")
+    eq(waiting(), 1, "the report takes the next slot")
+    fire()
+    local kind, level, cur, total = X.PartyLogic.ParseMessage(chat.sends[2] and chat.sends[2].text)
+    eq(kind, "report", "the second message reports")
+    eq(level, 10, "the level")
+    eq(cur, 100, "the XP")
+    eq(total, 1000, "and the total")
+    eq(waiting(), 0, "then no timer while idle")
+
+    -- Leaving unregisters the party set.
+    units = {}
+    group.home = false
+    ev("GROUP_ROSTER_UPDATE")
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "leaving: back to one event")
+    eq(lastN, 0, "leaving: no rows")
+
+    -- A raid is as if solo, and its roster traffic reads no roster.
+    group.home, group.raid = true, true
+    units = { party1 = member("Mirelle", "MAGE", 58) }
+    rosterReads = 0
+    ev("GROUP_ROSTER_UPDATE")
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "in a raid: one event")
+    eq(rosterReads, 0, "in a raid: a roster event reads no roster")
+    fire()
+    group.raid = false
+
+    -- Followers alone count as solo.
+    local follower = member("Brann", "WARRIOR", 80)
+    follower.ai = true
+    local before = #chat.sends
+    join(follower)
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "followers only: one event")
+    fire()
+    eq(#chat.sends, before, "followers only: nothing is sent")
+    settings.xpPartyCard = true
+    X.PartyApply()
+    eq(lastWanted, false, "followers only: the card stays hidden")
+    settings.xpPartyCard = nil
+
+    -- A follower beside a player has no row.
+    join(follower, member("Mirelle", "MAGE", 58))
+    eq(rowOf("Brann"), nil, "a follower has no row")
+    check(rowOf("Mirelle") ~= nil, "beside a player who does")
+
+    -- Share off with no display drops everything.
+    settings.xpPartyShare = false
+    X.PartyApply()
+    eq(eventList(), "", "Share off, no display: no event")
+    eq(waiting(), 0, "Share off, no display: no timer")
+    reset()
+
+    -- A display at max with an all-max party hears nothing.
+    me.level = 90
+    settings.xpPartyCard = true
+    X.PartyApply()
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "a display on at max, solo: one event")
+    local atMax = member("Dornak", "WARRIOR", 90)
+    join(atMax)
+    check(not eventList():find("CHAT_MSG_ADDON", 1, true), "a display at max, an all-max party: no messages heard")
+    check(not eventList():find("PLAYER_XP_UPDATE", 1, true), "and no XP events")
+    fire()
+    eq(#chat.sends, 0, "and nothing sent")
+    eq(lastWanted, false, "and the card hidden: nobody is below max")
+
+    -- A member below max moves it to listening, which asks and never reports.
+    units.party2 = member("Mirelle", "MAGE", 58)
+    ev("GROUP_ROSTER_UPDATE")
+    check(eventList():find("CHAT_MSG_ADDON", 1, true), "a member below max: messages heard")
+    eq(lastWanted, true, "and the card shows")
+    fire()
+    eq(chat.sends[1] and chat.sends[1].text, "R", "it asks")
+    fire()
+    eq(#chat.sends, 1, "and never reports")
+    say("R", "Mirelle-Realm")
+    eq(waiting(), 0, "and a request sets no report")
+    say("1 58 500 1000", "Mirelle-Realm")
+    eq(rowOf("Mirelle").view.kind, "data", "it hears a report")
+
+    -- That member reaching max moves it back.
+    units.party2.level = 90
+    ev("UNIT_LEVEL", "party2")
+    check(not eventList():find("CHAT_MSG_ADDON", 1, true), "the member reaching max: no messages heard")
+    eq(lastWanted, false, "and the card hides")
+    reset()
+
+    -- A level-up that reads the old level is read again one slot later, in every
+    -- mode with a level event, sharing or not.
+    settings.xpPartyShare = false
+    settings.xpPartyCard = true
+    me.level = 89
+    X.PartyApply()
+    join(member("Dornak", "WARRIOR", 90))
+    eq(lastWanted, true, "a display below max, an all-max party: the card shows")
+    ev("PLAYER_LEVEL_UP", 90)
+    eq(waiting(), 1, "a level-up arms one slot to read the level again")
+    me.level = 90
+    fire()
+    eq(lastWanted, false, "which finds max level and hides the card")
+    check(not eventList():find("PLAYER_XP_UPDATE", 1, true), "and leaves the XP events")
+    eq(waiting(), 0, "with nothing waiting")
+    eq(#chat.sends, 0, "and no message")
+    reset()
+
+    -- Share off with a display on, below max: hears, asks, sends no XP.
+    settings.xpPartyShare = false
+    settings.xpPartyCard = true
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 58))
+    check(eventList():find("PLAYER_XP_UPDATE", 1, true), "Share off, a display on: XP events for the player's row")
+    fire()
+    fire()
+    eq(#chat.sends, 1, "Share off, a display on: one message")
+    eq(chat.sends[1] and chat.sends[1].text, "R", "which carries no XP")
+    me.xp = 200
+    ev("PLAYER_XP_UPDATE")
+    eq(waiting(), 0, "Share off: XP arms nothing")
+    check(rowOf("Tester").view.text:find("20.0", 1, true), "and the player's row still moves")
+    reset()
+
+    -- XP gain off, in a party: no sharing until it is back on.
+    local xpOff = true
+    _G.IsXPUserDisabled = function() return xpOff end
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 58))
+    fire()
+    eq(#chat.sends, 0, "XP gain off: nothing is sent")
+    check(eventList():find("ENABLE_XP_GAIN", 1, true), "XP gain off: it listens for the change")
+    xpOff = false
+    ev("ENABLE_XP_GAIN")
+    fire()
+    fire()
+    eq(#chat.sends, 2, "XP gain back on: it asks and reports")
+    xpOff = true
+    ev("DISABLE_XP_GAIN")
+    me.xp = 300
+    ev("PLAYER_XP_UPDATE")
+    eq(waiting(), 0, "XP gain off again: XP arms nothing")
+    _G.IsXPUserDisabled = function() return false end
+    reset()
+end
+
+---------------------------------------------------------------------------------
+-- Sending
+---------------------------------------------------------------------------------
+
+do
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 58))
+    fire()
+    fire()
+    chat.sends = {}
+
+    -- A burst merges.
+    me.xp = 200
+    ev("PLAYER_XP_UPDATE")
+    me.xp = 250
+    ev("PLAYER_XP_UPDATE")
+    me.xp = 300
+    ev("PLAYER_XP_UPDATE")
+    eq(waiting(), 1, "a burst arms one slot")
+    fire()
+    eq(#chat.sends, 1, "a burst sends once")
+    eq(select(2, X.PartyLogic.ParseMessage(chat.sends[1].text)), 10, "the level")
+    eq(select(3, X.PartyLogic.ParseMessage(chat.sends[1].text)), 300, "with the newest XP")
+    eq(waiting(), 0, "then nothing waits")
+
+    -- An unchanged reading sends nothing.
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(#chat.sends, 1, "an unchanged reading sends nothing")
+
+    -- A join and a request each report.
+    units.party2 = member("Dornak", "WARRIOR", 90)
+    ev("GROUP_ROSTER_UPDATE")
+    fire()
+    eq(#chat.sends, 2, "a join reports")
+    say("R", "Dornak-Realm")
+    fire()
+    eq(#chat.sends, 3, "a report request reports")
+    say("R", "Stranger-Realm")
+    eq(waiting(), 0, "a request from a non-member does nothing")
+
+    -- An instance group changes the channel.
+    group.instance = true
+    ev("GROUP_ROSTER_UPDATE")
+    fire()
+    fire()
+    eq(chat.sends[#chat.sends].channel, "INSTANCE_CHAT", "an instance group sends on INSTANCE_CHAT")
+    eq(chat.sends[#chat.sends - 1].text, "R", "and the new channel asks again")
+    for _, send in ipairs(chat.sends) do
+        check(send.channel ~= "RAID", "never on RAID")
+    end
+    group.instance = false
+    ev("GROUP_ROSTER_UPDATE")
+    fire()
+    fire()
+    chat.sends = {}
+
+    -- A secret reading sends nothing.
+    local xpReal = _G.UnitXP
+    _G.UnitXP = function() return SECRET end
+    say("R", "Dornak-Realm")
+    fire()
+    eq(#chat.sends, 0, "a secret XP sends nothing")
+    _G.UnitXP = xpReal
+
+    -- A raised send error is caught.
+    chat.raises = true
+    say("R", "Dornak-Realm")
+    fire()
+    eq(#chat.sends, 0, "a raised send error sends nothing")
+    chat.raises = false
+
+    -- Max level, read at the event or only at the flush.
+    me.xp = 900
+    ev("PLAYER_XP_UPDATE")
+    me.level = 90
+    fire()
+    eq(#chat.sends, 0, "a flush that finds max level sends nothing")
+    check(not eventList():find("PLAYER_XP_UPDATE", 1, true), "and leaves sharing")
+    reset()
+
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 58))
+    fire()
+    fire()
+    chat.sends = {}
+    me.level = 90
+    ev("PLAYER_LEVEL_UP", 90)
+    check(not eventList():find("PLAYER_XP_UPDATE", 1, true), "a level-up to max leaves sharing")
+    eq(waiting(), 0, "with nothing waiting")
+    fire()
+    eq(#chat.sends, 0, "and no final report")
+    reset()
+end
+
+---------------------------------------------------------------------------------
+-- Refusals
+---------------------------------------------------------------------------------
+
+do
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 58))
+    fire()
+    fire()
+    chat.sends = {}
+
+    -- A lock read before the send.
+    chat.locked = true
+    me.xp = 200
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(#chat.sends, 0, "a known lock: no send is made")
+    eq(waiting(), 0, "and no timer runs inside it")
+    chat.locked = false
+    eq(waiting(), 0, "a lock lifting alone arms nothing")
+    me.xp = 300
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(#chat.sends, 1, "the next XP gain sends")
+    eq(select(3, X.PartyLogic.ParseMessage(chat.sends[1].text)), 300, "with the newest XP")
+
+    -- A send refused with 11.
+    chat.sends = {}
+    chat.result = 11
+    me.xp = 400
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(#chat.sends, 1, "the send was made")
+    eq(waiting(), 0, "and 11 arms no timer")
+    chat.result = 0
+    me.xp = 500
+    say("R", "Mirelle-Realm")
+    fire()
+    eq(#chat.sends, 2, "a report request sends what was held")
+    eq(select(3, X.PartyLogic.ParseMessage(chat.sends[2].text)), 500, "with the newest XP")
+
+    -- A secret lock reads as locked.
+    chat.sends = {}
+    chat.locked = SECRET
+    me.xp = 600
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(#chat.sends, 0, "a secret lock reads as locked")
+    chat.locked = false
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    chat.sends = {}
+
+    -- A throttle tries the next slot.
+    chat.result = 3
+    me.xp = 700
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(waiting(), 1, "a throttle tries the next slot")
+    chat.result = 0
+    fire()
+    eq(#chat.sends, 2, "and goes")
+    eq(waiting(), 0, "then nothing waits")
+
+    -- Not in a group is dropped until the roster changes.
+    chat.sends = {}
+    chat.result = 5
+    me.xp = 800
+    ev("PLAYER_XP_UPDATE")
+    fire()
+    eq(waiting(), 0, "not in a group: nothing waits")
+    chat.result = 0
+    me.xp = 850
+    ev("PLAYER_XP_UPDATE")
+    eq(waiting(), 0, "and XP arms nothing")
+    ev("GROUP_ROSTER_UPDATE")
+    eq(waiting(), 1, "a roster change lifts it")
+    fire()
+    eq(chat.sends[#chat.sends].channel, "PARTY", "and it sends")
+    reset()
+
+    -- A listener's refused request comes back with the roster.
+    settings.xpPartyShare = false
+    settings.xpPartyCard = true
+    X.PartyApply()
+    chat.result = 5
+    join(member("Mirelle", "MAGE", 58))
+    fire()
+    eq(waiting(), 0, "a listener refused as not in a group: nothing waits")
+    chat.result = 0
+    chat.sends = {}
+    ev("GROUP_ROSTER_UPDATE")
+    eq(waiting(), 1, "a roster change lifts it")
+    fire()
+    eq(chat.sends[1] and chat.sends[1].text, "R", "and it asks again")
+    eq(waiting(), 0, "once")
+    reset()
+
+    -- What a flush finds for itself leaves no timer past a refusal. Each change
+    -- below reaches the game with no event, so only the flush can find it.
+    local CHANGES = {
+        ["a new channel"] = function() group.instance = true end,
+        ["a new member"] = function() units.party2 = member("Vess", "DRUID", 57) end,
+        ["a new mode"] = function()
+            settings.xpPartyShare = false
+            settings.xpPartyCard = true
+        end,
+    }
+    for name, change in pairs(CHANGES) do
+        for _, refusal in ipairs({ "a lock", "result 11" }) do
+            local label = name .. " under " .. refusal
+            X.PartyApply()
+            join(member("Mirelle", "MAGE", 58))
+            fire()
+            fire()
+            chat.sends = {}
+            me.xp = 200
+            ev("PLAYER_XP_UPDATE")
+            change()
+            if refusal == "a lock" then chat.locked = true else chat.result = 11 end
+            fire()
+            eq(waiting(), 0, label .. ": no timer is left")
+            local tried = #chat.sends
+            eq(tried, refusal == "a lock" and 0 or 1, label .. ": one try at most")
+            fire()
+            eq(#chat.sends, tried, label .. ": and no retry")
+            chat.locked, chat.result = false, 0
+            eq(waiting(), 0, label .. ": the refusal lifting alone arms nothing")
+            me.xp = 300
+            ev("PLAYER_XP_UPDATE")
+            eq(waiting(), 1, label .. ": the next trigger arms one slot")
+            fire()
+            check(#chat.sends > tried, label .. ": and sends what was held")
+            reset()
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Receipt
+---------------------------------------------------------------------------------
+
+do
+    X.PartyApply()
+    local mirelle = member("Mirelle", "MAGE", 58)
+    join(mirelle, member("Dornak", "WARRIOR", 90), member("Vess", "DRUID", 57))
+    fire()
+    fire()
+
+    eq(lastRows[1].name, "Tester", "the player's row comes first")
+    eq(lastRows[2].name, "Mirelle", "then the party in the game's order")
+    eq(rowOf("Mirelle").view.kind, "nodata", "nothing heard: no data")
+    eq(rowOf("Dornak").view.kind, "max", "a max-level member reads Max with no message")
+    eq(rowOf("Vess").view.kind, "nodata", "a member with no addon: no data")
+
+    say("1 58 912 1000")
+    eq(rowOf("Mirelle").view.kind, "data", "a report fills the row")
+    eq(rowOf("Mirelle").view.pct, 91.2, "at its percent")
+
+    local marks = X.PartyMarkerList()
+    eq(marks, nil, "markers off: no list")
+    settings.xpPartyMarkers = true
+    marks = X.PartyMarkerList()
+    eq(marks.n, 1, "markers on: only a member with data")
+    eq(marks[1].name, "Mirelle", "by name")
+    eq(marks[1].pct, 91.2, "at the percent")
+    eq(marks[1].level, 58, "and level")
+    eq(marks[1].class, "MAGE", "and class")
+
+    local count = refreshes
+    say("1 58 912 1000")
+    eq(refreshes, count, "a repeat report redraws nothing")
+
+    local bad = {
+        { "1 58 100 1000", "Tester-Realm" },
+        { "1 58 100 1000", "Stranger-Realm" },
+        { "1 58 100 1000", "Mirelle-Realm", "RAID" },
+        { "1 58 100 1000", "Mirelle-Realm", "GUILD" },
+        { "1 58 100 1000", "Mirelle-Realm", "PARTY", "OtherPrefix" },
+        { "1 58 5000 1000", "Mirelle-Realm" },
+        { "2 58 100 1000", "Mirelle-Realm" },
+        { "garbage", "Mirelle-Realm" },
+        { SECRET, "Mirelle-Realm" },
+        { "1 58 100 1000", SECRET },
+        { "1 58 100 1000", "Mirelle-Realm", SECRET },
+        { "1 58 100 1000", "Mirelle-Realm", "PARTY", SECRET },
+    }
+    for i, m in ipairs(bad) do
+        say(m[1], m[2], m[3], m[4])
+        eq(rowOf("Mirelle").view.pct, 91.2, "a refused message changes nothing, case " .. i)
+    end
+    say("1 58 100 1000", "Mirelle-Realm", "INSTANCE_CHAT")
+    eq(rowOf("Mirelle").view.pct, 10, "INSTANCE_CHAT is heard")
+    say("1 58 912 1000")
+
+    -- A level-up drops the old pair, and a lock keeps it.
+    mirelle.level = 59
+    ev("UNIT_LEVEL", "party1")
+    eq(rowOf("Mirelle").view.kind, "nodata", "a member's level-up reads no data")
+    check(rowOf("Mirelle").view.text:find("59", 1, true), "at the new level")
+    eq(X.PartyMarkerList().n, 0, "and has no marker")
+    say("1 59 50 1000")
+    eq(rowOf("Mirelle").view.pct, 5, "until the next report")
+    chat.locked = true
+    mirelle.level = 60
+    ev("UNIT_LEVEL", "party1")
+    eq(rowOf("Mirelle").view.kind, "data", "inside a lock the row keeps the pair")
+    check(rowOf("Mirelle").view.text:find("59", 1, true), "at its own level")
+    chat.locked = false
+    ev("UNIT_NAME_UPDATE", "party1")
+    eq(rowOf("Mirelle").view.kind, "nodata", "a pair kept in a lock gives way at the next redraw")
+
+    -- Offline
+    say("1 60 5 1000")
+    eq(X.PartyMarkerList().n, 1, "a member with data has a marker")
+    mirelle.online = false
+    ev("UNIT_CONNECTION", "party1", false)
+    eq(rowOf("Mirelle").view.kind, "offline", "an offline member reads offline")
+    eq(X.PartyMarkerList().n, 0, "and has none")
+    mirelle.online = true
+    ev("UNIT_CONNECTION", "party1", true)
+
+    -- Leaving removes the heard value.
+    say("1 60 5 1000")
+    units.party1 = member("Dornak", "WARRIOR", 90)
+    units.party2 = member("Vess", "DRUID", 57)
+    units.party3 = nil
+    ev("GROUP_ROSTER_UPDATE")
+    eq(rowOf("Mirelle"), nil, "a member who left has no row")
+    units.party3 = mirelle
+    ev("GROUP_ROSTER_UPDATE")
+    eq(rowOf("Mirelle").view.kind, "nodata", "and returns with nothing heard")
+
+    -- Show Self
+    settings.xpPartyShowSelf = false
+    X.PartyApply()
+    eq(rowOf("Tester"), nil, "Show Self off drops the player's row")
+    settings.xpPartyShowSelf = nil
+    X.PartyApply()
+
+    -- A /reload's memory is empty: leaving the group clears everything.
+    say("1 60 5 1000")
+    reset()
+    X.PartyApply()
+    join(member("Mirelle", "MAGE", 60))
+    eq(rowOf("Mirelle").view.kind, "nodata", "heard values do not outlast a stop")
+    reset()
+end
+
+---------------------------------------------------------------------------------
+-- Secret values
+---------------------------------------------------------------------------------
+
+do
+    X.PartyApply()
+    local mirelle = member("Mirelle", "MAGE", 58)
+    join(mirelle, member("Vess", "DRUID", 57))
+    say("1 58 912 1000")
+    settings.xpPartyMarkers = true
+
+    mirelle.secretName = true
+    ev("UNIT_NAME_UPDATE", "party1")
+    check(rowOf("Mirelle") ~= nil, "a shown row keeps what it showed")
+    eq(rowOf("Mirelle").view.pct, 91.2, "with its value")
+    eq(X.PartyMarkerList().n, 1, "and its marker")
+
+    local fresh = member("Bram", "MAGE", 50)
+    fresh.secretName = true
+    units.party3 = fresh
+    ev("GROUP_ROSTER_UPDATE")
+    eq(lastN, 3, "a new unreadable member gets no row")
+    say("1 57 100 1000", "Vess-Realm")
+    eq(rowOf("Vess").view.pct, 10, "others still hear")
+
+    -- The heard value of an unreadable member survives a prune.
+    units.party2 = nil
+    units.party3 = nil
+    ev("GROUP_ROSTER_UPDATE")
+    check(rowOf("Mirelle") ~= nil, "a roster that cannot be fully read keeps its row")
+    mirelle.secretName = nil
+    fresh.secretName = nil
+    units.party2 = fresh
+    ev("UNIT_NAME_UPDATE", "party2")
+    check(rowOf("Bram") ~= nil, "a readable roster adds the new member")
+    eq(rowOf("Mirelle").view.pct, 91.2, "and the kept value is still there")
+    reset()
+end
+
 finish()

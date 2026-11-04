@@ -11,6 +11,7 @@
     <Script file="Effects.lua" />
     <Script file="Bar.lua" />
     <Script file="Ticker.lua" />
+    <Script file="Party.lua" />
     <Script file="PartyMarkers.lua" />
     <Script file="PartyCard.lua" />
     <Script file="Options.lua" />
