@@ -22,6 +22,25 @@ All four files are directly uploadable as ChatGPT Images references. Do not
 make JPEG copies. JPEG compression damages the thin rails, particles, text,
 and transparency edges.
 
+## Forever marks
+
+On the Forever client a transparent image draws over each background, so the
+retail files above never change. Each is RGBA on its background's canvas, takes
+the same crop or anchors, and holds the infinity mark in the header arch, a
+small copy left of the title, and the word FOREVER below the title.
+`dev/art/build_forever_art.py` draws them and carries the numbers.
+
+| Overlays | Surface | Tracked file |
+| --- | --- | --- |
+| Installer A | KitnUI installer | [`Media/Background/KitnUI-EUI-Background-Forever.png`](../Media/Background/KitnUI-EUI-Background-Forever.png) |
+| Installer B | KitnUI installer | [`Media/Background/KitnUI-EUI-Background-Rasta-Forever.png`](../Media/Background/KitnUI-EUI-Background-Rasta-Forever.png) |
+| Options A | EUI options panel | [`KitnUI_EUI/Media/Backgrounds/KitnUI-EUI-Options-Forever.png`](../KitnUI_EUI/Media/Backgrounds/KitnUI-EUI-Options-Forever.png) |
+| Options B | EUI options panel | [`KitnUI_EUI/Media/Backgrounds/KitnUI-EUI-Options-Rasta-Forever.png`](../KitnUI_EUI/Media/Backgrounds/KitnUI-EUI-Options-Rasta-Forever.png) |
+
+Live labels bound where a mark can sit. The installer's longest page title plus
+its Skip link reaches canvas x 760. EUI's thanks name is right-anchored, varies
+per open and grows left from x 1205, so the options mark stops at x 1145.
+
 ## Shared character language
 
 Both themes use the same basic cat silhouette and jewelry language:
