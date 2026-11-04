@@ -624,10 +624,12 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         local partyLines = Toggle("Party Tooltip Lines", "xpPartyTooltip", "Adds each member to the end of the XP bar's tooltip.",
             function() return not X.XPEnabled() or X.Get("xpTooltip") ~= true end)
         partyLines.disabledTooltip = "Turn on the XP bar and its Show Tooltip first."
+        partyLines.rawTooltip = true
         Row(Toggle("Share My XP", "xpPartyShare", "Sends your level and XP to your party, only while you are below max level."), partyLines)
         local partyMarkers = Toggle("Party Markers", "xpPartyMarkers", "Draws a tick on your XP bar at each member's percent through their own level.",
             function() return not X.XPEnabled() end, true)
         partyMarkers.disabledTooltip = "Turn on the XP bar first."
+        partyMarkers.rawTooltip = true
         local markersRow = Row(partyMarkers,
             Drop("Marker Label", "xpPartyLabel", PARTYLABEL_V, PARTYLABEL_O, "What the text beside each tick shows.", NoMarkers, true))
         Cog(markersRow, "left", "Party Markers", { CogSlider("Marker Width", "xpPartyMarkerWidth", 1, 6) },

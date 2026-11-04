@@ -1897,8 +1897,10 @@ do
     check(type(cfgs["Share My XP"].tooltip) == "string", "party rows: Share My XP has a tooltip")
     eq(cfgs["Party Markers"].disabled(), true, "party rows: Party Markers grays with the XP bar off")
     check(type(cfgs["Party Markers"].disabledTooltip) == "string", "party rows: with a reason")
+    eq(cfgs["Party Markers"].rawTooltip, true, "party rows: the markers' reason prints as written")
     eq(cfgs["Party Tooltip Lines"].disabled(), true, "party rows: the lines gray with the XP bar off")
     check(type(cfgs["Party Tooltip Lines"].disabledTooltip) == "string", "party rows: with a reason")
+    eq(cfgs["Party Tooltip Lines"].rawTooltip, true, "party rows: the lines' reason prints as written")
     settings.xpEnabled = true
     eq(cfgs["Party Markers"].disabled(), false, "party rows: Party Markers works with the XP bar on")
     eq(cfgs["Party Tooltip Lines"].disabled(), false, "party rows: and the lines, with Show Tooltip on")
