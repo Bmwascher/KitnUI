@@ -249,6 +249,10 @@ local function RefreshXP()
     X.TickerRefresh(raw)
 end
 
+function X.LiveXPWidget()
+    return widgets.xp
+end
+
 local function RefreshFaction()
     local w = widgets.fb
     if not w then return end
@@ -664,13 +668,16 @@ end
 
 -- Registered once and never unregistered: unregistering an element deletes
 -- every anchor link the player made to it.
-local function RegisterUnlock()
+function X.EnsureUnlock()
+    if unlockDone then return end
+    unlockDone = true
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.RegisterUnlockElements and EUI.MakeUnlockElement) then return end
     EUI:RegisterUnlockElements({
         UnlockElement(EUI, "xp", UNLOCK_KEY.xp, "KitnUI XP Bar", 3, "xpPos", "xpWidth", "xpHeight", X.XPEnabled),
         UnlockElement(EUI, "fb", UNLOCK_KEY.fb, "KitnUI Reputation Bar", 4, "fbPos", "fbWidth", "fbHeight", X.FactionEnabled),
         X.TickerElement(EUI),
+        X.PartyElement(EUI),
     }, "KitnUI_EUI")
 end
 
@@ -724,10 +731,7 @@ local function Ensure()
         ev = CreateFrame("Frame")
         ev:SetScript("OnEvent", OnEvent)
     end
-    if not unlockDone then
-        unlockDone = true
-        RegisterUnlock()
-    end
+    X.EnsureUnlock()
     if not accentDone then
         accentDone = true
         RegisterAccent()

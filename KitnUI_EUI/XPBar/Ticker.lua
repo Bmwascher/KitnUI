@@ -31,6 +31,7 @@ local TOP_SCALE, PAD_SCALE, ARROW_GAP, BUTTON_W = 1.35, 0.5, 0.3, 4
 local UP_R, UP_G, UP_B = 0.3, 0.9, 0.3
 local DOWN_R, DOWN_G, DOWN_B = 0.95, 0.3, 0.3
 local BACKGROUNDS = { card = { 0.05, 0.05, 0.05, 0.85 }, soft = { 0, 0, 0, 0.35 } }
+X.CARD_BACKGROUNDS = BACKGROUNDS
 -- Where a card sits until it is moved, clear of the bars' default spots.
 local FIRST_X, FIRST_Y = 40, 120
 
@@ -543,6 +544,12 @@ function X.TickerStop()
     if live.mouseover and EUI and EUI.UnregisterMouseoverTarget then EUI.UnregisterMouseoverTarget(live) end
     live.mouseover = false
     live:Hide()
+end
+
+-- What the party card stacks under: nil while the ticker is off.
+function X.TickerFrame()
+    if X.XPEnabled() and Get("xpTickerEnabled") == true then return live end
+    return nil
 end
 
 -- The size follows the font size, so the mover has no resize controls.

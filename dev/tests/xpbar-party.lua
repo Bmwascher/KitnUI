@@ -350,4 +350,386 @@ do
     eq(fb.ptHost, nil, "the reputation bar has no markers")
 end
 
+---------------------------------------------------------------------------------
+-- The readers
+---------------------------------------------------------------------------------
+
+do
+    eq(X.LevelCap(), 90, "the level cap from the expansion's and the player's cap")
+    _G.GetMaxPlayerLevel = function() return 60 end
+    eq(X.LevelCap(), 60, "the lower of the two")
+    _G.GameRulesUtil = { GetEffectiveMaxLevelForPlayer = function() return 80 end }
+    eq(X.LevelCap(), 80, "Blizzard's own rule first")
+    _G.GameRulesUtil = { GetEffectiveMaxLevelForPlayer = function() return SECRET end }
+    eq(X.LevelCap(), 60, "a secret answer falls back")
+    _G.GameRulesUtil = nil
+    _G.GetMaxLevelForPlayerExpansion, _G.GetMaxPlayerLevel = nil, nil
+    eq(X.LevelCap(), nil, "with nothing to read, no cap")
+    _G.GetMaxLevelForPlayerExpansion = function() return 90 end
+    _G.GetMaxPlayerLevel = function() return 90 end
+
+    eq(X.ReadPlain(nil), nil, "a missing function reads as nil")
+    eq(X.ReadPlain(function() error("x") end), nil, "a raised error reads as nil")
+    eq(X.ReadPlain(function() return SECRET end), nil, "a secret reads as nil")
+    local a, b = X.ReadPlain(function() return 1, 2 end)
+    eq(a, 1, "the first result")
+    eq(b, 2, "and the second")
+end
+
+---------------------------------------------------------------------------------
+-- The card
+---------------------------------------------------------------------------------
+
+do
+    local function row(name, class, kind, pct, text)
+        return { name = name, class = class, view = { kind = kind, pct = pct, text = text } }
+    end
+    local list = { row("Mirelle", "MAGE", "data", 45, "Lv 59  45.0%"), row("Dornak", "WARRIOR", "max", 100, "Lv 90  Max") }
+
+    local accentFn
+    local regAccent = EUI.RegAccent
+    EUI.RegAccent = function(opts)
+        accentFn = opts.fn
+        return regAccent(opts)
+    end
+
+    -- Off, it makes nothing.
+    local frameCount, unlockCount = #frames, unlocks
+    X.PartyCardApply()
+    X.PartyCardRefresh(list, 2, true)
+    eq(#frames, frameCount, "card off: no frame")
+    eq(unlocks, unlockCount, "card off: no Unlock Mode element")
+    check(next(updaters) == nil, "card off: no visibility updater")
+    check(next(listeners) == nil, "card off: no Unlock Mode listener")
+    eq(accents, 0, "card off: no accent callback")
+    X.PartyCardRefresh(list, 0, false)
+
+    -- On, with both bars off.
+    settings.xpPartyCard = true
+    X.PartyCardApply()
+    check(#frames > frameCount, "card on: it makes a frame with both bars off")
+    eq(unlocks, unlockCount + 1, "card on: the Unlock Mode elements register")
+    eq(accents, 1, "card on: one accent callback")
+    check(next(updaters) ~= nil, "card on: a visibility updater")
+    check(listeners.KitnUI_PartyXP ~= nil, "card on: an Unlock Mode listener")
+    X.PartyCardApply()
+    eq(unlocks, unlockCount + 1, "a second apply registers nothing more")
+    eq(accents, 1, "and no second accent callback")
+
+    local element
+    for _, e in ipairs(unlockList) do
+        if e.key == "KitnUI_PartyXP" then element = e end
+    end
+    check(element ~= nil, "the card's Unlock Mode element is in the list")
+    eq(element.noResize, true, "with no resize controls")
+    eq(element.isHidden(), false, "and not hidden")
+    local card = element.getFrame()
+    check(card ~= nil, "it returns the card")
+    settings.xpPartyCard = false
+    eq(element.isHidden(), true, "the switch off hides it")
+    settings.xpPartyCard = true
+
+    -- Clicks pass through, through the hover service's reveal too.
+    card:EnableMouse(true)
+    eq(card.click, false, "a reveal leaves clicks off")
+    eq(card.motion, false, "and motion")
+
+    -- Rows
+    eq(card.shown, false, "the card waits for what is wanted")
+    X.PartyCardRefresh(list, 2, true)
+    eq(card.shown, true, "wanted shows it")
+    local r1, r2 = card.rows[1], card.rows[2]
+    eq(r1.name.text, "Mirelle", "a row holds the name")
+    eq(r1.name.colorR, 0.1, "in the class color")
+    eq(r1.text.text, list[1].view.text, "and its text")
+    eq(r1.bar.value, 45, "and its percent")
+    eq(r2.bar.value, 100, "a max row is full")
+    eq(r2.bar.colorR, r2.bar.colorG, "and gray")
+    eq(r2.bar.colorG, r2.bar.colorB, "all through")
+    eq(card.kuiW, 264, "the card is its Width")
+    eq(card.kuiW, X.Math.TickerWidth(X.Get("xpTickerFontSize")), "which starts as the ticker's width")
+    eq(X.Get("xpPartyBackground"), X.Get("xpTickerBackground"), "and with the ticker's background")
+    local height = card.kuiH
+    check(height > 0, "and as tall as its rows")
+
+    local texts = textCalls
+    X.PartyCardRefresh(list, 2, true)
+    eq(textCalls, texts, "an unchanged row sets no text")
+
+    local away = row("Bram", "DRUID", "offline", 0, "offline")
+    X.PartyCardRefresh({ list[1], away }, 2, true)
+    eq(r2.name.colorR, r2.name.colorG, "an offline name is gray")
+    eq(r2.name.text, "Bram", "and the row is the new member's")
+    eq(r2.bar.value, 0, "with an empty bar")
+
+    X.PartyCardRefresh(list, 1, true)
+    eq(r2.shown, false, "a row left over hides")
+    check(card.kuiH < height, "and the card shortens")
+    X.PartyCardRefresh(list, 2, true)
+    eq(r2.shown, true, "and it returns")
+
+    -- Fill
+    settings.xpPartyFill = "class"
+    X.PartyCardRefresh(list, 2, true)
+    eq(r1.bar.colorR, 0.1, "Class Color fills in the class color")
+    settings.xpPartyFill = "custom"
+    settings.xpPartyFillColorR, settings.xpPartyFillColorG, settings.xpPartyFillColorB = 0.9, 0.8, 0.7
+    X.PartyCardRefresh(list, 2, true)
+    eq(r1.bar.colorR, 0.9, "Custom fills in the Fill Color")
+    settings.xpPartyFillColorR, settings.xpPartyFillColorG, settings.xpPartyFillColorB = nil, nil, nil
+    settings.xpPartyFill = nil
+    local accentReal = X.AccentColor
+    X.AccentColor = function() return 0.25, 0.5, 0.75 end
+    X.PartyCardRefresh(list, 2, true)
+    eq(r1.bar.colorR, 0.25, "the accent is the default")
+    X.AccentColor = function() return nil end
+    X.PartyCardRefresh(list, 2, true)
+    eq(r1.bar.colorR, X.Get("xpPartyFillColorR"), "no accent falls back to the Fill Color")
+    X.AccentColor = accentReal
+
+    -- Settings
+    settings.xpPartyFontSize = 24
+    X.PartyCardApply()
+    check(card.kuiH > height, "row height follows Font Size")
+    settings.xpPartyFontSize = nil
+    settings.xpPartyWidth = 400
+    X.PartyCardApply()
+    eq(card.kuiW, 400, "Width is the setting")
+    settings.xpPartyWidth = nil
+    settings.xpPartyBackground = "none"
+    X.PartyCardApply()
+    eq(card.bg.shown, false, "Background None hides the background")
+    settings.xpPartyBackground = nil
+    X.PartyCardApply()
+    eq(card.bg.shown, true, "and Card shows it")
+
+    -- Every Width and Font Size on the page leaves the bar and the name room.
+    for _, width in ipairs({ 160, 260, 600 }) do
+        for _, size in ipairs({ 8, 12, 32 }) do
+            settings.xpPartyWidth, settings.xpPartyFontSize = width, size
+            X.PartyCardApply()
+            local look, label = card.look, width .. " wide at size " .. size
+            check(look.barW > 0, "the bar has room, " .. label, look.barW)
+            check(look.nameW > look.pad, "and the name, " .. label, look.nameW)
+            eq(look.nameW + look.barW, width - 2 * look.pad, "and the two fill the row, " .. label)
+            eq(r1.text.width, look.barW, "a row's text is capped to its bar, " .. label)
+            eq(r1.name.width, look.nameW - look.pad, "and its name to its column, " .. label)
+        end
+    end
+    settings.xpPartyWidth, settings.xpPartyFontSize = nil, nil
+    X.PartyCardApply()
+    eq(card.look.nameW, 90, "at the defaults the name column is its multiple of the font size")
+    local tickerCard = X.NewCard(_G.UIParent)
+    X.DrawCard(tickerCard, X.Get, { rate = "", ding = "", pauseText = "", n = 0, keys = {} })
+    eq(card.look.pad, tickerCard.pad, "at the defaults its pad is the ticker's, so their text lines up")
+
+    -- Visibility
+    X.PartyCardRefresh(list, 2, false)
+    eq(card.shown, false, "not wanted hides it")
+    X.PartyCardRefresh(list, 2, true)
+    visResult = false
+    X.PartyCardVisibility()
+    eq(card.shown, false, "a Visibility choice that says no hides it")
+    visResult = "mouseover"
+    X.PartyCardVisibility()
+    check(mouseover[card] ~= nil, "Mouseover uses the hover service")
+    eq(mouseover[card] and mouseover[card](), true, "while it is wanted")
+    visResult = true
+    X.PartyCardVisibility()
+    eq(mouseover[card], nil, "and leaves it after")
+    eq(card.shown, true, "and shows")
+
+    -- Unlock Mode shows the sample whatever the party state.
+    X.PartyCardRefresh(list, 0, false)
+    eq(card.shown, false, "solo: hidden")
+    listeners.KitnUI_PartyXP(true)
+    eq(card.shown, true, "Unlock Mode shows it solo")
+    eq(card.rows[4] and card.rows[4].shown, true, "with the four sample rows")
+    listeners.KitnUI_PartyXP(false)
+    eq(card.shown, false, "and returns to its rule")
+
+    -- The sample
+    local sample, n = X.PartySampleRows(X.Get)
+    eq(n, 4, "the sample has four rows")
+    eq(sample[1].view.kind, "data", "the player first, with data")
+    eq(sample[2].view.kind, "data", "a member with data")
+    eq(sample[2].view.pct, 91.2, "at 91.2%")
+    eq(sample[3].view.kind, "max", "a member at Max")
+    eq(sample[4].view.kind, "nodata", "and one with no data")
+    settings.xpPartyShowSelf = false
+    local _, withoutSelf = X.PartySampleRows(X.Get)
+    eq(withoutSelf, 3, "Show Self off drops the player's row")
+    settings.xpPartyShowSelf = nil
+    local marks = X.PartySampleMarks()
+    eq(marks.n, 1, "the sample has one tick")
+    eq(marks[1].pct, 91.2, "the member with data")
+
+    -- The accent, on and stopped
+    X.PartyCardRefresh(list, 2, true)
+    X.AccentColor = function() return 0.6, 0.6, 0.6 end
+    accentFn()
+    eq(r1.bar.colorR, 0.6, "an accent change repaints the card")
+
+    -- Stop
+    settings.xpPartyCard = false
+    X.PartyCardApply()
+    eq(card.shown, false, "the switch off hides the card")
+    check(next(updaters) == nil, "and leaves the visibility service")
+    eq(listeners.KitnUI_PartyXP, nil, "and the Unlock Mode listener")
+    eq(element.getFrame(), card, "the element keeps its frame")
+    X.AccentColor = function() return 0.7, 0.7, 0.7 end
+    local stoppedTexts = textCalls
+    accentFn()
+    eq(r1.bar.colorR, 0.6, "a stopped card takes no accent change")
+    X.PartyCardRefresh({ row("Bram", "DRUID", "offline", 0, "offline") }, 1, true)
+    eq(textCalls, stoppedTexts, "and no rows")
+    eq(card.shown, false, "and stays hidden")
+    X.PartyCardVisibility()
+    eq(card.shown, false, "whoever asks")
+    X.PartyCardRefresh(list, 0, false)
+    X.AccentColor = accentReal
+    EUI.RegAccent = regAccent
+    settings.xpPartyCard = nil
+
+    local placed
+    local placeReal = X.PlaceFrame
+    X.PlaceFrame = function(_, key, pos) placed = { key, pos } end
+    X.Set("xpPartyPos", { point = "TOP", relPoint = "TOP", x = 1, y = 2 })
+    element.applyPos()
+    eq(placed and placed[1], "KitnUI_PartyXP", "the card places by its own key")
+    eq(placed and placed[2].x, 1, "from its saved spot")
+    local loaded = element.loadPos()
+    eq(loaded.y, 2, "the element reads a copy of the spot")
+    element.clearPos()
+    eq(element.loadPos(), nil, "and clears it")
+    X.PlaceFrame = placeReal
+
+    -- Where it sits. A plain frame stands in for the ticker's.
+    local ticker = _G.CreateFrame("Frame")
+    local tickerReal = X.TickerFrame
+    local tickerOn = true
+    X.TickerFrame = function() return tickerOn and ticker or nil end
+    settings.xpPartyCard = true
+    X.PartyCardApply()
+    local function onTicker(label)
+        eq(card.point[1], "TOPLEFT", label .. ": by its top left")
+        eq(card.point[2], ticker, label .. ": on the ticker")
+        eq(card.point[3], "BOTTOMLEFT", label .. ": at its bottom left")
+        eq(card.point[4], 0, label .. ": with the left edges lined up")
+        eq(card.point[5], 0, label .. ": and no gap")
+    end
+    local function atFirstSpot(label)
+        eq(card.point[1], "LEFT", label .. ": by its left")
+        eq(card.point[2], _G.UIParent, label .. ": on the screen")
+        eq(card.point[4], 40, label .. ": at its first spot")
+        eq(card.point[5], -40, label .. ": below the ticker's")
+    end
+    onTicker("never moved")
+
+    tickerOn = false
+    X.PartyCardVisibility()
+    atFirstSpot("the ticker off")
+    tickerOn = true
+    X.PartyCardVisibility()
+    onTicker("the ticker on again")
+
+    -- A move keeps its own spot, and clearing it stacks again.
+    element.savePos(nil, "CENTER", "CENTER", 5, 6)
+    eq(settings.xpPartyPos and settings.xpPartyPos.x, 5, "a move is saved")
+    eq(card.point[2], _G.UIParent, "a move leaves the ticker")
+    X.PartyCardVisibility()
+    eq(card.point[4], 5, "and stays on its spot while the ticker is there")
+    element.clearPos()
+    X.PartyCardVisibility()
+    onTicker("its spot cleared")
+
+    -- Its own link wins.
+    local reapplied
+    EUI.IsAnchored = function(key) return key == "KitnUI_PartyXP" end
+    EUI.ReapplyOwnAnchor = function(key) reapplied = key end
+    local points = pointCalls
+    X.PartyCardVisibility()
+    eq(reapplied, "KitnUI_PartyXP", "its own link places it")
+    eq(pointCalls, points, "and the card sets no point of its own")
+    EUI.IsAnchored, EUI.ReapplyOwnAnchor = nil, nil
+
+    -- The ticker's links: back to the card gives the first spot, elsewhere stacks.
+    local dbReal = _G.EllesmereUIDB
+    local function withLinks(links, label, want)
+        _G.EllesmereUIDB = { unlockAnchors = links }
+        local placedOk, placeErr = pcall(X.PartyCardVisibility)
+        check(placedOk, label .. ": no error", placeErr)
+        want(label)
+    end
+    withLinks({ KitnUI_XPTicker = { target = "KitnUI_PartyXP" } }, "the ticker linked to the card", atFirstSpot)
+    withLinks({ KitnUI_XPTicker = { target = "A" }, A = { target = "KitnUI_PartyXP" } }, "through another element", atFirstSpot)
+    withLinks({ KitnUI_XPTicker = { target = "A" }, A = { target = "KitnUI_XPTicker" } }, "a chain that never ends", atFirstSpot)
+    withLinks({ KitnUI_XPTicker = { target = "A" } }, "the ticker linked elsewhere", onTicker)
+    withLinks({}, "no links", onTicker)
+    _G.EllesmereUIDB = dbReal
+
+    -- Unlock Mode: on the screen at the same spot, which a later placement keeps.
+    methods.GetLeft = function() return 11 end
+    methods.GetTop = function() return 22 end
+    listeners.KitnUI_PartyXP(true)
+    eq(card.point[2], _G.UIParent, "Unlock Mode: off the ticker, for its arrow keys")
+    eq(card.point[3], "BOTTOMLEFT", "Unlock Mode: from the screen's corner")
+    eq(card.point[4], 11, "Unlock Mode: at the card's left")
+    eq(card.point[5], 22, "Unlock Mode: and its top")
+    points = pointCalls
+    X.PartyCardVisibility()
+    eq(pointCalls, points, "Unlock Mode: a later placement leaves a dragged card alone")
+    listeners.KitnUI_PartyXP(false)
+    onTicker("Unlock Mode closed")
+    eq(settings.xpPartyPos, nil, "Unlock Mode closed: nothing saved")
+
+    -- The hold lasts only while the card stays stacked: each of these, inside a
+    -- session, has the next placement stack it and read its rect again.
+    local function reflattens(label, leave)
+        listeners.KitnUI_PartyXP(true)
+        leave()
+        methods.GetLeft = function() return 33 end
+        X.PartyCardVisibility()
+        eq(card.point[2], _G.UIParent, label .. ": on the screen again")
+        eq(card.point[4], 33, label .. ": at the spot it reads now")
+        methods.GetLeft = function() return 11 end
+        listeners.KitnUI_PartyXP(false)
+    end
+    reflattens("its spot cleared", element.clearPos)
+    reflattens("a save, then its spot cleared", function()
+        element.savePos(nil, "CENTER", "CENTER", 7, 8)
+        element.clearPos()
+    end)
+    reflattens("a link made and undone", function()
+        EUI.IsAnchored = function(key) return key == "KitnUI_PartyXP" end
+        EUI.ReapplyOwnAnchor = NOOP
+        X.PartyCardVisibility()
+        EUI.IsAnchored, EUI.ReapplyOwnAnchor = nil, nil
+    end)
+    reflattens("the ticker off and on", function()
+        tickerOn = false
+        X.PartyCardVisibility()
+        tickerOn = true
+    end)
+
+    listeners.KitnUI_PartyXP(true)
+    element.savePos(nil, "CENTER", "CENTER", 7, 8)
+    eq(card.point[4], 7, "Unlock Mode: a save goes to its spot")
+    listeners.KitnUI_PartyXP(false)
+    eq(card.point[4], 7, "and it stays there after closing")
+    element.clearPos()
+    X.PartyCardVisibility()
+    methods.GetLeft, methods.GetTop = nil, nil
+    listeners.KitnUI_PartyXP(true)
+    onTicker("Unlock Mode with an unreadable rect")
+    listeners.KitnUI_PartyXP(false)
+
+    X.TickerFrame = tickerReal
+    settings.xpPartyCard = nil
+    X.PartyCardApply()
+end
+
+check(X.LiveXPWidget() == nil, "no XP bar yet: no live widget")
+check(type(X.CARD_BACKGROUNDS) == "table" and X.CARD_BACKGROUNDS.card ~= nil, "the card shares the ticker's backgrounds")
+
 finish()

@@ -58,6 +58,23 @@ function X.ReadXP()
     return xp
 end
 
+-- The level the client counts as max, for a member's level as for the player's.
+function X.LevelCap()
+    local rules = _G.GameRulesUtil
+    local cap = rules and Num(Call(rules.GetEffectiveMaxLevelForPlayer))
+    if cap then return cap end
+    local a, b = Num(Call(GetMaxLevelForPlayerExpansion)), Num(Call(GetMaxPlayerLevel))
+    if a and b then return min(a, b) end
+    return a or b
+end
+
+-- A read of a call that may be missing, raise or answer a secret: the first
+-- two results, each nil when it cannot be used.
+function X.ReadPlain(fn, ...)
+    local a, b = Call(fn, ...)
+    return Plain(a), Plain(b)
+end
+
 -- Completed and in-progress quest XP. Read-only: it never selects a quest.
 -- Bonus objectives and world quests are tasks and are skipped.
 function X.ScanQuestXP()
