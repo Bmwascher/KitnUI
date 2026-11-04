@@ -45,6 +45,8 @@
 - On Forever, the Top Bar hides the portal, vault, housing and journal
   buttons, and the achievements button opens the Legacy window
 - Bite Mode and **Update Profile** read your spec correctly on Forever
+- On Forever, the installer and KitnUI options backgrounds carry an infinity
+  mark in the header and beside the title, with the word FOREVER below it
 
 ---
 
