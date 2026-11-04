@@ -19,7 +19,6 @@ local Plain = ns.EUIPlain
 -- mask. False makes those effects alpha-only, with no other change.
 X.FX_MASKED_MOTION = true
 
-local STAR = "Interface\\AddOns\\KitnUI_EUI\\Media\\XPBar\\star"
 local GOLD_R, GOLD_G, GOLD_B = 1, 0.82, 0.25
 local SURGE_RIBBON, SURGE_PIP = "ui-castingbar-full-glow-standard", "ui-castingbar-pip"
 local SURGE_GLOW, SURGE_FLARE = "cast_standard_pipglow", "cast-empowered-pipflare"
@@ -437,15 +436,8 @@ end
 
 local function MakeReady(w)
     Host(w)
-    Glow(w)
     local set = { group = w.fx:CreateAnimationGroup(), regions = {} }
     set.tex = InBar(w, set)
-    set.star = w.fxGlow:CreateTexture(nil, "OVERLAY")
-    set.star:SetTexture(STAR)
-    set.star:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
-    set.star:SetPoint("CENTER", w.frame, "RIGHT", 0, 0)
-    set.star:Hide()
-    set.regions[#set.regions + 1] = set.star
     set.group:SetLooping("BOUNCE")
     Step(set.group, set.tex, READY_FROM, READY_TO, READY_TIME)
     w.fxReady = set
@@ -463,8 +455,6 @@ function X.SyncReady(w, view, data, bw, bh)
     set = set or MakeReady(w)
     Span(w, set.tex, M.EffectSpan(data.fill or 0, data.readyEnd, bw, bh * SPAN_MIN))
     set.tex:SetVertexColor(M.Lift(view("xpQuestR")), M.Lift(view("xpQuestG")), M.Lift(view("xpQuestB")), 1)
-    local star = tonumber(view("xpStarSize")) or 16
-    set.star:SetSize(star, star)
     if not set.on then
         set.on = true
         ShowRegions(set)

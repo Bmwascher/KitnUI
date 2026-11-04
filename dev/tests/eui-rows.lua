@@ -1327,7 +1327,7 @@ do
     eq(xpLabelOf("fbGainShowAmount"), "Reputation show amount gained", "xp label: on the other bar too")
     eq(xpLabelOf("xpGainTextSize"), "Amount text size", "xp label: the amount's size reads as on the page")
     eq(xpLabelOf("fbGainTextSize"), "Reputation amount text size", "xp label: on the other bar too, its size")
-    eq(xpLabelOf("xpStarSize"), "Ready glow star size", "xp label: the star is named")
+    eq(xpLabelOf("xpStarSize"), "Star size", "xp label: a saved key with no default reads as tidied")
     eq(xpLabelOf("xpTickerFontSize"), "Ticker font size", "xp label: a card key reads as tidied")
     eq(xpLabelOf("xpGainEffect"), "Gain effect", "xp label: a gain key reads as tidied")
     eq(xpLabelOf("fbGainEffect"), "Reputation gain effect", "xp label: with Reputation on the other bar")

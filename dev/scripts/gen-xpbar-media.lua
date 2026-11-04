@@ -1,4 +1,4 @@
--- Draws the XP bar's three textures as uncompressed TGA: white shapes on
+-- Draws the XP bar's two textures as uncompressed TGA: white shapes on
 -- alpha, tinted in game. Run by hand from the repo root, with the folder
 -- KitnUI_EUI/Media/XPBar already made:
 --
@@ -61,14 +61,6 @@ end
 -- One diagonal stripe per tile, seamless when repeated.
 write("stripes", solid(function(x, y) return (x + y) % SIZE < SIZE / 2 end, STRIPE_ALPHA))
 
-local star = {}
-for i = 0, 9 do
-    local radius = i % 2 == 0 and 15 or 6
-    local angle = math.pi / 2 + i * math.pi / 5
-    star[#star + 1] = { 16 + radius * math.cos(angle), 16 + radius * math.sin(angle) }
-end
-write("star", solid(polygon(star), 1))
-
 write("arrow", solid(polygon({ { 16, 30 }, { 28, 16 }, { 20, 16 }, { 20, 3 }, { 12, 3 }, { 12, 16 }, { 4, 16 } }), 1))
 
-print("wrote stripes.tga, star.tga and arrow.tga to " .. OUT)
+print("wrote stripes.tga and arrow.tga to " .. OUT)

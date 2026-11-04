@@ -510,7 +510,6 @@ local XP_NAMES = {
     xpGlowSize = "Level-up glow size", fbGlowSize = "Reputation rank-up glow size",
     xpGainShowAmount = "Show amount gained", fbGainShowAmount = "Reputation show amount gained",
     xpGainTextSize = "Amount text size", fbGainTextSize = "Reputation amount text size",
-    xpStarSize = "Ready glow star size",
 }
 
 -- The XP Bar's Unlock Mode elements, for a walk with no label for them: a bar

@@ -135,7 +135,7 @@ local function resetSettings()
     for key in pairs(settings) do settings[key] = nil end
     settings.xpWidth, settings.xpHeight = 200, 20
     settings.xpGainEffect, settings.xpGainShowAmount, settings.xpGainMatchBar = "pulse", true, true
-    settings.xpGainTextSize, settings.xpLevelEffect, settings.xpGlowSize, settings.xpStarSize = 13, "flash", 8, 16
+    settings.xpGainTextSize, settings.xpLevelEffect, settings.xpGlowSize = 13, "flash", 8
 end
 
 local X = loadAll()
@@ -426,7 +426,7 @@ do
     eq(set and set.group.plays, 1, "ready: one play")
     eq(set and set.tex.pt[4], 80, "ready: from the fill's end")
     eq(set and set.tex.width, 120, "ready: to the bar's end")
-    eq(set and set.star.shown, true, "ready: with its star")
+    eq(w.fxGlow, nil, "ready: makes no frame outside the bar")
     X.Draw(w, view, ready)
     eq(set and set.group.plays, 1, "ready: a redraw does not restart it")
     w.frame:Hide()
@@ -447,7 +447,6 @@ do
     eq(set and set.group.playing, true, "ready: and a redraw brings it back")
     X.Draw(w, view, data)
     eq(set and set.group.playing, false, "ready: stops once no longer set")
-    eq(set and set.star.shown, false, "ready: and its star hides")
 end
 
 ---------------------------------------------------------------------------------

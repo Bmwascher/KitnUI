@@ -453,7 +453,6 @@ local DEFAULTS = {
         xpGlowSize              = 8,
         fbGlowSize              = 8,
         xpReadyGlow             = true,
-        xpStarSize              = 16,
         xpRestedStripes         = false,
         xpStripeSize            = 12,
     },

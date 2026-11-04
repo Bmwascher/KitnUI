@@ -1276,10 +1276,11 @@ for _, key in ipairs({
     "xpGainEffect", "fbGainEffect", "xpGainQuestsOnly", "xpGainShowAmount", "fbGainShowAmount", "xpGainTextSize",
     "fbGainTextSize", "xpGainMatchBar", "fbGainMatchBar", "xpGainColorR", "xpGainColorG", "xpGainColorB", "fbGainColorR",
     "fbGainColorG", "fbGainColorB", "xpLevelEffect", "fbLevelEffect", "xpGlowSize", "fbGlowSize", "xpReadyGlow",
-    "xpStarSize", "xpRestedStripes", "xpStripeSize",
+    "xpRestedStripes", "xpStripeSize",
 }) do
     check(ns.EUI_DEFAULTS[key] ~= nil, "the default " .. key .. " exists")
 end
+eq(ns.EUI_DEFAULTS.xpStarSize, nil, "the star's size is not a setting")
 
 ---------------------------------------------------------------------------------
 -- The card through the funnel
