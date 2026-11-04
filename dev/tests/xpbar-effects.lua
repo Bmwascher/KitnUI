@@ -24,7 +24,7 @@ local function eq(actual, expected, label)
 end
 
 -- The drawn files: uncompressed true color, 32 by 32, with alpha.
-for _, name in ipairs({ "stripes", "arrow", "glowfade" }) do
+for _, name in ipairs({ "stripes", "arrow", "glowfade", "glowcorner" }) do
     local f = io.open("KitnUI_EUI/Media/XPBar/" .. name .. ".tga", "rb")
     check(f ~= nil, name .. ".tga exists")
     if f then
@@ -63,6 +63,42 @@ do
         check(falling, "glowfade.tga: alpha falls from row to row")
         eq(bytes:byte(18 + 4), 255, "glowfade.tga: opaque at its bottom row")
         eq(bytes:byte(18 + 31 * 32 * 4 + 4), 0, "glowfade.tga: clear at its top row")
+    end
+end
+
+-- The glow's corner, read back from the shipped bytes: white throughout, round
+-- about its bottom-left pixel, and equal to the fade along both edges it shares.
+do
+    local function readAll(name)
+        local f = io.open("KitnUI_EUI/Media/XPBar/" .. name .. ".tga", "rb")
+        if not f then return nil end
+        local bytes = f:read("*a")
+        f:close()
+        return bytes
+    end
+    local fade, corner = readAll("glowfade"), readAll("glowcorner")
+    if fade and corner then
+        local function alphaOf(bytes, x, y)
+            return bytes:byte(18 + (y * 32 + x) * 4 + 4)
+        end
+        local white, column, row, mirrored = true, true, true, true
+        for y = 0, 31 do
+            column = column and alphaOf(corner, 0, y) == alphaOf(fade, 0, y)
+            row = row and alphaOf(corner, y, 0) == alphaOf(fade, 0, y)
+            for x = 0, 31 do
+                local at = 18 + (y * 32 + x) * 4
+                local b, g, r = corner:byte(at + 1, at + 3)
+                white = white and b == 255 and g == 255 and r == 255
+                mirrored = mirrored and alphaOf(corner, x, y) == alphaOf(corner, y, x)
+            end
+        end
+        check(white, "glowcorner.tga: white in every pixel")
+        check(column, "glowcorner.tga: its first column equals the fade")
+        check(row, "glowcorner.tga: its first row equals the fade")
+        check(mirrored, "glowcorner.tga: the same both ways round")
+        eq(alphaOf(corner, 0, 0), 255, "glowcorner.tga: opaque at its bottom-left")
+        eq(alphaOf(corner, 31, 31), 0, "glowcorner.tga: clear at its top-right")
+        check(alphaOf(corner, 11, 11) < alphaOf(fade, 0, 11), "glowcorner.tga: round, not square")
     end
 end
 
@@ -108,6 +144,7 @@ methods.CreateAnimationGroup = function()
     return Obj("AnimationGroup")
 end
 methods.CreateAnimation = function(_, kind) return Obj(kind) end
+methods.SetTarget = function(_, target) target.steps = (target.steps or 0) + 1 end
 methods.GetStatusBarTexture = function(self)
     self.barTex = self.barTex or Obj("Texture")
     return self.barTex
@@ -548,17 +585,48 @@ do
         end
     end
 
+    -- Each corner's own anchor point, the frame's point it sits on, and the
+    -- coordinates that turn its opaque corner to the frame.
+    local CORNERS = {
+        { "BOTTOMRIGHT", "TOPLEFT", "1,0,0,1" },
+        { "BOTTOMLEFT", "TOPRIGHT", "0,1,0,1" },
+        { "TOPRIGHT", "BOTTOMLEFT", "1,0,1,0" },
+        { "TOPLEFT", "BOTTOMRIGHT", "0,1,1,0" },
+    }
+    local function checkCorners(bar, set, size, when)
+        local corners = set and set.corners
+        eq(corners and #corners, 4, "glow, " .. when .. ": four corners")
+        for i, spec in ipairs(CORNERS) do
+            local tex = corners and corners[i]
+            local name = "glow, " .. when .. ", corner " .. i
+            check(tex ~= nil and tostring(tex.file):find("glowcorner", 1, true) ~= nil, name .. ": draws the corner")
+            eq(tex and tex.pt[1], spec[1], name .. ": its anchor")
+            eq(tex and tex.pt[2], bar.frame, name .. ": on the frame")
+            eq(tex and tex.pt[3], spec[2], name .. ": at the frame's corner")
+            eq(tex and tex.tc and table.concat(tex.tc, ","), spec[3], name .. ": turned to the frame")
+            eq(tex and tex.vertex and table.concat(tex.vertex, ","), "1,0.82,0.25,1", name .. ": tinted gold")
+            eq(tex and tex.gradients, nil, name .. ": with no gradient call")
+            eq(tex and tex.width, size, name .. ": as wide as Glow Size")
+            eq(tex and tex.height, size, name .. ": as tall as Glow Size")
+            eq(tex and tex.steps, 4, name .. ": with the glow's four alpha steps")
+            eq(tex and tex.shown, true, name .. ": shown while it plays")
+        end
+    end
+
     local w = newBar()
     settings.xpLevelEffect = "sweep"
     X.PlayLevelEffect(w, view)
     local set = w.fxSets and w.fxSets.sweep
     checkStrips(set, 8, "first play")
+    checkCorners(w, set, 8, "first play")
 
     X.StopEffects(w)
+    eq(set and set.corners and set.corners[1].shown, false, "glow: a stop hides a corner")
     X.Draw(w, view, data)
     settings.xpGlowSize = 12
     X.PlayLevelEffect(w, view)
     checkStrips(set, 12, "second play")
+    checkCorners(w, set, 12, "second play")
 end
 
 ---------------------------------------------------------------------------------

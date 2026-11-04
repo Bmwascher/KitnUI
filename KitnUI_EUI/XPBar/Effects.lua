@@ -21,6 +21,7 @@ X.FX_MASKED_MOTION = true
 
 local GOLD_R, GOLD_G, GOLD_B = 1, 0.82, 0.25
 local GLOW_FADE = "Interface\\AddOns\\KitnUI_EUI\\Media\\XPBar\\glowfade"
+local GLOW_CORNER = "Interface\\AddOns\\KitnUI_EUI\\Media\\XPBar\\glowcorner"
 local SURGE_RIBBON, SURGE_PIP = "ui-castingbar-full-glow-standard", "ui-castingbar-pip"
 local SURGE_GLOW, SURGE_FLARE = "cast_standard_pipglow", "cast-empowered-pipflare"
 
@@ -262,19 +263,33 @@ local function PlayFlash(w)
     return set
 end
 
--- A strip of the Sweep's glow, outside the frame. The fade is drawn, because
--- SetGradient painted these strips plain white; the texture coordinates (...)
--- turn its opaque edge to the frame.
-local function GlowStrip(w, set, p1, rel1, p2, rel2, ...)
+-- A piece of the Sweep's glow, outside the frame. The texture coordinates (...)
+-- turn its opaque edge or corner to the frame.
+local function GlowPiece(w, set, file, ...)
     local t = w.fxGlow:CreateTexture(nil, "ARTWORK")
-    t:SetTexture(GLOW_FADE)
+    t:SetTexture(file)
     t:SetTexCoord(...)
     t:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
     t:SetBlendMode("ADD")
-    t:SetPoint(p1, w.frame, rel1)
-    t:SetPoint(p2, w.frame, rel2)
     t:Hide()
     set.regions[#set.regions + 1] = t
+    return t
+end
+
+-- A strip along one frame edge. The fade is drawn, because SetGradient painted
+-- these strips plain white.
+local function GlowStrip(w, set, p1, rel1, p2, rel2, ...)
+    local t = GlowPiece(w, set, GLOW_FADE, ...)
+    t:SetPoint(p1, w.frame, rel1)
+    t:SetPoint(p2, w.frame, rel2)
+    return t
+end
+
+-- The square beyond one frame corner. Its fade is round, and equals each strip's
+-- along the edge they share.
+local function GlowCorner(w, set, point, rel, ...)
+    local t = GlowPiece(w, set, GLOW_CORNER, ...)
+    t:SetPoint(point, w.frame, rel)
     return t
 end
 
@@ -290,6 +305,12 @@ local function PlaySweep(w, view, p)
         set.bottom = GlowStrip(w, set, "TOPLEFT", "BOTTOMLEFT", "TOPRIGHT", "BOTTOMRIGHT", 0, 1, 1, 0)
         set.leftSide = GlowStrip(w, set, "TOPRIGHT", "TOPLEFT", "BOTTOMRIGHT", "BOTTOMLEFT", 0, 0, 1, 0, 0, 1, 1, 1)
         set.rightSide = GlowStrip(w, set, "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", 0, 1, 1, 1, 0, 0, 1, 0)
+        set.corners = {
+            GlowCorner(w, set, "BOTTOMRIGHT", "TOPLEFT", 1, 0, 0, 1),
+            GlowCorner(w, set, "BOTTOMLEFT", "TOPRIGHT", 0, 1, 0, 1),
+            GlowCorner(w, set, "TOPRIGHT", "BOTTOMLEFT", 1, 0, 1, 0),
+            GlowCorner(w, set, "TOPLEFT", "BOTTOMRIGHT", 0, 1, 1, 0),
+        }
         for i = 1, #set.regions do
             for j = 1, #SWEEP_STEPS do
                 local s = SWEEP_STEPS[j]
@@ -306,6 +327,10 @@ local function PlaySweep(w, view, p)
     set.bottom:SetHeight(size)
     set.leftSide:SetWidth(size)
     set.rightSide:SetWidth(size)
+    for i = 1, #set.corners do
+        set.corners[i]:SetWidth(size)
+        set.corners[i]:SetHeight(size)
+    end
     return set
 end
 
