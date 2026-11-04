@@ -212,6 +212,9 @@ end
 ---------------------------------------------------------------------------------
 
 quiet("at load")
+-- Below max level sharing makes a frame of its own: xpbar-party.lua checks each
+-- of its states. This file reads a level 10 character for the bars' own checks.
+ns.EUISettings().xpPartyShare = false
 local ok, why = pcall(X.Apply)
 check(ok, "an apply with both bars off runs", why)
 quiet("a re-apply with both bars off")
@@ -1065,11 +1068,47 @@ do
     xpNow = 400
     send("PLAYER_XP_UPDATE")
     eq(live and live.fxBusy, nil, "effects: Unlock Mode blocks a play")
+
+    -- A drag lives only on the frame until the save.
+    local placeFrame, placedCalls = X.PlaceFrame, 0
+    X.PlaceFrame = function(...)
+        placedCalls = placedCalls + 1
+        return placeFrame(...)
+    end
+    X.ApplyVisibility()
+    eq(placedCalls, 0, "unlock: a session's visibility run leaves placed frames where they are")
+    unlockList[1].applyPos()
+    eq(placedCalls, 0, "unlock: an apply leaves the XP bar where it is")
+    eq(unlockList[1].noInitHook, true, "unlock: EUI's position pass is left to the XP bar's apply")
+    eq(unlockList[2].noInitHook, true, "unlock: and to the Reputation bar's")
+    eq(unlockList[3].noInitHook, true, "unlock: and to the ticker's")
+    unlockList[1].savePos(nil, "CENTER", "CENTER", 3, 4)
+    eq(placedCalls, 1, "unlock: a save places it")
+    unlockList[1].clearPos()
     local drawsBefore = liveDraws
     if listener then listener(false) end
     eq(X.UnlockActive, false, "effects: leaving Unlock Mode is noted")
     check(liveDraws > drawsBefore, "effects: and redraws, which brings Ready Glow back")
+    check(placedCalls > 1, "unlock: closing places the frames again")
+    eq(unlockList[1].noInitHook, false, "unlock: closing hands the XP bar back to EUI's position pass")
+    X.PlaceFrame = placeFrame
     settings.xpGainQuestsOnly = nil
+
+    -- A spec layout banks each bar's "never moved" and gets it back.
+    for spotIndex, spotKey in ipairs({ "xpPos", "fbPos" }) do
+        local spotElem, spotHeld = unlockList[spotIndex], settings[spotKey]
+        settings[spotKey] = nil
+        local spotNever = spotElem.loadRawPos()
+        eq(spotNever.neverMoved, true, spotKey .. ": a layout hears it never moved")
+        spotElem.savePos(nil, "CENTER", "CENTER", 3, 4)
+        local spotMoved = spotElem.loadRawPos()
+        eq(spotMoved.x, 3, spotKey .. ": a layout hears its spot")
+        spotElem.saveRawPos(nil, spotNever)
+        eq(settings[spotKey], nil, spotKey .. ": never moved clears the spot")
+        spotElem.saveRawPos(nil, spotMoved)
+        eq(settings[spotKey] and settings[spotKey].x, 3, spotKey .. ": and its spot comes back")
+        settings[spotKey] = spotHeld
+    end
 
     -- A level whose completed quests cover the rest, for Ready Glow alone.
     local scan = X.ScanQuestXP
@@ -1086,6 +1125,44 @@ do
     eq(live and live.fxReady and live.fxReady.on, false, "effects: and stops when they no longer do")
     X.ScanQuestXP = scan
     settings.xpTooltip, settings.xpShowQuest, settings.xpShowCompRested = nil, nil, nil
+
+    -- The tooltip's rows in groups, for each order of quest rows: a blank line sits
+    -- only between two groups that drew something.
+    do
+        local tipRows = {}
+        _G.GameTooltip.AddLine = function(_, text) tipRows[#tipRows + 1] = text end
+        _G.GameTooltip.AddDoubleLine = function(_, left) tipRows[#tipRows + 1] = left end
+        local function hovered()
+            tipRows = {}
+            xpFrame.scripts.OnEnter(xpFrame)
+            return table.concat(tipRows, ",")
+        end
+        local function withQuests(done, open)
+            X.ScanQuestXP = function() return done, open end
+            send("QUEST_LOG_UPDATE")
+            fire()
+            return hovered()
+        end
+        local function reads(text, part, label)
+            check(text:find(part, 1, true) ~= nil, "tooltip: " .. label, text)
+            check(text:sub(1, 8) == "Level 11", "tooltip: " .. label .. ", nothing above its first row", text)
+            check(text:sub(-1) ~= " ", "tooltip: " .. label .. ", nothing below its last row", text)
+        end
+        X.Apply()
+        reads(withQuests(0, 0), "Experience,Remaining, ,This session", "no quest rows, one blank line")
+        reads(withQuests(5000, 7), "Remaining, ,Completed quests,Quests in progress, ,This session", "both quest rows")
+        reads(withQuests(5000, 0), "Remaining, ,Completed quests, ,This session", "completed quests alone")
+        reads(withQuests(0, 7), "Remaining, ,Quests in progress, ,This session", "quests in progress alone")
+        reads(withQuests(0, 0), "Experience,Remaining, ,This session", "the quest rows gone again")
+        X.ScanQuestXP = scan
+        _G.IsResting = function() return true end
+        reads(hovered(), "Remaining,Rested, ,This session", "the rested row in the first group")
+        _G.IsResting = function() return false end
+        _G.UnitLevel = function() return 90 end
+        eq(hovered(), "Level 90,Max Level", "tooltip: at max level, its own rows with no blank line")
+        _G.UnitLevel = function() return 11 end
+        _G.GameTooltip.AddLine, _G.GameTooltip.AddDoubleLine = nil, nil
+    end
 
     -- Two turn-ins close together, with each side first, play both gains.
     local gainsBefore = gainPlays
@@ -1260,10 +1337,12 @@ do
     eq(live and live.fxBusy, nil, "effects: a hidden bar stops its effects")
     settings.xpGainQuestsOnly = nil
 
+    if listener then listener(true) end
     settings.xpEnabled, settings.fbEnabled, settings.fbSource, settings.fbFactionID = false, false, nil, nil
     X.Apply()
     eq(listener, nil, "effects: both bars off leaves Unlock Mode's listeners")
     eq(X.UnlockActive, false, "effects: and clears its note")
+    eq(unlockList[1].noInitHook, false, "effects: and hands the bars back to EUI's position pass")
     eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: and unregisters QUEST_TURNED_IN")
     _G.C_Reputation, _G.C_MajorFactions = nil, nil
     X.Draw, X.PlayLevelEffect, X.PlayGainEffect, X.PlayGain = drawReal, levelReal, gainReal, passReal
@@ -1467,6 +1546,100 @@ do
     X.PreviewRefresh()
     eq(#frames, cardCount, "sample card: a redraw makes no frame")
     eq(X.PreviewPlay("gain"), nil, "sample card: a play with the card selected does nothing")
+
+    -- With Party Markers on, the party card beside the ticker's sample and the sample
+    -- XP bar under both. With it off, the party card under the ticker's sample.
+    local drawnN, partyCard, barData, barWidget
+    local drawParty, drawSample = X.DrawPartyCard, X.Draw
+    X.DrawPartyCard = function(card, view, rows, n)
+        partyCard, drawnN = card, n
+        return drawParty(card, view, rows, n)
+    end
+    X.Draw = function(w, view, data)
+        if w.kind == "xp" then barData, barWidget = data, w end
+        return drawSample(w, view, data)
+    end
+    methods.SetPoint = function(self, point, rel, relPoint, x, y) self.pt = { point, rel, relPoint, x, y } end
+
+    settings.xpPartyMarkers = true
+    X.PreviewRefresh()
+    eq(drawnN, 4, "party preview: four sample rows")
+    eq(partyCard and partyCard.shown, true, "party preview: the card shows")
+    eq(cardShown and cardShown.shown, true, "party preview: with the ticker's sample")
+    eq(partyCard and partyCard.pt[2], cardShown, "party preview: beside it")
+    eq(partyCard and partyCard.pt[3], "TOPRIGHT", "party preview: at its top right")
+    eq(partyCard and partyCard.pt[5], 0, "party preview: with their tops aligned")
+    local sideGap = partyCard and partyCard.pt[4] or 0
+    check(sideGap > 0, "party preview: and a gap between them")
+    eq(barWidget and barWidget.frame.shown, true, "party preview: the sample bar shows with Party Markers on")
+    eq(barWidget and barWidget.ptMarks and barWidget.ptMarks[1].on, true, "party preview: with its tick")
+    local pairWidth = cardShown.kuiW + sideGap + partyCard.kuiW
+    eq(cardShown.pt[4], (X.Get("xpWidth") - pairWidth) / 2, "party preview: the two cards center as a pair over the bar")
+    -- The bar clears the taller card, whichever that is.
+    local function barBelowBoth(label)
+        local top = math.max(cardShown.kuiH, partyCard.kuiH) + sideGap + (barWidget.above or 0)
+        eq(barWidget.frame.pt[5], -top, "party preview: the bar below both, " .. label)
+    end
+    barBelowBoth("at the defaults")
+    settings.xpPartyFontSize = 32
+    X.PreviewRefresh()
+    check(partyCard.kuiH > cardShown.kuiH, "party preview: a large party font makes the party card the taller")
+    barBelowBoth("the party card taller")
+    settings.xpPartyFontSize = nil
+    settings.xpTickerFontSize = 32
+    X.PreviewRefresh()
+    check(cardShown.kuiH > partyCard.kuiH, "party preview: a large ticker font makes the ticker the taller")
+    barBelowBoth("the ticker taller")
+    eq(cardShown.pt[4], 0, "party preview: a pair wider than the bar starts at the left")
+    settings.xpTickerFontSize = nil
+
+    settings.xpPartyMarkers = false
+    X.PreviewRefresh()
+    eq(barWidget and barWidget.frame.shown, false, "party preview: the sample bar hides with Party Markers off")
+    eq(cardShown.pt[4], 0, "party preview: and the cards fill the width")
+    eq(partyCard and partyCard.pt[2], cardShown, "party preview: Party Markers off stacks the card on the ticker's sample")
+    eq(partyCard and partyCard.pt[3], "BOTTOMLEFT", "party preview: at its bottom left")
+    eq(partyCard and partyCard.pt[5], 0, "party preview: with no gap")
+    settings.xpTickerFontSize = 20
+    X.PreviewRefresh()
+    eq(partyCard and partyCard.kuiW, X.Math.TickerWidth(20), "party preview: at Width 0 the card's sample follows the ticker's font size")
+    settings.xpPartyWidth = 400
+    X.PreviewRefresh()
+    eq(partyCard and partyCard.kuiW, 400, "party preview: a set Width does not")
+    settings.xpTickerFontSize, settings.xpPartyWidth = nil, nil
+    settings.xpPartyMarkers = true
+    X.PreviewRefresh()
+    eq(barWidget and barWidget.frame.shown, true, "party preview: and returns")
+
+    settings.xpPartyShowSelf = false
+    X.PreviewRefresh()
+    eq(drawnN, 3, "party preview: Show Self off drops a row")
+    eq(overlays.pxName4 and overlays.pxName4.btn.shown, false, "party preview: and its overlay")
+    settings.xpPartyShowSelf = nil
+    X.PreviewRefresh()
+    eq(overlays.pxName4 and overlays.pxName4.btn.shown, true, "party preview: which returns with it")
+
+    if overlays.pxBack then overlays.pxBack.navigate("pxBack") end
+    eq(navTo, "pxBack", "party preview: the background leads to its own")
+    if overlays.pxName1 then overlays.pxName1.navigate() end
+    eq(navTo, "pxFont", "party preview: a name leads to Party Font")
+    if overlays.pxBar2 then overlays.pxBar2.navigate() end
+    eq(navTo, "pxFill", "party preview: a bar leads to Party Fill")
+    if overlays.pxText3 then overlays.pxText3.navigate() end
+    eq(navTo, "pxSize", "party preview: a text leads to Party Font Size")
+
+    local partyCount = #frames
+    X.PreviewRefresh()
+    eq(#frames, partyCount, "party preview: a redraw makes no frame")
+
+    X.SelectBar("xp")
+    eq(partyCard and partyCard.shown, false, "party preview: the card hides when a bar is selected")
+    eq(barData and barData.markers, nil, "the XP view's preview draws no ticks")
+    eq(barWidget and barWidget.ptMarks and barWidget.ptMarks[1].on, false, "and hides the sample's")
+    settings.xpPartyMarkers = nil
+    X.SelectBar("tk")
+    methods.SetPoint = nil
+    X.DrawPartyCard, X.Draw = drawParty, drawSample
     X.NavigateToSetting = navReal
 
     local bar
@@ -1624,7 +1797,7 @@ do
     eq(spans(stripeWheel, "Stripe Size"), "4-32", "effects: Stripe Size's range")
     writes(stripeWheel, "Stripe Size", "xpStripeSize", 20, 20)
     settings.xpRestedStripes, settings.xpStripeSize = nil, nil
-    check(not has("XP TICKER"), "effects: the XP bar's page has no card section")
+    check(not has("TICKER AND PARTY"), "effects: the XP bar's page has no card section")
 
     X.SelectBar("fb")
     buildPage("page, reputation view with effects")
@@ -1652,13 +1825,15 @@ do
     settings.xpEnabled = false
     buildPage("page, card view")
     EUI.Widgets.DualRow = dualRow
-    for _, text in ipairs({ "XP TICKER", "VISIBILITY", "ROWS", "TEXT", "BACKGROUND", "POSITION" }) do
+    local sections = { "TICKER AND PARTY", "TICKER VISIBILITY", "TICKER ROWS", "TICKER STYLE",
+        "PARTY CARD", "PARTY CARD STYLE", "POSITION" }
+    for i, text in ipairs(sections) do
         check(has(text), "card view: its " .. text .. " section")
+        if i > 1 then check(before(sections[i - 1], text), "card view: " .. text .. " follows " .. sections[i - 1]) end
     end
-    check(before("XP TICKER", "VISIBILITY") and before("VISIBILITY", "ROWS") and before("ROWS", "TEXT")
-        and before("TEXT", "BACKGROUND") and before("BACKGROUND", "POSITION"), "card view: in order")
     check(not has("XP BAR") and not has("REPUTATION BAR") and not has("EFFECTS") and not has("FRAME"),
         "card view: no bar's sections")
+    check(not has("TICKER TEXT") and not has("TICKER BACKGROUND"), "card view: TICKER STYLE replaces the two sections")
     check(enable ~= nil, "card view: Enable XP Ticker is built")
     eq(enable and enable.disabled(), true, "card view: grayed with the XP bar off")
     check(enable and type(enable.disabledTooltip) == "string", "card view: with a reason")
@@ -1688,12 +1863,18 @@ do
         check(glowed ~= nil and (glowed == page.rows[row] or glowed == page.rows[row]._leftRegion
             or glowed == page.rows[row]._rightRegion), "card view: " .. key .. " glows its row")
     end
+    glowed = nil
+    X.NavigateToSetting("tkTop")
+    eq(glowed, page.rows.Font._leftRegion, "card view: the top line glows Font, on the left")
+    glowed = nil
+    X.NavigateToSetting("tkBack")
+    eq(glowed, page.rows.Background._rightRegion, "card view: the background glows Background, on the right")
     _G.C_Timer.After = realAfter
     EUI.SmoothScrollTo, EUI.ELLESMERE_GREEN, EUI.MakeSettingGlow = nil, nil, nil
 
     EUI.IsSearchPrebuild = function() return true end
     buildPage("page, search prebuild with the card")
-    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("XP TICKER") and has("ROWS"),
+    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("TICKER AND PARTY") and has("TICKER STYLE") and has("PARTY CARD"),
         "search prebuild: all three views, so search finds every row")
     check(lastIndexOf("EFFECTS") ~= indexOf("EFFECTS"), "search prebuild: both bars' EFFECTS")
     EUI.IsSearchPrebuild = nil
@@ -1736,6 +1917,171 @@ do
     X.SelectBar("tk")
     eq(table.concat(calls, ","), "refresh,top", "a pick of the card rebuilds the page, then scrolls it to the top")
     EUI.RefreshPage, EUI.ScrollToTop = nil, nil
+    X.SelectBar("xp")
+end
+
+---------------------------------------------------------------------------------
+-- The party's rows in the third view
+---------------------------------------------------------------------------------
+
+do
+    local cfgs = {}
+    local dualRow = EUI.Widgets.DualRow
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        for _, cfg in ipairs({ left or false, right or false }) do
+            if cfg and cfg.text then cfgs[cfg.text] = cfg end
+        end
+        return dualRow(w, parent, y, left, right)
+    end
+
+    eq(X.BAR_V.tk, "Ticker and Party", "the picker's third choice names both")
+    eq(table.concat(X.BAR_O, ","), "xp,fb,tk", "and the picker has no fourth")
+
+    X.SelectBar("tk")
+    settings.xpEnabled = false
+    buildPage("page, party rows")
+    local function sameRow(a, b)
+        check(page.rows[a] ~= nil and page.rows[a] == page.rows[b], "party rows: " .. a .. " and " .. b .. " share a row")
+    end
+    sameRow("Enable XP Ticker", "Enable Party Card")
+    sameRow("Share My XP", "Party Tooltip Lines")
+    sameRow("Party Markers", "Marker Label")
+    sameRow("Party Visibility", "Show Self")
+    sameRow("Party Background", "Party Width")
+    sameRow("Party Font", "Party Outline")
+    sameRow("Party Font Size", "Party Texture")
+    sameRow("Font", "Outline")
+    sameRow("Font Size", "Background")
+    eq(cfgs["Party Width"].min, 0, "party rows: Party Width starts at 0")
+    eq(cfgs["Party Width"].max, 600, "party rows: and keeps its maximum")
+    eq(cfgs["Party Width"].getValue(), 0, "party rows: and sits at 0 by default")
+    check(cfgs["Party Width"].tooltip:find("ticker", 1, true) ~= nil, "party rows: its tooltip says what 0 follows")
+    check(page.rows["Party Fill"] ~= nil, "party rows: Party Fill has its row")
+    for _, wheelOnly in ipairs({ "Marker Width", "Label Size", "Fill Color" }) do
+        eq(page.rows[wheelOnly], nil, "party rows: " .. wheelOnly .. " sits in a cogwheel")
+    end
+    check(page.rows.Font ~= nil and page.rows.Font ~= page.rows["Party Font"], "party rows: the ticker's Font keeps its own row")
+    eq(factionWord(), nil, "party rows: no word on the page reads faction")
+
+    -- The cogwheels.
+    local markerCog = cogTitled("Party Markers")
+    check(markerCog ~= nil and markerCog.rgn == (page.rows["Party Markers"] or {})._leftRegion, "party rows: the markers' cogwheel sits on them")
+    eq(markerCog and #markerCog.opts.rows, 1, "party rows: holding Marker Width")
+    if markerCog then
+        markerCog.opts.rows[1].set(4)
+        eq(settings.xpPartyMarkerWidth, 4, "party rows: Marker Width saves")
+        settings.xpPartyMarkerWidth = nil
+    end
+    local labelCog = cogTitled("Marker Label")
+    check(labelCog ~= nil and labelCog.rgn == (page.rows["Marker Label"] or {})._rightRegion, "party rows: the label's cogwheel sits on it")
+    eq(labelCog and #labelCog.opts.rows, 4, "party rows: holding its side, two offsets and its size")
+    eq(labelCog and labelCog.opts.rows[1].type, "dropdown", "party rows: the side first")
+    if labelCog then
+        labelCog.opts.rows[1].set("below")
+        eq(settings.xpPartyLabelSide, "below", "party rows: the side saves")
+        settings.xpPartyLabelSide = nil
+        labelCog.opts.rows[2].set(7)
+        eq(settings.xpPartyLabelOffX, 7, "party rows: the X offset saves")
+        settings.xpPartyLabelOffX = nil
+        labelCog.opts.rows[4].set(20)
+        eq(settings.xpPartyLabelSize, 20, "party rows: the size saves")
+        settings.xpPartyLabelSize = nil
+    end
+    local fillCog = cogTitled("Party Fill")
+    check(fillCog ~= nil and fillCog.rgn == (page.rows["Party Fill"] or {})._leftRegion, "party rows: the fill's cogwheel sits on it")
+    if fillCog then
+        fillCog.opts.rows[1].set(0.1, 0.2, 0.3)
+        eq(settings.xpPartyFillColorG, 0.2, "party rows: Fill Color saves")
+        settings.xpPartyFillColorR, settings.xpPartyFillColorG, settings.xpPartyFillColorB = nil, nil, nil
+    end
+
+    -- Grays. Enable Party Card and Share My XP work with the XP bar off.
+    local shareOff = cfgs["Share My XP"] and cfgs["Share My XP"].disabled
+    eq(shareOff and shareOff() or false, false, "party rows: Share My XP works with the XP bar off")
+    local cardOff = cfgs["Enable Party Card"] and cfgs["Enable Party Card"].disabled
+    eq(cardOff and cardOff() or false, false, "party rows: and so does Enable Party Card")
+    check(type(cfgs["Share My XP"].tooltip) == "string", "party rows: Share My XP has a tooltip")
+    eq(cfgs["Party Markers"].disabled(), true, "party rows: Party Markers grays with the XP bar off")
+    check(type(cfgs["Party Markers"].disabledTooltip) == "string", "party rows: with a reason")
+    eq(cfgs["Party Markers"].rawTooltip, true, "party rows: the markers' reason prints as written")
+    eq(cfgs["Party Tooltip Lines"].disabled(), true, "party rows: the lines gray with the XP bar off")
+    check(type(cfgs["Party Tooltip Lines"].disabledTooltip) == "string", "party rows: with a reason")
+    eq(cfgs["Party Tooltip Lines"].rawTooltip, true, "party rows: the lines' reason prints as written")
+    settings.xpEnabled = true
+    eq(cfgs["Party Markers"].disabled(), false, "party rows: Party Markers works with the XP bar on")
+    eq(cfgs["Party Tooltip Lines"].disabled(), false, "party rows: and the lines, with Show Tooltip on")
+    settings.xpTooltip = false
+    eq(cfgs["Party Tooltip Lines"].disabled(), true, "party rows: the lines gray with Show Tooltip off")
+    settings.xpTooltip = nil
+    eq(cfgs["Marker Label"].disabled(), true, "party rows: Marker Label grays with Party Markers off")
+    eq(markerCog and markerCog.opts.disabled(), true, "party rows: and the markers' cogwheel")
+    settings.xpPartyMarkers = true
+    eq(cfgs["Marker Label"].disabled(), false, "party rows: and works with it on")
+    eq(markerCog and markerCog.opts.disabled(), false, "party rows: and the cogwheel opens")
+    eq(labelCog and labelCog.opts.disabled(), false, "party rows: with a label chosen, its cogwheel opens")
+    settings.xpPartyLabel = "off"
+    eq(labelCog and labelCog.opts.disabled(), true, "party rows: with Off chosen, it grays")
+    settings.xpPartyLabel = nil
+    settings.xpEnabled = false
+    eq(cfgs["Marker Label"].disabled(), true, "party rows: and grays with the XP bar off")
+    settings.xpPartyMarkers = nil
+    for _, name in ipairs({ "Party Visibility", "Show Self", "Party Background", "Party Width", "Party Font", "Party Outline",
+        "Party Font Size", "Party Texture", "Party Fill" }) do
+        settings.xpPartyCard = false
+        eq(cfgs[name].disabled(), true, "party rows: " .. name .. " grays with the card off")
+        settings.xpPartyCard = true
+        eq(cfgs[name].disabled(), false, "party rows: and works with it on")
+    end
+    eq(fillCog and fillCog.opts.disabled(), true, "party rows: the fill's cogwheel grays unless Fill is custom")
+    settings.xpPartyFill = "custom"
+    eq(fillCog and fillCog.opts.disabled(), false, "party rows: and opens with custom")
+    settings.xpPartyFill = nil
+    settings.xpPartyCard = nil
+
+    -- A press on the sample leads to its setting.
+    local scrolled, glowed
+    local realAfter = _G.C_Timer.After
+    EUI.SmoothScrollTo = function(v) scrolled = v end
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.MakeSettingGlow = function() return function(target) glowed = target end end
+    _G.C_Timer.After = function(_, fn) fn() end
+    buildPage("page, party rows, navigation")
+    for key, row in pairs({ pxFont = "Party Font", pxSize = "Party Font Size", pxFill = "Party Fill", pxBack = "Party Background" }) do
+        scrolled, glowed = nil, nil
+        X.NavigateToSetting(key)
+        check(scrolled ~= nil, "party rows: " .. key .. " scrolls")
+        check(glowed ~= nil and (glowed == page.rows[row] or glowed == page.rows[row]._leftRegion
+            or glowed == page.rows[row]._rightRegion), "party rows: " .. key .. " glows its row")
+    end
+    for _, key in ipairs({ "frame", "body", "fill", "level", "center", "right", "levelTime", "sessionTime", "rate", "compRested" }) do
+        glowed = nil
+        X.NavigateToSetting(key)
+        eq(glowed, page.rows["Party Markers"]._leftRegion, "party rows: the sample bar's " .. key .. " leads to Party Markers")
+    end
+
+    -- Collapsed, the style rows are not built, and their keys glow the section.
+    EUI.BuildLessCommonExpander = function(_parent, y) return false, y end
+    buildPage("page, party rows, collapsed")
+    eq(page.rows["Party Font"], nil, "party rows: collapsed, no Party Font")
+    eq(page.rows["Party Fill"], nil, "party rows: and no Party Fill")
+    check(page.rows["Party Width"] ~= nil, "party rows: Party Width stays out of the collapsed section")
+    for _, key in ipairs({ "pxFont", "pxSize", "pxFill" }) do
+        glowed = nil
+        X.NavigateToSetting(key)
+        eq(glowed, page.headerAt["PARTY CARD STYLE"], "party rows: collapsed, " .. key .. " glows the section")
+    end
+    EUI.BuildLessCommonExpander = nil
+
+    _G.C_Timer.After = realAfter
+    EUI.SmoothScrollTo, EUI.ELLESMERE_GREEN, EUI.MakeSettingGlow = nil, nil, nil
+
+    -- A setter reaches the party path.
+    cfgs["Share My XP"].setValue(true)
+    eq(settings.xpPartyShare, true, "party rows: Share My XP saves")
+    cfgs["Share My XP"].setValue(false)
+    eq(settings.xpPartyShare, false, "party rows: both ways")
+
+    EUI.Widgets.DualRow = dualRow
     X.SelectBar("xp")
 end
 

@@ -244,9 +244,14 @@ local function RefreshXP()
     raw.quest = questDone
     raw.levelTime, raw.elapsed, raw.gained = X.LevelTime(), X.SessionElapsed(), X.SessionGained()
     X.XPView(raw, Get, xpData)
+    xpData.markers = X.PartyMarkerList()
     X.Draw(w, Get, xpData)
     xpShown = t.applies or Get("xpShowAtMax") == true
     X.TickerRefresh(raw)
+end
+
+function X.LiveXPWidget()
+    return widgets.xp
 end
 
 local function RefreshFaction()
@@ -334,7 +339,15 @@ end
 local function Place(kind)
     local w = widgets[kind]
     if not w then return end
+    w.kuiPlaced = true
     X.PlaceFrame(w.frame, UNLOCK_KEY[kind], Get(kind == "xp" and "xpPos" or "fbPos"), "TOP", 0, DEFAULT_Y[kind])
+end
+
+-- A session's drag or arrow key lives only on the frame until Save & Exit reads it
+-- back from there, so while Unlock Mode is open only a save moves a placed frame.
+local function PlaceOutsideSession(kind)
+    local w = widgets[kind]
+    if w and not (X.UnlockActive and w.kuiPlaced) then Place(kind) end
 end
 
 local function Tick()
@@ -368,11 +381,11 @@ function X.ApplyVisibility()
     if not active then return end
     if widgets.xp then
         Show("xp", X.XPEnabled() and xpShown and Eval(Get("xpVisibility")))
-        Place("xp")
+        PlaceOutsideSession("xp")
     end
     if widgets.fb then
         Show("fb", X.FactionEnabled() and fbShown and Eval(Get("fbVisibility")))
-        Place("fb")
+        PlaceOutsideSession("fb")
     end
     X.UpdateClock()
     X.TickerVisibility()
@@ -409,11 +422,13 @@ local function ShowXPTooltip(self)
             local rested = format("%s (%.1f%%)", M.Number(t.rested, style, breakUp), t.rested * 100 / mx)
             TipLine("Rested", t.resting and (rested .. ", Resting") or rested)
         end
+        if questDone > 0 or questOpen > 0 then GameTooltip:AddLine(" ") end
         if questDone > 0 then
             TipLine("Completed quests", questDone >= left and "Enough to level"
                 or format("%s (%.1f%%)", M.Number(questDone, style, breakUp), questDone * 100 / mx))
         end
         if questOpen > 0 then TipLine("Quests in progress", M.Number(questOpen, style, breakUp)) end
+        GameTooltip:AddLine(" ")
         local gained = X.SessionGained()
         local perHour, eta = M.Rate(gained, X.SessionElapsed(), left)
         TipLine("This session", M.Number(gained, style, breakUp))
@@ -430,6 +445,7 @@ local function ShowXPTooltip(self)
         end
         if kills then TipLine("Kills to level", kills == 1 and "About 1 kill" or format("About %d kills", kills)) end
     end
+    X.PartyTooltipLines(GameTooltip)
     GameTooltip:Show()
 end
 
@@ -615,6 +631,8 @@ local function OnEvent(_, event, ...)
         X.OnXP()
         RefreshXP()
         ReconcileEvents()
+        -- At max level the party path has no event of its own to hear a new cap.
+        if event == "PLAYER_MAX_LEVEL_UPDATE" or event == "MAX_EXPANSION_LEVEL_UPDATED" then X.PartyApply() end
     end
     X.ApplyVisibility()
 end
@@ -647,8 +665,14 @@ local function UnlockElement(EUI, kind, key, label, order, posKey, widthKey, hei
             if type(p) ~= "table" then return nil end
             return { point = p.point, relPoint = p.relPoint, x = p.x, y = p.y }
         end,
+        -- Spec layouts read these instead of loadPos and savePos.
+        loadRawPos = function() return M.RawSpot(Get(posKey)) end,
+        saveRawPos = function(_, banked)
+            Set(posKey, M.StoredSpot(banked))
+            Place(kind)
+        end,
         clearPos = function() Set(posKey, nil) end,
-        applyPos = function() Place(kind) end,
+        applyPos = function() PlaceOutsideSession(kind) end,
         setWidth = function(_, v)
             Set(widthKey, ClampSize(widthKey, v))
             X.Apply()
@@ -662,15 +686,30 @@ local function UnlockElement(EUI, kind, key, label, order, posKey, widthKey, hei
     })
 end
 
+-- The bars' and the ticker's elements. The Party Card keeps its own, for its own
+-- listener, since it works with both bars off.
+local barElements = {}
+
+-- While noInitHook is up, Unlock Mode's position pass, which runs on every zone
+-- change, skips the element, and its resize path calls only applyPos, which holds.
+local function FlagElements(on)
+    for i = 1, #barElements do barElements[i].noInitHook = on end
+end
+
 -- Registered once and never unregistered: unregistering an element deletes
 -- every anchor link the player made to it.
-local function RegisterUnlock()
+function X.EnsureUnlock()
+    if unlockDone then return end
+    unlockDone = true
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.RegisterUnlockElements and EUI.MakeUnlockElement) then return end
-    EUI:RegisterUnlockElements({
+    barElements = {
         UnlockElement(EUI, "xp", UNLOCK_KEY.xp, "KitnUI XP Bar", 3, "xpPos", "xpWidth", "xpHeight", X.XPEnabled),
         UnlockElement(EUI, "fb", UNLOCK_KEY.fb, "KitnUI Reputation Bar", 4, "fbPos", "fbWidth", "fbHeight", X.FactionEnabled),
         X.TickerElement(EUI),
+    }
+    EUI:RegisterUnlockElements({
+        barElements[1], barElements[2], barElements[3], X.PartyElement(EUI),
     }, "KitnUI_EUI")
 end
 
@@ -697,10 +736,12 @@ end
 
 local function OnUnlockMode(on)
     X.UnlockActive = on == true
+    FlagElements(X.UnlockActive)
     for _, w in pairs(widgets) do X.StopEffects(w) end
     if not X.UnlockActive and active then
         RefreshXP()
         RefreshFaction()
+        X.ApplyVisibility()
     end
 end
 
@@ -724,10 +765,7 @@ local function Ensure()
         ev = CreateFrame("Frame")
         ev:SetScript("OnEvent", OnEvent)
     end
-    if not unlockDone then
-        unlockDone = true
-        RegisterUnlock()
-    end
+    X.EnsureUnlock()
     if not accentDone then
         accentDone = true
         RegisterAccent()
@@ -768,6 +806,7 @@ local function Stop()
     if EUI and EUI.UnregisterVisibilityUpdater then EUI.UnregisterVisibilityUpdater(VisUpdater) end
     if EUI and EUI.UnregisterUnlockModeListener then EUI:UnregisterUnlockModeListener(X) end
     X.UnlockActive = false
+    FlagElements(false)
     active = false
     questFresh = false
     for _, w in pairs(widgets) do
@@ -787,6 +826,7 @@ function X.Apply(claim)
     if not (xpOn or fbOn) then
         Stop()
         X.SyncExisting(claim)
+        X.PartyApply()
         return
     end
     Ensure()
@@ -819,6 +859,7 @@ function X.Apply(claim)
     X.ApplyVisibility()
     DropTooltips()
     X.SyncExisting(claim)
+    X.PartyApply()
 end
 
 -- For the reset: everything off, and every hidden bar given back whatever the
@@ -826,6 +867,7 @@ end
 function X.Teardown()
     Stop()
     X.SyncExisting(nil, true)
+    X.PartyStop()
 end
 
 ns.EUIRegisterReapply(function()

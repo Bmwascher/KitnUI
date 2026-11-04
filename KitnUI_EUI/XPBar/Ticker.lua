@@ -31,6 +31,7 @@ local TOP_SCALE, PAD_SCALE, ARROW_GAP, BUTTON_W = 1.35, 0.5, 0.3, 4
 local UP_R, UP_G, UP_B = 0.3, 0.9, 0.3
 local DOWN_R, DOWN_G, DOWN_B = 0.95, 0.3, 0.3
 local BACKGROUNDS = { card = { 0.05, 0.05, 0.05, 0.85 }, soft = { 0, 0, 0, 0.35 } }
+X.CARD_BACKGROUNDS = BACKGROUNDS
 -- Where a card sits until it is moved, clear of the bars' default spots.
 local FIRST_X, FIRST_Y = 40, 120
 
@@ -483,7 +484,14 @@ local function WantsMouseover()
 end
 
 local function PlaceCard()
-    if live then X.PlaceFrame(live, UNLOCK_KEY, Get("xpTickerPos"), "LEFT", FIRST_X, FIRST_Y) end
+    if not live then return end
+    live.kuiPlaced = true
+    X.PlaceFrame(live, UNLOCK_KEY, Get("xpTickerPos"), "LEFT", FIRST_X, FIRST_Y)
+end
+
+-- A drag lives only on the frame until Unlock Mode's save reads it back.
+local function PlaceUnheld()
+    if not (X.UnlockActive and live and live.kuiPlaced) then PlaceCard() end
 end
 
 -- With the card off or the XP bar off, no frame is created and none is drawn.
@@ -509,7 +517,7 @@ function X.TickerVisibility()
         live:SetAlpha(1)
         live:SetShown(v and true or false)
     end
-    PlaceCard()
+    PlaceUnheld()
     if on then DrawHidden() end
 end
 
@@ -545,6 +553,12 @@ function X.TickerStop()
     live:Hide()
 end
 
+-- What the party card stacks under: nil while the ticker is off.
+function X.TickerFrame()
+    if X.XPEnabled() and Get("xpTickerEnabled") == true then return live end
+    return nil
+end
+
 -- The size follows the font size, so the mover has no resize controls.
 function X.TickerElement(EUI)
     return EUI.MakeUnlockElement({
@@ -566,7 +580,13 @@ function X.TickerElement(EUI)
             if type(p) ~= "table" then return nil end
             return { point = p.point, relPoint = p.relPoint, x = p.x, y = p.y }
         end,
+        -- Spec layouts read these instead of loadPos and savePos.
+        loadRawPos = function() return M.RawSpot(Get("xpTickerPos")) end,
+        saveRawPos = function(_, banked)
+            X.Set("xpTickerPos", M.StoredSpot(banked))
+            PlaceCard()
+        end,
         clearPos = function() X.Set("xpTickerPos", nil) end,
-        applyPos = PlaceCard,
+        applyPos = PlaceUnheld,
     })
 end

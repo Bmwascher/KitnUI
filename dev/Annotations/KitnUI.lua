@@ -181,6 +181,7 @@ local KitnUIWizard
 ---@field ResetPositions fun()
 ---@field Teardown fun()
 ---@field SizeClockButton fun()
+---@field PlaceAfterSession fun(key: string, place: fun())
 ---@field SuppressEUIFps fun(on: boolean)
 ---@field FriendsTooltip fun(tt: table)
 ---@field GuildTooltip fun(tt: table)
@@ -281,6 +282,32 @@ local KitnUITopBar
 ---@field TickerVisibility fun()
 ---@field TickerStop fun()
 ---@field TickerElement fun(EUI: table): table
+---@field CARD_BACKGROUNDS table<string, number[]>
+---@field TickerFrame fun(): table?   # nil while the ticker is off
+---@field PARTY_STACK_GAP number
+---@field BarTexture fun(name: string?): string
+---@field LevelCap fun(): number?
+---@field ReadPlain fun(fn: function?, ...: any): any, any   # first two results; nil when missing, raised or secret
+---@field EnsureUnlock fun()
+---@field LiveXPWidget fun(): table?
+---@field PartyLogic table   # party XP's pure decisions
+---@field Pixel fun(): number
+---@field SyncMarkers fun(w: table, view: fun(key: string): any, list: table?)
+---@field PartyClassColor fun(class: string?): number, number, number
+---@field NewPartyCard fun(parent: table?): table
+---@field PartyCardRow fun(card: table, i: number): table
+---@field DrawPartyCard fun(card: table, view: fun(key: string): any, rows: table, n: number)
+---@field PartySampleRows fun(view: fun(key: string): any): table, number
+---@field PartySampleMarks fun(): table
+---@field PartyCardApply fun()
+---@field PartyCardRefresh fun(rows: table, n: number, wanted: boolean)
+---@field PartyCardVisibility fun()
+---@field PartyCardStop fun()
+---@field PartyElement fun(EUI: table): table
+---@field PartyApply fun()
+---@field PartyStop fun()
+---@field PartyMarkerList fun(): table?
+---@field PartyTooltipLines fun(tip: table)
 ---@field PreviewPlay fun(moment: "gain"|"level")
 ---@field BuildPreviewHeader fun(parent: table, width: number): number
 ---@field PreviewRefresh fun()

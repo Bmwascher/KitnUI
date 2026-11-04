@@ -15,7 +15,7 @@ local STAGE_PAD_Y = 14
 -- The bar picker above the stage: its gap from the top, width, height, and
 -- the gap below it.
 local PICK_TOP, PICK_W, PICK_H, PICK_GAP = 14, 260, 30, 12
--- Overlay levels above a bar's base, over its top layer (the texts, at 13).
+-- Overlay levels above a bar's base, over its top layer (the texts, at 14).
 local HIT_FRAME, HIT_BODY, HIT_FILL, HIT_TEXT = 20, 21, 22, 30
 -- How far the frame's overlay reaches past the bar.
 local RING_OUT = 4
@@ -27,7 +27,7 @@ local Plain = ns.EUIPlain
 -- space, so the centering must not live on the scaled frame.
 local stage, wrap, content, picker
 local widgets = {}
-local hits, hitsBuilt = { xp = {}, fb = {}, tk = {} }, {}
+local hits, hitsBuilt = { xp = {}, fb = {}, tk = {}, px = {} }, {}
 local availW = 1
 -- The bar the page and the preview show, kept for the session only.
 local selected = "xp"
@@ -49,6 +49,9 @@ local sampleFaction = {
 local xpOut, fbOut, cardOut = {}, {}, {}
 -- What Play Gain draws on the sample: a span in percent, and the amounts.
 local SAMPLE_SPAN, SAMPLE_XP, SAMPLE_REP = 10, 20980, 2100
+-- The party card's most rows, and the gap beside the cards and above the sample bar.
+local PARTY_ROWS, PARTY_GAP = 4, 12
+local partyShown = 0
 
 local function Pad()
     return (EllesmereUI and EllesmereUI.CONTENT_PAD) or 10
@@ -140,6 +143,28 @@ local function BuildCardHits(w)
     end
 end
 
+local function AddPartyHit(w, key, element, isText, level, go)
+    local ok, btn = pcall(EllesmereUI.CreatePreviewHitOverlay, element, go, key, isText, w.base + level,
+        { parent = w.frame })
+    if ok and btn then hits.px[key] = btn end
+end
+
+local function GoToFont() Navigate("pxFont") end
+local function GoToFill() Navigate("pxFill") end
+local function GoToSize() Navigate("pxSize") end
+
+-- Every row the sample can show, so turning Show Self on later has its overlays.
+local function BuildPartyHits(w)
+    local card = w.frame
+    AddHit(w, "pxBack", card, false, HIT_FRAME)
+    for i = 1, PARTY_ROWS do
+        local row = X.PartyCardRow(card, i)
+        AddPartyHit(w, "pxName" .. i, row.name, true, HIT_TEXT, GoToFont)
+        AddPartyHit(w, "pxBar" .. i, row.bar, false, HIT_FILL, GoToFill)
+        AddPartyHit(w, "pxText" .. i, row.text, true, HIT_TEXT, GoToSize)
+    end
+end
+
 -- Each part of a bar leads to the row that sets it. Made once per bar, the
 -- first time the host has the overlay helper and the colors it draws with.
 local function BuildHits(kind)
@@ -151,6 +176,10 @@ local function BuildHits(kind)
     hitsBuilt[kind] = true
     if kind == "tk" then
         BuildCardHits(w)
+        return
+    end
+    if kind == "px" then
+        BuildPartyHits(w)
         return
     end
     local ring = CreateFrame("Frame", nil, w.frame)
@@ -166,6 +195,16 @@ local function SyncCardHit(btn, on)
     if not btn then return end
     btn:SetShown(on)
     if on and btn._resizeToText then pcall(btn._resizeToText) end
+end
+
+local function SyncPartyHits()
+    local list = hits.px
+    for i = 1, PARTY_ROWS do
+        local on = i <= partyShown
+        SyncCardHit(list["pxName" .. i], on)
+        SyncCardHit(list["pxBar" .. i], on)
+        SyncCardHit(list["pxText" .. i], on)
+    end
 end
 
 local function SyncCardHits()
@@ -187,6 +226,10 @@ local function SyncHits(kind)
         SyncCardHits()
         return
     end
+    if kind == "px" then
+        SyncPartyHits()
+        return
+    end
     local w, list = widgets[kind], hits[kind]
     local tex = list.fill and w.fill:GetStatusBarTexture()
     if tex then
@@ -201,6 +244,62 @@ local function SyncHits(kind)
             if on and btn._resizeToText then pcall(btn._resizeToText) end
         end
     end
+end
+
+-- With Party Markers on, the party card sits beside the ticker's sample, tops
+-- aligned, with a sample XP bar below both. With it off, the card sits under the
+-- ticker's sample, as on screen. Returns the width and height of the whole. w is
+-- the ticker's sample, bw its width and h its height.
+local function LayoutStack(w, bw, h)
+    local party = widgets.px
+    if not party then
+        local card = X.NewPartyCard(content)
+        party = { kind = "px", frame = card, base = Plain(card:GetFrameLevel()) or 0, above = 0, below = 0 }
+        widgets.px = party
+        BuildHits("px")
+    end
+    local rows, n = X.PartySampleRows(X.Get)
+    partyShown = n
+    party.frame.dirty = true
+    X.DrawPartyCard(party.frame, X.Get, rows, n)
+    party.frame:Show()
+    SyncHits("px")
+    local bar = widgets.xp
+    local withBar = bar and X.Get("xpPartyMarkers") == true
+    local pairW
+    if withBar then
+        pairW = bw + PARTY_GAP + party.frame.kuiW
+        h = math.max(h, party.frame.kuiH)
+    else
+        pairW = math.max(bw, party.frame.kuiW)
+        h = h + X.PARTY_STACK_GAP + party.frame.kuiH
+    end
+    local totalW = pairW
+    if withBar then
+        X.XPView(sampleXP, X.Get, xpOut)
+        xpOut.readyEnd = nil
+        xpOut.markers = X.PartySampleMarks()
+        X.Draw(bar, X.Get, xpOut)
+        xpOut.markers = nil
+        bar.frame:Show()
+        SyncHits("xp")
+        local barW = tonumber(X.Get("xpWidth")) or 100
+        local barH = tonumber(X.Get("xpHeight")) or 10
+        local top = h + PARTY_GAP + (bar.above or 0)
+        bar.frame:ClearAllPoints()
+        bar.frame:SetPoint("TOP", content, "TOP", 0, -top)
+        h = top + barH + (bar.below or 0)
+        totalW = math.max(totalW, barW)
+    end
+    w.frame:ClearAllPoints()
+    w.frame:SetPoint("TOPLEFT", content, "TOPLEFT", (totalW - pairW) / 2, 0)
+    party.frame:ClearAllPoints()
+    if withBar then
+        party.frame:SetPoint("TOPLEFT", w.frame, "TOPRIGHT", PARTY_GAP, 0)
+    else
+        party.frame:SetPoint("TOPLEFT", w.frame, "BOTTOMLEFT", 0, -X.PARTY_STACK_GAP)
+    end
+    return totalW, h
 end
 
 local function Layout()
@@ -242,6 +341,7 @@ local function Layout()
     w.frame:ClearAllPoints()
     w.frame:SetPoint("TOP", content, "TOP", 0, -(w.above or 0))
     local h = (w.above or 0) + bh + (w.below or 0)
+    if selected == "tk" then bw, h = LayoutStack(w, bw, h) end
     local scale = (bw > availW) and (availW / bw) or 1
     content:SetScale(scale)
     content:SetSize(math.max(1, bw), math.max(1, h))

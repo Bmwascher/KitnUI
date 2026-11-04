@@ -15,9 +15,9 @@ local CDM = "EllesmereUICooldownManager"
 local NAMEPLATES = "EllesmereUINameplates"
 local TOP_BAR = "KitnUI_EUI"
 -- The XP Bar's row shares KitnUI's folder with the Top Bar's: its xp and fb
--- keys, and its three Unlock Mode elements.
+-- keys, and its four Unlock Mode elements.
 local XP_ROW = "xpbar"
-local XP_CHILDREN = { KitnUI_XPBar = true, KitnUI_FactionBar = true, KitnUI_XPTicker = true }
+local XP_CHILDREN = { KitnUI_XPBar = true, KitnUI_FactionBar = true, KitnUI_XPTicker = true, KitnUI_PartyXP = true }
 
 local function isXPKey(k)
     if type(k) ~= "string" then return false end
@@ -510,11 +510,14 @@ local XP_NAMES = {
     xpGlowSize = "Level-up glow size", fbGlowSize = "Reputation rank-up glow size",
     xpGainShowAmount = "Show amount gained", fbGainShowAmount = "Reputation show amount gained",
     xpGainTextSize = "Amount text size", fbGainTextSize = "Reputation amount text size",
+    xpPartyShare = "Share my XP", xpPartyCard = "Party card on",
+    xpPartyMarkers = "Party markers on", xpPartyTooltip = "Party tooltip lines on",
+    xpPartyVisibility = "Party card visibility", xpPartyPos = "Party card position",
 }
 
 -- The XP Bar's Unlock Mode elements, for a walk with no label for them: a bar
 -- never turned on this session registers none.
-local XP_UNLOCK_NAMES = { KitnUI_XPBar = "KitnUI XP Bar", KitnUI_FactionBar = "KitnUI Reputation Bar", KitnUI_XPTicker = "KitnUI XP Ticker" }
+local XP_UNLOCK_NAMES = { KitnUI_XPBar = "KitnUI XP Bar", KitnUI_FactionBar = "KitnUI Reputation Bar", KitnUI_XPTicker = "KitnUI XP Ticker", KitnUI_PartyXP = "KitnUI Party XP" }
 
 -- Top Bar settings the tidied key would misname. Any other tb key reads as
 -- its tidied name without the prefix: "tbIconSize" is "Icon size".

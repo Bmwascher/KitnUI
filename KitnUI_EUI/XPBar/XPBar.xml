@@ -3,6 +3,7 @@
 
     <!-- Load order matters: each file reads the ones above it. -->
     <Script file="Math.lua" />
+    <Script file="PartyLogic.lua" />
     <Script file="Data.lua" />
     <Script file="Session.lua" />
     <Script file="Existing.lua" />
@@ -10,6 +11,9 @@
     <Script file="Effects.lua" />
     <Script file="Bar.lua" />
     <Script file="Ticker.lua" />
+    <Script file="Party.lua" />
+    <Script file="PartyMarkers.lua" />
+    <Script file="PartyCard.lua" />
     <Script file="Options.lua" />
     <Script file="Preview.lua" />
 </Ui>
