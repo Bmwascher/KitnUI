@@ -24,6 +24,17 @@
   XP and reputation bars, and gives them back when you turn it off
 - **NEW:** Frame styles, fill styles, dividers, text positions and offsets,
   and every size are settings; move and resize both bars in Unlock Mode
+- **NEW:** An **XP Ticker** card shows your XP/hour and its trend, the time
+  to your next level, this level's clock, past levels, played time and your
+  pace against your other characters. It is off by default on retail and on
+  by default on WoW Forever
+- **NEW:** Hover the card to pause or reset your session, even in combat
+- **NEW:** Bar effects: a gain effect (Pulse, Energy Wave or Spell Surge), a
+  level-up or rank-up effect (Flash or Sweep), Ready Glow when completed
+  quests cover the rest of the level, and Rested Stripes
+- The XP bar starts with Energy Wave on quest turn-ins with the amount
+  gained, Sweep on level-up and Ready Glow; the Reputation Bar starts with
+  Flash on rank-up. A bar you already turned on starts with these too
 
 ### Options Themes
 
