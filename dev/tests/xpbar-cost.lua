@@ -775,7 +775,7 @@ do
         local before = #frames
         local pickHeight = X.BuildPreviewHeader(Obj("Frame"), 800)
         check(X.SelectorShown(), "the bar picker: the header holds it")
-        eq(picked and table.concat(picked.order, ","), "xp,fb", "the bar picker: the XP bar, then the faction bar")
+        eq(picked and table.concat(picked.order, ","), "xp,fb,tk", "the bar picker: the XP bar, the faction bar, then the card")
         eq(picked and picked.values.fb, "Reputation Bar", "the bar picker: names the reputation bar")
         check(picked ~= nil and picked.values == X.BAR_V and picked.order == X.BAR_O, "the bar picker: reads the shared labels")
         eq(picked and picked.get(), "xp", "the bar picker: reads the selection")
@@ -1443,6 +1443,153 @@ do
 
     X.DrawCard, X.Draw = drawCardReal, drawBar
     EUI.CreatePreviewHitOverlay, EUI.PP, EUI.ELLESMERE_GREEN = nil, nil, nil
+end
+
+---------------------------------------------------------------------------------
+-- The page's third view and the EFFECTS section
+---------------------------------------------------------------------------------
+
+do
+    local function indexOf(text)
+        for i, h in ipairs(page.headers) do
+            if h == text then return i end
+        end
+        return nil
+    end
+    local function before(a, b)
+        local ia, ib = indexOf(a), indexOf(b)
+        return ia ~= nil and ib ~= nil and ia < ib
+    end
+    local function lastIndexOf(text)
+        local last
+        for i, h in ipairs(page.headers) do
+            if h == text then last = i end
+        end
+        return last
+    end
+
+    buildPage("page, XP view with effects")
+    check(has("EFFECTS"), "effects: the XP bar's page has the section")
+    check(before("DIVIDERS", "EFFECTS"), "effects: after the appearance sections")
+    check(before("EFFECTS", "XP TOOLTIP"), "effects: before XP TOOLTIP")
+    check(page.rows["Gain Effect"] ~= nil and page.rows["Gain Effect"] == page.rows["Quest Turn-Ins Only"],
+        "effects: Gain Effect and Quest Turn-Ins Only share a row")
+    check(page.rows["Level-Up Effect"] ~= nil and page.rows["Level-Up Effect"] == page.rows["Glow Size"],
+        "effects: Level-Up Effect and Glow Size share a row")
+    check(page.rows["Ready Glow"] ~= nil and page.rows["Ready Glow"] == page.rows["Star Size"],
+        "effects: Ready Glow and Star Size share a row")
+    check(page.rows["Rested Stripes"] ~= nil and page.rows["Rested Stripes"] == page.rows["Stripe Size"],
+        "effects: Rested Stripes and Stripe Size share a row")
+    check(page.rows["Play Gain"] ~= nil and page.rows["Play Gain"] == page.rows["Play Level-Up"],
+        "effects: the two play buttons share a row")
+    check(not has("XP TICKER"), "effects: the XP bar's page has no card section")
+
+    X.SelectBar("fb")
+    buildPage("page, reputation view with effects")
+    check(has("EFFECTS"), "effects: the reputation bar's page has the section")
+    check(before("DIVIDERS", "EFFECTS"), "effects: after its appearance sections")
+    check(page.rows["Rank-Up Effect"] ~= nil, "effects: the reputation bar's moment is a rank-up")
+    check(page.rows["Play Gain"] ~= nil and page.rows["Play Gain"] == page.rows["Play Rank-Up"],
+        "effects: its two play buttons share a row")
+    eq(page.rows["Ready Glow"], nil, "effects: Ready Glow is the XP bar's")
+    eq(page.rows["Rested Stripes"], nil, "effects: and Rested Stripes")
+    eq(factionWord(), nil, "effects: every label reads reputation, none faction")
+
+    -- The third view
+    local enable
+    local dualRow = EUI.Widgets.DualRow
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        if type(left) == "table" and left.text == "Enable XP Ticker" then enable = left end
+        return dualRow(w, parent, y, left, right)
+    end
+    X.SelectBar("tk")
+    settings.xpEnabled = false
+    buildPage("page, card view")
+    EUI.Widgets.DualRow = dualRow
+    for _, text in ipairs({ "XP TICKER", "VISIBILITY", "ROWS", "TEXT", "BACKGROUND", "POSITION" }) do
+        check(has(text), "card view: its " .. text .. " section")
+    end
+    check(before("XP TICKER", "VISIBILITY") and before("VISIBILITY", "ROWS") and before("ROWS", "TEXT")
+        and before("TEXT", "BACKGROUND") and before("BACKGROUND", "POSITION"), "card view: in order")
+    check(not has("XP BAR") and not has("REPUTATION BAR") and not has("EFFECTS") and not has("FRAME"),
+        "card view: no bar's sections")
+    check(enable ~= nil, "card view: Enable XP Ticker is built")
+    eq(enable and enable.disabled(), true, "card view: grayed with the XP bar off")
+    check(enable and type(enable.disabledTooltip) == "string", "card view: with a reason")
+    settings.xpEnabled = true
+    eq(enable and enable.disabled(), false, "card view: usable with the XP bar on")
+    settings.xpEnabled = false
+    check(page.rows["Current Level"] ~= nil and page.rows["Current Level"] == page.rows["Level History Rows"],
+        "card view: Current Level and Level History Rows share a row")
+    check(page.rows.Played ~= nil and page.rows.Played == page.rows.Pace, "card view: Played and Pace share a row")
+    eq(page.full["Position: use EUI Unlock Mode"], true, "card view: the Unlock Mode line has a row of its own")
+    eq(factionWord(), nil, "card view: no word on the page reads faction")
+
+    -- A press on the sample card leads to its setting.
+    local scrolled, glowed
+    local realAfter = _G.C_Timer.After
+    EUI.SmoothScrollTo = function(v) scrolled = v end
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.MakeSettingGlow = function() return function(target) glowed = target end end
+    _G.C_Timer.After = function(_, fn) fn() end
+    buildPage("page, card view, navigation")
+    for key, row in pairs({ tkCurrent = "Current Level", tkHistory = "Level History Rows", tkPlayed = "Played", tkPace = "Pace",
+        tkTop = "Font", tkBack = "Background" }) do
+        scrolled, glowed = nil, nil
+        X.NavigateToSetting(key)
+        check(scrolled ~= nil, "card view: " .. key .. " scrolls")
+        check(glowed ~= nil and (glowed == page.rows[row] or glowed == page.rows[row]._leftRegion
+            or glowed == page.rows[row]._rightRegion), "card view: " .. key .. " glows its row")
+    end
+    _G.C_Timer.After = realAfter
+    EUI.SmoothScrollTo, EUI.ELLESMERE_GREEN, EUI.MakeSettingGlow = nil, nil, nil
+
+    EUI.IsSearchPrebuild = function() return true end
+    buildPage("page, search prebuild with the card")
+    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("XP TICKER") and has("ROWS"),
+        "search prebuild: all three views, so search finds every setting")
+    check(lastIndexOf("EFFECTS") ~= indexOf("EFFECTS"), "search prebuild: both bars' EFFECTS")
+    EUI.IsSearchPrebuild = nil
+
+    -- The dropdowns and buttons play on the preview.
+    local played = {}
+    local previewPlay = X.PreviewPlay
+    X.PreviewPlay = function(moment) played[#played + 1] = moment end
+    local gainDrop, levelDrop, playGain
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        for _, cfg in ipairs({ left or false, right or false }) do
+            if cfg and cfg.text == "Gain Effect" then gainDrop = cfg end
+            if cfg and cfg.text == "Level-Up Effect" then levelDrop = cfg end
+            if cfg and cfg.text == "Play Gain" then playGain = cfg end
+        end
+        return dualRow(w, parent, y, left, right)
+    end
+    X.SelectBar("xp")
+    buildPage("page, XP view, playback")
+    EUI.Widgets.DualRow = dualRow
+    check(gainDrop ~= nil and levelDrop ~= nil and playGain ~= nil, "playback: the controls are built")
+    if gainDrop and levelDrop and playGain then
+        gainDrop.setValue("wave")
+        eq(settings.xpGainEffect, "wave", "playback: the dropdown saves")
+        eq(played[1], "gain", "playback: changing the gain effect plays it")
+        levelDrop.setValue("sweep")
+        eq(played[2], "level", "playback: changing the level effect plays it")
+        playGain.onClick()
+        eq(played[3], "gain", "playback: the button plays")
+        settings.xpGainEffect = "surge"
+        eq(gainDrop.getValue(), "surge", "playback: a style the client has shows as itself")
+        settings.xpGainEffect, settings.xpLevelEffect = nil, nil
+    end
+    X.PreviewPlay = previewPlay
+
+    -- A pick of the card rebuilds the page and goes to its top.
+    local calls = {}
+    EUI.RefreshPage = function() calls[#calls + 1] = "refresh" end
+    EUI.ScrollToTop = function() calls[#calls + 1] = "top" end
+    X.SelectBar("tk")
+    eq(table.concat(calls, ","), "refresh,top", "a pick of the card rebuilds the page, then scrolls it to the top")
+    EUI.RefreshPage, EUI.ScrollToTop = nil, nil
+    X.SelectBar("xp")
 end
 
 finish()
