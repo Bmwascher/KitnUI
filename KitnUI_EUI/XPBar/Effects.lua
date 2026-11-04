@@ -140,12 +140,6 @@ local function Span(w, t, left, width)
     t:SetWidth(width)
 end
 
-local function Gradient(w, t, orientation, r, g, b, a1, a2)
-    w.colorA:SetRGBA(r, g, b, a1)
-    w.colorB:SetRGBA(r, g, b, a2)
-    t:SetGradient(orientation, w.colorA, w.colorB)
-end
-
 local function Moves(w)
     return X.FX_MASKED_MOTION or not w.masksOn
 end
@@ -166,11 +160,20 @@ local function PlayPulse(w, r, g, b, fromPct, toPct)
     return set
 end
 
+-- A part of Energy Wave's streak: the drawn fade's stretch from alpha a1 to a2,
+-- left to right. Along the fade's depth, the texture coordinate is its alpha.
+local function WavePart(w, set, a1, a2)
+    local t = InBar(w, set)
+    t:SetTexture(GLOW_FADE)
+    t:SetTexCoord(0, a1, 1, a1, 0, a2, 1, a2)
+    return t
+end
+
 local function PlayWave(w, r, g, b, fromPct, toPct)
     local set = w.fxSets and w.fxSets.wave
     if not set then
         set = NewSet(w, "wave")
-        set.spark, set.trail, set.light = InBar(w, set), InBar(w, set), InBar(w, set)
+        set.spark, set.trail, set.light = WavePart(w, set, 0.5, 1), WavePart(w, set, 0, 0.5), InBar(w, set)
         set.moveSpark, set.moveTrail = Move(set.group, set.spark, WAVE_TIME), Move(set.group, set.trail, WAVE_TIME)
         for i = 1, #set.regions do
             Step(set.group, set.regions[i], 0, 1, WAVE_IN)
@@ -184,8 +187,8 @@ local function PlayWave(w, r, g, b, fromPct, toPct)
     Span(w, set.spark, startX - sparkW, sparkW)
     Span(w, set.trail, startX - sparkW - trailW, trailW)
     Span(w, set.light, left, width)
-    Gradient(w, set.spark, "HORIZONTAL", r, g, b, 0.5, 1)
-    Gradient(w, set.trail, "HORIZONTAL", r, g, b, 0, 0.5)
+    set.spark:SetVertexColor(r, g, b, 1)
+    set.trail:SetVertexColor(r, g, b, 1)
     set.light:SetVertexColor(r, g, b, 0.5)
     local offset = moves and toX or 0
     set.moveSpark:SetOffset(offset, 0)

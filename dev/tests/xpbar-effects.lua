@@ -486,6 +486,43 @@ do
 end
 
 ---------------------------------------------------------------------------------
+-- Energy Wave's streak
+---------------------------------------------------------------------------------
+
+resetSettings()
+do
+    -- Each part's field, and the coordinates that give it the design's alpha range,
+    -- left to right.
+    local PARTS = {
+        { "spark", "0,0.5,1,0.5,0,1,1,1" },
+        { "trail", "0,0,1,0,0,0.5,1,0.5" },
+    }
+    local function checkParts(set, color, when)
+        for _, part in ipairs(PARTS) do
+            local tex = set and set[part[1]]
+            local name = "wave, " .. when .. ", " .. part[1]
+            check(tex ~= nil and tostring(tex.file):find("glowfade", 1, true) ~= nil, name .. ": draws the fade")
+            eq(tex and tex.tc and table.concat(tex.tc, ","), part[2], name .. ": over its alpha range")
+            eq(tex and tex.vertex and table.concat(tex.vertex, ","), color, name .. ": tinted the effect's color")
+            eq(tex and tex.gradients, nil, name .. ": with no gradient call")
+        end
+    end
+
+    local w = newBar()
+    settings.xpGainEffect, settings.xpGainMatchBar = "wave", false
+    settings.xpGainColorR, settings.xpGainColorG, settings.xpGainColorB = 0.1, 0.2, 0.3
+    X.PlayGainEffect(w, view, data, 10, 20, 5)
+    local set = w.fxSets and w.fxSets.wave
+    checkParts(set, "0.1,0.2,0.3,1", "first play")
+    eq(set and set.light.vertex[4], 0.5, "wave: its highlight stays at half strength")
+
+    X.StopEffects(w)
+    settings.xpGainColorR = 0.9
+    X.PlayGainEffect(w, view, data, 10, 20, 5)
+    checkParts(set, "0.9,0.2,0.3,1", "second play")
+end
+
+---------------------------------------------------------------------------------
 -- The Sweep's glow
 ---------------------------------------------------------------------------------
 
