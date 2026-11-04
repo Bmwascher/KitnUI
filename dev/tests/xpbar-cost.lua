@@ -79,8 +79,9 @@ methods.EnableMouse = function(self, on) self.click, self.motion = on and true o
 methods.SetMouseClickEnabled = function(self, on) self.click = on and true or false end
 methods.SetMouseMotionEnabled = function(self, on) self.motion = on and true or false end
 
-_G.CreateFrame = function(kind)
+_G.CreateFrame = function(kind, _, parent)
     local f = Obj(kind)
+    f.parent = parent
     frames[#frames + 1] = f
     return f
 end
@@ -1323,6 +1324,125 @@ do
     X.XPView({ level = 10, cur = 1, max = 10, elapsed = 120, gained = 1, paused = true }, withTime, paused)
     check(running.sessionTime ~= nil and running.sessionTime ~= paused.sessionTime,
         "paused: the session time carries a mark")
+end
+
+---------------------------------------------------------------------------------
+-- The preview: the sample card and playback
+---------------------------------------------------------------------------------
+
+do
+    local cardShown, cardOut
+    local drawCardReal = X.DrawCard
+    X.DrawCard = function(card, view, data)
+        cardShown, cardOut = card, data
+        return drawCardReal(card, view, data)
+    end
+    local overlays = {}
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.PP = { CreateBorder = NOOP }
+    EUI.CreatePreviewHitOverlay = function(_element, navigate, key)
+        local btn = _G.CreateFrame("Button")
+        overlays[key] = { btn = btn, navigate = navigate }
+        return btn
+    end
+    local navTo
+    local navReal = X.NavigateToSetting
+    X.NavigateToSetting = function(key) navTo = key end
+
+    X.SelectBar("tk")
+    eq(X.SelectedBar(), "tk", "sample card: the card can be selected")
+    check(cardOut ~= nil, "sample card: it draws")
+    eq(cardOut and cardOut.rate, "90.0K xp/hr", "sample card: the XP bar's rate")
+    eq(cardOut and cardOut.ding, "Ding 1h 16m", "sample card: and its time to level")
+    eq(cardOut and cardOut.arrow, "up", "sample card: with an arrow")
+    eq(cardOut and cardOut.left[1], "Level 59", "sample card: the current level")
+    eq(cardOut and cardOut.right[1], "20:00  45%", "sample card: at 45%, with a 20-minute clock")
+    eq(cardOut and cardOut.n, 5, "sample card: three completed levels and Played, by default")
+    eq(cardOut and cardOut.left[2], "Level 58", "sample card: the newest completed level")
+    eq(cardOut and cardOut.left[5], "Played", "sample card: Played last")
+
+    settings.xpTickerShowPace = true
+    X.PreviewRefresh()
+    eq(cardOut and cardOut.n, 6, "sample card: Pace shows with its switch")
+    eq(cardOut and cardOut.left[6], "Pace", "sample card: on the last row")
+    check(cardOut and cardOut.right[6] ~= "--", "sample card: with a sample character")
+    eq(overlays.tkRow6 and overlays.tkRow6.btn.shown, true, "sample card: a shown row has its overlay")
+    eq(overlays.tkRow7 and overlays.tkRow7.btn.shown, false, "sample card: a row not shown does not")
+    settings.xpTickerShowPace = nil
+    X.PreviewRefresh()
+    eq(overlays.tkRow6 and overlays.tkRow6.btn.shown, false, "sample card: and its overlay goes with it")
+
+    if overlays.tkBack then overlays.tkBack.navigate("tkBack") end
+    eq(navTo, "tkBack", "sample card: the background leads to its own")
+    if overlays.tkRow1 then overlays.tkRow1.navigate() end
+    eq(navTo, "tkCurrent", "sample card: the first row leads to its own control")
+    if overlays.tkRow5 then overlays.tkRow5.navigate() end
+    eq(navTo, "tkPlayed", "sample card: a row leads to what it shows now")
+    if overlays.tkValue1 then overlays.tkValue1.navigate() end
+    eq(navTo, "tkCurrent", "sample card: a row's value leads where its label does")
+    if overlays.tkValue5 then overlays.tkValue5.navigate() end
+    eq(navTo, "tkPlayed", "sample card: on every row")
+    for _, part in ipairs({ "tkTop", "tkDing", "tkArrow" }) do
+        navTo = nil
+        if overlays[part] then overlays[part].navigate() end
+        eq(navTo, "tkTop", "sample card: the top line's " .. part .. " leads to the top line's control")
+    end
+
+    settings.xpTickerShowPace = true
+    X.PreviewRefresh()
+    eq(overlays.tkValue6 and overlays.tkValue6.btn.shown, true, "sample card: a shown row's value has its overlay")
+    eq(overlays.tkValue7 and overlays.tkValue7.btn.shown, false, "sample card: a row not shown has none for its value")
+    settings.xpTickerShowPace = nil
+    eq(overlays.tkArrow and overlays.tkArrow.btn.shown, true, "sample card: the arrow has its overlay")
+    local viewReal = X.TickerView
+    X.TickerView = function(r, view, out)
+        viewReal(r, view, out)
+        out.arrow = nil
+    end
+    X.PreviewRefresh()
+    eq(overlays.tkArrow and overlays.tkArrow.btn.shown, false, "sample card: an arrow not drawn has no overlay")
+    X.TickerView = viewReal
+    X.PreviewRefresh()
+
+    local cardCount = #frames
+    X.PreviewRefresh()
+    eq(#frames, cardCount, "sample card: a redraw makes no frame")
+    eq(X.PreviewPlay("gain"), nil, "sample card: a play with the card selected does nothing")
+    X.NavigateToSetting = navReal
+
+    local bar
+    local drawBar = X.Draw
+    X.Draw = function(w, view, data)
+        if w.kind == "xp" then bar = w end
+        return drawBar(w, view, data)
+    end
+    X.SelectBar("xp")
+    eq(cardShown and cardShown.shown, false, "playback: the card hides when a bar is selected")
+    check(bar ~= nil, "playback: the XP bar draws")
+    eq(bar and bar.fxReady and bar.fxReady.on, true, "playback: Ready Glow shows on the sample")
+    settings.xpReadyGlow = false
+    X.PreviewRefresh()
+    eq(bar and bar.fxReady and bar.fxReady.on, false, "playback: while its switch is on")
+    settings.xpReadyGlow = nil
+    X.PreviewRefresh()
+
+    X.PreviewPlay("gain")
+    check(bar and bar.fxBusy ~= nil, "playback: Play Gain plays on the sample")
+    X.SelectBar("fb")
+    eq(bar and bar.fxBusy, nil, "playback: selecting another item stops it")
+    eq(bar and bar.fxReady and bar.fxReady.on, false, "playback: and Ready Glow")
+    X.SelectBar("xp")
+    X.PreviewPlay("level")
+    check(bar and bar.fxBusy == (bar.fxSets and bar.fxSets.flash), "playback: Play Level-Up plays on the sample")
+    local content = bar and bar.frame.parent
+    check(content and content.scripts.OnHide ~= nil, "playback: the preview's content stops what plays when it hides")
+    if content and content.scripts.OnHide then content.scripts.OnHide(content) end
+    eq(bar and bar.fxBusy, nil, "playback: nothing plays once it hides")
+    X.PreviewRestore()
+    eq(bar and bar.fxReady and bar.fxReady.on, true, "playback: a cached revisit brings Ready Glow back")
+
+    X.DrawCard, X.Draw = drawCardReal, drawBar
+    EUI.CreatePreviewHitOverlay, EUI.PP, EUI.ELLESMERE_GREEN = nil, nil, nil
 end
 
 finish()
