@@ -276,8 +276,8 @@ local function OptOut(charKey, specIndex)
 
     -- Written key by key. A fresh table would erase every other spec's opt-out on
     -- this character, which is the opposite of what the button promises. The
-    -- character record is not guaranteed to exist either: three paths create it on
-    -- demand and a character none of them has reached has none.
+    -- character record is not guaranteed to exist either: several features create
+    -- it on demand and a character none of them has reached has none.
     ns.db.perChar = ns.db.perChar or {}
     local rec = ns.db.perChar[charKey]
     if not rec then

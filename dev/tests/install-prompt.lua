@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  install-prompt.lua                                          ║
--- ║  Purpose: Gate for the /kitn install overwrite prompt: an    ║
--- ║           install record or the account's profiles raise     ║
--- ║           it, a character's other stored settings do not.    ║
+-- ║  Purpose: Gate for the /kitn install overwrite prompt: the   ║
+-- ║           account's profiles raise it, nothing a character   ║
+-- ║           stores does.                                       ║
 -- ║           Loads the SHIPPED code, never a copy.              ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
@@ -40,7 +40,7 @@ _G.GetRealmName = function() return "Realm" end
 _G.StaticPopupDialogs = {}
 _G.StaticPopup_Show = function(name) popups[#popups + 1] = name return true end
 
-local ns = { data = {}, Wizard = {} }
+local ns = {}
 for _, path in ipairs({ "Installer/Core.lua", "Installer/Setup.lua" }) do
     local chunk, err = loadfile(path)
     if not chunk then
@@ -84,7 +84,7 @@ local function expectPrompt(label)
 end
 
 ---------------------------------------------------------------------------------
--- A record without the install field is not an install
+-- With no profiles on the account, a character's record raises nothing
 ---------------------------------------------------------------------------------
 
 account(nil)
@@ -108,25 +108,21 @@ expectFresh("layout watch opt-out only")
 account({ loaded = false })
 expectFresh("loaded false")
 
----------------------------------------------------------------------------------
--- The install record raises it, through the writers that run headless
----------------------------------------------------------------------------------
-
-account({ loaded = true })
-expectPrompt("loaded true")
-
+-- Finish with nothing imported: the wizard's character work sets loaded.
 account(nil)
-ns:SetCharLoaded()
-expectPrompt("SetCharLoaded")
+ns.ApplyCharacterWork()
+eq(ns.db.perChar[KEY].loaded, true, "the wizard's character work sets loaded")
+expectFresh("a Finish with nothing imported")
+
+---------------------------------------------------------------------------------
+-- An import raises it
+---------------------------------------------------------------------------------
 
 account(nil)
 ns.CompleteSetup("BigWigs")
-eq(ns.db.perChar[KEY].loaded, true, "an imported profile writes the install record")
+-- The login load prompt reads this.
+eq(ns.db.perChar[KEY].loaded, true, "an imported profile sets loaded")
 expectPrompt("an imported profile")
-
-account(nil)
-ns.ApplyCharacterWork()
-expectPrompt("the wizard's character work")
 
 -- The order a real character meets them in: the XP row first, the install after.
 account({ xp = { gained = 0 } })
@@ -160,14 +156,16 @@ expectFresh("no profile list")
 -- The prompt's own contract
 ---------------------------------------------------------------------------------
 
-account({ loaded = true })
+account(nil)
+ns.db.profiles.BigWigs = true
 install()
 opened = 0
 StaticPopupDialogs.KITNUI_OVERWRITE_CONFIRM.OnAccept()
 eq(opened, 1, "Yes opens the wizard")
 
 -- No identifiable character: refused, whatever the account holds.
-account({ loaded = true })
+account(nil)
+ns.db.profiles.BigWigs = true
 playerName = nil
 local realPrint = _G.print
 _G.print = function() end
