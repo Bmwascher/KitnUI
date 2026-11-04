@@ -572,5 +572,82 @@ do
     eq(#tickers, count, "draw: starts no timer")
 end
 
+---------------------------------------------------------------------------------
+-- A card that is on but not showing
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh({ settings = { xpTickerVisibility = "mouseover" } })
+    X.SessionStart("login")
+    local before = mouseover
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    eq(card.shown, false, "not showing: a card on Mouseover waits for the cursor")
+    eq(mouseover, before + 1, "not showing: having joined the service")
+    check(card.kuiW ~= nil, "not showing: it has a width for the service to read")
+    check(card.kuiH ~= nil, "not showing: and a height")
+
+    clock = clock + 180
+    reading.cur = reading.cur + 1000
+    X.OnXP()
+    X.TickerRefresh(raw)
+    X.TickerApply()
+    X.TickerVisibility()
+    eq(raw.trend, nil, "not showing: a draw sets no arrow")
+    card:Show()
+    clock = clock + 180
+    reading.cur = reading.cur + 5000
+    X.OnXP()
+    X.TickerRefresh(raw)
+    eq(raw.trend, nil, "not showing: a draw starts no window, so the first after the show sets none")
+    X.TickerStop()
+end
+
+do
+    local X, set = fresh()
+    X.SessionStart("login")
+    reading.resting = true
+    local card = showCard(X, rawRecord())
+    check(card ~= nil, "not showing: a card held back by resting has a frame, for Unlock Mode")
+    eq(X.TickerElement(EUI).isHidden(), false, "not showing: and its element is not hidden")
+    eq(card and card.shown, false, "not showing: it stays hidden")
+    check(card and card.kuiW ~= nil and card.kuiH ~= nil, "not showing: with its size")
+    reading.resting = false
+    X.TickerVisibility()
+    eq(card and card.shown, true, "not showing: it shows when resting ends")
+
+    set.xpEnabled = false
+    X.TickerApply()
+    X.TickerVisibility()
+    eq(card and card.dirty, true, "not showing: the XP bar off draws nothing on a frame that exists")
+    X.TickerStop()
+end
+
+do
+    local X = fresh({ settings = { xpEnabled = false } })
+    X.TickerVisibility()
+    eq(framesMade, 0, "not showing: the XP bar off makes no frame")
+    eq(X.TickerElement(EUI).getFrame(), nil, "not showing: and its element creates none")
+end
+
+---------------------------------------------------------------------------------
+-- A show reads the session
+---------------------------------------------------------------------------------
+
+do
+    local X = fresh()
+    X.SessionStart("login")
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    card:Hide()
+    raw.elapsed, raw.gained = 1, 1
+    X.SessionPause(true)
+    card:Show()
+    eq(raw.elapsed, X.SessionElapsed(), "a show: the session's time is current")
+    eq(raw.gained, X.SessionGained(), "a show: and its XP")
+    eq(raw.paused, true, "a show: and its pause")
+    X.TickerStop()
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

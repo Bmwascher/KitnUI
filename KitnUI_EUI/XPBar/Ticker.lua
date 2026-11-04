@@ -311,8 +311,7 @@ end
 
 -- Reads no game API beyond the clock, no save unless the history moved, and
 -- makes no table.
-local function Redraw()
-    local r = liveRaw
+local function FillRecord(r)
     r.played = X.PlayedTotal()
     SyncHistory(r.level, tonumber(Get("xpTickerHistoryRows")) or 0)
     r.hist = hist
@@ -321,9 +320,26 @@ local function Redraw()
         if r.level ~= peersLevel then FillPeers(r.level) end
         r.pace = ClosestGap(r)
     end
+end
+
+local function Redraw()
+    local r = liveRaw
+    FillRecord(r)
     -- From the session: the kept record can be stale on a show, and a window
     -- must start at the show.
     r.trend = M.Trend(trendState, X.SessionGained(), X.SessionElapsed(), M.TREND_WINDOW)
+    X.TickerView(r, Get, cardData)
+    X.DrawCard(live, Get, cardData)
+end
+
+-- The hover service reads a hidden card's rect to reveal it, and the mover its
+-- frame, so a hidden card takes its size after every apply. It sets no trend: a
+-- window must start at a show.
+local function DrawHidden()
+    local r = liveRaw
+    if not (r and live.dirty) or Plain(live:IsShown()) == true then return end
+    FillRecord(r)
+    r.trend = nil
     X.TickerView(r, Get, cardData)
     X.DrawCard(live, Get, cardData)
 end
@@ -367,7 +383,8 @@ end
 
 local function OnCardShow(self)
     SetMouse(self)
-    if liveRaw then Redraw() end
+    -- A card shown after a hide reads the session as it is now.
+    OnTick()
     if not timer and C_Timer and C_Timer.NewTicker then timer = C_Timer.NewTicker(1, OnTick) end
 end
 
@@ -462,12 +479,14 @@ local function PlaceCard()
     if live then X.PlaceFrame(live, UNLOCK_KEY, Get("xpTickerPos"), "LEFT", FIRST_X, FIRST_Y) end
 end
 
--- With the card off or the XP bar off, no frame is created and none is touched
--- until one exists.
+-- With the card off or the XP bar off, no frame is created and none is drawn.
+-- With both on the frame exists even while hidden: Unlock Mode moves it and the
+-- hover service reads its rect.
 function X.TickerVisibility()
     local v = Wanted()
+    local on = X.XPEnabled() and Get("xpTickerEnabled") == true
     if not live then
-        if not v then return end
+        if not on then return end
         MakeLive()
     end
     local EUI = _G.EllesmereUI
@@ -484,6 +503,7 @@ function X.TickerVisibility()
         live:SetShown(v and true or false)
     end
     PlaceCard()
+    if on then DrawHidden() end
 end
 
 -- Runs on every apply. A pause ends by itself when its Start button can no
