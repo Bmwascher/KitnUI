@@ -663,7 +663,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
 
         local tickerStyleHdr = Header("TICKER STYLE")
         local cardFontRow = Row(Drop("Font", "xpTickerFont", fontV, fontO), Drop("Outline", "xpTickerOutline", OUTLINE_V, OUTLINE_O))
-        local cardSizeRow = Row(Slider("Font Size", "xpTickerFontSize", 8, 32, "The card's width follows it."),
+        local cardSizeRow = Row(Slider("Font Size", "xpTickerFontSize", 8, 32, "The card's width follows it, and so does the Party Card's at a Party Width of 0."),
             Drop("Background", "xpTickerBackground", CARDBG_V, CARDBG_O))
         Nav("tkTop", tickerStyleHdr, cardFontRow, "left")
         Nav("tkBack", tickerStyleHdr, cardSizeRow, "right")
