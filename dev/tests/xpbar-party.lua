@@ -1725,7 +1725,7 @@ do
     say("1 58 912 1000")
     check(bar.ptHost ~= nil, "a report draws the tick")
     eq(bar.ptMarks[1].on, true, "and it shows")
-    eq(bar.ptMarks[1].x, X.PartyLogic.MarkerX(91.2, bar.bw, 2, 1), "at the member's percent")
+    eq(bar.ptMarks[1].x, X.PartyLogic.MarkerX(91.2, bar.bw, 3, 1), "at the member's percent")
     me.xp = 500
     ev("PLAYER_XP_UPDATE")
     eq(bar.ptMarks[1].on, true, "the bar's own XP keeps it")
