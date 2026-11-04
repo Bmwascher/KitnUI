@@ -97,6 +97,12 @@ methods.RemoveMaskTexture = function(self) self.mask = nil end
 methods.SetTexCoord = function(self, a, b, c, d) self.tc = { a, b, c, d } end
 methods.SetPoint = function(self, point, rel, relPoint, x, y) self.pt = { point, rel, relPoint, x, y } end
 methods.SetWidth = function(self, v) self.width = v end
+methods.SetHeight = function(self, v) self.height = v end
+methods.SetGradient = function(self, orientation, minColor, maxColor)
+    self.gradients = (self.gradients or 0) + 1
+    self.gradient = { orientation = orientation, height = self.height, width = self.width,
+        min = { minColor.r, minColor.g, minColor.b, minColor.a }, max = { maxColor.r, maxColor.g, maxColor.b, maxColor.a } }
+end
 methods.SetText = function(self, v) self.text = v end
 
 _G.CreateFrame = function(kind)
@@ -104,7 +110,9 @@ _G.CreateFrame = function(kind)
     return Obj(kind)
 end
 _G.UIParent = Obj("Frame")
-_G.CreateColor = function() return { SetRGBA = NOOP } end
+_G.CreateColor = function()
+    return { SetRGBA = function(self, r, g, b, a) self.r, self.g, self.b, self.a = r, g, b, a end }
+end
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 
 local missingAtlas
@@ -451,6 +459,50 @@ do
     eq(set and set.group.playing, true, "ready: and a redraw brings it back")
     X.Draw(w, view, data)
     eq(set and set.group.playing, false, "ready: stops once no longer set")
+end
+
+---------------------------------------------------------------------------------
+-- The Sweep's glow
+---------------------------------------------------------------------------------
+
+resetSettings()
+do
+    -- Each strip's field, its orientation, its fade and the dimension Glow Size sets.
+    local STRIPS = {
+        { "top", "VERTICAL", 1, 0, "height" },
+        { "bottom", "VERTICAL", 0, 1, "height" },
+        { "leftSide", "HORIZONTAL", 0, 1, "width" },
+        { "rightSide", "HORIZONTAL", 1, 0, "width" },
+    }
+    local function rgb(color)
+        return color and (color[1] .. "," .. color[2] .. "," .. color[3])
+    end
+    local function checkStrips(set, plays, size, when)
+        for _, strip in ipairs(STRIPS) do
+            local tex = set and set[strip[1]]
+            local grad = tex and tex.gradient
+            local name = "glow, " .. when .. ", " .. strip[1]
+            eq(tex and tex.gradients, plays, name .. ": a gradient on each play")
+            eq(grad and grad.orientation, strip[2], name .. ": its orientation")
+            eq(grad and rgb(grad.min), "1,0.82,0.25", name .. ": gold at one end")
+            eq(grad and rgb(grad.max), "1,0.82,0.25", name .. ": gold at the other")
+            eq(grad and grad.min[4], strip[3], name .. ": the fade's first end")
+            eq(grad and grad.max[4], strip[4], name .. ": the fade's other end")
+            eq(grad and grad[strip[5]], size, name .. ": set after its size")
+        end
+    end
+
+    local w = newBar()
+    settings.xpLevelEffect = "sweep"
+    X.PlayLevelEffect(w, view)
+    local set = w.fxSets and w.fxSets.sweep
+    checkStrips(set, 1, 8, "first play")
+
+    X.StopEffects(w)
+    X.Draw(w, view, data)
+    settings.xpGlowSize = 12
+    X.PlayLevelEffect(w, view)
+    checkStrips(set, 2, 12, "second play")
 end
 
 ---------------------------------------------------------------------------------
