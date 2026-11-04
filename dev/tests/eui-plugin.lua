@@ -207,7 +207,7 @@ for _, forever in ipairs({ true, false }) do
     eq(defaults.fbEnabled, forever, "the faction bar's default on " .. client)
     eq(defaults.xpPartyCard, forever, "the Party Card's default on " .. client)
     eq(defaults.xpPartyMarkers, forever, "the Party Markers' default on " .. client)
-    eq(defaults.xpPartyTooltip, false, "the Party Tooltip Lines' default on " .. client)
+    eq(defaults.xpPartyTooltip, forever, "the Party Tooltip Lines' default on " .. client)
     eq(defaults.xpPartyShare, true, "Share My XP's default on " .. client)
     eq(defaults.xpTickerEnabled, forever, "the XP ticker's default on " .. client)
 end
@@ -229,7 +229,8 @@ eq(xpDefaults.xpPartyShowSelf, true, "the Party Card shows the player by default
 eq(xpDefaults.xpPartyWidth, 0, "the Party Card's width defaults to 0, the ticker's")
 eq(xpDefaults.xpPartyFill, "accent", "the Party Card's fill defaults to the accent")
 eq(xpDefaults.xpPartyBackground, "card", "the Party Card's background defaults to Card")
-eq(xpDefaults.xpPartyMarkerWidth, 2, "a marker defaults to 2 wide")
+eq(xpDefaults.xpPartyMarkerWidth, 3, "a marker defaults to 3 wide")
+eq(xpDefaults.xpPartyLabelSize, 12, "a marker's label defaults to size 12")
 eq(xpDefaults.xpPartyLabel, "namelevel", "a marker's label defaults to Name and Level")
 eq(xpDefaults.xpPartyLabelSide, "above", "a marker's label defaults to Above")
 eq(xpDefaults.xpPartyPos, nil, "the Party Card has no default position")

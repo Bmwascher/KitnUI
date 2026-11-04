@@ -240,8 +240,8 @@ do
     eq(first.tick.shown, true, "a tick shows")
     eq(first.tick.colorR, 0.1, "in its class color")
     eq(first.label.colorR, 0.1, "and so does its label")
-    eq(first.x, X.PartyLogic.MarkerX(91.2, w.bw, 2, 1), "at its percent")
-    eq(first.tick.width, 2, "at the default width")
+    eq(first.x, X.PartyLogic.MarkerX(91.2, w.bw, 3, 1), "at its percent")
+    eq(first.tick.width, 3, "at the default width")
     eq(first.tick.height, w.bh, "as tall as the bar")
     eq(masked[first.tick] and masked[second.tick], true, "each tick takes the bar's mask")
     check(type(first.label.text) == "string" and first.label.text:find("Mirelle", 1, true) ~= nil, "the label names the member")
@@ -279,20 +279,20 @@ do
     check(first.label.point[5] >= 9, "and the Y offset")
     settings.xpPartyLabelOffX, settings.xpPartyLabelOffY = nil, nil
 
-    -- The room reaches the label's far edge from the body, 14 at the default size.
+    -- The room reaches the label's far edge from the body, 15 at the default size.
     settings.xpPartyLabelOffY = 17
     X.Draw(w, X.Get, data)
-    eq(w.above, first.label.point[5] + 14, "a label moved up: the room above reaches it")
+    eq(w.above, first.label.point[5] + 15, "a label moved up: the room above reaches it")
     w.insetY = 5
     X.SyncMarkers(w, X.Get, data.markers)
-    eq(w.above, first.label.point[5] + 14, "with the frame's inset too")
+    eq(w.above, first.label.point[5] + 15, "with the frame's inset too")
     settings.xpPartyLabelOffY = -100
     X.Draw(w, X.Get, data)
     eq(w.above, w.textAbove, "a label moved in: the around-texts' room is the least")
     eq(w.below, -(first.label.point[5] + w.bh), "an Above label moved past the bar: the room below reaches it")
     settings.xpPartyLabelSide, settings.xpPartyLabelOffY = "below", -17
     X.Draw(w, X.Get, data)
-    eq(w.below, 14 - first.label.point[5], "a label moved down: the room below reaches it")
+    eq(w.below, 15 - first.label.point[5], "a label moved down: the room below reaches it")
     settings.xpPartyLabelOffY = 100
     X.Draw(w, X.Get, data)
     eq(w.below, w.textBelow, "a label moved in from below: the around-texts' room is the least")
@@ -302,13 +302,15 @@ do
 
     -- A tick sits on a physical pixel, with a width of whole ones.
     _G.EllesmereUI.PP = { mult = 0.75 }
+    settings.xpPartyMarkerWidth = 2
     X.SyncMarkers(w, X.Get, data.markers)
     eq(first.x, X.PartyLogic.MarkerX(91.2, w.bw, 2.25, 0.75), "a tick snaps at the UI's pixel size")
     eq(first.x % 0.75, 0, "to a whole pixel")
     eq(first.tick.width, 2.25, "with a whole-pixel width")
+    settings.xpPartyMarkerWidth = nil
     _G.EllesmereUI.PP = nil
     X.SyncMarkers(w, X.Get, data.markers)
-    eq(first.tick.width, 2, "and returns with it")
+    eq(first.tick.width, 3, "and returns with it")
 
     settings.xpPartyLabel = "name"
     X.Draw(w, X.Get, data)
@@ -1728,7 +1730,7 @@ do
     eq(bar.ptMarks[1].on, true, "the bar's own XP keeps it")
     settings.xpWidth = 800
     X.Apply()
-    eq(bar.ptMarks[1].x, X.PartyLogic.MarkerX(91.2, bar.bw, 2, 1), "a resize moves it")
+    eq(bar.ptMarks[1].x, X.PartyLogic.MarkerX(91.2, bar.bw, 3, 1), "a resize moves it")
     settings.xpWidth = nil
     settings.xpPartyMarkers = nil
     X.Apply()
