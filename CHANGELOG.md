@@ -10,6 +10,12 @@
 - `/kitn install` no longer warns about installed profiles when the account
   has none, and now warns on every character once it has some
 
+### Top Bar
+
+- A Top Bar or FPS readout dragged in Unlock Mode keeps its spot through
+  zoning until Save & Exit
+- A spot saved in one spec's layout no longer reaches your other layouts
+
 ### XP Bar
 
 - **NEW:** KitnUI draws its own XP bar and Reputation Bar, set up on an
@@ -35,6 +41,12 @@
 - The XP bar starts with Energy Wave on quest turn-ins with the amount
   gained, Sweep on level-up and Ready Glow; the Reputation Bar starts with
   Flash on rank-up. A bar you already turned on starts with these too
+- **NEW:** Party XP: see your party's level and XP on a **Party Card** under
+  the XP Ticker, as ticks on your XP bar, and as lines in its tooltip. Each
+  has its own switch, all off by default on retail and on by default on WoW
+  Forever, where a grouped player sees them right after updating
+- KitnUI players below max level share their level and XP with their party
+  by default; **Share My XP** turns that off
 
 ### Options Themes
 
