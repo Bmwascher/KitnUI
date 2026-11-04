@@ -161,6 +161,7 @@ local function fresh(opts)
     X.PlaceFrame = function() X.placed = (X.placed or 0) + 1 end
     X.FontPath = function() return "font" end
     X.OutlineFlag = function() return "" end
+    X.SetFont = function(fs, font, size, flags) fs:SetFont(font, size, flags) end
     X.AccentColor = function() return 1, 0, 0 end
     X.Apply = function() X.applied = (X.applied or 0) + 1 end
     run("KitnUI_EUI/XPBar/Session.lua")

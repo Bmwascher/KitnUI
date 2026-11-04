@@ -461,6 +461,7 @@ do
 
     local away = row("Bram", "DRUID", "offline", 0, "offline")
     X.PartyCardRefresh({ list[1], away }, 2, true)
+    eq(r2.name.colorR, 0.5, "an offline name reads the shared gray")
     eq(r2.name.colorR, r2.name.colorG, "an offline name is gray")
     eq(r2.name.text, "Bram", "and the row is the new member's")
     eq(r2.bar.value, 0, "with an empty bar")

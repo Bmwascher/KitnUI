@@ -29,7 +29,8 @@ local ROW_SCALE, NAME_SCALE, PAD_SCALE, INSET_SCALE = 1.5, 7.5, 0.5, 0.1
 -- The most of a row the name column may take: Width and Font Size are set apart,
 -- and at a large font on a narrow card its multiple would leave the bar no room.
 local NAME_SHARE = 0.5
-local MAX_GRAY, OFFLINE_GRAY = 0.45, 0.5
+local MAX_GRAY = 0.45
+local OFFLINE_GRAY = X.PARTY_OFFLINE_GRAY
 local ROW_BACK_A = 0.5
 -- Where a card with no ticker to stack under sits until it is moved, clear of
 -- the bars' and the ticker's first spots.
@@ -86,9 +87,7 @@ function X.PartyCardRow(card, i)
     return row
 end
 
-local function SetFont(fs, font, size, flags)
-    if not fs:SetFont(font, size, flags) then fs:SetFont(STANDARD_TEXT_FONT, size, flags) end
-end
+local SetFont = X.SetFont
 
 -- Only when a setting changed: every size is a multiple of the font size.
 local function StyleCard(card, view)

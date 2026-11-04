@@ -71,7 +71,7 @@ local function SyncLabel(mark, m)
     end
     if mark.font ~= look.font or mark.size ~= look.size or mark.flags ~= look.flags then
         mark.font, mark.size, mark.flags = look.font, look.size, look.flags
-        if not label:SetFont(look.font, look.size, look.flags) then label:SetFont(STANDARD_TEXT_FONT, look.size, look.flags) end
+        X.SetFont(label, look.font, look.size, look.flags)
     end
     if mark.text ~= text then
         mark.text = text

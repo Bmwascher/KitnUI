@@ -221,6 +221,35 @@ end
 local function finished(set) set.group.scripts.OnFinished() end
 
 ---------------------------------------------------------------------------------
+-- The font fallback
+---------------------------------------------------------------------------------
+
+do
+    local asked = {}
+    local fs = { SetFont = function(_, font)
+        asked[#asked + 1] = font
+        return font == _G.STANDARD_TEXT_FONT
+    end }
+    X.SetFont(fs, "bad.ttf", 12, "")
+    eq(table.concat(asked, ","), "bad.ttf," .. _G.STANDARD_TEXT_FONT, "a refused font: falls back to the client's")
+    asked = {}
+    X.SetFont(fs, _G.STANDARD_TEXT_FONT, 12, "")
+    eq(#asked, 1, "an accepted font: one call")
+
+    local fh = assert(io.open("KitnUI_EUI/XPBar/XPBar.xml", "rb"))
+    local manifest = fh:read("*a")
+    fh:close()
+    local sites = 0
+    for file in manifest:gmatch('<Script file="([^"]+)"') do
+        local src = assert(io.open("KitnUI_EUI/XPBar/" .. file, "rb"))
+        local body = src:read("*a")
+        src:close()
+        for _ in body:gmatch("if not [%w_%.]+:SetFont%(") do sites = sites + 1 end
+    end
+    eq(sites, 1, "the XP Bar folder keeps one font fallback")
+end
+
+---------------------------------------------------------------------------------
 -- Nothing until the first play
 ---------------------------------------------------------------------------------
 

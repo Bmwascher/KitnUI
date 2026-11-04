@@ -138,6 +138,13 @@ end
 
 X.FontPath, X.OutlineFlag = FontPath, Outline
 
+-- The client refuses a font it cannot load.
+local function SetFont(fs, font, size, flags)
+    if not fs:SetFont(font, size, flags) then fs:SetFont(STANDARD_TEXT_FONT, size, flags) end
+end
+
+X.SetFont = SetFont
+
 local function BarTexture(name)
     if name and name ~= "" then return Fetch("statusbar", name) or WHITE end
     return WHITE
@@ -807,7 +814,7 @@ local function Lines(w, view, p, data, bw, bh, on, font, flags)
                 labels = labels + 1
                 local fs = MarkLabel(w, labels)
                 local size = tonumber(view(p .. "TickLabelSize")) or 8
-                if not fs:SetFont(font, size, flags) then fs:SetFont(STANDARD_TEXT_FONT, size, flags) end
+                SetFont(fs, font, size, flags)
                 fs:SetTextColor(view(p .. "TickLabelR"), view(p .. "TickLabelG"), view(p .. "TickLabelB"), 1)
                 fs:SetText(tostring(pct))
                 fs:ClearAllPoints()
@@ -833,7 +840,7 @@ local function SetText(fs, text, font, size, flags)
         fs:Hide()
         return false
     end
-    if not fs:SetFont(font, size, flags) then fs:SetFont(STANDARD_TEXT_FONT, size, flags) end
+    SetFont(fs, font, size, flags)
     -- Width 0 is the automatic width: it lifts the cap an earlier draw set.
     fs:SetWidth(0)
     fs:SetText(text)

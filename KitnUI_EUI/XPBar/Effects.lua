@@ -356,7 +356,7 @@ local function ShowAmount(w, view, p, toPct, amount, r, g, b)
     w.fxAmountGroup:Stop()
     local size = tonumber(view(p .. "GainTextSize")) or 13
     local font, flags = X.FontPath(view(p .. "Font")), X.OutlineFlag(view(p .. "Outline"))
-    if not fs:SetFont(font, size, flags) then fs:SetFont(STANDARD_TEXT_FONT, size, flags) end
+    X.SetFont(fs, font, size, flags)
     fs:SetTextColor(r, g, b, 1)
     local text = p == "xp" and M.Number(amount, view("xpNumberStyle"), _G.BreakUpLargeNumbers) or M.Short(amount)
     fs:SetText("+" .. text)
