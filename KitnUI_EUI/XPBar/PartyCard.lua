@@ -43,9 +43,10 @@ local SAMPLE_CAP = 60
 local live, liveRows
 local liveN, liveWanted, unlockOn, watching, accentDone = 0, false, false, false, false
 -- Placed for this Unlock Mode session. A drag or an arrow key lives only on the
--- frame until Save & Exit reads it back from there, so a visibility run leaves a
--- held card alone. A save, an apply of its own spot or a cleared spot still reach it.
+-- frame until Save & Exit reads it back from there, so only a save or a cleared
+-- spot reaches a held card.
 local held = false
+local element
 
 ---------------------------------------------------------------------------------
 -- The widget
@@ -309,6 +310,10 @@ local function PlaceCard()
     held = true
 end
 
+local function PlaceUnheld()
+    if not held then PlaceCard() end
+end
+
 function X.PartyCardVisibility()
     if not (live and watching) then return end
     local v = Wanted()
@@ -325,12 +330,15 @@ function X.PartyCardVisibility()
         live:SetAlpha(1)
         live:SetShown(v and true or false)
     end
-    if not held then PlaceCard() end
+    PlaceUnheld()
 end
 
+-- While noInitHook is up, Unlock Mode's position pass, which runs on every zone
+-- change, skips the element, and its resize path calls only applyPos, which holds.
 local function OnUnlock(active)
     unlockOn = Plain(active) == true
     held = false
+    if element then element.noInitHook = unlockOn end
     Redraw()
     X.PartyCardVisibility()
 end
@@ -403,6 +411,7 @@ function X.PartyCardStop()
     Watch(false)
     unlockOn = false
     held = false
+    if element then element.noInitHook = false end
     if not live then return end
     local EUI = _G.EllesmereUI
     if live.mouseover and EUI and EUI.UnregisterMouseoverTarget then EUI.UnregisterMouseoverTarget(live) end
@@ -413,7 +422,7 @@ end
 -- Width is on the page and height follows the font size, so the mover has no
 -- resize controls.
 function X.PartyElement(EUI)
-    return EUI.MakeUnlockElement({
+    element = EUI.MakeUnlockElement({
         key = UNLOCK_KEY, label = "KitnUI Party XP", group = "KitnUI", order = 6, noResize = true,
         isHidden = function() return Get("xpPartyCard") ~= true end,
         -- Never creates: Unlock Mode asks whether or not the card is on.
@@ -431,10 +440,19 @@ function X.PartyElement(EUI)
             if type(p) ~= "table" then return nil end
             return { point = p.point, relPoint = p.relPoint, x = p.x, y = p.y }
         end,
+        -- Spec layouts read these instead of loadPos and savePos. A layout's spot
+        -- replaces whatever the session held.
+        loadRawPos = function() return X.Math.RawSpot(Get("xpPartyPos")) end,
+        saveRawPos = function(_, banked)
+            X.Set("xpPartyPos", X.Math.StoredSpot(banked))
+            held = false
+            PlaceCard()
+        end,
         clearPos = function()
             X.Set("xpPartyPos", nil)
             held = false
         end,
-        applyPos = PlaceCard,
+        applyPos = PlaceUnheld,
     })
+    return element
 end

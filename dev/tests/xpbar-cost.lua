@@ -1078,14 +1078,37 @@ do
     X.ApplyVisibility()
     eq(placedCalls, 0, "unlock: a session's visibility run leaves placed frames where they are")
     unlockList[1].applyPos()
-    eq(placedCalls, 1, "unlock: an apply still places the XP bar")
+    eq(placedCalls, 0, "unlock: an apply leaves the XP bar where it is")
+    eq(unlockList[1].noInitHook, true, "unlock: EUI's position pass is left to the XP bar's apply")
+    eq(unlockList[2].noInitHook, true, "unlock: and to the Reputation bar's")
+    eq(unlockList[3].noInitHook, true, "unlock: and to the ticker's")
+    unlockList[1].savePos(nil, "CENTER", "CENTER", 3, 4)
+    eq(placedCalls, 1, "unlock: a save places it")
+    unlockList[1].clearPos()
     local drawsBefore = liveDraws
     if listener then listener(false) end
     eq(X.UnlockActive, false, "effects: leaving Unlock Mode is noted")
     check(liveDraws > drawsBefore, "effects: and redraws, which brings Ready Glow back")
     check(placedCalls > 1, "unlock: closing places the frames again")
+    eq(unlockList[1].noInitHook, false, "unlock: closing hands the XP bar back to EUI's position pass")
     X.PlaceFrame = placeFrame
     settings.xpGainQuestsOnly = nil
+
+    -- A spec layout banks each bar's "never moved" and gets it back.
+    for spotIndex, spotKey in ipairs({ "xpPos", "fbPos" }) do
+        local spotElem, spotHeld = unlockList[spotIndex], settings[spotKey]
+        settings[spotKey] = nil
+        local spotNever = spotElem.loadRawPos()
+        eq(spotNever.neverMoved, true, spotKey .. ": a layout hears it never moved")
+        spotElem.savePos(nil, "CENTER", "CENTER", 3, 4)
+        local spotMoved = spotElem.loadRawPos()
+        eq(spotMoved.x, 3, spotKey .. ": a layout hears its spot")
+        spotElem.saveRawPos(nil, spotNever)
+        eq(settings[spotKey], nil, spotKey .. ": never moved clears the spot")
+        spotElem.saveRawPos(nil, spotMoved)
+        eq(settings[spotKey] and settings[spotKey].x, 3, spotKey .. ": and its spot comes back")
+        settings[spotKey] = spotHeld
+    end
 
     -- A level whose completed quests cover the rest, for Ready Glow alone.
     local scan = X.ScanQuestXP
@@ -1276,10 +1299,12 @@ do
     eq(live and live.fxBusy, nil, "effects: a hidden bar stops its effects")
     settings.xpGainQuestsOnly = nil
 
+    if listener then listener(true) end
     settings.xpEnabled, settings.fbEnabled, settings.fbSource, settings.fbFactionID = false, false, nil, nil
     X.Apply()
     eq(listener, nil, "effects: both bars off leaves Unlock Mode's listeners")
     eq(X.UnlockActive, false, "effects: and clears its note")
+    eq(unlockList[1].noInitHook, false, "effects: and hands the bars back to EUI's position pass")
     eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: and unregisters QUEST_TURNED_IN")
     _G.C_Reputation, _G.C_MajorFactions = nil, nil
     X.Draw, X.PlayLevelEffect, X.PlayGainEffect, X.PlayGain = drawReal, levelReal, gainReal, passReal

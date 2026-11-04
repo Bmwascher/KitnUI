@@ -383,6 +383,22 @@ function M.RowHeight(fontSize)
     return ceil((tonumber(fontSize) or 12) * 1.4)
 end
 
+-- Spec layouts bank a spot only when an element reports one, and write back only
+-- what they banked, so a spot saved in one layout would stay in every layout that
+-- never moved the frame. "Never moved" goes to them as a flagged spot. Having no
+-- offsets, it never reads as near a saved spot, and a build that cannot read the
+-- flag lands at the top of the screen.
+function M.RawSpot(pos)
+    if type(pos) ~= "table" then return { point = "TOP", relPoint = "TOP", neverMoved = true } end
+    return { point = pos.point, relPoint = pos.relPoint, x = pos.x, y = pos.y }
+end
+
+-- What to store for a spot a layout hands back, with its own fields added.
+function M.StoredSpot(banked)
+    if type(banked) ~= "table" or banked.neverMoved then return nil end
+    return { point = banked.point, relPoint = banked.relPoint, x = banked.x, y = banked.y }
+end
+
 -- The whole seconds spent in newLevel - 1, from the running clock, else the
 -- clock a reading-first level-up held; nil when neither is that level's.
 function M.LevelSplit(newLevel, levelOf, levelStart, heldOf, heldStart, now)

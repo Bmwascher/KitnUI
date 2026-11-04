@@ -489,6 +489,11 @@ local function PlaceCard()
     X.PlaceFrame(live, UNLOCK_KEY, Get("xpTickerPos"), "LEFT", FIRST_X, FIRST_Y)
 end
 
+-- A drag lives only on the frame until Unlock Mode's save reads it back.
+local function PlaceUnheld()
+    if not (X.UnlockActive and live and live.kuiPlaced) then PlaceCard() end
+end
+
 -- With the card off or the XP bar off, no frame is created and none is drawn.
 -- With both on the frame exists even while hidden: Unlock Mode moves it and the
 -- hover service reads its rect.
@@ -512,8 +517,7 @@ function X.TickerVisibility()
         live:SetAlpha(1)
         live:SetShown(v and true or false)
     end
-    -- A drag lives only on the frame until Unlock Mode's save reads it back.
-    if not (X.UnlockActive and live.kuiPlaced) then PlaceCard() end
+    PlaceUnheld()
     if on then DrawHidden() end
 end
 
@@ -576,7 +580,13 @@ function X.TickerElement(EUI)
             if type(p) ~= "table" then return nil end
             return { point = p.point, relPoint = p.relPoint, x = p.x, y = p.y }
         end,
+        -- Spec layouts read these instead of loadPos and savePos.
+        loadRawPos = function() return M.RawSpot(Get("xpTickerPos")) end,
+        saveRawPos = function(_, banked)
+            X.Set("xpTickerPos", M.StoredSpot(banked))
+            PlaceCard()
+        end,
         clearPos = function() X.Set("xpTickerPos", nil) end,
-        applyPos = PlaceCard,
+        applyPos = PlaceUnheld,
     })
 end

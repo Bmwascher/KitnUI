@@ -422,6 +422,20 @@ do
     element.clearPos()
     eq(set.xpTickerPos, nil, "unlock: and cleared")
 
+    -- A spec layout banks "never moved" and gets it back.
+    local spotNever = element.loadRawPos()
+    eq(spotNever.neverMoved, true, "layout: it hears the ticker never moved")
+    element.savePos(nil, "LEFT", "LEFT", 7, 8)
+    local spotMoved = element.loadRawPos()
+    eq(spotMoved.x, 7, "layout: it hears its spot")
+    placed = X.placed
+    element.saveRawPos(nil, spotNever)
+    eq(set.xpTickerPos, nil, "layout: never moved clears the spot")
+    check(X.placed > placed, "layout: and places it")
+    element.saveRawPos(nil, spotMoved)
+    eq(set.xpTickerPos and set.xpTickerPos.x, 7, "layout: and its spot comes back")
+    element.clearPos()
+
     -- A drag lives only on the frame until the save, so a session's visibility run
     -- leaves a placed card alone and places one that never was.
     X.UnlockActive = true
@@ -429,7 +443,10 @@ do
     X.TickerVisibility()
     eq(X.placed, placed, "unlock: a session's visibility run leaves it where it is")
     element.applyPos()
-    check(X.placed > placed, "unlock: an apply still places it")
+    eq(X.placed, placed, "unlock: an apply leaves it where it is")
+    card.kuiPlaced = nil
+    element.applyPos()
+    check(X.placed > placed, "unlock: an apply places a card never placed")
     placed = X.placed
     card.kuiPlaced = nil
     X.TickerVisibility()

@@ -482,5 +482,25 @@ eq(M.PaceText(nil), "--", "pace text: unknown")
 eq(M.TickerWidth(24), 2 * M.TickerWidth(12), "ticker width: scales with the font size")
 check(M.RowHeight(24) > M.RowHeight(12), "row height: scales with the font size")
 
+-- A spec layout banks "never moved" as a spot and gets it back
+do
+    local spotNever = M.RawSpot(nil)
+    eq(spotNever.neverMoved, true, "raw spot: nothing saved reads as never moved")
+    check(spotNever.point ~= nil, "raw spot: a layout banks only what has a point")
+    eq(spotNever.x, nil, "raw spot: no offsets, so it never reads as near a saved spot")
+    eq(M.StoredSpot(spotNever), nil, "stored spot: never moved stores nothing")
+    local spotSaved = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = 3, y = 4 }
+    local spotRaw = M.RawSpot(spotSaved)
+    check(spotRaw ~= spotSaved, "raw spot: a copy")
+    eq(spotRaw.neverMoved, nil, "raw spot: a saved spot is not flagged")
+    eq(spotRaw.relPoint, "BOTTOMLEFT", "raw spot: the relative point is kept")
+    spotRaw.rawPos, spotRaw.w, spotRaw.h = true, 264, 40
+    local spotStored = M.StoredSpot(spotRaw)
+    eq(spotStored.x, 3, "stored spot: the spot comes back")
+    eq(spotStored.w, nil, "stored spot: without the layout's size")
+    eq(spotStored.rawPos, nil, "stored spot: or its mark")
+    eq(M.StoredSpot(nil), nil, "stored spot: nothing handed back stores nothing")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
