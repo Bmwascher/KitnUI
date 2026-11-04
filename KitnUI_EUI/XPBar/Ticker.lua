@@ -484,7 +484,9 @@ local function WantsMouseover()
 end
 
 local function PlaceCard()
-    if live then X.PlaceFrame(live, UNLOCK_KEY, Get("xpTickerPos"), "LEFT", FIRST_X, FIRST_Y) end
+    if not live then return end
+    live.kuiPlaced = true
+    X.PlaceFrame(live, UNLOCK_KEY, Get("xpTickerPos"), "LEFT", FIRST_X, FIRST_Y)
 end
 
 -- With the card off or the XP bar off, no frame is created and none is drawn.
@@ -510,7 +512,8 @@ function X.TickerVisibility()
         live:SetAlpha(1)
         live:SetShown(v and true or false)
     end
-    PlaceCard()
+    -- A drag lives only on the frame until Unlock Mode's save reads it back.
+    if not (X.UnlockActive and live.kuiPlaced) then PlaceCard() end
     if on then DrawHidden() end
 end
 

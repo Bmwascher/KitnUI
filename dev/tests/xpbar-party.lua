@@ -683,8 +683,8 @@ do
     onTicker("Unlock Mode closed")
     eq(settings.xpPartyPos, nil, "Unlock Mode closed: nothing saved")
 
-    -- The hold lasts only while the card stays stacked: each of these, inside a
-    -- session, has the next placement stack it and read its rect again.
+    -- A cleared spot ends the hold: the next placement stacks the card and reads
+    -- its rect again.
     local function reflattens(label, leave)
         listeners.KitnUI_PartyXP(true)
         leave()
@@ -700,17 +700,71 @@ do
         element.savePos(nil, "CENTER", "CENTER", 7, 8)
         element.clearPos()
     end)
-    reflattens("a link made and undone", function()
+    -- A link undone or the ticker off and on moves nothing until the session
+    -- closes: an unlink keeps the live spot for the save.
+    local function staysUntilClose(label, leave)
+        listeners.KitnUI_PartyXP(true)
+        leave()
+        methods.GetLeft = function() return 33 end
+        X.PartyCardVisibility()
+        eq(card.point[2], _G.UIParent, label .. ": on the screen")
+        eq(card.point[4], 11, label .. ": where the session put it")
+        methods.GetLeft = function() return 11 end
+        listeners.KitnUI_PartyXP(false)
+        onTicker(label .. ", then closed")
+    end
+    staysUntilClose("a link undone", function()
         EUI.IsAnchored = function(key) return key == "KitnUI_PartyXP" end
         EUI.ReapplyOwnAnchor = NOOP
         X.PartyCardVisibility()
         EUI.IsAnchored, EUI.ReapplyOwnAnchor = nil, nil
     end)
-    reflattens("the ticker off and on", function()
+    staysUntilClose("the ticker off and on", function()
         tickerOn = false
         X.PartyCardVisibility()
         tickerOn = true
     end)
+
+    -- A card that is not stacked: a drag or an arrow key stays until the save, and a
+    -- session closed with no save goes back to where the card was.
+    local function drag()
+        card:ClearAllPoints()
+        card:SetPoint("TOPLEFT", _G.UIParent, "TOPLEFT", 50, 60)
+    end
+    local function keepsDrag(label)
+        listeners.KitnUI_PartyXP(true)
+        drag()
+        X.PartyCardVisibility()
+        X.PartyCardRefresh(list, 2, true)
+        eq(card.point[1], "TOPLEFT", label .. ": a redraw leaves a dragged card on its new point")
+        eq(card.point[4], 50, label .. ": at its new spot")
+        element.savePos(nil, "CENTER", "CENTER", 50, 60)
+        eq(card.point[1], "CENTER", label .. ": the save places it")
+        listeners.KitnUI_PartyXP(false)
+        eq(card.point[4], 50, label .. ": and it stays after closing")
+        element.clearPos()
+    end
+    element.savePos(nil, "CENTER", "CENTER", 5, 6)
+    keepsDrag("a saved spot")
+    tickerOn = false
+    X.PartyCardVisibility()
+    keepsDrag("the first spot")
+    tickerOn = true
+    X.PartyCardVisibility()
+    onTicker("its drag saved and cleared")
+
+    element.savePos(nil, "CENTER", "CENTER", 5, 6)
+    listeners.KitnUI_PartyXP(true)
+    drag()
+    element.applyPos()
+    eq(card.point[1], "CENTER", "an apply still places a card with a saved spot")
+    drag()
+    listeners.KitnUI_PartyXP(false)
+    eq(card.point[1], "CENTER", "a session closed with no save goes back to its point")
+    eq(card.point[4], 5, "and to its spot")
+    element.clearPos()
+    X.PartyCardVisibility()
+    onTicker("its spot cleared again")
 
     listeners.KitnUI_PartyXP(true)
     element.savePos(nil, "CENTER", "CENTER", 7, 8)

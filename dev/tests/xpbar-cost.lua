@@ -1068,10 +1068,23 @@ do
     xpNow = 400
     send("PLAYER_XP_UPDATE")
     eq(live and live.fxBusy, nil, "effects: Unlock Mode blocks a play")
+
+    -- A drag lives only on the frame until the save.
+    local placeFrame, placedCalls = X.PlaceFrame, 0
+    X.PlaceFrame = function(...)
+        placedCalls = placedCalls + 1
+        return placeFrame(...)
+    end
+    X.ApplyVisibility()
+    eq(placedCalls, 0, "unlock: a session's visibility run leaves placed frames where they are")
+    unlockList[1].applyPos()
+    eq(placedCalls, 1, "unlock: an apply still places the XP bar")
     local drawsBefore = liveDraws
     if listener then listener(false) end
     eq(X.UnlockActive, false, "effects: leaving Unlock Mode is noted")
     check(liveDraws > drawsBefore, "effects: and redraws, which brings Ready Glow back")
+    check(placedCalls > 1, "unlock: closing places the frames again")
+    X.PlaceFrame = placeFrame
     settings.xpGainQuestsOnly = nil
 
     -- A level whose completed quests cover the rest, for Ready Glow alone.

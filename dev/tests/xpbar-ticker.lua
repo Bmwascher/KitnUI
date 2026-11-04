@@ -421,6 +421,23 @@ do
     eq(element.loadPos().y, 8, "unlock: and read back")
     element.clearPos()
     eq(set.xpTickerPos, nil, "unlock: and cleared")
+
+    -- A drag lives only on the frame until the save, so a session's visibility run
+    -- leaves a placed card alone and places one that never was.
+    X.UnlockActive = true
+    placed = X.placed
+    X.TickerVisibility()
+    eq(X.placed, placed, "unlock: a session's visibility run leaves it where it is")
+    element.applyPos()
+    check(X.placed > placed, "unlock: an apply still places it")
+    placed = X.placed
+    card.kuiPlaced = nil
+    X.TickerVisibility()
+    check(X.placed > placed, "unlock: a card never placed is placed")
+    X.UnlockActive = nil
+    placed = X.placed
+    X.TickerVisibility()
+    check(X.placed > placed, "unlock: and after the session every run places again")
     X.TickerStop()
 end
 

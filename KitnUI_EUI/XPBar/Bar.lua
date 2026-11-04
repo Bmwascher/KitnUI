@@ -339,7 +339,16 @@ end
 local function Place(kind)
     local w = widgets[kind]
     if not w then return end
+    w.kuiPlaced = true
     X.PlaceFrame(w.frame, UNLOCK_KEY[kind], Get(kind == "xp" and "xpPos" or "fbPos"), "TOP", 0, DEFAULT_Y[kind])
+end
+
+-- A session's drag or arrow key lives only on the frame until Save & Exit reads it
+-- back from there, so a visibility run leaves a placed frame alone while Unlock
+-- Mode is open. Its savePos and applyPos still place it.
+local function PlaceOutsideSession(kind)
+    local w = widgets[kind]
+    if w and not (X.UnlockActive and w.kuiPlaced) then Place(kind) end
 end
 
 local function Tick()
@@ -373,11 +382,11 @@ function X.ApplyVisibility()
     if not active then return end
     if widgets.xp then
         Show("xp", X.XPEnabled() and xpShown and Eval(Get("xpVisibility")))
-        Place("xp")
+        PlaceOutsideSession("xp")
     end
     if widgets.fb then
         Show("fb", X.FactionEnabled() and fbShown and Eval(Get("fbVisibility")))
-        Place("fb")
+        PlaceOutsideSession("fb")
     end
     X.UpdateClock()
     X.TickerVisibility()
@@ -712,6 +721,7 @@ local function OnUnlockMode(on)
     if not X.UnlockActive and active then
         RefreshXP()
         RefreshFaction()
+        X.ApplyVisibility()
     end
 end
 

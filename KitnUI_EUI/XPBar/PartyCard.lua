@@ -42,8 +42,10 @@ local SAMPLE_CAP = 60
 
 local live, liveRows
 local liveN, liveWanted, unlockOn, watching, accentDone = 0, false, false, false, false
--- A stacked card on the screen at its own spot, for one Unlock Mode session.
-local flat = false
+-- Placed for this Unlock Mode session. A drag or an arrow key lives only on the
+-- frame until Save & Exit reads it back from there, so a visibility run leaves a
+-- held card alone. A save, an apply of its own spot or a cleared spot still reach it.
+local held = false
 
 ---------------------------------------------------------------------------------
 -- The widget
@@ -292,11 +294,11 @@ local function PlaceCard()
     if not live then return end
     local ticker = StackUnder()
     if not ticker then
-        flat = false
         X.PlaceFrame(live, UNLOCK_KEY, Get("xpPartyPos"), "LEFT", FIRST_X, FIRST_Y)
+        held = unlockOn
         return
     end
-    if flat then return end
+    if held then return end
     live:ClearAllPoints()
     live:SetPoint("TOPLEFT", ticker, "BOTTOMLEFT", 0, -STACK_GAP)
     if not unlockOn then return end
@@ -304,7 +306,7 @@ local function PlaceCard()
     if not (left and top) then return end
     live:ClearAllPoints()
     live:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
-    flat = true
+    held = true
 end
 
 function X.PartyCardVisibility()
@@ -323,12 +325,12 @@ function X.PartyCardVisibility()
         live:SetAlpha(1)
         live:SetShown(v and true or false)
     end
-    PlaceCard()
+    if not held then PlaceCard() end
 end
 
 local function OnUnlock(active)
     unlockOn = Plain(active) == true
-    flat = false
+    held = false
     Redraw()
     X.PartyCardVisibility()
 end
@@ -400,7 +402,7 @@ end
 function X.PartyCardStop()
     Watch(false)
     unlockOn = false
-    flat = false
+    held = false
     if not live then return end
     local EUI = _G.EllesmereUI
     if live.mouseover and EUI and EUI.UnregisterMouseoverTarget then EUI.UnregisterMouseoverTarget(live) end
@@ -431,7 +433,7 @@ function X.PartyElement(EUI)
         end,
         clearPos = function()
             X.Set("xpPartyPos", nil)
-            flat = false
+            held = false
         end,
         applyPos = PlaceCard,
     })
