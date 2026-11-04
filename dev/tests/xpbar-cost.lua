@@ -1126,6 +1126,44 @@ do
     X.ScanQuestXP = scan
     settings.xpTooltip, settings.xpShowQuest, settings.xpShowCompRested = nil, nil, nil
 
+    -- The tooltip's rows in groups, for each order of quest rows: a blank line sits
+    -- only between two groups that drew something.
+    do
+        local tipRows = {}
+        _G.GameTooltip.AddLine = function(_, text) tipRows[#tipRows + 1] = text end
+        _G.GameTooltip.AddDoubleLine = function(_, left) tipRows[#tipRows + 1] = left end
+        local function hovered()
+            tipRows = {}
+            xpFrame.scripts.OnEnter(xpFrame)
+            return table.concat(tipRows, ",")
+        end
+        local function withQuests(done, open)
+            X.ScanQuestXP = function() return done, open end
+            send("QUEST_LOG_UPDATE")
+            fire()
+            return hovered()
+        end
+        local function reads(text, part, label)
+            check(text:find(part, 1, true) ~= nil, "tooltip: " .. label, text)
+            check(text:sub(1, 8) == "Level 11", "tooltip: " .. label .. ", nothing above its first row", text)
+            check(text:sub(-1) ~= " ", "tooltip: " .. label .. ", nothing below its last row", text)
+        end
+        X.Apply()
+        reads(withQuests(0, 0), "Experience,Remaining, ,This session", "no quest rows, one blank line")
+        reads(withQuests(5000, 7), "Remaining, ,Completed quests,Quests in progress, ,This session", "both quest rows")
+        reads(withQuests(5000, 0), "Remaining, ,Completed quests, ,This session", "completed quests alone")
+        reads(withQuests(0, 7), "Remaining, ,Quests in progress, ,This session", "quests in progress alone")
+        reads(withQuests(0, 0), "Experience,Remaining, ,This session", "the quest rows gone again")
+        X.ScanQuestXP = scan
+        _G.IsResting = function() return true end
+        reads(hovered(), "Remaining,Rested, ,This session", "the rested row in the first group")
+        _G.IsResting = function() return false end
+        _G.UnitLevel = function() return 90 end
+        eq(hovered(), "Level 90,Max Level", "tooltip: at max level, its own rows with no blank line")
+        _G.UnitLevel = function() return 11 end
+        _G.GameTooltip.AddLine, _G.GameTooltip.AddDoubleLine = nil, nil
+    end
+
     -- Two turn-ins close together, with each side first, play both gains.
     local gainsBefore = gainPlays
     X.Apply()

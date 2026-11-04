@@ -422,11 +422,13 @@ local function ShowXPTooltip(self)
             local rested = format("%s (%.1f%%)", M.Number(t.rested, style, breakUp), t.rested * 100 / mx)
             TipLine("Rested", t.resting and (rested .. ", Resting") or rested)
         end
+        if questDone > 0 or questOpen > 0 then GameTooltip:AddLine(" ") end
         if questDone > 0 then
             TipLine("Completed quests", questDone >= left and "Enough to level"
                 or format("%s (%.1f%%)", M.Number(questDone, style, breakUp), questDone * 100 / mx))
         end
         if questOpen > 0 then TipLine("Quests in progress", M.Number(questOpen, style, breakUp)) end
+        GameTooltip:AddLine(" ")
         local gained = X.SessionGained()
         local perHour, eta = M.Rate(gained, X.SessionElapsed(), left)
         TipLine("This session", M.Number(gained, style, breakUp))

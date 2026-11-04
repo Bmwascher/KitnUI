@@ -154,8 +154,8 @@ function L.RowView(out, m, heard, cap, locked)
     return out
 end
 
-function L.TooltipText(name, row)
-    return name .. ": " .. (row.text:gsub("  ", " "))
+function L.TooltipStatus(row)
+    return (row.text:gsub("  ", " "))
 end
 
 function L.LabelText(name, level, style)

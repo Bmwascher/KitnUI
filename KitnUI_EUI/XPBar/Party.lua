@@ -378,6 +378,10 @@ function X.PartyMarkerList()
     return marks
 end
 
+-- As the card's offline name.
+local OFFLINE_GRAY = 0.5
+
+-- The bar's own rows always come first, so the blank line is never the top one.
 function X.PartyTooltipLines(tip)
     if not (tip and inParty) or Get("xpPartyTooltip") ~= true then return end
     local header = false
@@ -386,9 +390,12 @@ function X.PartyTooltipLines(tip)
         if m.present then
             if not header then
                 header = true
+                tip:AddLine(" ")
                 tip:AddLine("Party", 1, 0.82, 0)
             end
-            tip:AddLine(L.TooltipText(m.name, m.view), 1, 1, 1)
+            local r, g, b = X.PartyClassColor(m.class)
+            local status = m.view.kind == "offline" and OFFLINE_GRAY or 1
+            tip:AddDoubleLine(m.name, L.TooltipStatus(m.view), r, g, b, status, status, status)
         end
     end
 end

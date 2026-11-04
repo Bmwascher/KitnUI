@@ -1589,41 +1589,94 @@ do
     eq(eventList(), "", "both bars off, Share off: an apply stops it")
     settings.xpPartyShare = nil
 
-    -- The tooltip lines, on the leveling branch and the max-level one.
-    local tipLines = {}
-    _G.GameTooltip.AddLine = function(_, text) tipLines[#tipLines + 1] = text end
-    _G.GameTooltip.AddDoubleLine = NOOP
+    -- The tooltip's party rows, on the leveling branch and the max-level one.
+    local tipRows = {}
+    _G.GameTooltip.AddLine = function(_, text, r, g, b)
+        tipRows[#tipRows + 1] = { left = text, r = r, g = g, b = b }
+    end
+    _G.GameTooltip.AddDoubleLine = function(_, left, right, lr, lg, lb, rr, rg, rb)
+        tipRows[#tipRows + 1] = { left = left, right = right, r = lr, g = lg, b = lb, rr = rr, rg = rg, rb = rb }
+    end
     settings.xpEnabled = true
     settings.xpPartyTooltip = true
     X.Apply()
     local bar = X.LiveXPWidget()
     check(bar ~= nil, "the XP bar is on")
     local function hover()
-        tipLines = {}
+        tipRows = {}
         bar.frame.scripts.OnEnter(bar.frame)
-        return tipLines
+        return tipRows
     end
-    eq(#hover(), 0, "solo: no party lines")
-    join(member("Mirelle", "MAGE", 58), member("Dornak", "WARRIOR", 90), member("Vess", "DRUID", 57))
+    local function headerAt(shown)
+        for i = 1, #shown do
+            if shown[i].left == "Party" then return i end
+        end
+        return nil
+    end
+    local function noBlankAtEdges(shown, label)
+        check(shown[1].left ~= " ", label .. ": no blank line at the top")
+        check(shown[#shown].left ~= " ", label .. ": none at the end")
+    end
+    local function noPartyRows(label)
+        local shown = hover()
+        eq(headerAt(shown), nil, label .. ": no party rows")
+        noBlankAtEdges(shown, label)
+    end
+    local function memberRow(row, name, status, r, label)
+        eq(row and row.left, name, label .. ": the name on the left")
+        eq(row and row.right, status, label .. ": the status on the right")
+        eq(row and row.r, r, label .. ": the name's color")
+    end
+
+    noPartyRows("solo")
+    local trio = { member("Mirelle", "MAGE", 58), member("Dornak", "WARRIOR", 90), member("Vess", "DRUID", 57) }
+    join(trio[1], trio[2], trio[3])
     say("1 58 912 1000")
-    local lines = hover()
-    eq(#lines, 4, "in a party: a header and one line per other member")
-    check(lines[2]:find("Mirelle", 1, true) and lines[2]:find("91.2", 1, true), "the first member's line", lines[2])
-    check(lines[3]:find("Dornak", 1, true), "the second", lines[3])
-    check(lines[4]:find("Vess", 1, true), "the third", lines[4])
+    local rows = hover()
+    local at = headerAt(rows)
+    check(at ~= nil, "in a party: a header")
+    eq(rows[at - 1].left, " ", "in a party: a blank line above the header")
+    check(rows[at - 2].left ~= " ", "in a party: one blank line")
+    memberRow(rows[at + 1], "Mirelle", "Lv 58 91.2%", 0.1, "a member with data")
+    memberRow(rows[at + 2], "Dornak", "Lv 90 Max", 0.4, "a member at max")
+    memberRow(rows[at + 3], "Vess", "Lv 57 no data", 0.7, "a member with no data")
+    eq(rows[at + 1].rr, 1, "a status reads white")
+    eq(#rows, at + 3, "the party's rows end the tooltip")
+    noBlankAtEdges(rows, "in a party")
+
+    -- An offline status reads gray beside the class-colored name, and an unknown
+    -- class reads white.
+    local tipAway = member("Bram", "MAGE", 57)
+    tipAway.online = false
+    join(tipAway, member("Odd", "MONK", 57))
+    rows = hover()
+    at = headerAt(rows)
+    memberRow(rows[at + 1], "Bram", "offline", 0.1, "an offline member")
+    eq(rows[at + 1].rr, 0.5, "an offline status reads gray")
+    eq(rows[at + 1].rg, 0.5, "in its green")
+    eq(rows[at + 1].rb, 0.5, "and its blue")
+    memberRow(rows[at + 2], "Odd", "Lv 57 no data", 1, "an unknown class")
+    eq(rows[at + 2].g, 1, "reads white in its green")
+    eq(rows[at + 2].b, 1, "and its blue")
+
+    join(trio[1], trio[2], trio[3])
+    say("1 58 912 1000")
     me.level = 90
     X.Apply()
-    lines = hover()
-    check(#lines >= 4, "at max level the tooltip keeps its lines", #lines)
-    check(lines[#lines]:find("Vess", 1, true), "at its end", lines[#lines])
+    rows = hover()
+    eq(rows[1].left, "Level 90", "at max level: its own rows")
+    eq(rows[2].left, "Max Level", "at max level: together")
+    eq(rows[3].left, " ", "at max level: a blank line above the party")
+    eq(rows[4].left, "Party", "at max level: the header")
+    eq(rows[#rows].left, "Vess", "at max level: the last member ends the tooltip")
     me.level = 10
     settings.xpPartyTooltip = nil
     X.Apply()
-    eq(#hover(), 0, "the switch off: no party lines")
+    noPartyRows("the switch off")
     settings.xpPartyTooltip = true
     group.raid = true
     ev("GROUP_ROSTER_UPDATE")
-    eq(#hover(), 0, "in a raid: no party lines")
+    noPartyRows("in a raid")
     group.raid = false
     settings.xpPartyTooltip = nil
 

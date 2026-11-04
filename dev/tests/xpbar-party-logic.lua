@@ -267,11 +267,13 @@ do
     eq(out.pct, 100, "and so is 100")
 
     L.RowView(out, m, heard, 90, false)
-    local line = L.TooltipText("Mirelle", out)
-    check(line:find("Mirelle", 1, true) and line:find("45.0", 1, true), "a tooltip line holds the name and percent", line)
-    check(not line:find("  ", 1, true), "with single spaces", line)
+    eq(L.TooltipStatus(out), "Lv 59 45.0%", "a tooltip status holds the level and percent, with single spaces")
+    L.RowView(out, atCap, nil, 90, false)
+    eq(L.TooltipStatus(out), "Lv 90 Max", "at the cap, Max")
+    L.RowView(out, m, nil, 90, false)
+    eq(L.TooltipStatus(out), "Lv 59 no data", "with nothing heard, no data")
     L.RowView(out, away, nil, 90, false)
-    check(L.TooltipText("Bram", out):find("Bram", 1, true) ~= nil, "an offline member has a line")
+    eq(L.TooltipStatus(out), "offline", "an offline member reads offline")
 
     eq(L.LabelText("Mirelle", 58, "off"), nil, "a label off is no text")
     eq(L.LabelText("Mirelle", 58, "name"), "Mirelle", "a name label")
