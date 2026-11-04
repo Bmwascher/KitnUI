@@ -396,10 +396,16 @@ local function OnCardHide()
 end
 
 local function CloserFirst(a, b) return abs(a.gap) < abs(b.gap) end
-local function FurthestAheadFirst(a, b) return a.gap > b.gap end
 
--- Built on hover only: the closest characters, with the player's own place
--- among them.
+-- A gap is the player's lead, so the fastest character has the lowest. A tie
+-- reads ahead, so it sits above the player's own line.
+local function FastestFirst(a, b)
+    if a.gap ~= b.gap then return a.gap < b.gap end
+    return b.own == true and a.own ~= true
+end
+
+-- Built on hover only: the closest characters, fastest on top, with the player's
+-- own place among them.
 local function ShowPaceTip(self)
     ShowButtons()
     local r = liveRaw
@@ -414,7 +420,7 @@ local function ShowPaceTip(self)
     for i = #list, TIP_ROWS, -1 do list[i] = nil end
     local me = ns.GetCharKey and ns.GetCharKey()
     if me then list[#list + 1] = { key = me, gap = 0, own = true } end
-    table.sort(list, FurthestAheadFirst)
+    table.sort(list, FastestFirst)
     local chars = ns.db and ns.db.perChar
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     for i = 1, #list do
@@ -424,7 +430,8 @@ local function ShowPaceTip(self)
         local class = type(h) == "table" and h.class
         local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
         local name = tostring(entry.key):match("^[^-]+") or ""
-        GameTooltip:AddDoubleLine(name, entry.own and "you" or M.PaceText(entry.gap),
+        -- Each line reads from that character's view; the Pace row, the player's.
+        GameTooltip:AddDoubleLine(name, entry.own and "you" or M.PaceText(-entry.gap),
             c and c.r or 1, c and c.g or 1, c and c.b or 1, 1, 1, 1)
     end
     GameTooltip:Show()
@@ -507,7 +514,8 @@ function X.TickerVisibility()
 end
 
 -- Runs on every apply. A pause ends by itself when its Start button can no
--- longer exist; the XP bar going off keeps it, since the card returns with it.
+-- longer exist: here for the switch and Never, in the session for max level. The
+-- XP bar going off keeps it, since the card returns with it.
 function X.TickerApply()
     if live then live.dirty = true end
     if X.XPEnabled() and (Get("xpTickerEnabled") ~= true or Get("xpTickerVisibility") == "never") then

@@ -123,6 +123,19 @@ local function Counted(upTo)
     return true
 end
 
+-- The reading, or the level PLAYER_LEVEL_UP named while UnitLevel still reads
+-- the old one.
+local function AtMax(t)
+    return t.atMax or (t.cap and levelOf and levelOf >= t.cap)
+end
+
+-- Moves the session's start past the pause, so every reader of the elapsed time
+-- needs nothing more.
+local function Resume()
+    sessionStart = sessionStart + (GetTime() - pausedAt)
+    pausedAt = nil
+end
+
 -- Once per load, when the XP bar first runs. A fresh session counts from the
 -- load's start that Core captured, so it spans the real login even when the
 -- bar is turned on later, and its XP covers the same span. A /reload within
@@ -187,6 +200,7 @@ function X.SessionStart(kind)
             gained, sessionStart = 0, now
         end
     end
+    if pausedAt and AtMax(t) then Resume() end
 end
 
 -- Takes one reading first, so XP earned since the last event is in the save.
@@ -233,6 +247,8 @@ function X.OnXP()
     local t = X.ReadXP()
     local gain, upTo = M.Track(track, t.cur, t.max, t.level)
     if not pausedAt then gained = gained + gain end
+    -- The card that holds Start hides at max level, so a pause ends there.
+    if pausedAt and AtMax(t) then Resume() end
     if Counted(upTo) and listening and C_Timer and C_Timer.After then C_Timer.After(0, AskAgain) end
 end
 
@@ -258,17 +274,15 @@ end
 function X.SessionPaused() return pausedAt ~= nil end
 
 -- Takes one reading first, so XP earned up to the click counts in the running
--- session and XP earned during the pause does not. Start moves the session's
--- start past the pause, so every reader of the elapsed time needs nothing more.
+-- session and XP earned during the pause does not. That reading can itself end
+-- a pause at max level, and no pause begins there.
 function X.SessionPause(on)
     if not started or (on and true or false) == (pausedAt ~= nil) then return end
     X.OnXP()
-    local now = GetTime()
     if on then
-        pausedAt = now
-    else
-        sessionStart = sessionStart + (now - pausedAt)
-        pausedAt = nil
+        if not AtMax(X.ReadXP()) then pausedAt = GetTime() end
+    elseif pausedAt then
+        Resume()
     end
 end
 

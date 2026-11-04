@@ -37,7 +37,7 @@ end
 
 local xp = {}
 
--- One reused table: { level, cur, max, rested, resting, applies, atMax, xpOff }.
+-- One reused table: { level, cur, max, rested, resting, applies, atMax, xpOff, cap }.
 -- Blizzard's own rule decides max level and whether the bar applies; the
 -- level compare is the fallback.
 function X.ReadXP()
@@ -54,7 +54,7 @@ function X.ReadXP()
     if type(atMax) ~= "boolean" then atMax = level >= cap end
     local applies = rules and Plain(Call(rules.CanShowExperienceBar))
     if type(applies) ~= "boolean" then applies = level < cap and not xp.xpOff end
-    xp.atMax, xp.applies = atMax, applies
+    xp.atMax, xp.applies, xp.cap = atMax, applies, cap
     return xp
 end
 

@@ -85,7 +85,11 @@ _G.UIParent = Obj("Frame")
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 _G.hooksecurefunc = NOOP
 _G.GameTooltip = Obj("GameTooltip")
-_G.GameTooltip.AddDoubleLine = function() tipLines = tipLines + 1 end
+local tipLeft, tipRight = {}, {}
+_G.GameTooltip.AddDoubleLine = function(_, left, right)
+    tipLines = tipLines + 1
+    tipLeft[tipLines], tipRight[tipLines] = left, right
+end
 _G.GameTooltip.IsOwned = function() return true end
 _G.UnitClass = function() return "Hunter", "HUNTER" end
 
@@ -684,6 +688,30 @@ do
     tipLines = 0
     card.paceHover.scripts.OnEnter(card.paceHover)
     eq(tipLines, 1, "no key: the tooltip has no line without a name")
+    X.TickerStop()
+end
+
+---------------------------------------------------------------------------------
+-- The Pace tooltip's order and wording
+---------------------------------------------------------------------------------
+
+do
+    local perChar = {
+        ["Near-Realm"] = { xpHistory = { reached = { [59] = 1000, [60] = 2000 } } },
+        ["Far-Realm"] = { xpHistory = { reached = { [59] = 1000, [60] = 1300 } } },
+        ["Tied-Realm"] = { xpHistory = { reached = { [59] = 1400, [60] = 1400 } } },
+    }
+    local X = fresh({ db = { perChar = perChar }, settings = { xpTickerShowPace = true } })
+    X.SessionStart("login")
+    X.OnPlayed(1400)
+    local raw = rawRecord()
+    raw.cur = 104900
+    local card = showCard(X, raw)
+    tipLines = 0
+    card.paceHover.scripts.OnEnter(card.paceHover)
+    eq(table.concat(tipLeft, ",", 1, tipLines), "Far,Tied,Me,Near", "pace tooltip: fastest on top, a tie above you")
+    eq(table.concat(tipRight, "|", 1, tipLines), "4m ahead|< 1m ahead|you|1m behind",
+        "pace tooltip: each line from that character's view")
     X.TickerStop()
 end
 

@@ -521,6 +521,102 @@ X.OnXP()
 eq(X.SessionPaused(), true, "bar off and on while paused: stays paused")
 eq(X.SessionGained(), 0, "bar off and on while paused: adds nothing")
 
+-- Reaching max level ends a pause, whichever order the level-up and its reading
+-- come in, and a /reload there comes back running.
+do
+    local function reading(cur, level)
+        local t = XP(cur, 1000, level, level >= 90)
+        t.cap = 90
+        return t
+    end
+
+    clock, wall = 1000, 50000
+    X, setXP = load({ xp = reading(100, 89) })
+    X.SessionStart("login")
+    setXP(reading(200, 89))
+    clock = 1100
+    X.SessionPause(true)
+    clock = 1200
+    setXP(reading(0, 90))
+    X.OnXP()
+    eq(X.SessionPaused(), false, "max level: a reading of it ends a pause")
+    eq(X.SessionGained(), 100, "max level: XP during the pause stays out")
+    eq(X.SessionElapsed(), 100, "max level: the session resumes from the frozen time")
+    X.OnLevelUp(90)
+    eq(X.SessionPaused(), false, "max level: and its level-up after the reading changes nothing")
+    clock = 1250
+    eq(X.SessionElapsed(), 150, "max level: the session runs again")
+
+    clock = 1000
+    X, setXP = load({ xp = reading(100, 89) })
+    X.SessionStart("login")
+    X.SessionPause(true)
+    X.OnLevelUp(90)
+    eq(X.SessionPaused(), false, "max level: a level-up ends a pause while the level still reads old")
+    setXP(reading(0, 90))
+    X.OnXP()
+    eq(X.SessionPaused(), false, "max level: and the reading after it changes nothing")
+
+    clock = 1000
+    X, setXP = load({ xp = reading(100, 89) })
+    X.SessionStart("login")
+    X.SessionPause(true)
+    clock = 1100
+    setXP(reading(0, 90))
+    X.SessionPause(false)
+    eq(X.SessionPaused(), false, "max level: Start whose own reading ended the pause ends it once")
+    eq(X.SessionElapsed(), 0, "max level: with the frozen time")
+
+    clock = 1000
+    X, setXP = load({ xp = reading(100, 89) })
+    X.SessionStart("login")
+    X.SessionPause(true)
+    clock = 1100
+    setXP(reading(0, 90))
+    X.ResetSession()
+    eq(X.SessionPaused(), false, "max level: a reset there leaves it running")
+    eq(X.SessionElapsed(), 0, "max level: at zero time")
+
+    X = load({ xp = reading(0, 90) })
+    X.SessionStart("login")
+    X.SessionPause(true)
+    eq(X.SessionPaused(), false, "max level: Pause does nothing there")
+
+    local record = {}
+    clock, wall = 1000, 50000
+    X, setXP = load({ rec = record, xp = reading(100, 89) })
+    X.SessionStart("login")
+    setXP(reading(300, 89))
+    clock, wall = 1100, 50100
+    X.SessionPause(true)
+    X.SessionSave()
+    eq(record.paused, true, "max level: a pause below it is saved")
+
+    clock, wall = 2000, 50130
+    X = load({ rec = record, xp = reading(0, 90) })
+    X.SessionStart("reload")
+    eq(X.SessionPaused(), false, "max level: a /reload there comes back running")
+    eq(X.SessionGained(), 200, "max level: with the frozen XP")
+    eq(X.SessionElapsed(), 100, "max level: and the frozen time")
+    clock = 2050
+    eq(X.SessionElapsed(), 150, "max level: and it runs from there")
+
+    clock = 2000
+    X = load({ rec = record, settings = { xpResetOnReload = true }, xp = reading(0, 90) })
+    X.SessionStart("reload")
+    eq(X.SessionPaused(), false, "max level: with Reset Session on Reload on too")
+    eq(X.SessionGained(), 0, "max level: at zero XP")
+
+    local maxSave = {}
+    clock, wall = 1000, 50000
+    X, setXP = load({ rec = maxSave, xp = reading(100, 89) })
+    X.SessionStart("login")
+    X.SessionPause(true)
+    setXP(reading(0, 90))
+    X.SessionSave()
+    eq(maxSave.paused, nil, "max level: a save there records no pause")
+end
+
 -- The level history
 _G.UnitClass = function() return "Hunter", "HUNTER" end
 clock = 1000

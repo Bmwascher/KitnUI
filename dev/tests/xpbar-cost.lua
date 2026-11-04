@@ -1338,6 +1338,33 @@ do
     X.XPView({ level = 10, cur = 1, max = 10, elapsed = 120, gained = 1, paused = true }, withTime, paused)
     check(running.sessionTime ~= nil and running.sessionTime ~= paused.sessionTime,
         "paused: the session time carries a mark")
+
+    -- Reaching max level, with the real reader and the real event path.
+    local shownTime
+    local drawForTime = X.Draw
+    X.Draw = function(w, view, data)
+        shownTime = data.sessionTime
+        return drawForTime(w, view, data)
+    end
+    settings.xpEnabled, settings.xpShowSessionTime = true, true
+    X.Apply()
+    local onEvent = evFrame.scripts.OnEvent
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 12)
+    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "reaching max level: paused on the way")
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 90)
+    eq(X.SessionPaused(), false, "reaching max level: the level-up ends it while the level still reads old")
+    check(shownTime ~= nil and not shownTime:find("paused", 1, true),
+        "reaching max level: and the bar stops saying paused")
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 12)
+    X.SessionPause(true)
+    _G.UnitLevel = function() return 90 end
+    onEvent(evFrame, "PLAYER_XP_UPDATE")
+    eq(X.SessionPaused(), false, "reaching max level: so does a reading of it")
+    _G.UnitLevel = function() return 11 end
+    X.Draw = drawForTime
+    settings.xpEnabled, settings.xpShowSessionTime = false, nil
+    X.Apply()
 end
 
 ---------------------------------------------------------------------------------
