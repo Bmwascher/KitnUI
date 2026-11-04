@@ -7,6 +7,7 @@
     <Script file="Session.lua" />
     <Script file="Existing.lua" />
     <Script file="Render.lua" />
+    <Script file="Effects.lua" />
     <Script file="Bar.lua" />
     <Script file="Options.lua" />
     <Script file="Preview.lua" />
