@@ -24,7 +24,7 @@ local function eq(actual, expected, label)
 end
 
 -- The drawn files: uncompressed true color, 32 by 32, with alpha.
-for _, name in ipairs({ "stripes", "star", "arrow" }) do
+for _, name in ipairs({ "stripes", "arrow" }) do
     local f = io.open("KitnUI_EUI/Media/XPBar/" .. name .. ".tga", "rb")
     check(f ~= nil, name .. ".tga exists")
     if f then
@@ -37,6 +37,10 @@ for _, name in ipairs({ "stripes", "star", "arrow" }) do
         eq(bytes:byte(17), 32, name .. ".tga: 32 bits per pixel")
     end
 end
+
+local starFile = io.open("KitnUI_EUI/Media/XPBar/star.tga", "rb")
+eq(starFile, nil, "star.tga does not ship")
+if starFile then starFile:close() end
 
 ---------------------------------------------------------------------------------
 -- Recording stubs
