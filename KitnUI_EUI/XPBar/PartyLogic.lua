@@ -79,17 +79,25 @@ function L.Channel(inInstanceGroup, inHomeGroup)
     return nil
 end
 
--- One "Name-Realm" for one player, whichever way the game spelled it.
-function L.MemberKey(name, realm, myRealm)
+-- One key for one player, whichever way the game spelled it. sep is set where
+-- names are regional: the unit API's second return is a surname, and a sender
+-- is the joined name with no realm.
+function L.MemberKey(name, realm, myRealm, sep)
     if type(name) ~= "string" or name == "" then return nil end
+    if sep then
+        if type(realm) ~= "string" or realm == "" then return name end
+        local tail = sep .. realm
+        if name:sub(-#tail) == tail then return name end
+        return name .. tail
+    end
     if type(realm) == "string" and realm ~= "" then return name .. "-" .. realm end
     if type(myRealm) == "string" and myRealm ~= "" then return name .. "-" .. myRealm end
     return nil
 end
 
-function L.SenderKey(sender, myRealm)
+function L.SenderKey(sender, myRealm, sep)
     if type(sender) ~= "string" or sender == "" then return nil end
-    if sender:find("-", 1, true) then return sender end
+    if sep or sender:find("-", 1, true) then return sender end
     return L.MemberKey(sender, nil, myRealm)
 end
 

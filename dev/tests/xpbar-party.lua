@@ -1572,6 +1572,18 @@ do
     join(member("Mirelle", "MAGE", 60))
     eq(rowOf("Mirelle").view.kind, "nodata", "heard values do not outlast a stop")
     reset()
+
+    -- Regional names: the unit's second return is a surname, and a sender is the
+    -- joined name with no realm.
+    _G.RegionalUniqueNamesEnabled = function() return true end
+    X.PartyApply()
+    local dunni = member("Dunni", "MAGE", 58)
+    dunni.realm = "Rat"
+    join(dunni)
+    say("1 58 912 1000", "Dunni Rat")
+    eq(rowOf("Dunni").view.kind, "data", "a regional sender fills its member's row")
+    _G.RegionalUniqueNamesEnabled = nil
+    reset()
 end
 
 ---------------------------------------------------------------------------------

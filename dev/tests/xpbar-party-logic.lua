@@ -107,6 +107,11 @@ do
     eq(L.SenderKey(nil, "Area52"), nil, "no sender")
     eq(L.SenderKey("", "Area52"), nil, "an empty sender")
     eq(L.SenderKey("Mirelle-Area52", "X"), L.MemberKey("Mirelle", nil, "Area52"), "one player keys one way")
+
+    eq(L.MemberKey("Dunni", "Rat", "Area52", " "), "Dunni Rat", "a regional member joins the surname")
+    eq(L.MemberKey("Dunni Rat", "Rat", "Area52", " "), "Dunni Rat", "a joined name is kept")
+    eq(L.MemberKey("Dunni", nil, "Area52", " "), "Dunni", "no surname read takes no realm")
+    eq(L.SenderKey("Dunni Rat", "Area52", " "), L.MemberKey("Dunni", "Rat", "Area52", " "), "a regional sender matches its member")
 end
 
 ---------------------------------------------------------------------------------

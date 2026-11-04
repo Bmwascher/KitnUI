@@ -64,6 +64,14 @@ local function Hearing()
     return mode == "listen" or mode == "share"
 end
 
+-- What joins a first name to a surname, or nil where realms identify players.
+local function SurnameSeparator()
+    if not Read(_G.RegionalUniqueNamesEnabled) then return nil end
+    local consts = _G.Constants and _G.Constants.CharacterNameSeparatorConsts
+    local sep = consts and Plain(consts.CHARACTERNAME_SURNAME_SEPARATOR)
+    return type(sep) == "string" and sep ~= "" and sep or " "
+end
+
 ---------------------------------------------------------------------------------
 -- The roster
 ---------------------------------------------------------------------------------
@@ -82,7 +90,7 @@ local function ClearRoster()
     memberCount = 0
 end
 
-local function ApplyVerdict(m, verdict, name, realm, class, level, online, myRealm)
+local function ApplyVerdict(m, verdict, name, realm, class, level, online, myRealm, sep)
     if verdict == "drop" or verdict == "none" then
         m.present, m.key = false, nil
     elseif verdict == "keep" then
@@ -90,13 +98,13 @@ local function ApplyVerdict(m, verdict, name, realm, class, level, online, myRea
         m.online = online
     else
         m.present, m.name, m.class, m.level, m.online = true, name, class, level, online
-        m.key = L.MemberKey(name, realm, myRealm)
+        m.key = L.MemberKey(name, realm, myRealm, sep)
     end
 end
 
 local function RosterPass()
     local cap = X.LevelCap()
-    local myRealm = Read(GetNormalizedRealmName)
+    local myRealm, sep = Read(GetNormalizedRealmName), SurnameSeparator()
     local humans, below, unreadable = 0, false, false
     Clear(byKey)
     for i = 1, #UNITS do
@@ -115,7 +123,7 @@ local function RosterPass()
         end
         local verdict = L.MergeMember(m.present and m or nil, exists, follower, name, class, level)
         if verdict == "keep" or verdict == "none" then unreadable = true end
-        ApplyVerdict(m, verdict, name, realm, class, level, online, myRealm)
+        ApplyVerdict(m, verdict, name, realm, class, level, online, myRealm, sep)
         if m.present and m.key then byKey[m.key] = m end
     end
     -- With a member unreadable the roster cannot be known, so nothing is pruned.
@@ -327,7 +335,7 @@ local function OnMessage(prefix, text, channel, sender)
     if Plain(prefix) ~= L.PREFIX then return end
     channel, sender = Plain(channel), Plain(sender)
     if not L.AcceptChannel(channel) then return end
-    local key = L.SenderKey(sender, (Read(GetNormalizedRealmName)))
+    local key = L.SenderKey(sender, (Read(GetNormalizedRealmName)), SurnameSeparator())
     local m = key and byKey[key]
     if not m then return end
     local kind, level, cur, total = L.ParseMessage(Plain(text))
