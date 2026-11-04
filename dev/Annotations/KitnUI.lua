@@ -122,7 +122,7 @@ local KitnUINS
 ---@field extras table<string, boolean>          # [extraKey] = true once opted in; account-wide, replayed by /kitn load
 ---@field skipped table<string, string>?         # [addonKey] = shipped X-header version at the moment of the skip; absent on a DB from before the feature
 ---@field installedVersion string?
----@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, editModeApplied = boolean, layoutWatchOff = { [specIndex] = true }, xp = { gained, lastXP, lastMax, lastLevel, lastWait, elapsed, savedAt, levelTime, levelOf, kills } }
+---@field perChar table<string, table>  # [charName-realm] = { loaded = boolean, editModeApplied = boolean, layoutWatchOff = { [specIndex] = true }, xp = { gained, lastXP, lastMax, lastLevel, lastWait, elapsed, savedAt, levelTime, levelOf, kills, paused, played }, xpHistory = { class, splits = { [level] = seconds }, reached = { [level] = total played seconds on reaching it } } }
 ---@field cdmLimitPending table<string, string[]>  # [charName-realm] = spec names the CDM layout cap blocked, raised as a popup at that character's next login
 ---@field devMode boolean
 ---@field dismissedVersion string?
@@ -237,6 +237,11 @@ local KitnUITopBar
 ---@field OnKill fun(xp: number)
 ---@field OnPlayed fun(total: number?, thisLevel: number?)
 ---@field ResetSession fun()
+---@field SessionPaused fun(): boolean
+---@field SessionPause fun(on: boolean)   # one reading first; nothing before the session starts
+---@field PlayedTotal fun(): number?
+---@field History fun(create: boolean?): table?   # this character's xpHistory record
+---@field HistoryGen fun(): number   # moves on each history write
 ---@field RequestPlayed fun()
 ---@field SyncExisting fun(claim: "xp"|"rep"|nil, release: boolean?)
 ---@field HoldsExisting fun(kind: "xp"|"rep"): boolean
@@ -250,6 +255,32 @@ local KitnUITopBar
 ---@field NewWidget fun(parent: table?, kind: "xp"|"fb"): table
 ---@field Draw fun(w: table, view: fun(key: string): any, data: table)
 ---@field PlayGain fun(w: table)
+---@field WHITE string
+---@field Atlas fun(name: string): table?
+---@field FontPath fun(name: string?): string
+---@field OutlineFlag fun(flag: string?): string
+---@field AccentColor fun(): number?, number?, number?
+---@field FillEndColor fun(view: fun(key: string): any, p: "xp"|"fb", data: table): number, number, number
+---@field MaskEffect fun(w: table, region: table)
+---@field FX_MASKED_MOTION boolean   # false makes the Blizzard frame style's moving effects alpha-only
+---@field UnlockActive boolean?   # Unlock Mode is open; no effect plays
+---@field EffectAvailable fun(name: string): boolean
+---@field ResolveGainEffect fun(stored: string?): string
+---@field PlayGainEffect fun(w: table, view: fun(key: string): any, data: table, fromPct: number, toPct: number, amount: number?, quest: boolean?)
+---@field PlayLevelEffect fun(w: table, view: fun(key: string): any)
+---@field SyncReady fun(w: table, view: fun(key: string): any, data: table, bw: number, bh: number)
+---@field StopEffects fun(w: table?)
+---@field EvalVisibility fun(mode: string): boolean|string
+---@field PlaceFrame fun(frame: table, unlockKey: string, pos: table?, defaultPoint: string, x: number, y: number)
+---@field NewCard fun(parent: table?): table
+---@field DrawCard fun(card: table, view: fun(key: string): any, data: table)
+---@field TickerView fun(raw: table, view: fun(key: string): any, out: table): table
+---@field TickerApply fun()
+---@field TickerRefresh fun(raw: table)
+---@field TickerVisibility fun()
+---@field TickerStop fun()
+---@field TickerElement fun(EUI: table): table
+---@field PreviewPlay fun(moment: "gain"|"level")
 ---@field BuildPreviewHeader fun(parent: table, width: number): number
 ---@field PreviewRefresh fun()
 ---@field PreviewRestore fun()
