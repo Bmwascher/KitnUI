@@ -379,6 +379,16 @@ function M.TickerWidth(fontSize)
     return floor((tonumber(fontSize) or 12) * 22 + 0.5)
 end
 
+-- The narrowest Party Card that leaves its name and bar readable.
+M.PARTY_MIN_WIDTH = 160
+
+-- A Width of 0 follows the ticker's font size, whether or not the ticker is on.
+function M.PartyWidth(width, tickerFontSize)
+    width = tonumber(width) or 0
+    if width <= 0 then return M.TickerWidth(tickerFontSize) end
+    return max(M.PARTY_MIN_WIDTH, width)
+end
+
 function M.RowHeight(fontSize)
     return ceil((tonumber(fontSize) or 12) * 1.4)
 end

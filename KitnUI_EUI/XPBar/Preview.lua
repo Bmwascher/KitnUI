@@ -49,7 +49,7 @@ local sampleFaction = {
 local xpOut, fbOut, cardOut = {}, {}, {}
 -- What Play Gain draws on the sample: a span in percent, and the amounts.
 local SAMPLE_SPAN, SAMPLE_XP, SAMPLE_REP = 10, 20980, 2100
--- The party card's most rows, and the gap above the sample bar under the cards.
+-- The party card's most rows, and the gap beside the cards and above the sample bar.
 local PARTY_ROWS, PARTY_GAP = 4, 12
 local partyShown = 0
 
@@ -246,9 +246,10 @@ local function SyncHits(kind)
     end
 end
 
--- Under the ticker's sample, as on screen: the party card, then a sample XP bar
--- while Party Markers is on. Returns the width and height of the whole. w is the
--- ticker's sample, bw its width and h its height.
+-- With Party Markers on, the party card sits beside the ticker's sample, tops
+-- aligned, with a sample XP bar below both. With it off, the card sits under the
+-- ticker's sample, as on screen. Returns the width and height of the whole. w is
+-- the ticker's sample, bw its width and h its height.
 local function LayoutStack(w, bw, h)
     local party = widgets.px
     if not party then
@@ -263,11 +264,18 @@ local function LayoutStack(w, bw, h)
     X.DrawPartyCard(party.frame, X.Get, rows, n)
     party.frame:Show()
     SyncHits("px")
-    local pairW = math.max(bw, party.frame.kuiW)
-    local totalW = pairW
-    h = h + X.PARTY_STACK_GAP + party.frame.kuiH
     local bar = widgets.xp
-    if bar and X.Get("xpPartyMarkers") == true then
+    local withBar = bar and X.Get("xpPartyMarkers") == true
+    local pairW
+    if withBar then
+        pairW = bw + PARTY_GAP + party.frame.kuiW
+        h = math.max(h, party.frame.kuiH)
+    else
+        pairW = math.max(bw, party.frame.kuiW)
+        h = h + X.PARTY_STACK_GAP + party.frame.kuiH
+    end
+    local totalW = pairW
+    if withBar then
         X.XPView(sampleXP, X.Get, xpOut)
         xpOut.readyEnd = nil
         xpOut.markers = X.PartySampleMarks()
@@ -286,7 +294,11 @@ local function LayoutStack(w, bw, h)
     w.frame:ClearAllPoints()
     w.frame:SetPoint("TOPLEFT", content, "TOPLEFT", (totalW - pairW) / 2, 0)
     party.frame:ClearAllPoints()
-    party.frame:SetPoint("TOPLEFT", w.frame, "BOTTOMLEFT", 0, -X.PARTY_STACK_GAP)
+    if withBar then
+        party.frame:SetPoint("TOPLEFT", w.frame, "TOPRIGHT", PARTY_GAP, 0)
+    else
+        party.frame:SetPoint("TOPLEFT", w.frame, "BOTTOMLEFT", 0, -X.PARTY_STACK_GAP)
+    end
     return totalW, h
 end
 

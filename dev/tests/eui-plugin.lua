@@ -226,7 +226,7 @@ eq(xpDefaults.fbFillMode, "standing", "the reputation bar defaults to Standing C
 eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
 eq(xpDefaults.xpPartyVisibility, "always", "the Party Card's Visibility defaults to Always")
 eq(xpDefaults.xpPartyShowSelf, true, "the Party Card shows the player by default")
-eq(xpDefaults.xpPartyWidth, 264, "the Party Card defaults to 264 wide")
+eq(xpDefaults.xpPartyWidth, 0, "the Party Card's width defaults to 0, the ticker's")
 eq(xpDefaults.xpPartyFill, "accent", "the Party Card's fill defaults to the accent")
 eq(xpDefaults.xpPartyBackground, "card", "the Party Card's background defaults to Card")
 eq(xpDefaults.xpPartyMarkerWidth, 2, "a marker defaults to 2 wide")

@@ -96,7 +96,7 @@ local function StyleCard(card, view)
     card.gen = card.gen + 1
     local look = card.look
     look.size = tonumber(view("xpPartyFontSize")) or 12
-    look.width = tonumber(view("xpPartyWidth")) or 264
+    look.width = X.Math.PartyWidth(view("xpPartyWidth"), view("xpTickerFontSize"))
     look.rowH = ceil(look.size * ROW_SCALE)
     look.pad = ceil(look.size * PAD_SCALE)
     local inner = max(1, look.width - 2 * look.pad)
@@ -428,7 +428,7 @@ function X.PartyElement(EUI)
         -- Never creates: Unlock Mode asks whether or not the card is on.
         getFrame = function() return live end,
         getSize = function()
-            return live and live.kuiW or Get("xpPartyWidth"), live and live.kuiH or Get("xpPartyFontSize")
+            return X.Math.PartyWidth(Get("xpPartyWidth"), Get("xpTickerFontSize")), live and live.kuiH or Get("xpPartyFontSize")
         end,
         savePos = function(_, point, relPoint, x, y)
             X.Set("xpPartyPos", { point = point, relPoint = relPoint, x = x, y = y })

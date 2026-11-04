@@ -1547,7 +1547,8 @@ do
     eq(#frames, cardCount, "sample card: a redraw makes no frame")
     eq(X.PreviewPlay("gain"), nil, "sample card: a play with the card selected does nothing")
 
-    -- The party card under the ticker's sample, and the sample XP bar under both.
+    -- With Party Markers on, the party card beside the ticker's sample and the sample
+    -- XP bar under both. With it off, the party card under the ticker's sample.
     local drawnN, partyCard, barData, barWidget
     local drawParty, drawSample = X.DrawPartyCard, X.Draw
     X.DrawPartyCard = function(card, view, rows, n)
@@ -1565,18 +1566,47 @@ do
     eq(drawnN, 4, "party preview: four sample rows")
     eq(partyCard and partyCard.shown, true, "party preview: the card shows")
     eq(cardShown and cardShown.shown, true, "party preview: with the ticker's sample")
-    eq(partyCard and partyCard.pt[2], cardShown, "party preview: stacked on it")
-    eq(partyCard and partyCard.pt[3], "BOTTOMLEFT", "party preview: at its bottom left")
-    eq(partyCard and partyCard.pt[5], 0, "party preview: with no gap")
+    eq(partyCard and partyCard.pt[2], cardShown, "party preview: beside it")
+    eq(partyCard and partyCard.pt[3], "TOPRIGHT", "party preview: at its top right")
+    eq(partyCard and partyCard.pt[5], 0, "party preview: with their tops aligned")
+    local sideGap = partyCard and partyCard.pt[4] or 0
+    check(sideGap > 0, "party preview: and a gap between them")
     eq(barWidget and barWidget.frame.shown, true, "party preview: the sample bar shows with Party Markers on")
     eq(barWidget and barWidget.ptMarks and barWidget.ptMarks[1].on, true, "party preview: with its tick")
-    local pairWidth = math.max(cardShown.kuiW, partyCard and partyCard.kuiW or 0)
+    local pairWidth = cardShown.kuiW + sideGap + partyCard.kuiW
     eq(cardShown.pt[4], (X.Get("xpWidth") - pairWidth) / 2, "party preview: the two cards center as a pair over the bar")
+    -- The bar clears the taller card, whichever that is.
+    local function barBelowBoth(label)
+        local top = math.max(cardShown.kuiH, partyCard.kuiH) + sideGap + (barWidget.above or 0)
+        eq(barWidget.frame.pt[5], -top, "party preview: the bar below both, " .. label)
+    end
+    barBelowBoth("at the defaults")
+    settings.xpPartyFontSize = 32
+    X.PreviewRefresh()
+    check(partyCard.kuiH > cardShown.kuiH, "party preview: a large party font makes the party card the taller")
+    barBelowBoth("the party card taller")
+    settings.xpPartyFontSize = nil
+    settings.xpTickerFontSize = 32
+    X.PreviewRefresh()
+    check(cardShown.kuiH > partyCard.kuiH, "party preview: a large ticker font makes the ticker the taller")
+    barBelowBoth("the ticker taller")
+    eq(cardShown.pt[4], 0, "party preview: a pair wider than the bar starts at the left")
+    settings.xpTickerFontSize = nil
 
     settings.xpPartyMarkers = false
     X.PreviewRefresh()
     eq(barWidget and barWidget.frame.shown, false, "party preview: the sample bar hides with Party Markers off")
     eq(cardShown.pt[4], 0, "party preview: and the cards fill the width")
+    eq(partyCard and partyCard.pt[2], cardShown, "party preview: Party Markers off stacks the card on the ticker's sample")
+    eq(partyCard and partyCard.pt[3], "BOTTOMLEFT", "party preview: at its bottom left")
+    eq(partyCard and partyCard.pt[5], 0, "party preview: with no gap")
+    settings.xpTickerFontSize = 20
+    X.PreviewRefresh()
+    eq(partyCard and partyCard.kuiW, X.Math.TickerWidth(20), "party preview: at Width 0 the card's sample follows the ticker's font size")
+    settings.xpPartyWidth = 400
+    X.PreviewRefresh()
+    eq(partyCard and partyCard.kuiW, 400, "party preview: a set Width does not")
+    settings.xpTickerFontSize, settings.xpPartyWidth = nil, nil
     settings.xpPartyMarkers = true
     X.PreviewRefresh()
     eq(barWidget and barWidget.frame.shown, true, "party preview: and returns")
@@ -1795,7 +1825,7 @@ do
     settings.xpEnabled = false
     buildPage("page, card view")
     EUI.Widgets.DualRow = dualRow
-    local sections = { "TICKER AND PARTY", "TICKER VISIBILITY", "TICKER ROWS", "TICKER TEXT", "TICKER BACKGROUND",
+    local sections = { "TICKER AND PARTY", "TICKER VISIBILITY", "TICKER ROWS", "TICKER STYLE",
         "PARTY CARD", "PARTY CARD STYLE", "POSITION" }
     for i, text in ipairs(sections) do
         check(has(text), "card view: its " .. text .. " section")
@@ -1803,6 +1833,7 @@ do
     end
     check(not has("XP BAR") and not has("REPUTATION BAR") and not has("EFFECTS") and not has("FRAME"),
         "card view: no bar's sections")
+    check(not has("TICKER TEXT") and not has("TICKER BACKGROUND"), "card view: TICKER STYLE replaces the two sections")
     check(enable ~= nil, "card view: Enable XP Ticker is built")
     eq(enable and enable.disabled(), true, "card view: grayed with the XP bar off")
     check(enable and type(enable.disabledTooltip) == "string", "card view: with a reason")
@@ -1832,12 +1863,18 @@ do
         check(glowed ~= nil and (glowed == page.rows[row] or glowed == page.rows[row]._leftRegion
             or glowed == page.rows[row]._rightRegion), "card view: " .. key .. " glows its row")
     end
+    glowed = nil
+    X.NavigateToSetting("tkTop")
+    eq(glowed, page.rows.Font._leftRegion, "card view: the top line glows Font, on the left")
+    glowed = nil
+    X.NavigateToSetting("tkBack")
+    eq(glowed, page.rows.Background._rightRegion, "card view: the background glows Background, on the right")
     _G.C_Timer.After = realAfter
     EUI.SmoothScrollTo, EUI.ELLESMERE_GREEN, EUI.MakeSettingGlow = nil, nil, nil
 
     EUI.IsSearchPrebuild = function() return true end
     buildPage("page, search prebuild with the card")
-    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("TICKER AND PARTY") and has("TICKER ROWS") and has("PARTY CARD"),
+    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("TICKER AND PARTY") and has("TICKER STYLE") and has("PARTY CARD"),
         "search prebuild: all three views, so search finds every row")
     check(lastIndexOf("EFFECTS") ~= indexOf("EFFECTS"), "search prebuild: both bars' EFFECTS")
     EUI.IsSearchPrebuild = nil
@@ -1913,6 +1950,12 @@ do
     sameRow("Party Background", "Party Width")
     sameRow("Party Font", "Party Outline")
     sameRow("Party Font Size", "Party Texture")
+    sameRow("Font", "Outline")
+    sameRow("Font Size", "Background")
+    eq(cfgs["Party Width"].min, 0, "party rows: Party Width starts at 0")
+    eq(cfgs["Party Width"].max, 600, "party rows: and keeps its maximum")
+    eq(cfgs["Party Width"].getValue(), 0, "party rows: and sits at 0 by default")
+    check(cfgs["Party Width"].tooltip:find("ticker", 1, true) ~= nil, "party rows: its tooltip says what 0 follows")
     check(page.rows["Party Fill"] ~= nil, "party rows: Party Fill has its row")
     for _, wheelOnly in ipairs({ "Marker Width", "Label Size", "Fill Color" }) do
         eq(page.rows[wheelOnly], nil, "party rows: " .. wheelOnly .. " sits in a cogwheel")

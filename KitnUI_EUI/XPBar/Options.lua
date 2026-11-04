@@ -661,19 +661,18 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         Nav("tkPlayed", rowsHdr, totalRow, "left")
         Nav("tkPace", rowsHdr, totalRow, "right")
 
-        local cardTextHdr = Header("TICKER TEXT")
+        local tickerStyleHdr = Header("TICKER STYLE")
         local cardFontRow = Row(Drop("Font", "xpTickerFont", fontV, fontO), Drop("Outline", "xpTickerOutline", OUTLINE_V, OUTLINE_O))
-        Row(Slider("Font Size", "xpTickerFontSize", 8, 32, "The card's width follows it."), Spacer())
-        Nav("tkTop", cardTextHdr, cardFontRow, "left")
-
-        local backHdr = Header("TICKER BACKGROUND")
-        Nav("tkBack", backHdr, Row(Drop("Background", "xpTickerBackground", CARDBG_V, CARDBG_O), Spacer()), "left")
+        local cardSizeRow = Row(Slider("Font Size", "xpTickerFontSize", 8, 32, "The card's width follows it."),
+            Drop("Background", "xpTickerBackground", CARDBG_V, CARDBG_O))
+        Nav("tkTop", tickerStyleHdr, cardFontRow, "left")
+        Nav("tkBack", tickerStyleHdr, cardSizeRow, "right")
 
         local partyHdr = Header("PARTY CARD")
         Row(Drop("Party Visibility", "xpPartyVisibility", VIS_V, VIS_O, "When the card shows in a party, with the same choices as EllesmereUI's own frames.", NoCard),
             Toggle("Show Self", "xpPartyShowSelf", "Gives you a row on the card too.", NoCard))
         Nav("pxBack", partyHdr, Row(Drop("Party Background", "xpPartyBackground", CARDBG_V, CARDBG_O, nil, NoCard),
-            Slider("Party Width", "xpPartyWidth", 160, 600, "Starts at the XP ticker's width at its default font size. The ticker's width follows its own font size.", NoCard)), "left")
+            Slider("Party Width", "xpPartyWidth", 0, 600, "0 matches the XP ticker's width, which follows its Font Size, even with the ticker off. Any other value sets the width, from 160 up.", NoCard)), "left")
 
         -- Rarely touched once set, so collapsed behind the host's expander; a
         -- host without one shows the rows.

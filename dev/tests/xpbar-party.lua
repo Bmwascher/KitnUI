@@ -446,8 +446,8 @@ do
     eq(r2.bar.value, 100, "a max row is full")
     eq(r2.bar.colorR, r2.bar.colorG, "and gray")
     eq(r2.bar.colorG, r2.bar.colorB, "all through")
-    eq(card.kuiW, 264, "the card is its Width")
-    eq(card.kuiW, X.Math.TickerWidth(X.Get("xpTickerFontSize")), "which starts as the ticker's width")
+    eq(card.kuiW, 264, "the default Width draws 264 at the ticker's default font size")
+    eq(card.kuiW, X.Math.TickerWidth(X.Get("xpTickerFontSize")), "which is the ticker's width")
     eq(X.Get("xpPartyBackground"), X.Get("xpTickerBackground"), "and with the ticker's background")
     local height = card.kuiH
     check(height > 0, "and as tall as its rows")
@@ -495,6 +495,22 @@ do
     settings.xpPartyWidth = 400
     X.PartyCardApply()
     eq(card.kuiW, 400, "Width is the setting")
+    eq((element.getSize()), 400, "and Unlock Mode reads it")
+    settings.xpTickerFontSize = 20
+    X.PartyCardApply()
+    eq(card.kuiW, 400, "a set Width leaves the ticker's font size alone")
+    for _, low in ipairs({ 1, 159 }) do
+        settings.xpPartyWidth = low
+        X.PartyCardApply()
+        eq(card.kuiW, 160, "a Width of " .. low .. " draws as 160")
+        eq((element.getSize()), 160, "and Unlock Mode reads 160 at " .. low)
+    end
+    settings.xpPartyWidth = 0
+    X.PartyCardApply()
+    eq(card.kuiW, X.Math.TickerWidth(20), "a Width of 0 is the ticker's width")
+    settings.xpTickerFontSize = 24
+    eq((element.getSize()), X.Math.TickerWidth(24), "Unlock Mode reads the ticker's width, not the 0, before any redraw")
+    settings.xpTickerFontSize = nil
     settings.xpPartyWidth = nil
     settings.xpPartyBackground = "none"
     X.PartyCardApply()
@@ -516,6 +532,19 @@ do
             eq(r1.name.width, look.nameW - look.pad, "and its name to its column, " .. label)
         end
     end
+    -- At 0, each of the ticker's font sizes with each of the card's own.
+    for _, tickerSize in ipairs({ 8, 12, 32 }) do
+        for _, size in ipairs({ 8, 12, 32 }) do
+            settings.xpPartyWidth, settings.xpTickerFontSize, settings.xpPartyFontSize = 0, tickerSize, size
+            X.PartyCardApply()
+            local look, label = card.look, "at 0, the ticker at " .. tickerSize .. " and the card at " .. size
+            eq(look.width, X.Math.TickerWidth(tickerSize), "the ticker's width, " .. label)
+            check(look.barW > 0, "the bar has room, " .. label, look.barW)
+            check(look.nameW > look.pad, "and the name, " .. label, look.nameW)
+            eq(look.nameW + look.barW, look.width - 2 * look.pad, "and the two fill the row, " .. label)
+        end
+    end
+    settings.xpTickerFontSize = nil
     settings.xpPartyWidth, settings.xpPartyFontSize = nil, nil
     X.PartyCardApply()
     eq(card.look.nameW, 90, "at the defaults the name column is its multiple of the font size")
@@ -1791,6 +1820,28 @@ do
     settings.xpPartyPos = nil
     X.Apply()
     eq(card.point[2], ticker, "after a reset: back under the ticker")
+
+    -- Party Markers moves only the preview's samples.
+    settings.xpPartyMarkers = true
+    X.Apply()
+    eq(card.point[2], ticker, "Party Markers on: the live card still stacks")
+    settings.xpPartyMarkers = nil
+    X.Apply()
+
+    -- A changed ticker font size reaches the card through the apply every setter
+    -- runs, whichever comes first, the change or the rows, and with the ticker off.
+    settings.xpTickerFontSize = 16
+    X.Apply()
+    join(member("Mirelle", "MAGE", 58))
+    eq(card.kuiW, X.Math.TickerWidth(16), "the funnel: a font size changed before the rows reaches the card")
+    settings.xpTickerFontSize = 20
+    X.Apply()
+    eq(card.kuiW, X.Math.TickerWidth(20), "the funnel: one changed on a drawn card reaches it at once")
+    settings.xpTickerEnabled = false
+    settings.xpTickerFontSize = 24
+    X.Apply()
+    eq(card.kuiW, X.Math.TickerWidth(24), "the funnel: and with the ticker off")
+    settings.xpTickerFontSize = nil
     settings.xpEnabled, settings.xpTickerEnabled, settings.xpPartyCard = nil, nil, nil
     X.Apply()
     reset()
