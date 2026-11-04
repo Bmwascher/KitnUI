@@ -43,13 +43,19 @@ local OUTLINE_V, OUTLINE_O = Choices("", "EllesmereUI Outline", "NONE", "None", 
 local SOURCE_V, SOURCE_O = Choices("watched", "Watched Reputation", "companion", "Current Delve Companion",
     "pinned", "Pinned Reputation")
 local FBFILL_V, FBFILL_O = Choices("custom", "Custom Color", "standing", "Standing Color")
-X.BAR_V, X.BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar", "tk", "XP Ticker")
+-- The third choice's view holds the ticker and the party card.
+local TICKER_PARTY_LABEL = "Ticker and Party"
+X.BAR_V, X.BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar", "tk", TICKER_PARTY_LABEL)
 local STYLE_NAMES = { eui = "EUI Border", prof = "Profession Frame", classic = "Classic", forever = "Forever", blizzard = "Blizzard" }
 local STYLE_ORDER = { "eui", "prof", "classic", "forever", "blizzard" }
 local GAIN_NAMES = { pulse = "Pulse", wave = "Energy Wave", surge = "Spell Surge" }
 local GAIN_ORDER = { "pulse", "wave", "surge" }
 local LEVEL_V, LEVEL_O = Choices("off", "Off", "flash", "Flash", "sweep", "Sweep")
 local CARDBG_V, CARDBG_O = Choices("card", "Card", "soft", "Soft", "none", "None")
+local PARTYFILL_V, PARTYFILL_O = Choices("accent", "KitnUI Accent", "class", "Class Color", "custom", "Custom Color")
+local PARTYLABEL_V, PARTYLABEL_O = Choices("off", "Off", "name", "Name", "namelevel", "Name and Level")
+-- The party card's less common rows sit behind the host's expander.
+local PARTY_STYLE_KEY, PARTY_STYLE_LABEL = "kitnuiPartyCardStyle", "Show Party Card Style Options"
 
 local HIDE_TIPS = {
     xp = "Hides the XP bar you already had while this one is on: Blizzard's for the session, or EllesmereUI's by setting its Visibility to Never until this goes off.",
@@ -266,7 +272,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         texO[#texO + 1] = name
     end
     -- A saved texture LibSharedMedia lacks draws flat but keeps its name here.
-    for _, prefix in ipairs({ "xp", "fb" }) do
+    for _, prefix in ipairs({ "xp", "fb", "xpParty" }) do
         local stored = X.Get(prefix .. "Texture")
         if type(stored) == "string" and not texV[stored] then
             texV[stored] = stored
@@ -605,18 +611,45 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
     end
 
     if showTK then
-        Header("XP TICKER")
+        local NoCard = Off("xpPartyCard")
+        local function NoMarkers() return X.Get("xpPartyMarkers") ~= true or not X.XPEnabled() end
+        local function NoLabel() return NoMarkers() or X.Get("xpPartyLabel") == "off" end
+        local topHdr = Header("TICKER AND PARTY")
         local enable = Toggle("Enable XP Ticker", "xpTickerEnabled", "Shows a small card with your XP per hour, time to level and completed levels.",
             function() return not X.XPEnabled() end)
         enable.disabledTooltip = "Turn on the XP bar first. To see only the card, set the XP bar's Visibility to Never."
         enable.rawTooltip = true
-        Row(enable, Spacer())
+        Row(enable, Toggle("Enable Party Card", "xpPartyCard",
+            "Shows a card with one row per party member, under the XP ticker until you move it. It works with the XP bar off.", nil, true))
+        local partyLines = Toggle("Party Tooltip Lines", "xpPartyTooltip", "Adds each member to the end of the XP bar's tooltip.",
+            function() return not X.XPEnabled() or X.Get("xpTooltip") ~= true end)
+        partyLines.disabledTooltip = "Turn on the XP bar and its Show Tooltip first."
+        Row(Toggle("Share My XP", "xpPartyShare", "Sends your level and XP to your party, only while you are below max level."), partyLines)
+        local partyMarkers = Toggle("Party Markers", "xpPartyMarkers", "Draws a tick on your XP bar at each member's percent through their own level.",
+            function() return not X.XPEnabled() end, true)
+        partyMarkers.disabledTooltip = "Turn on the XP bar first."
+        local markersRow = Row(partyMarkers,
+            Drop("Marker Label", "xpPartyLabel", PARTYLABEL_V, PARTYLABEL_O, "What the text beside each tick shows.", NoMarkers, true))
+        Cog(markersRow, "left", "Party Markers", { CogSlider("Marker Width", "xpPartyMarkerWidth", 1, 6) },
+            NoMarkers, "Turn on the XP bar and Party Markers to size their ticks.")
+        local labelRows = Offsets("xpPartyLabel")
+        table.insert(labelRows, 1, { type = "dropdown", label = "Position", values = EDGE_V, order = EDGE_O,
+            get = function() return X.Get("xpPartyLabelSide") end,
+            set = function(v)
+                X.Set("xpPartyLabelSide", v)
+                Changed()
+            end })
+        labelRows[#labelRows + 1] = CogSlider("Label Size", "xpPartyLabelSize", 8, 32)
+        Cog(markersRow, "right", "Marker Label", labelRows, NoLabel, "Turn on Party Markers and choose a Marker Label to place it.")
+        for _, part in ipairs({ "frame", "body", "fill", "level", "center", "right", "levelTime", "sessionTime", "rate", "compRested" }) do
+            Nav(part, topHdr, markersRow, "left")
+        end
 
-        Header("VISIBILITY")
+        Header("TICKER VISIBILITY")
         Row(Drop("Visibility", "xpTickerVisibility", VIS_V, VIS_O, "When the card shows, with the same choices as EllesmereUI's own frames."),
             Toggle("Hide While Resting", "xpTickerHideResting", "Hides the card in an inn or a city."))
 
-        local rowsHdr = Header("ROWS")
+        local rowsHdr = Header("TICKER ROWS")
         local levelRow = Row(Toggle("Current Level", "xpTickerShowCurrent", "The current level, with its clock and percent."),
             Slider("Level History Rows", "xpTickerHistoryRows", 0, 10, "How many completed levels the card lists, newest first."))
         local totalRow = Row(Toggle("Played", "xpTickerShowPlayed", "This character's total time played."),
@@ -626,18 +659,52 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         Nav("tkPlayed", rowsHdr, totalRow, "left")
         Nav("tkPace", rowsHdr, totalRow, "right")
 
-        local cardTextHdr = Header("TEXT")
+        local cardTextHdr = Header("TICKER TEXT")
         local cardFontRow = Row(Drop("Font", "xpTickerFont", fontV, fontO), Drop("Outline", "xpTickerOutline", OUTLINE_V, OUTLINE_O))
         Row(Slider("Font Size", "xpTickerFontSize", 8, 32, "The card's width follows it."), Spacer())
         Nav("tkTop", cardTextHdr, cardFontRow, "left")
 
-        local backHdr = Header("BACKGROUND")
+        local backHdr = Header("TICKER BACKGROUND")
         Nav("tkBack", backHdr, Row(Drop("Background", "xpTickerBackground", CARDBG_V, CARDBG_O), Spacer()), "left")
+
+        local partyHdr = Header("PARTY CARD")
+        Row(Drop("Party Visibility", "xpPartyVisibility", VIS_V, VIS_O, "When the card shows in a party, with the same choices as EllesmereUI's own frames.", NoCard),
+            Toggle("Show Self", "xpPartyShowSelf", "Gives you a row on the card too.", NoCard))
+        Nav("pxBack", partyHdr, Row(Drop("Party Background", "xpPartyBackground", CARDBG_V, CARDBG_O, nil, NoCard),
+            Slider("Party Width", "xpPartyWidth", 160, 600, "Starts at the XP ticker's width at its default font size. The ticker's width follows its own font size.", NoCard)), "left")
+
+        -- Rarely touched once set, so collapsed behind the host's expander; a
+        -- host without one shows the rows.
+        local styleHdr = Header("PARTY CARD STYLE")
+        local styleOpen = true
+        if EllesmereUI.BuildLessCommonExpander then
+            styleOpen, y = EllesmereUI.BuildLessCommonExpander(parent, y, PARTY_STYLE_KEY, PARTY_STYLE_LABEL)
+        end
+        if styleOpen then
+            local fontRow = Row(Drop("Party Font", "xpPartyFont", fontV, fontO, nil, NoCard),
+                Drop("Party Outline", "xpPartyOutline", OUTLINE_V, OUTLINE_O, nil, NoCard))
+            local sizeRow = Row(Slider("Party Font Size", "xpPartyFontSize", 8, 32, "The row height follows it.", NoCard),
+                Drop("Party Texture", "xpPartyTexture", texV, texO, nil, NoCard))
+            local fillRow = Row(Drop("Party Fill", "xpPartyFill", PARTYFILL_V, PARTYFILL_O, nil, NoCard, true), Spacer())
+            Cog(fillRow, "left", "Party Fill", { CogColor("Fill Color", "xpPartyFillColor") },
+                function() return NoCard() or X.Get("xpPartyFill") ~= "custom" end,
+                "Turn on the Party Card and choose Custom Color to set its color.")
+            Nav("pxFont", styleHdr, fontRow, "left")
+            Nav("pxSize", styleHdr, sizeRow, "left")
+            Nav("pxFill", styleHdr, fillRow, "left")
+        else
+            Nav("pxFont", styleHdr)
+            Nav("pxSize", styleHdr)
+            Nav("pxFill", styleHdr)
+        end
+        if EllesmereUI.FinishLessCommonExpander then
+            y = EllesmereUI.FinishLessCommonExpander(parent, y, PARTY_STYLE_KEY, PARTY_STYLE_LABEL)
+        end
     end
 
     Header("POSITION")
     Row({ type = "labeledButton", text = "Position: use EUI Unlock Mode", buttonText = "Unlock Mode", width = 120,
-          tooltip = bar == "tk" and "The XP ticker is moved in EllesmereUI's Unlock Mode. Its size follows its font size."
+          tooltip = bar == "tk" and "The XP ticker and the Party Card are moved in EllesmereUI's Unlock Mode, one item each. The ticker's size follows its font size. The card's width is set on this page, and the card stays under the ticker until you move it."
               or "Both bars are moved and resized in EllesmereUI's Unlock Mode.",
           onClick = function()
               if EllesmereUI and EllesmereUI.OpenUnlockMode then pcall(EllesmereUI.OpenUnlockMode, EllesmereUI) end

@@ -1691,7 +1691,7 @@ do
     eq(spans(stripeWheel, "Stripe Size"), "4-32", "effects: Stripe Size's range")
     writes(stripeWheel, "Stripe Size", "xpStripeSize", 20, 20)
     settings.xpRestedStripes, settings.xpStripeSize = nil, nil
-    check(not has("XP TICKER"), "effects: the XP bar's page has no card section")
+    check(not has("TICKER AND PARTY"), "effects: the XP bar's page has no card section")
 
     X.SelectBar("fb")
     buildPage("page, reputation view with effects")
@@ -1719,11 +1719,12 @@ do
     settings.xpEnabled = false
     buildPage("page, card view")
     EUI.Widgets.DualRow = dualRow
-    for _, text in ipairs({ "XP TICKER", "VISIBILITY", "ROWS", "TEXT", "BACKGROUND", "POSITION" }) do
+    local sections = { "TICKER AND PARTY", "TICKER VISIBILITY", "TICKER ROWS", "TICKER TEXT", "TICKER BACKGROUND",
+        "PARTY CARD", "PARTY CARD STYLE", "POSITION" }
+    for i, text in ipairs(sections) do
         check(has(text), "card view: its " .. text .. " section")
+        if i > 1 then check(before(sections[i - 1], text), "card view: " .. text .. " follows " .. sections[i - 1]) end
     end
-    check(before("XP TICKER", "VISIBILITY") and before("VISIBILITY", "ROWS") and before("ROWS", "TEXT")
-        and before("TEXT", "BACKGROUND") and before("BACKGROUND", "POSITION"), "card view: in order")
     check(not has("XP BAR") and not has("REPUTATION BAR") and not has("EFFECTS") and not has("FRAME"),
         "card view: no bar's sections")
     check(enable ~= nil, "card view: Enable XP Ticker is built")
@@ -1760,7 +1761,7 @@ do
 
     EUI.IsSearchPrebuild = function() return true end
     buildPage("page, search prebuild with the card")
-    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("XP TICKER") and has("ROWS"),
+    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("TICKER AND PARTY") and has("TICKER ROWS") and has("PARTY CARD"),
         "search prebuild: all three views, so search finds every row")
     check(lastIndexOf("EFFECTS") ~= indexOf("EFFECTS"), "search prebuild: both bars' EFFECTS")
     EUI.IsSearchPrebuild = nil
@@ -1803,6 +1804,163 @@ do
     X.SelectBar("tk")
     eq(table.concat(calls, ","), "refresh,top", "a pick of the card rebuilds the page, then scrolls it to the top")
     EUI.RefreshPage, EUI.ScrollToTop = nil, nil
+    X.SelectBar("xp")
+end
+
+---------------------------------------------------------------------------------
+-- The party's rows in the third view
+---------------------------------------------------------------------------------
+
+do
+    local cfgs = {}
+    local dualRow = EUI.Widgets.DualRow
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        for _, cfg in ipairs({ left or false, right or false }) do
+            if cfg and cfg.text then cfgs[cfg.text] = cfg end
+        end
+        return dualRow(w, parent, y, left, right)
+    end
+
+    eq(X.BAR_V.tk, "Ticker and Party", "the picker's third choice names both")
+    eq(table.concat(X.BAR_O, ","), "xp,fb,tk", "and the picker has no fourth")
+
+    X.SelectBar("tk")
+    settings.xpEnabled = false
+    buildPage("page, party rows")
+    local function sameRow(a, b)
+        check(page.rows[a] ~= nil and page.rows[a] == page.rows[b], "party rows: " .. a .. " and " .. b .. " share a row")
+    end
+    sameRow("Enable XP Ticker", "Enable Party Card")
+    sameRow("Share My XP", "Party Tooltip Lines")
+    sameRow("Party Markers", "Marker Label")
+    sameRow("Party Visibility", "Show Self")
+    sameRow("Party Background", "Party Width")
+    sameRow("Party Font", "Party Outline")
+    sameRow("Party Font Size", "Party Texture")
+    check(page.rows["Party Fill"] ~= nil, "party rows: Party Fill has its row")
+    for _, wheelOnly in ipairs({ "Marker Width", "Label Size", "Fill Color" }) do
+        eq(page.rows[wheelOnly], nil, "party rows: " .. wheelOnly .. " sits in a cogwheel")
+    end
+    check(page.rows.Font ~= nil and page.rows.Font ~= page.rows["Party Font"], "party rows: the ticker's Font keeps its own row")
+    eq(factionWord(), nil, "party rows: no word on the page reads faction")
+
+    -- The cogwheels.
+    local markerCog = cogTitled("Party Markers")
+    check(markerCog ~= nil and markerCog.rgn == (page.rows["Party Markers"] or {})._leftRegion, "party rows: the markers' cogwheel sits on them")
+    eq(markerCog and #markerCog.opts.rows, 1, "party rows: holding Marker Width")
+    if markerCog then
+        markerCog.opts.rows[1].set(4)
+        eq(settings.xpPartyMarkerWidth, 4, "party rows: Marker Width saves")
+        settings.xpPartyMarkerWidth = nil
+    end
+    local labelCog = cogTitled("Marker Label")
+    check(labelCog ~= nil and labelCog.rgn == (page.rows["Marker Label"] or {})._rightRegion, "party rows: the label's cogwheel sits on it")
+    eq(labelCog and #labelCog.opts.rows, 4, "party rows: holding its side, two offsets and its size")
+    eq(labelCog and labelCog.opts.rows[1].type, "dropdown", "party rows: the side first")
+    if labelCog then
+        labelCog.opts.rows[1].set("below")
+        eq(settings.xpPartyLabelSide, "below", "party rows: the side saves")
+        settings.xpPartyLabelSide = nil
+        labelCog.opts.rows[2].set(7)
+        eq(settings.xpPartyLabelOffX, 7, "party rows: the X offset saves")
+        settings.xpPartyLabelOffX = nil
+        labelCog.opts.rows[4].set(20)
+        eq(settings.xpPartyLabelSize, 20, "party rows: the size saves")
+        settings.xpPartyLabelSize = nil
+    end
+    local fillCog = cogTitled("Party Fill")
+    check(fillCog ~= nil and fillCog.rgn == (page.rows["Party Fill"] or {})._leftRegion, "party rows: the fill's cogwheel sits on it")
+    if fillCog then
+        fillCog.opts.rows[1].set(0.1, 0.2, 0.3)
+        eq(settings.xpPartyFillColorG, 0.2, "party rows: Fill Color saves")
+        settings.xpPartyFillColorR, settings.xpPartyFillColorG, settings.xpPartyFillColorB = nil, nil, nil
+    end
+
+    -- Grays. Enable Party Card and Share My XP work with the XP bar off.
+    local shareOff = cfgs["Share My XP"] and cfgs["Share My XP"].disabled
+    eq(shareOff and shareOff() or false, false, "party rows: Share My XP works with the XP bar off")
+    local cardOff = cfgs["Enable Party Card"] and cfgs["Enable Party Card"].disabled
+    eq(cardOff and cardOff() or false, false, "party rows: and so does Enable Party Card")
+    check(type(cfgs["Share My XP"].tooltip) == "string", "party rows: Share My XP has a tooltip")
+    eq(cfgs["Party Markers"].disabled(), true, "party rows: Party Markers grays with the XP bar off")
+    check(type(cfgs["Party Markers"].disabledTooltip) == "string", "party rows: with a reason")
+    eq(cfgs["Party Tooltip Lines"].disabled(), true, "party rows: the lines gray with the XP bar off")
+    check(type(cfgs["Party Tooltip Lines"].disabledTooltip) == "string", "party rows: with a reason")
+    settings.xpEnabled = true
+    eq(cfgs["Party Markers"].disabled(), false, "party rows: Party Markers works with the XP bar on")
+    eq(cfgs["Party Tooltip Lines"].disabled(), false, "party rows: and the lines, with Show Tooltip on")
+    settings.xpTooltip = false
+    eq(cfgs["Party Tooltip Lines"].disabled(), true, "party rows: the lines gray with Show Tooltip off")
+    settings.xpTooltip = nil
+    eq(cfgs["Marker Label"].disabled(), true, "party rows: Marker Label grays with Party Markers off")
+    eq(markerCog and markerCog.opts.disabled(), true, "party rows: and the markers' cogwheel")
+    settings.xpPartyMarkers = true
+    eq(cfgs["Marker Label"].disabled(), false, "party rows: and works with it on")
+    eq(markerCog and markerCog.opts.disabled(), false, "party rows: and the cogwheel opens")
+    eq(labelCog and labelCog.opts.disabled(), false, "party rows: with a label chosen, its cogwheel opens")
+    settings.xpPartyLabel = "off"
+    eq(labelCog and labelCog.opts.disabled(), true, "party rows: with Off chosen, it grays")
+    settings.xpPartyLabel = nil
+    settings.xpEnabled = false
+    eq(cfgs["Marker Label"].disabled(), true, "party rows: and grays with the XP bar off")
+    settings.xpPartyMarkers = nil
+    for _, name in ipairs({ "Party Visibility", "Show Self", "Party Background", "Party Width", "Party Font", "Party Outline",
+        "Party Font Size", "Party Texture", "Party Fill" }) do
+        settings.xpPartyCard = false
+        eq(cfgs[name].disabled(), true, "party rows: " .. name .. " grays with the card off")
+        settings.xpPartyCard = true
+        eq(cfgs[name].disabled(), false, "party rows: and works with it on")
+    end
+    eq(fillCog and fillCog.opts.disabled(), true, "party rows: the fill's cogwheel grays unless Fill is custom")
+    settings.xpPartyFill = "custom"
+    eq(fillCog and fillCog.opts.disabled(), false, "party rows: and opens with custom")
+    settings.xpPartyFill = nil
+    settings.xpPartyCard = nil
+
+    -- A press on the sample leads to its setting.
+    local scrolled, glowed
+    local realAfter = _G.C_Timer.After
+    EUI.SmoothScrollTo = function(v) scrolled = v end
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.MakeSettingGlow = function() return function(target) glowed = target end end
+    _G.C_Timer.After = function(_, fn) fn() end
+    buildPage("page, party rows, navigation")
+    for key, row in pairs({ pxFont = "Party Font", pxSize = "Party Font Size", pxFill = "Party Fill", pxBack = "Party Background" }) do
+        scrolled, glowed = nil, nil
+        X.NavigateToSetting(key)
+        check(scrolled ~= nil, "party rows: " .. key .. " scrolls")
+        check(glowed ~= nil and (glowed == page.rows[row] or glowed == page.rows[row]._leftRegion
+            or glowed == page.rows[row]._rightRegion), "party rows: " .. key .. " glows its row")
+    end
+    for _, key in ipairs({ "frame", "body", "fill", "level", "center", "right", "levelTime", "sessionTime", "rate", "compRested" }) do
+        glowed = nil
+        X.NavigateToSetting(key)
+        eq(glowed, page.rows["Party Markers"]._leftRegion, "party rows: the sample bar's " .. key .. " leads to Party Markers")
+    end
+
+    -- Collapsed, the style rows are not built, and their keys glow the section.
+    EUI.BuildLessCommonExpander = function(_parent, y) return false, y end
+    buildPage("page, party rows, collapsed")
+    eq(page.rows["Party Font"], nil, "party rows: collapsed, no Party Font")
+    eq(page.rows["Party Fill"], nil, "party rows: and no Party Fill")
+    check(page.rows["Party Width"] ~= nil, "party rows: Party Width stays out of the collapsed section")
+    for _, key in ipairs({ "pxFont", "pxSize", "pxFill" }) do
+        glowed = nil
+        X.NavigateToSetting(key)
+        eq(glowed, page.headerAt["PARTY CARD STYLE"], "party rows: collapsed, " .. key .. " glows the section")
+    end
+    EUI.BuildLessCommonExpander = nil
+
+    _G.C_Timer.After = realAfter
+    EUI.SmoothScrollTo, EUI.ELLESMERE_GREEN, EUI.MakeSettingGlow = nil, nil, nil
+
+    -- A setter reaches the party path.
+    cfgs["Share My XP"].setValue(true)
+    eq(settings.xpPartyShare, true, "party rows: Share My XP saves")
+    cfgs["Share My XP"].setValue(false)
+    eq(settings.xpPartyShare, false, "party rows: both ways")
+
+    EUI.Widgets.DualRow = dualRow
     X.SelectBar("xp")
 end
 
