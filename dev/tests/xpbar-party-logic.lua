@@ -331,5 +331,269 @@ do
     eq(L.MergeMember(nil, true, false, "A", "MAGE", -1), "none", "and neither does a negative one")
 end
 
+---------------------------------------------------------------------------------
+-- The refusal state machine
+---------------------------------------------------------------------------------
+
+-- A slot stands for the 2-second timer: armed by a trigger or a result, spent
+-- by one flush.
+local function newDriver(sharing)
+    local d = { s = {}, armed = false, sent = {}, locked = false, level = 10, cur = 100, total = 1000, result = 0, raised = false }
+    L.SetSharing(d.s, sharing)
+    function d.trigger(kind)
+        if L.Trigger(d.s, kind) then d.armed = true end
+    end
+    function d.slot()
+        d.armed = false
+        local text = L.NextSend(d.s, d.locked, d.level, d.cur, d.total)
+        if not text then return end
+        d.sent[#d.sent + 1] = text
+        if L.OnResult(d.s, not d.raised, d.result) then d.armed = true end
+    end
+    function d.drain()
+        local guard = 0
+        while d.armed and guard < 20 do
+            guard = guard + 1
+            d.slot()
+        end
+        check(guard < 20, "a drain ends")
+    end
+    return d
+end
+
+do
+    -- Merging, and one message a slot
+    local d = newDriver(true)
+    d.trigger("xp")
+    d.cur = 150
+    d.trigger("xp")
+    d.cur = 200
+    eq(d.armed, true, "a trigger arms a slot")
+    d.drain()
+    eq(#d.sent, 1, "two triggers merge into one send")
+    eq(select(2, L.ParseMessage(d.sent[1])), 10, "the report parses")
+    eq(select(3, L.ParseMessage(d.sent[1])), 200, "with the newest values")
+    eq(L.Due(d.s), false, "and nothing is left due")
+
+    d = newDriver(true)
+    d.trigger("enter")
+    d.slot()
+    eq(d.sent[1], L.ASK, "an enter asks first")
+    eq(d.armed, true, "and the report takes the next slot")
+    eq(#d.sent, 1, "one message a slot")
+    d.slot()
+    eq(L.ParseMessage(d.sent[2]), "report", "then the report")
+    eq(d.armed, false, "then nothing")
+
+    -- Only while XP changes
+    d = newDriver(true)
+    d.trigger("xp")
+    d.drain()
+    d.trigger("xp")
+    d.drain()
+    eq(#d.sent, 1, "an unchanged reading sends nothing")
+    eq(L.Due(d.s), false, "and is not left due")
+    d.trigger("join")
+    d.drain()
+    eq(#d.sent, 2, "a join sends the same values")
+    d.trigger("asked")
+    d.drain()
+    eq(#d.sent, 3, "and so does a report request")
+
+    -- A lock, read before the send or refused by it
+    d = newDriver(true)
+    d.locked = true
+    d.trigger("xp")
+    eq(d.armed, true, "a trigger inside a lock arms one slot")
+    d.slot()
+    eq(#d.sent, 0, "whose flush sends nothing")
+    eq(d.armed, false, "and arms no retry")
+    eq(L.Due(d.s), true, "what was due stays due")
+    d.locked = false
+    eq(d.armed, false, "a lock lifting alone arms nothing")
+    d.cur = 300
+    d.trigger("xp")
+    d.drain()
+    eq(#d.sent, 1, "the next trigger sends once")
+    eq(select(3, L.ParseMessage(d.sent[1])), 300, "with the newest values")
+
+    d = newDriver(true)
+    d.result = 11
+    d.trigger("join")
+    d.slot()
+    eq(#d.sent, 1, "a refused send was tried")
+    eq(d.armed, false, "11 arms no retry")
+    eq(L.Due(d.s), true, "and keeps what is due")
+    d.trigger("roster")
+    eq(d.armed, false, "a bare roster event does not send what is held")
+    d.result = 0
+    d.trigger("xp")
+    d.drain()
+    eq(#d.sent, 2, "the next trigger sends it")
+    eq(L.Due(d.s), false, "once")
+
+    -- A non-sharer holds only its ask
+    d = newDriver(false)
+    d.trigger("xp")
+    eq(d.armed, false, "a non-sharer's XP is no report")
+    d.trigger("asked")
+    eq(d.armed, false, "nor is a report request")
+    d.trigger("join")
+    eq(d.armed, false, "nor a join")
+    d.result = 11
+    d.trigger("enter")
+    d.slot()
+    eq(d.sent[1], L.ASK, "a non-sharer asks")
+    eq(L.Due(d.s), true, "and a refused ask is held")
+    d.result = 0
+    d.trigger("join")
+    eq(d.armed, true, "a join sends the held ask")
+    d.drain()
+    eq(d.sent[2], L.ASK, "which is only the ask")
+    eq(#d.sent, 2, "with no report")
+
+    -- Throttles and a group that is gone
+    for _, code in ipairs({ 3, 8 }) do
+        d = newDriver(true)
+        d.result = code
+        d.trigger("xp")
+        d.slot()
+        eq(d.armed, true, code .. " tries the next slot")
+        eq(L.Due(d.s), true, code .. " keeps what is due")
+        d.result = 0
+        d.drain()
+        eq(L.Due(d.s), false, code .. " then clears it")
+    end
+
+    d = newDriver(true)
+    d.result = 5
+    d.trigger("enter")
+    d.slot()
+    eq(d.armed, false, "5 arms nothing")
+    eq(L.Due(d.s), false, "and drops what is due")
+    d.result = 0
+    d.trigger("xp")
+    d.trigger("asked")
+    d.trigger("join")
+    d.trigger("enter")
+    eq(d.armed, false, "every trigger sets nothing until the roster changes")
+    local beforeRelease = #d.sent
+    d.trigger("roster")
+    eq(d.armed, true, "a roster event clears it")
+    d.drain()
+    eq(d.sent[beforeRelease + 1], L.ASK, "and asks again, since 5 dropped the ask")
+    eq(L.ParseMessage(d.sent[#d.sent]), "report", "then reports")
+
+    d = newDriver(false)
+    d.result = 5
+    d.trigger("enter")
+    d.slot()
+    eq(L.Due(d.s), false, "a non-sharer's 5 drops its ask")
+    d.result = 0
+    d.trigger("join")
+    eq(d.armed, false, "and nothing but the roster restores it")
+    d.trigger("roster")
+    eq(d.armed, true, "a roster event does")
+    d.drain()
+    eq(#d.sent, 2, "with one more message")
+    eq(d.sent[2], L.ASK, "which is the ask")
+    eq(L.Due(d.s), false, "and nothing is left due")
+
+    -- Anything else is dropped
+    for _, code in ipairs({ 1, 2, 4, 6, 7, 9, 10, 12 }) do
+        d = newDriver(true)
+        d.result = code
+        d.trigger("xp")
+        d.slot()
+        eq(d.armed, false, code .. " is dropped")
+        eq(L.Due(d.s), false, code .. " leaves nothing due")
+    end
+    d = newDriver(true)
+    d.result = nil
+    d.trigger("xp")
+    d.slot()
+    eq(L.Due(d.s), false, "a result that cannot be read is dropped")
+    d = newDriver(true)
+    d.raised = true
+    d.trigger("enter")
+    d.slot()
+    eq(d.armed, true, "a raised error drops the ask and the report still has a slot")
+    d.raised = false
+    d.drain()
+    eq(L.Due(d.s), false, "and it goes")
+
+    -- A report that cannot encode never reaches a send
+    d = newDriver(true)
+    d.total = 0
+    d.trigger("join")
+    d.drain()
+    eq(#d.sent, 0, "a report that encodes to nil is not sent")
+    eq(L.Due(d.s), false, "and is not kept")
+    d = newDriver(true)
+    d.cur = nil
+    d.trigger("xp")
+    d.drain()
+    eq(#d.sent, 0, "nor one with a reading missing")
+
+    -- Sharing going off and a reset
+    d = newDriver(true)
+    d.trigger("join")
+    L.SetSharing(d.s, false)
+    eq(L.Due(d.s), false, "sharing going off drops a due report")
+    d.trigger("enter")
+    L.Reset(d.s)
+    eq(L.Due(d.s), false, "a reset clears everything")
+end
+
+-- Every order of the triggers and a lock, under each result: nothing is lost,
+-- nothing is sent past the newest values, and the machine always ends quiet.
+do
+    local OPS = { "xp", "join", "asked", "enter", "lockOn", "lockOff" }
+    local RESULTS = { 0, 3, 8, 11, 5, 2 }
+    local runs = 0
+    local function run(order, code)
+        runs = runs + 1
+        local d = newDriver(true)
+        d.result = code
+        for i, op in ipairs(order) do
+            d.cur = 100 + i
+            if op == "lockOn" then
+                d.locked = true
+            elseif op == "lockOff" then
+                d.locked = false
+            else
+                d.trigger(op)
+            end
+            if d.armed then d.slot() end
+        end
+        d.locked = false
+        d.result = 0
+        d.cur = 500
+        d.trigger("roster")
+        d.trigger("xp")
+        d.drain()
+        eq(L.Due(d.s), false, "any order: nothing is left due")
+        eq(d.armed, false, "any order: no slot is left armed")
+        local last = d.sent[#d.sent]
+        eq(select(3, L.ParseMessage(last)), 500, "any order: the last report is the newest")
+        for _, text in ipairs(d.sent) do
+            check(L.ParseMessage(text) ~= nil, "any order: every message parses", text)
+        end
+    end
+    local function permute(list, n, code)
+        if n == 0 then
+            run(list, code)
+            return
+        end
+        for i = 1, n do
+            list[i], list[n] = list[n], list[i]
+            permute(list, n - 1, code)
+            list[i], list[n] = list[n], list[i]
+        end
+    end
+    for _, code in ipairs(RESULTS) do permute(OPS, #OPS, code) end
+    eq(runs, 720 * #RESULTS, "every order ran under each result")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -188,3 +188,98 @@ function L.MergeMember(prev, exists, isFollower, name, class, level)
     end
     return "set"
 end
+
+---------------------------------------------------------------------------------
+-- The refusal state machine
+---------------------------------------------------------------------------------
+
+local RESULT_OK, RESULT_THROTTLE, RESULT_CHANNEL_THROTTLE, RESULT_LOCKDOWN = 0, 3, 8, 11
+L.RESULT_NOT_IN_GROUP = 5
+
+-- s: sharing, askDue, reportDue, force, gated, what is being sent and the last
+-- values sent. Holding is no state of its own: what a lock or a refusal leaves
+-- due stays due with no slot armed, and the next trigger arms one.
+
+function L.Reset(s)
+    for k in pairs(s) do s[k] = nil end
+end
+
+function L.SetSharing(s, on)
+    s.sharing = on
+    if not on then s.reportDue, s.force = false, false end
+end
+
+function L.Due(s)
+    return s.askDue == true or s.reportDue == true
+end
+
+-- Returns true when a slot should be armed. A roster event sends only what it
+-- released, so a bare one is no trigger for a held send. Being gated dropped the
+-- ask with the rest, so the release asks again, a non-sharer included.
+function L.Trigger(s, kind)
+    if kind == "roster" then
+        if not s.gated then return false end
+        s.gated = false
+        s.askDue = true
+        if s.sharing then s.reportDue, s.force = true, true end
+        return true
+    end
+    if s.gated then return false end
+    if kind == "xp" then
+        if s.sharing then s.reportDue = true end
+    elseif kind == "join" or kind == "asked" then
+        if s.sharing then s.reportDue, s.force = true, true end
+    elseif kind == "enter" then
+        s.askDue = true
+        if s.sharing then s.reportDue, s.force = true, true end
+    end
+    return L.Due(s)
+end
+
+-- The text to send now, or nil. An ask goes first, and a locked flush changes
+-- nothing. An unchanged report with nothing forcing it is spent here: that is
+-- "only while XP changes".
+function L.NextSend(s, locked, level, cur, total)
+    s.sending = nil
+    if locked then return nil end
+    if s.askDue then
+        s.sending = "ask"
+        return L.ASK
+    end
+    if not s.reportDue then return nil end
+    local text = L.EncodeReport(level, cur, total)
+    local unchanged = not s.force and s.sentLevel == level and s.sentCur == cur and s.sentTotal == total
+    if not text or unchanged then
+        s.reportDue, s.force = false, false
+        return nil
+    end
+    s.sending, s.tryLevel, s.tryCur, s.tryTotal = "report", level, cur, total
+    return text
+end
+
+local function Spend(s, sending)
+    if sending == "ask" then
+        s.askDue = false
+    elseif sending == "report" then
+        s.reportDue, s.force = false, false
+    end
+end
+
+-- Returns true when another slot should be armed.
+function L.OnResult(s, ok, result)
+    local sending = s.sending
+    s.sending = nil
+    if ok and result == RESULT_LOCKDOWN then return false end
+    if ok and (result == RESULT_THROTTLE or result == RESULT_CHANNEL_THROTTLE) then return true end
+    if ok and result == L.RESULT_NOT_IN_GROUP then
+        s.askDue, s.reportDue, s.force = false, false, false
+        s.gated = true
+        return false
+    end
+    Spend(s, sending)
+    if ok and result == RESULT_OK and sending == "report" then
+        s.sentLevel, s.sentCur, s.sentTotal = s.tryLevel, s.tryCur, s.tryTotal
+    end
+    return L.Due(s)
+end
+
