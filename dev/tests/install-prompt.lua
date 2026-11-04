@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  install-prompt.lua                                          ║
--- ║  Purpose: Gate for the /kitn install overwrite prompt: the   ║
--- ║           install record raises it, a character's other      ║
--- ║           stored settings do not.                            ║
+-- ║  Purpose: Gate for the /kitn install overwrite prompt: an    ║
+-- ║           install record or the account's profiles raise     ║
+-- ║           it, a character's other stored settings do not.    ║
 -- ║           Loads the SHIPPED code, never a copy.              ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
@@ -139,6 +139,7 @@ expectPrompt("SetCharLoaded")
 
 account(nil)
 ns.CompleteSetup("BigWigs")
+eq(ns.db.perChar[KEY].loaded, true, "an imported profile writes the install record")
 expectPrompt("an imported profile")
 
 account(nil)
@@ -151,6 +152,27 @@ expectFresh("before the install")
 ns.CompleteSetup("BigWigs")
 expectPrompt("an install over an XP record")
 check(type(ns.db.perChar[KEY].xp) == "table", "the install keeps the XP record")
+
+---------------------------------------------------------------------------------
+-- An alt on an installed account overwrites the same shared profiles
+---------------------------------------------------------------------------------
+
+account(nil)
+ns.db.profiles.BigWigs = true
+expectPrompt("an alt with no record")
+
+account({ xp = { gained = 0 } })
+ns.db.profiles.BigWigs = true
+expectPrompt("an alt with only an XP record")
+
+-- The Cooldown Manager's entry is a table rather than a flag.
+account(nil)
+ns.db.profiles.BlizzardCDM = { WARRIOR_1 = "fingerprint" }
+expectPrompt("an alt on an account with only Cooldown Manager layouts")
+
+account(nil)
+ns.db.profiles = nil
+expectFresh("no profile list")
 
 ---------------------------------------------------------------------------------
 -- The prompt's own contract
