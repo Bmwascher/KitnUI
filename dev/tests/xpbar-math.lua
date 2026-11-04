@@ -411,5 +411,76 @@ do
     eq(M.Lift(nil), 0, "lift: a missing channel")
 end
 
+-- The card's texts
+eq(M.RateText(90000), "90.0K xp/hr", "rate text: short, with its suffix")
+eq(M.ClockText(0), "0:00", "clock text: zero")
+eq(M.ClockText(59), "0:59", "clock text: seconds")
+eq(M.ClockText(1200), "20:00", "clock text: minutes")
+eq(M.ClockText(3600), "1:00:00", "clock text: hours")
+eq(M.ClockText(nil), "--", "clock text: unknown")
+eq(M.ClockText(-1), "--", "clock text: a negative counts as unknown")
+
+-- Trend, on a window of 100 seconds
+do
+    local function two(firstGain, secondGain)
+        local st = {}
+        M.Trend(st, 0, 0, 100)
+        M.Trend(st, firstGain, 100, 100)
+        return M.Trend(st, firstGain + secondGain, 200, 100), st
+    end
+    local st = {}
+    eq(M.Trend(st, 0, 0, 100), nil, "trend: a first reading seeds")
+    eq(M.Trend(st, 50, 50, 100), nil, "trend: mid window")
+    eq(M.Trend(st, 100, 100, 100), nil, "trend: no direction in the first window")
+    eq((two(100, 105)), nil, "trend: 5% up exactly is no direction")
+    eq((two(100, 106)), "up", "trend: just over 5% is up")
+    eq((two(100, 95)), nil, "trend: 5% down exactly is no direction")
+    eq((two(100, 94)), "down", "trend: just over 5% down is down")
+    eq((two(100, 0)), "down", "trend: a window with no XP after one with XP")
+    eq((two(0, 100)), nil, "trend: a previous rate of 0 sets none")
+    local dir, kept = two(100, 106)
+    eq(M.Trend(kept, 206, 200, 100), dir, "trend: a frozen elapsed time changes nothing")
+    eq(M.Trend(kept, 999, 200, 100), dir, "trend: however the XP reads")
+    eq(M.Trend(kept, 0, 0, 100), nil, "trend: a reset reseeds")
+    eq(M.Trend(kept, 100, 100, 100), nil, "trend: and the first window after it sets none")
+    local cleared = select(2, two(100, 106))
+    cleared.at = nil
+    eq(M.Trend(cleared, 999, 999, 100), nil, "trend: a cleared start reseeds at any numbers")
+    eq(M.Trend(cleared, 1099, 1099, 100), nil, "trend: and the first window after it sets none")
+
+    local onTime = select(2, two(100, 106))
+    eq(M.Trend(onTime, 456, 325, 100), "up", "trend: a window that closes a little late counts")
+    local late = select(2, two(100, 106))
+    eq(M.Trend(late, 1000, 326, 100), nil, "trend: a window that closes too late is dropped")
+    eq(late.rate, nil, "trend: with the rate before it")
+    eq(M.Trend(late, 1100, 426, 100), nil, "trend: and the first window after it sets none")
+    eq(M.Trend(late, 1300, 526, 100), "up", "trend: the next compares those two")
+end
+
+-- The seconds spent in the level just finished
+eq(M.LevelSplit(11, 10, 900, nil, nil, 1000), 100, "level split: the running clock")
+eq(M.LevelSplit(11, nil, nil, 10, 900, 1000), 100, "level split: the held clock")
+eq(M.LevelSplit(11, 9, 900, nil, nil, 1000), nil, "level split: a running clock of another level")
+eq(M.LevelSplit(11, nil, nil, 9, 900, 1000), nil, "level split: a held clock of another level")
+eq(M.LevelSplit(12, 10, 900, nil, nil, 1000), nil, "level split: two levels at once")
+eq(M.LevelSplit(11, 10, 900.4, nil, nil, 1000), 100, "level split: whole seconds")
+eq(M.LevelSplit(nil, 10, 900, nil, nil, 1000), nil, "level split: no level")
+
+-- Pace
+eq(M.PaceGap(1000, 0.5, 800, 1600), 200, "pace gap: positive is ahead")
+eq(M.PaceGap(1400, 0.5, 800, 1600), -200, "pace gap: negative is behind")
+eq(M.PaceGap(1000, 0, 800, 1600), -200, "pace gap: at the level's start")
+eq(M.PaceGap(1000, 1, 800, 1600), 600, "pace gap: at the level's end")
+eq(M.PaceGap(nil, 0.5, 800, 1600), nil, "pace gap: a missing input")
+eq(M.PaceGap(1000, 0.5, 1600, 800), nil, "pace gap: an end before its start")
+eq(M.PaceText(3600), "1h 0m ahead", "pace text: ahead")
+eq(M.PaceText(-120), "2m behind", "pace text: behind")
+eq(M.PaceText(0), "< 1m ahead", "pace text: level")
+eq(M.PaceText(nil), "--", "pace text: unknown")
+
+-- Sizes follow the font size
+eq(M.TickerWidth(24), 2 * M.TickerWidth(12), "ticker width: scales with the font size")
+check(M.RowHeight(24) > M.RowHeight(12), "row height: scales with the font size")
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -21,6 +21,12 @@ M.KILL_SAMPLES = 10
 -- A save older than this, in seconds, belongs to an earlier session, so a
 -- /reload after it starts fresh.
 M.SESSION_RELOAD_WINDOW = 300
+-- The card's arrow: the share two windows' rates must differ by, how long a
+-- window is in seconds, and the share of a window it may close late and still
+-- count. A later close means the card missed its end.
+M.TREND_SHARE = 0.05
+M.TREND_WINDOW = 180
+M.TREND_LATE_SHARE = 0.25
 
 local function Round1(n) return floor(n * 10 + 0.5) / 10 end
 
@@ -328,4 +334,77 @@ end
 
 function M.Lift(c)
     return min(1, (tonumber(c) or 0) * 1.6)
+end
+
+function M.RateText(perHour)
+    return M.Short(perHour) .. " xp/hr"
+end
+
+function M.ClockText(sec)
+    sec = tonumber(sec)
+    if not sec or sec < 0 then return "--" end
+    sec = floor(sec)
+    local h, m, s = floor(sec / 3600), floor((sec % 3600) / 60), sec % 60
+    if h > 0 then return format("%d:%02d:%02d", h, m, s) end
+    return format("%d:%02d", m, s)
+end
+
+-- Compares each window's rate with the one before it, not with the running
+-- session rate, which flattens late in a long session. Elapsed comes from the
+-- session, so a pause freezes it. A nil at, falling numbers or a window closing
+-- too late starts it over. s: at, gained, rate, dir.
+function M.Trend(s, gained, elapsed, window)
+    if type(gained) ~= "number" or type(elapsed) ~= "number" then return s.dir end
+    if s.at == nil or elapsed < s.at or gained < s.gained
+        or elapsed - s.at > window * (1 + M.TREND_LATE_SHARE) then
+        s.at, s.gained, s.rate, s.dir = elapsed, gained, nil, nil
+        return nil
+    end
+    local span = elapsed - s.at
+    if span < window then return s.dir end
+    local rate = (gained - s.gained) / span
+    local prev = s.rate
+    s.at, s.gained, s.rate, s.dir = elapsed, gained, rate, nil
+    if prev and prev > 0 then
+        if rate > prev * (1 + M.TREND_SHARE) then
+            s.dir = "up"
+        elseif rate < prev * (1 - M.TREND_SHARE) then
+            s.dir = "down"
+        end
+    end
+    return s.dir
+end
+
+function M.TickerWidth(fontSize)
+    return floor((tonumber(fontSize) or 12) * 22 + 0.5)
+end
+
+function M.RowHeight(fontSize)
+    return ceil((tonumber(fontSize) or 12) * 1.4)
+end
+
+-- The whole seconds spent in newLevel - 1, from the running clock, else the
+-- clock a reading-first level-up held; nil when neither is that level's.
+function M.LevelSplit(newLevel, levelOf, levelStart, heldOf, heldStart, now)
+    if type(newLevel) ~= "number" or type(now) ~= "number" then return nil end
+    local done = newLevel - 1
+    local start = (levelStart and levelOf == done) and levelStart or (heldStart and heldOf == done) and heldStart or nil
+    if not start then return nil end
+    return max(0, floor(now - start + 0.5))
+end
+
+-- How far ahead of a character the player is at this point in the level: at
+-- and nextAt are that character's total played on reaching this level and the
+-- next, and share is how far through the level the player is.
+function M.PaceGap(myTotal, share, at, nextAt)
+    if type(myTotal) ~= "number" or type(share) ~= "number" or type(at) ~= "number" or type(nextAt) ~= "number" then
+        return nil
+    end
+    if nextAt < at then return nil end
+    return at + share * (nextAt - at) - myTotal
+end
+
+function M.PaceText(gap)
+    if type(gap) ~= "number" then return "--" end
+    return M.TimeText(max(1, math.abs(gap))) .. (gap >= 0 and " ahead" or " behind")
 end
