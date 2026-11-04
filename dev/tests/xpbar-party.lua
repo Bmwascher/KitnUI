@@ -1475,4 +1475,172 @@ do
     reset()
 end
 
+---------------------------------------------------------------------------------
+-- Through the funnel
+---------------------------------------------------------------------------------
+
+do
+    reset()
+    -- With both bars off, an apply still reaches the party path.
+    X.Apply()
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "both bars off: an apply starts the watcher")
+    settings.xpPartyShare = false
+    X.Apply()
+    eq(eventList(), "", "both bars off, Share off: an apply stops it")
+    settings.xpPartyShare = nil
+
+    -- The tooltip lines, on the leveling branch and the max-level one.
+    local tipLines = {}
+    _G.GameTooltip.AddLine = function(_, text) tipLines[#tipLines + 1] = text end
+    _G.GameTooltip.AddDoubleLine = NOOP
+    settings.xpEnabled = true
+    settings.xpPartyTooltip = true
+    X.Apply()
+    local bar = X.LiveXPWidget()
+    check(bar ~= nil, "the XP bar is on")
+    local function hover()
+        tipLines = {}
+        bar.frame.scripts.OnEnter(bar.frame)
+        return tipLines
+    end
+    eq(#hover(), 0, "solo: no party lines")
+    join(member("Mirelle", "MAGE", 58), member("Dornak", "WARRIOR", 90), member("Vess", "DRUID", 57))
+    say("1 58 912 1000")
+    local lines = hover()
+    eq(#lines, 4, "in a party: a header and one line per other member")
+    check(lines[2]:find("Mirelle", 1, true) and lines[2]:find("91.2", 1, true), "the first member's line", lines[2])
+    check(lines[3]:find("Dornak", 1, true), "the second", lines[3])
+    check(lines[4]:find("Vess", 1, true), "the third", lines[4])
+    me.level = 90
+    X.Apply()
+    lines = hover()
+    check(#lines >= 4, "at max level the tooltip keeps its lines", #lines)
+    check(lines[#lines]:find("Vess", 1, true), "at its end", lines[#lines])
+    me.level = 10
+    settings.xpPartyTooltip = nil
+    X.Apply()
+    eq(#hover(), 0, "the switch off: no party lines")
+    settings.xpPartyTooltip = true
+    group.raid = true
+    ev("GROUP_ROSTER_UPDATE")
+    eq(#hover(), 0, "in a raid: no party lines")
+    group.raid = false
+    settings.xpPartyTooltip = nil
+
+    -- The live bar draws its ticks from a report and from a redraw.
+    settings.xpPartyMarkers = true
+    X.Apply()
+    join(member("Mirelle", "MAGE", 58))
+    check(bar.ptHost == nil, "no data yet: no host")
+    say("1 58 912 1000")
+    check(bar.ptHost ~= nil, "a report draws the tick")
+    eq(bar.ptMarks[1].on, true, "and it shows")
+    eq(bar.ptMarks[1].x, X.PartyLogic.MarkerX(91.2, bar.bw, 2, 1), "at the member's percent")
+    me.xp = 500
+    ev("PLAYER_XP_UPDATE")
+    eq(bar.ptMarks[1].on, true, "the bar's own XP keeps it")
+    settings.xpWidth = 800
+    X.Apply()
+    eq(bar.ptMarks[1].x, X.PartyLogic.MarkerX(91.2, bar.bw, 2, 1), "a resize moves it")
+    settings.xpWidth = nil
+    settings.xpPartyMarkers = nil
+    X.Apply()
+    eq(bar.ptMarks[1].on, false, "the switch off hides it")
+
+    -- The card works with the XP bar off, and the markers do not draw.
+    settings.xpEnabled = false
+    settings.xpPartyCard = true
+    settings.xpPartyMarkers = true
+    X.Apply()
+    eq(lastWanted, true, "the XP bar off: the card still wants to show")
+    say("1 58 913 1000")
+    eq(bar.ptMarks[1].on, false, "the XP bar off: a report draws no tick on it")
+    settings.xpPartyMarkers = nil
+
+    -- The reset stops it all, and the next apply starts again.
+    X.Teardown()
+    eq(eventList(), "", "the reset unregisters everything")
+    eq(waiting(), 0, "and cancels the timer")
+    eq(lastN, 0, "and clears the rows")
+    settings.xpPartyCard = nil
+    reset()
+    settings.xpEnabled = nil
+    X.Apply()
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "an apply after the reset watches again")
+    reset()
+
+    -- A rising cap reaches a player at max level through the XP bar's own events,
+    -- and the party path has none of its own.
+    local function setCap(cap)
+        _G.GetMaxLevelForPlayerExpansion = function() return cap end
+        _G.GetMaxPlayerLevel = function() return cap end
+    end
+    settings.xpEnabled = true
+    me.level = 90
+    X.Apply()
+    eq(eventList(), "", "at max, the XP bar on: the party path has no event")
+    local capHeard
+    for _, f in ipairs(frames) do
+        if f.events.MAX_EXPANSION_LEVEL_UPDATED then capHeard = f end
+    end
+    check(capHeard ~= nil, "the XP bar listens for the cap")
+    for _, capEvent in ipairs({ "MAX_EXPANSION_LEVEL_UPDATED", "PLAYER_MAX_LEVEL_UPDATE" }) do
+        setCap(100)
+        capHeard.scripts.OnEvent(capHeard, capEvent)
+        eq(eventList(), "GROUP_ROSTER_UPDATE", capEvent .. ": a cap that rises wakes it")
+        setCap(90)
+        capHeard.scripts.OnEvent(capHeard, capEvent)
+        eq(eventList(), "", capEvent .. ": and a cap that falls ends it")
+    end
+    settings.xpEnabled = nil
+    X.Apply()
+
+    -- With the XP bar off nothing tells it, until the next apply.
+    X.PartyApply()
+    eq(eventList(), "", "at max, the XP bar off: no event")
+    setCap(100)
+    eq(eventList(), "", "a cap that rises is not noticed")
+    X.PartyApply()
+    eq(eventList(), "GROUP_ROSTER_UPDATE", "until the next apply")
+    setCap(90)
+    reset()
+
+    -- The card under the real ticker, through the funnel, in one load.
+    settings.xpEnabled, settings.xpTickerEnabled, settings.xpPartyCard = true, true, true
+    X.Apply()
+    local partyElement
+    for _, e in ipairs(unlockList) do
+        if e.key == "KitnUI_PartyXP" then partyElement = e end
+    end
+    local card = partyElement.getFrame()
+    local ticker = X.TickerFrame()
+    check(ticker ~= nil, "the funnel: the ticker's frame exists when the card places itself")
+    eq(card.point[2], ticker, "the funnel: the card sits under it")
+    settings.xpTickerEnabled = false
+    X.Apply()
+    eq(X.TickerFrame(), nil, "the ticker off: no frame to stack under")
+    eq(card.point[2], _G.UIParent, "the ticker off: the card leaves it at once")
+    eq(card.point[5], -40, "the ticker off: for its first spot")
+    settings.xpTickerEnabled = true
+    X.Apply()
+    eq(card.point[2], ticker, "the ticker on again: back under it")
+    settings.xpEnabled = false
+    X.Apply()
+    eq(X.TickerFrame(), nil, "the XP bar off counts as the ticker off")
+    eq(card.point[5], -40, "the XP bar off: its first spot")
+    settings.xpEnabled = true
+    settings.xpPartyPos = { point = "CENTER", relPoint = "CENTER", x = 3, y = 4 }
+    X.Apply()
+    eq(card.point[4], 3, "a saved spot: the card stays on it")
+
+    -- A reset or a profile switch clears the spot, and the next apply stacks.
+    X.Teardown()
+    settings.xpPartyPos = nil
+    X.Apply()
+    eq(card.point[2], ticker, "after a reset: back under the ticker")
+    settings.xpEnabled, settings.xpTickerEnabled, settings.xpPartyCard = nil, nil, nil
+    X.Apply()
+    reset()
+end
+
 finish()

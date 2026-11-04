@@ -244,6 +244,7 @@ local function RefreshXP()
     raw.quest = questDone
     raw.levelTime, raw.elapsed, raw.gained = X.LevelTime(), X.SessionElapsed(), X.SessionGained()
     X.XPView(raw, Get, xpData)
+    xpData.markers = X.PartyMarkerList()
     X.Draw(w, Get, xpData)
     xpShown = t.applies or Get("xpShowAtMax") == true
     X.TickerRefresh(raw)
@@ -434,6 +435,7 @@ local function ShowXPTooltip(self)
         end
         if kills then TipLine("Kills to level", kills == 1 and "About 1 kill" or format("About %d kills", kills)) end
     end
+    X.PartyTooltipLines(GameTooltip)
     GameTooltip:Show()
 end
 
@@ -619,6 +621,8 @@ local function OnEvent(_, event, ...)
         X.OnXP()
         RefreshXP()
         ReconcileEvents()
+        -- At max level the party path has no event of its own to hear a new cap.
+        if event == "PLAYER_MAX_LEVEL_UPDATE" or event == "MAX_EXPANSION_LEVEL_UPDATED" then X.PartyApply() end
     end
     X.ApplyVisibility()
 end
@@ -791,6 +795,7 @@ function X.Apply(claim)
     if not (xpOn or fbOn) then
         Stop()
         X.SyncExisting(claim)
+        X.PartyApply()
         return
     end
     Ensure()
@@ -823,6 +828,7 @@ function X.Apply(claim)
     X.ApplyVisibility()
     DropTooltips()
     X.SyncExisting(claim)
+    X.PartyApply()
 end
 
 -- For the reset: everything off, and every hidden bar given back whatever the
@@ -830,6 +836,7 @@ end
 function X.Teardown()
     Stop()
     X.SyncExisting(nil, true)
+    X.PartyStop()
 end
 
 ns.EUIRegisterReapply(function()

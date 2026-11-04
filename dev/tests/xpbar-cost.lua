@@ -212,6 +212,9 @@ end
 ---------------------------------------------------------------------------------
 
 quiet("at load")
+-- Below max level sharing makes a frame of its own: xpbar-party.lua checks each
+-- of its states. This file reads a level 10 character for the bars' own checks.
+ns.EUISettings().xpPartyShare = false
 local ok, why = pcall(X.Apply)
 check(ok, "an apply with both bars off runs", why)
 quiet("a re-apply with both bars off")
