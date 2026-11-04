@@ -27,39 +27,21 @@ end
 local playerName = "Tester"
 local popups = {}
 
-_G.format = string.format
-_G.strtrim = function(s) return (tostring(s):gsub("^%s+", ""):gsub("%s+$", "")) end
-_G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
-_G.CopyTable = function(t)
-    local c = {}
-    for k, v in pairs(t) do c[k] = type(v) == "table" and _G.CopyTable(v) or v end
-    return c
-end
 _G.C_AddOns = {
     GetAddOnMetadata = function() return "1.0.0" end,
     IsAddOnLoaded = function() return true end,
 }
-_G.tinsert = table.insert
-_G.InCombatLockdown = function() return false end
-_G.C_Timer = { After = function() end }
 _G.CreateFrame = function()
     return setmetatable({}, { __index = function() return function() end end })
 end
 _G.SlashCmdList = {}
-_G.UnitClass = function() return "Warrior", "WARRIOR", 1 end
-_G.C_SpecializationInfo = {
-    GetNumSpecializationsForClassID = function() return 3 end,
-    GetSpecialization = function() return 1 end,
-}
-_G.GetSpecializationInfoForClassID = function(_, i) return 70 + i, "Spec" .. i, "", 12345 end
 _G.UnitName = function() return playerName end
 _G.GetRealmName = function() return "Realm" end
-_G.ReloadUI = function() end
 _G.StaticPopupDialogs = {}
 _G.StaticPopup_Show = function(name) popups[#popups + 1] = name return true end
 
 local ns = { data = {}, Wizard = {} }
-for _, path in ipairs({ "Data/Classes/BlizzardCDM.lua", "Installer/Core.lua", "Installer/Setup.lua" }) do
+for _, path in ipairs({ "Installer/Core.lua", "Installer/Setup.lua" }) do
     local chunk, err = loadfile(path)
     if not chunk then
         print("FAIL  could not load " .. path .. ": " .. tostring(err))
@@ -127,7 +109,7 @@ account({ loaded = false })
 expectFresh("loaded false")
 
 ---------------------------------------------------------------------------------
--- Every writer of the install record raises it
+-- The install record raises it, through the writers that run headless
 ---------------------------------------------------------------------------------
 
 account({ loaded = true })
@@ -184,8 +166,7 @@ opened = 0
 StaticPopupDialogs.KITNUI_OVERWRITE_CONFIRM.OnAccept()
 eq(opened, 1, "Yes opens the wizard")
 
--- No identifiable character: refused, so a missing key can never read as a
--- character with nothing to overwrite.
+-- No identifiable character: refused, whatever the account holds.
 account({ loaded = true })
 playerName = nil
 local realPrint = _G.print

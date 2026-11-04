@@ -872,8 +872,8 @@ end
 ---------------------------------------------------------------------------------
 
 local function ConfirmOverwriteInstall(fn)
-    -- Refused rather than degraded. Reading a nil key as "no record" would skip
-    -- the confirmation below and overwrite the user's profiles unasked.
+    -- Refused rather than degraded: with no key the wizard could not record the
+    -- install on this character.
     local key = ns.GetCharKey()
     if not key then
         print(ns.title .. ": Could not identify this character, so nothing was started. Try again in a moment.")
