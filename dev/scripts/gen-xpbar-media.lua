@@ -1,4 +1,4 @@
--- Draws the XP bar's two textures as uncompressed TGA: white shapes on
+-- Draws the XP bar's three textures as uncompressed TGA: white shapes on
 -- alpha, tinted in game. Run by hand from the repo root, with the folder
 -- KitnUI_EUI/Media/XPBar already made:
 --
@@ -63,4 +63,8 @@ write("stripes", solid(function(x, y) return (x + y) % SIZE < SIZE / 2 end, STRI
 
 write("arrow", solid(polygon({ { 16, 30 }, { 28, 16 }, { 20, 16 }, { 20, 3 }, { 12, 3 }, { 12, 16 }, { 4, 16 } }), 1))
 
-print("wrote stripes.tga and arrow.tga to " .. OUT)
+-- One straight fade, opaque on the bottom row and clear on the top. Each strip of
+-- the Sweep's glow turns it with texture coordinates.
+write("glowfade", function(_, y) return math.floor(255 * (1 - y / (SIZE - 1)) + 0.5) end)
+
+print("wrote stripes.tga, arrow.tga and glowfade.tga to " .. OUT)

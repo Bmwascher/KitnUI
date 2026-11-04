@@ -20,6 +20,7 @@ local Plain = ns.EUIPlain
 X.FX_MASKED_MOTION = true
 
 local GOLD_R, GOLD_G, GOLD_B = 1, 0.82, 0.25
+local GLOW_FADE = "Interface\\AddOns\\KitnUI_EUI\\Media\\XPBar\\glowfade"
 local SURGE_RIBBON, SURGE_PIP = "ui-castingbar-full-glow-standard", "ui-castingbar-pip"
 local SURGE_GLOW, SURGE_FLARE = "cast_standard_pipglow", "cast-empowered-pipflare"
 
@@ -258,10 +259,14 @@ local function PlayFlash(w)
     return set
 end
 
--- A strip of the Sweep's glow, outside the frame.
-local function GlowStrip(w, set, p1, rel1, p2, rel2)
+-- A strip of the Sweep's glow, outside the frame. The fade is drawn, because
+-- SetGradient painted these strips plain white; the texture coordinates (...)
+-- turn its opaque edge to the frame.
+local function GlowStrip(w, set, p1, rel1, p2, rel2, ...)
     local t = w.fxGlow:CreateTexture(nil, "ARTWORK")
-    t:SetTexture(X.WHITE)
+    t:SetTexture(GLOW_FADE)
+    t:SetTexCoord(...)
+    t:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
     t:SetBlendMode("ADD")
     t:SetPoint(p1, w.frame, rel1)
     t:SetPoint(p2, w.frame, rel2)
@@ -278,10 +283,10 @@ local function PlaySweep(w, view, p)
         set.band = InBar(w, set)
         set.band:SetVertexColor(GOLD_R, GOLD_G, GOLD_B, 1)
         set.move = Move(set.group, set.band, SWEEP_TIME)
-        set.top = GlowStrip(w, set, "BOTTOMLEFT", "TOPLEFT", "BOTTOMRIGHT", "TOPRIGHT")
-        set.bottom = GlowStrip(w, set, "TOPLEFT", "BOTTOMLEFT", "TOPRIGHT", "BOTTOMRIGHT")
-        set.leftSide = GlowStrip(w, set, "TOPRIGHT", "TOPLEFT", "BOTTOMRIGHT", "BOTTOMLEFT")
-        set.rightSide = GlowStrip(w, set, "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT")
+        set.top = GlowStrip(w, set, "BOTTOMLEFT", "TOPLEFT", "BOTTOMRIGHT", "TOPRIGHT", 0, 1, 0, 1)
+        set.bottom = GlowStrip(w, set, "TOPLEFT", "BOTTOMLEFT", "TOPRIGHT", "BOTTOMRIGHT", 0, 1, 1, 0)
+        set.leftSide = GlowStrip(w, set, "TOPRIGHT", "TOPLEFT", "BOTTOMRIGHT", "BOTTOMLEFT", 0, 0, 1, 0, 0, 1, 1, 1)
+        set.rightSide = GlowStrip(w, set, "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", 0, 1, 1, 1, 0, 0, 1, 0)
         for i = 1, #set.regions do
             for j = 1, #SWEEP_STEPS do
                 local s = SWEEP_STEPS[j]
@@ -298,12 +303,6 @@ local function PlaySweep(w, view, p)
     set.bottom:SetHeight(size)
     set.leftSide:SetWidth(size)
     set.rightSide:SetWidth(size)
-    -- Each strip fades away from the frame. Set on every play, after the sizes:
-    -- a gradient set only as a strip is made can paint plain white.
-    Gradient(w, set.top, "VERTICAL", GOLD_R, GOLD_G, GOLD_B, 1, 0)
-    Gradient(w, set.bottom, "VERTICAL", GOLD_R, GOLD_G, GOLD_B, 0, 1)
-    Gradient(w, set.leftSide, "HORIZONTAL", GOLD_R, GOLD_G, GOLD_B, 0, 1)
-    Gradient(w, set.rightSide, "HORIZONTAL", GOLD_R, GOLD_G, GOLD_B, 1, 0)
     return set
 end
 

@@ -24,7 +24,7 @@ local function eq(actual, expected, label)
 end
 
 -- The drawn files: uncompressed true color, 32 by 32, with alpha.
-for _, name in ipairs({ "stripes", "arrow" }) do
+for _, name in ipairs({ "stripes", "arrow", "glowfade" }) do
     local f = io.open("KitnUI_EUI/Media/XPBar/" .. name .. ".tga", "rb")
     check(f ~= nil, name .. ".tga exists")
     if f then
@@ -35,6 +35,34 @@ for _, name in ipairs({ "stripes", "arrow" }) do
         eq(bytes:byte(13) + bytes:byte(14) * 256, 32, name .. ".tga: its width")
         eq(bytes:byte(15) + bytes:byte(16) * 256, 32, name .. ".tga: its height")
         eq(bytes:byte(17), 32, name .. ".tga: 32 bits per pixel")
+    end
+end
+
+-- The glow's fade, read back from the shipped bytes: white throughout, the same
+-- across each row, opaque at the bottom row and clear at the top.
+do
+    local f = io.open("KitnUI_EUI/Media/XPBar/glowfade.tga", "rb")
+    if f then
+        local bytes = f:read("*a")
+        f:close()
+        local white, level, falling = true, true, true
+        local above = 256
+        for y = 0, 31 do
+            local rowAlpha = bytes:byte(18 + y * 32 * 4 + 4)
+            for x = 0, 31 do
+                local at = 18 + (y * 32 + x) * 4
+                local b, g, r, a = bytes:byte(at + 1, at + 4)
+                white = white and b == 255 and g == 255 and r == 255
+                level = level and a == rowAlpha
+            end
+            falling = falling and rowAlpha < above
+            above = rowAlpha
+        end
+        check(white, "glowfade.tga: white in every pixel")
+        check(level, "glowfade.tga: the same across each row")
+        check(falling, "glowfade.tga: alpha falls from row to row")
+        eq(bytes:byte(18 + 4), 255, "glowfade.tga: opaque at its bottom row")
+        eq(bytes:byte(18 + 31 * 32 * 4 + 4), 0, "glowfade.tga: clear at its top row")
     end
 end
 
@@ -94,15 +122,13 @@ end
 methods.Stop = function(self) self.playing = false end
 methods.AddMaskTexture = function(self, mask) self.mask = mask end
 methods.RemoveMaskTexture = function(self) self.mask = nil end
-methods.SetTexCoord = function(self, a, b, c, d) self.tc = { a, b, c, d } end
+methods.SetTexCoord = function(self, ...) self.tc = { ... } end
+methods.SetTexture = function(self, file) self.file = file end
+methods.SetVertexColor = function(self, r, g, b, a) self.vertex = { r, g, b, a } end
 methods.SetPoint = function(self, point, rel, relPoint, x, y) self.pt = { point, rel, relPoint, x, y } end
 methods.SetWidth = function(self, v) self.width = v end
 methods.SetHeight = function(self, v) self.height = v end
-methods.SetGradient = function(self, orientation, minColor, maxColor)
-    self.gradients = (self.gradients or 0) + 1
-    self.gradient = { orientation = orientation, height = self.height, width = self.width,
-        min = { minColor.r, minColor.g, minColor.b, minColor.a }, max = { maxColor.r, maxColor.g, maxColor.b, maxColor.a } }
-end
+methods.SetGradient = function(self) self.gradients = (self.gradients or 0) + 1 end
 methods.SetText = function(self, v) self.text = v end
 
 _G.CreateFrame = function(kind)
@@ -110,9 +136,7 @@ _G.CreateFrame = function(kind)
     return Obj(kind)
 end
 _G.UIParent = Obj("Frame")
-_G.CreateColor = function()
-    return { SetRGBA = function(self, r, g, b, a) self.r, self.g, self.b, self.a = r, g, b, a end }
-end
+_G.CreateColor = function() return { SetRGBA = NOOP } end
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 
 local missingAtlas
@@ -467,28 +491,23 @@ end
 
 resetSettings()
 do
-    -- Each strip's field, its orientation, its fade and the dimension Glow Size sets.
+    -- Each strip's field, the coordinates that turn the fade's opaque edge to the
+    -- frame, and the dimension Glow Size sets.
     local STRIPS = {
-        { "top", "VERTICAL", 1, 0, "height" },
-        { "bottom", "VERTICAL", 0, 1, "height" },
-        { "leftSide", "HORIZONTAL", 0, 1, "width" },
-        { "rightSide", "HORIZONTAL", 1, 0, "width" },
+        { "top", "0,1,0,1", "height" },
+        { "bottom", "0,1,1,0", "height" },
+        { "leftSide", "0,0,1,0,0,1,1,1", "width" },
+        { "rightSide", "0,1,1,1,0,0,1,0", "width" },
     }
-    local function rgb(color)
-        return color and (color[1] .. "," .. color[2] .. "," .. color[3])
-    end
-    local function checkStrips(set, plays, size, when)
+    local function checkStrips(set, size, when)
         for _, strip in ipairs(STRIPS) do
             local tex = set and set[strip[1]]
-            local grad = tex and tex.gradient
             local name = "glow, " .. when .. ", " .. strip[1]
-            eq(tex and tex.gradients, plays, name .. ": a gradient on each play")
-            eq(grad and grad.orientation, strip[2], name .. ": its orientation")
-            eq(grad and rgb(grad.min), "1,0.82,0.25", name .. ": gold at one end")
-            eq(grad and rgb(grad.max), "1,0.82,0.25", name .. ": gold at the other")
-            eq(grad and grad.min[4], strip[3], name .. ": the fade's first end")
-            eq(grad and grad.max[4], strip[4], name .. ": the fade's other end")
-            eq(grad and grad[strip[5]], size, name .. ": set after its size")
+            check(tex ~= nil and tostring(tex.file):find("glowfade", 1, true) ~= nil, name .. ": draws the fade")
+            eq(tex and tex.tc and table.concat(tex.tc, ","), strip[2], name .. ": fading away from the frame")
+            eq(tex and tex.vertex and table.concat(tex.vertex, ","), "1,0.82,0.25,1", name .. ": tinted gold")
+            eq(tex and tex.gradients, nil, name .. ": with no gradient call")
+            eq(tex and tex[strip[3]], size, name .. ": as deep as Glow Size")
         end
     end
 
@@ -496,13 +515,13 @@ do
     settings.xpLevelEffect = "sweep"
     X.PlayLevelEffect(w, view)
     local set = w.fxSets and w.fxSets.sweep
-    checkStrips(set, 1, 8, "first play")
+    checkStrips(set, 8, "first play")
 
     X.StopEffects(w)
     X.Draw(w, view, data)
     settings.xpGlowSize = 12
     X.PlayLevelEffect(w, view)
-    checkStrips(set, 2, 12, "second play")
+    checkStrips(set, 12, "second play")
 end
 
 ---------------------------------------------------------------------------------
