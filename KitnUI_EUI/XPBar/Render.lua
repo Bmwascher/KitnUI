@@ -18,6 +18,8 @@ local floor, ceil, max, min = math.floor, math.ceil, math.max, math.min
 local Plain = ns.EUIPlain
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
+X.WHITE = WHITE
+local STRIPES = "Interface\\AddOns\\KitnUI_EUI\\Media\\XPBar\\stripes"
 local PROF_FRAME = "Professions-skillbar-frame"
 local BLIZZ_BG, BLIZZ_MASK = "UI-HUD-CoolDownManager-Bar-BG", "UI-HUD-CoolDownManager-Bar"
 local FLIP_PREFIX = "Skillbar_Fill_Flipbook_"
@@ -56,6 +58,8 @@ local function Atlas(name)
     end
     return info or nil
 end
+
+X.Atlas = Atlas
 
 function X.StyleAvailable(style)
     local EUI = _G.EllesmereUI
@@ -132,6 +136,8 @@ local function Outline(flag)
     return "OUTLINE"
 end
 
+X.FontPath, X.OutlineFlag = FontPath, Outline
+
 local function BarTexture(name)
     if name and name ~= "" then return Fetch("statusbar", name) or WHITE end
     return WHITE
@@ -180,10 +186,10 @@ function X.NewWidget(parent, kind)
     w.dividers:SetFrameLevel(base + 10)
     w.border = CreateFrame("Frame", nil, frame)
     w.border:SetAllPoints(frame)
-    w.border:SetFrameLevel(base + 11)
+    w.border:SetFrameLevel(base + 12)
     w.textHost = CreateFrame("Frame", nil, frame)
     w.textHost:SetAllPoints(frame)
-    w.textHost:SetFrameLevel(base + 12)
+    w.textHost:SetFrameLevel(base + 13)
     for _, key in ipairs(kind == "xp" and XP_TEXTS or FB_TEXTS) do
         local fs = w.textHost:CreateFontString(nil, "OVERLAY")
         fs:SetWordWrap(false)
@@ -208,6 +214,17 @@ local function SetBarTexture(bar, tex)
     return bar:GetStatusBarTexture()
 end
 
+function X.AccentColor()
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.GetAccentColor then
+        local ok, r, g, b = pcall(EUI.GetAccentColor)
+        if ok and type(r) == "number" then return r, g, b end
+    end
+    local pink = ns.KITN_PINK
+    if type(pink) == "table" then return pink[1], pink[2], pink[3] end
+    return nil
+end
+
 -- The fill's gradient ends and direction. The faction bar and the solid
 -- styles draw one color; Profession falls back to the solid color wherever
 -- the flipbook is not drawn.
@@ -228,15 +245,39 @@ local function FillColors(view, p, data)
         local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
         if c then r, g, b = c.r, c.g, c.b end
     elseif style == "accent" then
-        local EUI = _G.EllesmereUI
-        if EUI and EUI.GetAccentColor then
-            local ok, ar, ag, ab = pcall(EUI.GetAccentColor)
-            if ok and type(ar) == "number" then r, g, b = ar, ag, ab end
-        end
-        if not r and type(ns.KITN_PINK) == "table" then r, g, b = ns.KITN_PINK[1], ns.KITN_PINK[2], ns.KITN_PINK[3] end
+        r, g, b = X.AccentColor()
     end
     if not r then r, g, b = view("xpSolidR"), view("xpSolidG"), view("xpSolidB") end
     return "HORIZONTAL", r, g, b, r, g, b
+end
+
+function X.FillEndColor(view, p, data)
+    local _, _, _, _, r, g, b = FillColors(view, p, data)
+    return r, g, b
+end
+
+-- One repeating texture over the rested segment, in this set's own bar, so
+-- the gaps cut it as they cut the fill. Made only when first shown.
+local function PaintStripes(w, set, view, data)
+    local from, to = data.questEnd or 0, data.restedEnd or 0
+    if view("xpRestedStripes") ~= true or to <= from then
+        if set.stripes then set.stripes:Hide() end
+        return
+    end
+    local t = set.stripes
+    if not t then
+        t = set.rested:CreateTexture(nil, "OVERLAY")
+        t:SetTexture(STRIPES, "REPEAT", "REPEAT")
+        set.stripes = t
+    end
+    local size = max(1, tonumber(view("xpStripeSize")) or 1)
+    local left, right = from * w.bw / 100, to * w.bw / 100
+    local u1, u2 = M.StripeCoords(left, right, size)
+    t:ClearAllPoints()
+    t:SetPoint("TOPLEFT", set.rested, "TOPLEFT", left, 0)
+    t:SetPoint("BOTTOMRIGHT", set.rested, "BOTTOMLEFT", right, 0)
+    t:SetTexCoord(u1, u2, 0, w.bh / size)
+    t:Show()
 end
 
 -- Paints one set of background and bars: the widget's own, or a gap
@@ -250,6 +291,7 @@ local function PaintSet(w, set, view, p, data, tex, hideFill)
         SetBarTexture(set.quest, tex)
         set.quest:SetStatusBarColor(view("xpQuestR"), view("xpQuestG"), view("xpQuestB"), view("xpQuestA"))
         set.quest:SetValue(data.questEnd or 0)
+        PaintStripes(w, set, view, data)
     end
     local ftex = SetBarTexture(set.fill, tex)
     set.fill:SetStatusBarColor(1, 1, 1, 1)
@@ -421,11 +463,18 @@ local function MaskBar(w, bar, on)
     bar.kuiMasked = on and tex or nil
 end
 
+-- For a region made between draws, which no SyncMasks run would reach until
+-- the next draw.
+function X.MaskEffect(w, region)
+    MaskOne(w, region, w.masksOn == true)
+end
+
 -- The Blizzard style's silhouette on every texture that can paint inside the
 -- bar; the backgrounds are hidden instead, since the style's frame art is the
 -- background. Undone when the style changes. Runs after the gaps, tiles and
 -- lines are made, so textures made in this draw are covered.
 local function SyncMasks(w, on)
+    w.masksOn = on and true or false
     if not (on or w.blizzMask) then return end
     if on and not w.blizzMask then
         w.blizzMask = w.body:CreateMaskTexture()
@@ -433,6 +482,7 @@ local function SyncMasks(w, on)
         w.blizzMask:SetAllPoints(w.body)
     end
     for i = 1, #w.bars do MaskBar(w, w.bars[i], on) end
+    MaskOne(w, w.stripes, on)
     local segs = w.segments
     if segs then
         for i = 1, #segs do
@@ -441,6 +491,7 @@ local function SyncMasks(w, on)
             MaskBar(w, copy.rested, on)
             MaskBar(w, copy.quest, on)
             MaskBar(w, copy.fill, on)
+            MaskOne(w, copy.stripes, on)
         end
     end
     local marks = w.marks
@@ -457,6 +508,10 @@ local function SyncMasks(w, on)
     local strips = w.gapStrips
     if strips then
         for i = 1, #strips do MaskOne(w, strips[i], on) end
+    end
+    local fx = w.fxRegions
+    if fx then
+        for i = 1, #fx do MaskOne(w, fx[i], on) end
     end
 end
 
@@ -901,6 +956,7 @@ function X.Draw(w, view, data)
         CF.Seat(w.classic, w.body, CF.ScaleK(), false)
     end
     local bw, bh = max(1, width - 2 * ix), max(1, height - 2 * iy)
+    w.bw, w.bh = bw, bh
     local tex = BarTexture(view(p .. "Texture"))
     local divider = view(p .. "Divider")
     local prof = p == "xp" and view("xpFillStyle") == "profession" and X.ProfessionAvailable(view("xpProfFill"))
@@ -911,5 +967,6 @@ function X.Draw(w, view, data)
     local font, flags = FontPath(view(p .. "Font")), Outline(view(p .. "Outline"))
     Lines(w, view, p, data, bw, bh, divider == "lines", font, flags)
     SyncMasks(w, style == "blizzard")
+    X.SyncReady(w, view, data, bw, bh)
     LayoutTexts(w, view, p, data, font, flags, width, bw)
 end

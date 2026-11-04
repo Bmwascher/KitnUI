@@ -205,7 +205,7 @@ read_globals = {
     "GetMaxPlayerLevel", "GetMaxLevelForPlayerExpansion", "GameRulesUtil",
     "C_QuestLog", "GetQuestLogRewardXP",
     "C_Reputation", "C_GossipInfo", "C_MajorFactions", "C_DelvesUI", "C_PartyInfo",
-    "RequestTimePlayed", "NUM_CHAT_WINDOWS", "BreakUpLargeNumbers", "COMBATLOG_XPGAIN_FIRSTPERSON",
+    "RequestTimePlayed", "BreakUpLargeNumbers", "COMBATLOG_XPGAIN_FIRSTPERSON",
     "FACTION_BAR_COLORS", "StatusTrackingBarManager", "time", "IsInGroup", "IsInRaid",
 
     -- Misc

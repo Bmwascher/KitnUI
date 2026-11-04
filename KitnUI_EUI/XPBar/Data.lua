@@ -111,6 +111,7 @@ end
 -- reads plain standing only.
 local function Fill(rec, id, data, rep)
     rec.paragon, rec.reaction = nil, nil
+    rec.rank, rec.total = nil, nil
     if not ns.IS_FOREVER then
         local gossip = _G.C_GossipInfo
         local friend = gossip and Call(gossip.GetFriendshipReputation, id)
@@ -124,6 +125,7 @@ local function Fill(rec, id, data, rep)
             rec.cur = Num(friend.standing) or 0
             rec.max = nextAt or rec.cur
             rec.isMax = nextAt == nil
+            rec.rank, rec.total = level or rec.min, rec.cur
             return rec
         end
         if Plain(Call(rep.IsFactionParagonForCurrentPlayer or rep.IsFactionParagon, id)) == true then
@@ -134,6 +136,7 @@ local function Fill(rec, id, data, rep)
                 rec.min, rec.cur, rec.max, rec.isMax = 0, value % threshold, threshold, false
                 paragon.pending = Plain(pending) == true
                 rec.paragon = paragon
+                rec.rank, rec.total = math.floor(value / threshold), value
                 return rec
             end
         end
@@ -145,6 +148,7 @@ local function Fill(rec, id, data, rep)
                 rec.label = "Renown " .. (Num(md.renownLevel) or 0)
                 rec.min, rec.cur, rec.max = 0, Num(md.renownReputationEarned) or 0, Num(md.renownLevelThreshold) or 0
                 rec.isMax = Plain(Call(major.HasMaximumRenown, id)) == true
+                rec.rank, rec.total = Num(md.renownLevel) or 0, rec.cur
                 return rec
             end
         end
@@ -155,6 +159,7 @@ local function Fill(rec, id, data, rep)
     rec.label = StandingLabel(rec.reaction)
     rec.min, rec.cur, rec.max = lo, Num(data.currentStanding) or 0, hi
     rec.isMax = (rec.reaction or 0) >= MAX_REACTION or hi <= lo
+    rec.rank, rec.total = rec.reaction, rec.cur
     return rec
 end
 

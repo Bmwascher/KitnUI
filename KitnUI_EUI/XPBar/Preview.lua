@@ -15,7 +15,7 @@ local STAGE_PAD_Y = 14
 -- The bar picker above the stage: its gap from the top, width, height, and
 -- the gap below it.
 local PICK_TOP, PICK_W, PICK_H, PICK_GAP = 14, 260, 30, 12
--- Overlay levels above a bar's base, over its top layer (the texts, at 12).
+-- Overlay levels above a bar's base, over its top layer (the texts, at 13).
 local HIT_FRAME, HIT_BODY, HIT_FILL, HIT_TEXT = 20, 21, 22, 30
 -- How far the frame's overlay reaches past the bar.
 local RING_OUT = 4
@@ -27,7 +27,7 @@ local Plain = ns.EUIPlain
 -- space, so the centering must not live on the scaled frame.
 local stage, wrap, content, picker
 local widgets = {}
-local hits, hitsBuilt = { xp = {}, fb = {} }, {}
+local hits, hitsBuilt = { xp = {}, fb = {}, tk = {} }, {}
 local availW = 1
 -- The bar the page and the preview show, kept for the session only.
 local selected = "xp"
@@ -37,13 +37,18 @@ local selected = "xp"
 local sampleXP = {
     level = 59, cur = 94410, max = 209800, quest = 31470, rested = 52450,
     atMax = false, xpOff = false, levelTime = 1200, elapsed = 3600, gained = 90000,
+    -- The card's rows; the bars read none of these.
+    trend = "up", played = 1468800, pace = 1500,
+    hist = { n = 3, levels = { 58, 57, 56 }, texts = { "1:12:05", "58:40", "49:12" } },
 }
 -- Argent Dawn at Revered: 13,020 of the 21,000 that reach Exalted.
 local REVERED = 7
 local sampleFaction = {
     kind = "standard", name = "Argent Dawn", reaction = REVERED, cur = 13020, min = 0, max = 21000, isMax = false,
 }
-local xpOut, fbOut = {}, {}
+local xpOut, fbOut, cardOut = {}, {}, {}
+-- What Play Gain draws on the sample: a span in percent, and the amounts.
+local SAMPLE_SPAN, SAMPLE_XP, SAMPLE_REP = 10, 20980, 2100
 
 local function Pad()
     return (EllesmereUI and EllesmereUI.CONTENT_PAD) or 10
@@ -64,7 +69,7 @@ end
 -- scroll, so the page then goes to its top: the player lands on the selected
 -- bar's first section.
 function X.SelectBar(kind)
-    if (kind ~= "xp" and kind ~= "fb") or kind == selected then return end
+    if (kind ~= "xp" and kind ~= "fb" and kind ~= "tk") or kind == selected then return end
     selected = kind
     if EllesmereUI and EllesmereUI.RefreshPage then
         pcall(EllesmereUI.RefreshPage, EllesmereUI, true)
@@ -111,6 +116,30 @@ local function AddHit(w, key, element, isText, level)
     if ok and btn then hits[w.kind][key] = btn end
 end
 
+local function AddCardHit(w, key, element, isText, go)
+    local ok, btn = pcall(EllesmereUI.CreatePreviewHitOverlay, element, go, key, isText, w.base + HIT_TEXT,
+        { parent = w.frame })
+    if ok and btn then hits.tk[key] = btn end
+end
+
+local function GoToTop() Navigate("tkTop") end
+
+-- An overlay fits one text, so each part of the top line and both columns of a
+-- row has its own. A row's overlays lead to whatever that row shows now, so
+-- which rows are on never strands a press.
+local function BuildCardHits(w)
+    local card = w.frame
+    AddHit(w, "tkBack", card, false, HIT_FRAME)
+    AddCardHit(w, "tkTop", card.top, true, GoToTop)
+    AddCardHit(w, "tkDing", card.topR, true, GoToTop)
+    AddCardHit(w, "tkArrow", card.arrow, false, GoToTop)
+    for i = 1, #card.left do
+        local function GoToRow() Navigate(cardOut.keys and cardOut.keys[i]) end
+        AddCardHit(w, "tkRow" .. i, card.left[i], true, GoToRow)
+        AddCardHit(w, "tkValue" .. i, card.right[i], true, GoToRow)
+    end
+end
+
 -- Each part of a bar leads to the row that sets it. Made once per bar, the
 -- first time the host has the overlay helper and the colors it draws with.
 local function BuildHits(kind)
@@ -120,6 +149,10 @@ local function BuildHits(kind)
         return
     end
     hitsBuilt[kind] = true
+    if kind == "tk" then
+        BuildCardHits(w)
+        return
+    end
     local ring = CreateFrame("Frame", nil, w.frame)
     ring:SetPoint("TOPLEFT", w.frame, "TOPLEFT", -RING_OUT, RING_OUT)
     ring:SetPoint("BOTTOMRIGHT", w.frame, "BOTTOMRIGHT", RING_OUT, -RING_OUT)
@@ -129,9 +162,31 @@ local function BuildHits(kind)
     for key, fs in pairs(w.texts) do AddHit(w, key, fs, true, HIT_TEXT) end
 end
 
+local function SyncCardHit(btn, on)
+    if not btn then return end
+    btn:SetShown(on)
+    if on and btn._resizeToText then pcall(btn._resizeToText) end
+end
+
+local function SyncCardHits()
+    local list = hits.tk
+    SyncCardHit(list.tkTop, true)
+    SyncCardHit(list.tkDing, true)
+    SyncCardHit(list.tkArrow, cardOut.arrow ~= nil)
+    for i = 1, #widgets.tk.frame.left do
+        local on = i <= (cardOut.n or 0)
+        SyncCardHit(list["tkRow" .. i], on)
+        SyncCardHit(list["tkValue" .. i], on)
+    end
+end
+
 -- The fill's overlay covers the filled part only; a text's shows only with
 -- its text.
 local function SyncHits(kind)
+    if kind == "tk" then
+        SyncCardHits()
+        return
+    end
     local w, list = widgets[kind], hits[kind]
     local tex = list.fill and w.fill:GetStatusBarTexture()
     if tex then
@@ -149,21 +204,41 @@ local function SyncHits(kind)
 end
 
 local function Layout()
+    if selected == "tk" and content and not widgets.tk then
+        local card = X.NewCard(content)
+        widgets.tk = { kind = "tk", frame = card, base = Plain(card:GetFrameLevel()) or 0, above = 0, below = 0 }
+        BuildHits("tk")
+    end
     local w = content and widgets[selected]
     if not w then return 0 end
-    local other = widgets[selected == "xp" and "fb" or "xp"]
-    if other then other.frame:Hide() end
-    if selected == "xp" then
+    for kind, other in pairs(widgets) do
+        if kind ~= selected then
+            X.StopEffects(other)
+            other.frame:Hide()
+        end
+    end
+    if selected == "tk" then
+        X.TickerView(sampleXP, X.Get, cardOut)
+        w.frame.dirty = true
+        X.DrawCard(w.frame, X.Get, cardOut)
+    elseif selected == "xp" then
         X.XPView(sampleXP, X.Get, xpOut)
+        -- The sample shows Ready Glow while its switch is on, ready or not.
+        xpOut.readyEnd = X.Get("xpReadyGlow") == true and xpOut.questEnd or nil
         X.Draw(w, X.Get, xpOut)
     else
         X.FactionView(SampleFaction(), X.Get, fbOut)
         X.Draw(w, X.Get, fbOut)
     end
     w.frame:Show()
+    -- The draw above ran while the bar could be hidden.
+    if selected == "xp" then X.SyncReady(w, X.Get, xpOut, w.bw, w.bh) end
     SyncHits(selected)
-    local bw = tonumber(X.Get(selected .. "Width")) or 100
-    local bh = tonumber(X.Get(selected .. "Height")) or 10
+    local bw, bh = w.frame.kuiW, w.frame.kuiH
+    if selected ~= "tk" then
+        bw = tonumber(X.Get(selected .. "Width")) or 100
+        bh = tonumber(X.Get(selected .. "Height")) or 10
+    end
     w.frame:ClearAllPoints()
     w.frame:SetPoint("TOP", content, "TOP", 0, -(w.above or 0))
     local h = (w.above or 0) + bh + (w.below or 0)
@@ -201,7 +276,12 @@ function X.BuildPreviewHeader(parent, width)
     wrap:ClearAllPoints()
     wrap:SetPoint("TOP", stage, "TOP", 0, -STAGE_PAD_Y)
     wrap:Show()
-    content = content or CreateFrame("Frame", nil, wrap)
+    if not content then
+        content = CreateFrame("Frame", nil, wrap)
+        content:SetScript("OnHide", function()
+            for _, w in pairs(widgets) do X.StopEffects(w) end
+        end)
+    end
     content:SetParent(wrap)
     content:ClearAllPoints()
     content:SetPoint("TOPLEFT", wrap, "TOPLEFT", 0, 0)
@@ -227,4 +307,19 @@ end
 -- A cached revisit only redraws; it never rebuilds the widgets.
 function X.PreviewRestore()
     X.PreviewRefresh()
+end
+
+-- Plays a moment on the selected bar's sample. Play Gain also runs the
+-- profession fill's own pass.
+function X.PreviewPlay(moment)
+    local w = content and widgets[selected]
+    if not w or selected == "tk" or Plain(content:IsVisible()) ~= true then return end
+    if moment == "level" then
+        X.PlayLevelEffect(w, X.Get)
+        return
+    end
+    local data = selected == "xp" and xpOut or fbOut
+    local to = data.fill or 0
+    X.PlayGainEffect(w, X.Get, data, math.max(0, to - SAMPLE_SPAN), to, selected == "xp" and SAMPLE_XP or SAMPLE_REP)
+    X.PlayGain(w)
 end

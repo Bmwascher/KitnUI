@@ -1311,6 +1311,53 @@ do
     eq(item, "KitnUI Reputation Bar", "xp label: the reputation bar's position, with no Unlock Mode label known")
     group = ns.EUISettingLabel("addons." .. TOP_BAR .. ".tbIconSize", { id = TOP_BAR })
     eq(group, "Top Bar", "xp label: a Top Bar key keeps its group")
+
+    local function xpLabelOf(key)
+        local _, label = ns.EUISettingLabel("addons." .. TOP_BAR .. "." .. key, { id = XP })
+        return label
+    end
+    eq(xpLabelOf("xpTickerEnabled"), "XP ticker on", "xp label: the card's switch is named")
+    eq(xpLabelOf("xpTickerPos"), "XP ticker position", "xp label: the card's position is named")
+    eq(xpLabelOf("xpTickerPos.x"), "XP ticker position (x)", "xp label: with what lies below it")
+    eq(xpLabelOf("xpLevelEffect"), "Level-up effect", "xp label: the level-up effect is named")
+    eq(xpLabelOf("fbLevelEffect"), "Reputation rank-up effect", "xp label: the rank-up effect is named")
+    eq(xpLabelOf("xpGlowSize"), "Level-up glow size", "xp label: the level-up glow is named")
+    eq(xpLabelOf("fbGlowSize"), "Reputation rank-up glow size", "xp label: the rank-up glow is named")
+    eq(xpLabelOf("xpGainShowAmount"), "Show amount gained", "xp label: the amount's switch reads as on the page")
+    eq(xpLabelOf("fbGainShowAmount"), "Reputation show amount gained", "xp label: on the other bar too")
+    eq(xpLabelOf("xpGainTextSize"), "Amount text size", "xp label: the amount's size reads as on the page")
+    eq(xpLabelOf("fbGainTextSize"), "Reputation amount text size", "xp label: on the other bar too, its size")
+    eq(xpLabelOf("xpStarSize"), "Star size", "xp label: a saved key with no default reads as tidied")
+    eq(xpLabelOf("xpTickerFontSize"), "Ticker font size", "xp label: a card key reads as tidied")
+    eq(xpLabelOf("xpGainEffect"), "Gain effect", "xp label: a gain key reads as tidied")
+    eq(xpLabelOf("fbGainEffect"), "Reputation gain effect", "xp label: with Reputation on the other bar")
+    eq(xpLabelOf("xpGainColor"), "Gain color", "xp label: the color reads by its stem")
+    eq(xpLabelOf("fbGainColor"), "Reputation gain color", "xp label: on both bars")
+
+    local tickerKeys = { KitnUI_XPTicker = TOP_BAR, KitnUI_TopBar = TOP_BAR }
+    eq(ns.EUIRowOf("addons." .. TOP_BAR .. ".xpTickerFontSize", tickerKeys), XP, "xp owner: a card key")
+    eq(ns.EUIRowOf("unlockLayout.anchors.KitnUI_XPTicker", tickerKeys), XP, "xp owner: the card's Unlock element")
+    local tickerGroup, tickerItem = ns.EUISettingLabel("unlockLayout.anchors.KitnUI_XPTicker", { id = XP })
+    eq(tickerGroup, "Positions", "xp label: the card's position is a position")
+    eq(tickerItem, "KitnUI XP Ticker", "xp label: with no Unlock Mode label known")
+
+    local function tickerSide(y)
+        return {
+            addons = { [TOP_BAR] = { xpTickerFontSize = y } },
+            unlockLayout = { anchors = { KitnUI_XPTicker = { y = y } } },
+        }
+    end
+    local moved = tickerSide(600)
+    ns.EUIKeepSlices(moved, { conflicts = {} }, tickerSide(900), xpRows, { [TOP_BAR] = true }, tickerKeys)
+    eq(moved.unlockLayout.anchors.KitnUI_XPTicker.y, 900, "xp keep: the card's position stays the player's with the XP row kept")
+    moved = tickerSide(600)
+    ns.EUIKeepSlices(moved, { conflicts = {} }, tickerSide(900), xpRows, { [XP] = true }, tickerKeys)
+    eq(moved.unlockLayout.anchors.KitnUI_XPTicker.y, 600, "xp keep: and takes KitnUI's with the XP row taken")
+
+    local tb2, xp2 = counts({ addons = { [TOP_BAR] = { tbOpacity = 85, xpTickerFontSize = 12 } } },
+        { addons = { [TOP_BAR] = { tbOpacity = 60, xpTickerFontSize = 16 } } })
+    eq(tb2, 1, "xp walk: a card key does not change the Top Bar row's count")
+    eq(xp2, 1, "xp walk: it counts in the XP row")
 end
 
 print(string.format("%d checks, %d failures", checks, failures))

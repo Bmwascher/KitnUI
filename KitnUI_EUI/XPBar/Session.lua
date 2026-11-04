@@ -32,10 +32,17 @@ local pending
 local listening = false
 local muted = {}
 local muteTimer
+local pausedAt
+-- The total played, from a reply or a recent save, and when it was current.
+local playedBase, playedAt
+-- The clock a reading-first level-up dropped, kept for its PLAYER_LEVEL_UP.
+local heldStart, heldOf
+-- Moves on each history write; the card compares it.
+local historyGen = 0
 
--- KitnUIDB.perChar[<character>].xp. Per character and outside the EUI
--- profile, so no export carries it.
-local function Record(create)
+-- KitnUIDB.perChar[<character>]: per character and outside the EUI profile,
+-- so no export, reset or profile import touches it.
+local function Char(create)
     local key = ns.GetCharKey and ns.GetCharKey()
     local db = ns.db
     if not (key and db) then return nil end
@@ -49,11 +56,46 @@ local function Record(create)
         char = {}
         db.perChar[key] = char
     end
+    return char
+end
+
+local function Record(create)
+    local char = Char(create)
+    if not char then return nil end
     if type(char.xp) ~= "table" then
         if not create then return nil end
         char.xp = {}
     end
     return char.xp
+end
+
+-- A sibling of the session's record, so that a session save never rewrites
+-- it: { class, splits = { [level] = seconds }, reached = { [level] = total
+-- played on reaching it } }, in whole seconds.
+function X.History(create)
+    local char = Char(create)
+    if not char then return nil end
+    if type(char.xpHistory) ~= "table" then
+        if not create then return nil end
+        char.xpHistory = {}
+    end
+    local h = char.xpHistory
+    if type(h.splits) ~= "table" then h.splits = {} end
+    if type(h.reached) ~= "table" then h.reached = {} end
+    return h
+end
+
+function X.HistoryGen() return historyGen end
+
+local function WriteHistory(field, level, seconds)
+    local h = X.History(true)
+    if not h then return end
+    h[field][level] = seconds
+    if not h.class and UnitClass then
+        local _, class = UnitClass("player")
+        if type(class) == "string" and not (issecretvalue and issecretvalue(class)) then h.class = class end
+    end
+    historyGen = historyGen + 1
 end
 
 -- Starts the tracker from a stored reading, or empty, so that the next
@@ -76,8 +118,16 @@ local function AskAgain() X.RequestPlayed() end
 -- when the level-up was unseen.
 local function Counted(upTo)
     if not upTo or (levelStart and upTo == levelOf) then return false end
+    if levelStart then heldStart, heldOf = levelStart, levelOf end
     levelStart, levelOf, askAgain = nil, nil, true
     return true
+end
+
+-- Moves the session's start past the pause, so every reader of the elapsed time
+-- needs nothing more.
+local function Resume()
+    sessionStart = sessionStart + (GetTime() - pausedAt)
+    pausedAt = nil
 end
 
 -- Once per load, when the XP bar first runs. A fresh session counts from the
@@ -116,6 +166,7 @@ function X.SessionStart(kind)
             levelStart, levelOf = now - (rec.levelTime + gap), rec.levelOf
         end
     end
+    if recent and type(rec.played) == "number" then playedBase, playedAt = rec.played + gap, now end
     local beforeLoad, upLoad = 0, nil
     if fromLoad then beforeLoad, upLoad = M.Track(track, load.xp, load.max, load.level) end
     local sinceLoad, upNow = M.Track(track, t.cur, t.max, t.level)
@@ -132,6 +183,18 @@ function X.SessionStart(kind)
     elseif fromLoad then
         gained, sessionStart = sinceLoad, load.time
     end
+    -- A pause is the player's own state and a /reload is not a new session:
+    -- the frozen numbers hold, without the gap or the XP since the save.
+    if recent and rec.paused == true then
+        pausedAt = now
+        if continuing then
+            gained = type(rec.gained) == "number" and rec.gained or 0
+            sessionStart = now - (type(rec.elapsed) == "number" and rec.elapsed or 0)
+        else
+            gained, sessionStart = 0, now
+        end
+    end
+    if pausedAt and t.atMax then Resume() end
 end
 
 -- Takes one reading first, so XP earned since the last event is in the save.
@@ -143,7 +206,9 @@ function X.SessionSave()
     local now = GetTime()
     rec.gained = gained
     rec.lastXP, rec.lastMax, rec.lastLevel, rec.lastWait = track.x, track.m, track.level, track.wait
-    rec.elapsed = now - sessionStart
+    rec.elapsed = X.SessionElapsed()
+    rec.paused = pausedAt and true or nil
+    rec.played = X.PlayedTotal()
     rec.savedAt = time()
     rec.levelTime = levelStart and (now - levelStart) or nil
     rec.levelOf = levelStart and levelOf or nil
@@ -153,7 +218,7 @@ function X.SessionSave()
 end
 
 function X.SessionElapsed()
-    return started and (GetTime() - sessionStart) or 0
+    return started and ((pausedAt or GetTime()) - sessionStart) or 0
 end
 
 function X.SessionGained() return gained end
@@ -175,7 +240,11 @@ function X.OnXP()
     if not started then return end
     local t = X.ReadXP()
     local gain, upTo = M.Track(track, t.cur, t.max, t.level)
-    gained = gained + gain
+    if not pausedAt then gained = gained + gain end
+    -- The card that holds Start hides at max level, so a pause ends there. Only a
+    -- reading of max level ends it: Track has then seen the level-up during the
+    -- pause, so the rest of the old level stays out of the session.
+    if pausedAt and t.atMax then Resume() end
     if Counted(upTo) and listening and C_Timer and C_Timer.After then C_Timer.After(0, AskAgain) end
 end
 
@@ -185,12 +254,36 @@ function X.OnLevelUp(newLevel)
     if type(newLevel) ~= "number" or (issecretvalue and issecretvalue(newLevel)) then
         newLevel = X.ReadXP().level
     end
+    local split = M.LevelSplit(newLevel, levelOf, levelStart, heldOf, heldStart, GetTime())
+    if split then WriteHistory("splits", newLevel - 1, split) end
+    local total = X.PlayedTotal()
+    if total and type(newLevel) == "number" then WriteHistory("reached", newLevel, math.floor(total)) end
+    heldStart, heldOf = nil, nil
     levelStart, levelOf, askAgain = GetTime(), newLevel, false
     X.OnXP()
 end
 
 function X.OnKill(xpGain)
     M.PushKill(kills, xpGain)
+end
+
+function X.SessionPaused() return pausedAt ~= nil end
+
+-- Takes one reading first, so XP earned up to the click counts in the running
+-- session and XP earned during the pause does not. That reading can itself end
+-- a pause at max level, and no pause begins there.
+function X.SessionPause(on)
+    if not started or (on and true or false) == (pausedAt ~= nil) then return end
+    X.OnXP()
+    if on then
+        if not X.ReadXP().atMax then pausedAt = GetTime() end
+    elseif pausedAt then
+        Resume()
+    end
+end
+
+function X.PlayedTotal()
+    return playedBase and (playedBase + (GetTime() - playedAt)) or nil
 end
 
 -- Zeroes the session's XP and time now. The tracker takes this reading and
@@ -202,6 +295,7 @@ function X.ResetSession()
     if not started then return end
     X.OnXP()
     gained, sessionStart = 0, GetTime()
+    if pausedAt then pausedAt = sessionStart end
 end
 
 -- Bar.lua calls this as the XP bar's events come and go. A request whose
@@ -234,7 +328,8 @@ local function Mute()
         muteTimer:Cancel()
         muteTimer = nil
     end
-    for i = 1, tonumber(NUM_CHAT_WINDOWS) or 10 do
+    local constants = _G.Constants and _G.Constants.ChatFrameConstants
+    for i = 1, tonumber(constants and constants.MaxChatWindows) or 10 do
         local frame = _G["ChatFrame" .. i]
         if frame and frame.IsEventRegistered and frame:IsEventRegistered("TIME_PLAYED_MSG") then
             frame:UnregisterEvent("TIME_PLAYED_MSG")
@@ -246,22 +341,29 @@ local function Mute()
     end
 end
 
--- Two asks. The login ask runs at most once, in a load that began with a
--- login, muted as Mute /played in Chat says. The ask again runs after each
--- unseen level-up, in any load, always muted since the player did not type
--- it; when both are due it wins and spends the login ask too. A request that
--- raises never reached the server, so nothing is spent.
+-- Two asks, both only for something a row wants and no save supplied. The first
+-- runs once per load: after a login, muted as Mute /played in Chat says; in any
+-- other load only for a card row, always muted. The ask again runs after each
+-- unseen level-up, always muted, and spends the first too. A request that raises
+-- never reached the server, so nothing is spent.
 function X.RequestPlayed()
-    if not (started and listening) or levelStart or pending then return end
+    if not (started and listening) or pending then return end
+    local cardOn = X.Get("xpTickerEnabled") == true
+    local cardClock = cardOn and X.Get("xpTickerShowCurrent") == true
+    local wantTotal = cardOn and (X.Get("xpTickerShowPlayed") == true or X.Get("xpTickerShowPace") == true)
+    local noClock = not levelStart
+    local noTotal = wantTotal and not playedBase
+    if not ((noClock and (X.Get("xpShowLevelTime") == true or cardClock)) or noTotal) then return end
     local again = askAgain
-    local login = loadKind == "login" and not playedAsked
-    if not (again or login) then return end
-    if X.Get("xpShowLevelTime") ~= true or type(RequestTimePlayed) ~= "function" then return end
+    local login = loadKind == "login"
+    local first = not playedAsked and (login or (noClock and cardClock) or noTotal)
+    if not (again or first) then return end
+    if type(RequestTimePlayed) ~= "function" then return end
     local t = X.ReadXP()
     if t.atMax or t.xpOff then return end
     local spent = playedAsked
     playedAsked, askAgain, pending = true, false, again and "again" or "login"
-    if again or X.Get("xpMutePlayed") == true then Mute() end
+    if again or not login or X.Get("xpMutePlayed") == true then Mute() end
     if not pcall(RequestTimePlayed) then
         playedAsked, askAgain, pending = spent, again, nil
         Unmute()
@@ -271,11 +373,16 @@ end
 -- Any reply while the bar is on ends the wait and seeds the time this level,
 -- for the level the tracker has counted to once it has this reading too;
 -- chat comes back on the next frame.
-function X.OnPlayed(_, thisLevel)
+function X.OnPlayed(total, thisLevel)
     pending = nil
+    local plainTotal = type(total) == "number" and not (issecretvalue and issecretvalue(total))
+    if plainTotal then playedBase, playedAt = total, GetTime() end
     if type(thisLevel) == "number" and not (issecretvalue and issecretvalue(thisLevel)) then
         X.OnXP()
         levelStart, levelOf, askAgain = GetTime() - thisLevel, track.level or X.ReadXP().level, false
+        if plainTotal and type(levelOf) == "number" then
+            WriteHistory("reached", levelOf, math.floor(total - thisLevel))
+        end
     end
     if #muted > 0 and C_Timer and C_Timer.After then C_Timer.After(0, Unmute) end
 end

@@ -205,6 +205,7 @@ for _, forever in ipairs({ true, false }) do
     local client = forever and "Forever" or "retail"
     eq(defaults.xpEnabled, forever, "the XP bar's default on " .. client)
     eq(defaults.fbEnabled, forever, "the faction bar's default on " .. client)
+    eq(defaults.xpTickerEnabled, forever, "the XP ticker's default on " .. client)
 end
 core.IS_FOREVER = nil
 local booted = boot(newEUI(true))
@@ -219,6 +220,24 @@ eq(xpDefaults.fbWidth, 600, "the reputation bar defaults to 600 wide, as the XP 
 eq(xpDefaults.fbHeight, 27, "the reputation bar defaults to 27 high")
 eq(xpDefaults.fbFillMode, "standing", "the reputation bar defaults to Standing Color")
 eq(xpDefaults.xpNumberStyle, "short", "the number style defaults to short")
+eq(xpDefaults.xpGainEffect, "wave", "the XP bar's gain effect defaults to Energy Wave")
+eq(xpDefaults.xpGainMatchBar, true, "the XP bar's gain effect matches the bar by default")
+eq(xpDefaults.fbGainEffect, "off", "the reputation bar's gain effect defaults to off")
+eq(xpDefaults.xpGainQuestsOnly, true, "the XP bar's gain effect defaults to quest turn-ins only")
+eq(xpDefaults.xpGainShowAmount, true, "the XP bar shows the amount gained by default")
+eq(xpDefaults.fbGainShowAmount, true, "the reputation bar shows the amount gained by default")
+eq(xpDefaults.xpLevelEffect, "sweep", "the XP bar's level-up effect defaults to Sweep")
+eq(xpDefaults.xpGlowSize, 14, "the XP bar's Glow Size defaults to 14")
+eq(xpDefaults.fbGlowSize, 8, "the reputation bar's Glow Size stays 8")
+eq(xpDefaults.fbLevelEffect, "flash", "the reputation bar's rank-up effect defaults to Flash")
+eq(xpDefaults.xpReadyGlow, true, "Ready Glow defaults on")
+eq(xpDefaults.xpRestedStripes, false, "Rested Stripes defaults off")
+eq(xpDefaults.xpTickerVisibility, "always", "the card's Visibility defaults to Always")
+eq(xpDefaults.xpTickerHideResting, true, "the card hides while resting by default")
+eq(xpDefaults.xpTickerHistoryRows, 5, "the card shows five completed levels by default")
+eq(xpDefaults.xpTickerShowPace, false, "Pace defaults off")
+eq(xpDefaults.xpTickerBackground, "card", "the card's background defaults to Card")
+eq(xpDefaults.xpTickerPos, nil, "the card has no default position")
 for _, stem in ipairs({ "xpAmount", "xpLevelTime", "xpSessionTime", "xpRate", "xpCompRested", "fbName", "fbAmount" }) do
     eq(xpDefaults[stem .. "OffX"], 0, "the default " .. stem .. "OffX leaves the text where it was")
     eq(xpDefaults[stem .. "OffY"], 0, "the default " .. stem .. "OffY leaves the text where it was")

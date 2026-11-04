@@ -68,6 +68,9 @@ X.RANGES = {
 local QUEST_SCAN_DELAY = 0.3
 local DEFAULT_Y = { xp = -100, fb = -160 }
 local LABEL_R, LABEL_G, LABEL_B = 1, 0.82, 0
+-- How close an XP reading must be to QUEST_TURNED_IN to lend that turn-in its
+-- place on the bar, in seconds. It never decides whether a turn-in plays.
+local QUEST_GAIN_WINDOW = 0.5
 
 local XP_EVENTS = {
     "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "UPDATE_EXHAUSTION", "PLAYER_UPDATE_RESTING",
@@ -77,7 +80,7 @@ local XP_EVENTS = {
 local ALL_EVENTS = {}
 for i = 1, #XP_EVENTS do ALL_EVENTS[i] = XP_EVENTS[i] end
 for _, e in ipairs({ "QUEST_LOG_UPDATE", "UNIT_QUEST_LOG_CHANGED", "CHAT_MSG_COMBAT_XP_GAIN",
-    "UPDATE_FACTION", "MAJOR_FACTION_RENOWN_LEVEL_CHANGED", "ZONE_CHANGED_NEW_AREA" }) do
+    "UPDATE_FACTION", "MAJOR_FACTION_RENOWN_LEVEL_CHANGED", "ZONE_CHANGED_NEW_AREA", "QUEST_TURNED_IN" }) do
     ALL_EVENTS[#ALL_EVENTS + 1] = e
 end
 
@@ -95,6 +98,13 @@ local raw, xpData, fbData = {}, {}, {}
 local factionRec
 local xpShown, fbShown = true, false
 local visCfg = { visibility = "always" }
+-- The effects' own last readings, so a gain is told from what the session
+-- counted on other events.
+local xpStep, fbStep = {}, {}
+-- The game can report the quest that reaches max level after the level-up, so
+-- listening runs on there until a turn-in is heard for that level (turnInLevel).
+-- levelUpTo names the level for a turn-in whose level reading is still old.
+local levelUpTo, turnInLevel
 
 ---------------------------------------------------------------------------------
 -- Events
@@ -102,7 +112,9 @@ local visCfg = { visibility = "always" }
 
 -- Fills `out` with the events the enabled bars need. opts: quest (a quest
 -- overlay, completed line or tooltip needs quest XP), kills (retail tooltip
--- below max level), companion (faction source follows the delve).
+-- below max level), companion (faction source follows the delve), questGain
+-- (Quest Turn-Ins Only with a gain effect on, while leveling and for one turn-in
+-- after a level-up that reaches max level).
 function X.WantedEvents(out, xpOn, fbOn, opts)
     for i = 1, #ALL_EVENTS do out[ALL_EVENTS[i]] = nil end
     if xpOn then
@@ -112,6 +124,7 @@ function X.WantedEvents(out, xpOn, fbOn, opts)
             out.UNIT_QUEST_LOG_CHANGED = true
         end
         if opts.kills then out.CHAT_MSG_COMBAT_XP_GAIN = true end
+        if opts.questGain then out.QUEST_TURNED_IN = true end
     end
     if fbOn then
         out.UPDATE_FACTION = true
@@ -131,8 +144,10 @@ local function ReconcileEvents()
     -- the cap and XP-gain events re-run this, so the set follows the level.
     local leveling = not t.atMax and not t.xpOff
     wantOpts.quest = leveling
-        and (Get("xpShowQuest") == true or Get("xpShowCompRested") == true or Get("xpTooltip") == true)
+        and (Get("xpShowQuest") == true or Get("xpShowCompRested") == true or Get("xpTooltip") == true or Get("xpReadyGlow") == true)
     wantOpts.kills = leveling and not ns.IS_FOREVER and Get("xpTooltip") == true
+    wantOpts.questGain = not t.xpOff and (not t.atMax or (registered.QUEST_TURNED_IN and turnInLevel ~= t.level))
+        and Get("xpGainEffect") ~= "off" and Get("xpGainQuestsOnly") == true
     wantOpts.companion = Get("fbSource") == "companion"
     wantOpts.session = X.SessionStarted()
     X.WantedEvents(wanted, X.XPEnabled(), X.FactionEnabled(), wantOpts)
@@ -173,7 +188,10 @@ function X.XPView(r, view, out)
     local mx = r.max or 0
     out.level = format("Level %d", r.level or 0)
     out.right, out.levelTime, out.rate, out.compRested = nil, nil, nil, nil
-    out.sessionTime = view("xpShowSessionTime") and ("Time this session: " .. M.TimeText(r.elapsed)) or nil
+    out.readyEnd = nil
+    -- A frozen time otherwise reads as a defect.
+    out.sessionTime = view("xpShowSessionTime")
+        and ("Time this session: " .. M.TimeText(r.elapsed) .. (r.paused and " (paused)" or "")) or nil
     if r.atMax or mx <= 0 then
         out.fill, out.questEnd, out.restedEnd = 100, 0, 0
         out.center = "Max Level"
@@ -188,6 +206,7 @@ function X.XPView(r, view, out)
     out.fill, out.questEnd, out.restedEnd = xpPct, qEnd, rEnd
     out.center = view("xpAmountPos") ~= "hidden" and M.AmountText(r.cur, mx, style, view("xpShowRemaining"), breakUp) or nil
     out.right = M.PercentText(xpPct, rEnd)
+    if view("xpReadyGlow") == true and M.ReadyToLevel(r.cur, mx, r.quest) then out.readyEnd = 100 end
     if view("xpShowLevelTime") then out.levelTime = "Time this level: " .. M.TimeText(r.levelTime) end
     if view("xpShowRate") then
         local perHour, eta = M.Rate(r.gained, r.elapsed, mx - (r.cur or 0))
@@ -221,11 +240,13 @@ local function RefreshXP()
     local t = X.ReadXP()
     raw.level, raw.cur, raw.max, raw.rested = t.level, t.cur, t.max, t.rested
     raw.atMax, raw.xpOff = t.atMax, t.xpOff
+    raw.paused = X.SessionPaused()
     raw.quest = questDone
     raw.levelTime, raw.elapsed, raw.gained = X.LevelTime(), X.SessionElapsed(), X.SessionGained()
     X.XPView(raw, Get, xpData)
     X.Draw(w, Get, xpData)
     xpShown = t.applies or Get("xpShowAtMax") == true
+    X.TickerRefresh(raw)
 end
 
 local function RefreshFaction()
@@ -262,6 +283,8 @@ local function Eval(mode)
     return true
 end
 
+X.EvalVisibility = Eval
+
 local function XPWantsMouseover()
     return active and X.XPEnabled() and xpShown and Get("xpVisibility") == "mouseover"
 end
@@ -290,27 +313,28 @@ end
 
 local UNLOCK_KEY = { xp = "KitnUI_XPBar", fb = "KitnUI_FactionBar" }
 
--- An Unlock Mode anchor link is an anchored bar's only placing authority, as
--- it is for EUI's own frames: the bar is put back on its link, never on its
--- saved spot. An unanchored bar sits on its own saved spot.
+-- An Unlock Mode anchor link is an anchored frame's only placing authority, as
+-- it is for EUI's own frames: the frame is put back on its link, never on its
+-- saved spot. An unanchored frame sits on its own saved spot.
+function X.PlaceFrame(frame, unlockKey, pos, defaultPoint, x, y)
+    local EUI = _G.EllesmereUI
+    if EUI and EUI.IsAnchored and EUI.IsAnchored(unlockKey) then
+        if EUI.ReapplyOwnAnchor then EUI.ReapplyOwnAnchor(unlockKey) end
+        return
+    end
+    frame:ClearAllPoints()
+    if type(pos) == "table" then
+        local point = pos.point or defaultPoint
+        frame:SetPoint(point, UIParent, pos.relPoint or point, tonumber(pos.x) or 0, tonumber(pos.y) or 0)
+    else
+        frame:SetPoint(defaultPoint, UIParent, defaultPoint, x, y)
+    end
+end
+
 local function Place(kind)
     local w = widgets[kind]
     if not w then return end
-    local frame = w.frame
-    local EUI = _G.EllesmereUI
-    if EUI and EUI.IsAnchored and EUI.IsAnchored(UNLOCK_KEY[kind]) then
-        if EUI.ReapplyOwnAnchor then EUI.ReapplyOwnAnchor(UNLOCK_KEY[kind]) end
-        return
-    end
-    local pos = Get(kind == "xp" and "xpPos" or "fbPos")
-    local fallbackY = DEFAULT_Y[kind]
-    frame:ClearAllPoints()
-    if type(pos) == "table" then
-        local point = pos.point or "TOP"
-        frame:SetPoint(point, UIParent, pos.relPoint or point, tonumber(pos.x) or 0, tonumber(pos.y) or 0)
-    else
-        frame:SetPoint("TOP", UIParent, "TOP", 0, fallbackY)
-    end
+    X.PlaceFrame(w.frame, UNLOCK_KEY[kind], Get(kind == "xp" and "xpPos" or "fbPos"), "TOP", 0, DEFAULT_Y[kind])
 end
 
 local function Tick()
@@ -351,6 +375,7 @@ function X.ApplyVisibility()
         Place("fb")
     end
     X.UpdateClock()
+    X.TickerVisibility()
 end
 
 ---------------------------------------------------------------------------------
@@ -456,7 +481,8 @@ local function OnWidgetShow(self)
     X.UpdateClock()
 end
 
-local function OnWidgetHide()
+local function OnWidgetHide(self)
+    X.StopEffects(widgets[self.kuiPrefix])
     X.UpdateClock()
 end
 
@@ -495,6 +521,62 @@ function ArmQuestScan()
     questTimer = C_Timer.NewTimer(QUEST_SCAN_DELAY, QuestScan)
 end
 
+-- With the XP reading RefreshXP just kept. The profession fill's pass is not
+-- gated here: it has its own Play on XP Gain.
+local function XPGainMoment()
+    local w = widgets.xp
+    if not w or Get("xpGainEffect") == "off" then return end
+    local gain, from, to = M.XPGainStep(xpStep, raw.cur, raw.max, raw.level, GetTime())
+    if gain and Get("xpGainQuestsOnly") ~= true then X.PlayGainEffect(w, Get, xpData, from, to, gain) end
+end
+
+-- Plays from the event, not from a reading: a reading cannot say what caused it,
+-- so pairing them would let a kill stand in for a quest or lose a quest's gain.
+local function QuestMoment(reward)
+    local w = widgets.xp
+    if not w or Get("xpGainEffect") == "off" or Get("xpGainQuestsOnly") ~= true then return end
+    local t = X.ReadXP()
+    if t.xpOff then return end
+    local atMax, spent = t.atMax, turnInLevel == t.level
+    turnInLevel = type(levelUpTo) == "number" and levelUpTo > t.level and levelUpTo or t.level
+    if atMax then ReconcileEvents() end
+    if (atMax and spent) or type(reward) ~= "number" or reward <= 0 then return end
+    local from, to = 0, 100
+    if not atMax then
+        from, to = M.QuestSpan(xpStep, t.cur, t.max, t.level, reward, GetTime(), QUEST_GAIN_WINDOW)
+    end
+    if from then X.PlayGainEffect(w, Get, xpData, from, to, reward, true) end
+end
+
+local function FactionReading()
+    local rec = factionRec
+    if not rec then return M.FactionStep(fbStep, nil) end
+    return M.FactionStep(fbStep, rec.id, rec.kind, rec.rank, rec.total, fbData.fill, rec.isMax)
+end
+
+local function FactionMoment()
+    local w = widgets.fb
+    if not w then return end
+    local moment, amount, from = FactionReading()
+    if moment == "rank" then
+        X.PlayLevelEffect(w, Get)
+    elseif moment == "gain" then
+        X.PlayGainEffect(w, Get, fbData, from, fbData.fill, amount)
+    end
+end
+
+-- The first reading after an apply plays nothing: a login, a /reload, a bar
+-- turned on and a setting changed all land here.
+local function SeedEffects(xpOn, fbOn)
+    xpStep.x, xpStep.gainAt = nil, nil
+    if xpOn then
+        local t = X.ReadXP()
+        M.XPGainStep(xpStep, t.cur, t.max, t.level)
+    end
+    fbStep.id = nil
+    if fbOn then FactionReading() end
+end
+
 local function OnEvent(_, event, ...)
     if event == "PLAYER_LOGOUT" then
         X.SessionSave()
@@ -506,13 +588,19 @@ local function OnEvent(_, event, ...)
     elseif event == "QUEST_LOG_UPDATE" or event == "UNIT_QUEST_LOG_CHANGED" then
         ArmQuestScan()
         return
+    elseif event == "QUEST_TURNED_IN" then
+        QuestMoment(Plain((select(2, ...))))
+        return
     elseif event == "PLAYER_XP_UPDATE" then
         X.OnXP()
         RefreshXP()
+        XPGainMoment()
         if widgets.xp then X.PlayGain(widgets.xp) end
     elseif event == "PLAYER_LEVEL_UP" then
         X.OnLevelUp((...))
         RefreshXP()
+        levelUpTo = Plain((...))
+        X.PlayLevelEffect(widgets.xp, Get)
         ReconcileEvents()
     elseif event == "TIME_PLAYED_MSG" then
         X.OnPlayed(...)
@@ -520,6 +608,7 @@ local function OnEvent(_, event, ...)
     elseif event == "UPDATE_FACTION" or event == "MAJOR_FACTION_RENOWN_LEVEL_CHANGED"
         or event == "ZONE_CHANGED_NEW_AREA" then
         RefreshFaction()
+        FactionMoment()
     else
         -- The cap, rested and XP-gain events can carry a mixed level-up
         -- reading too; Track takes each one.
@@ -581,6 +670,7 @@ local function RegisterUnlock()
     EUI:RegisterUnlockElements({
         UnlockElement(EUI, "xp", UNLOCK_KEY.xp, "KitnUI XP Bar", 3, "xpPos", "xpWidth", "xpHeight", X.XPEnabled),
         UnlockElement(EUI, "fb", UNLOCK_KEY.fb, "KitnUI Reputation Bar", 4, "fbPos", "fbWidth", "fbHeight", X.FactionEnabled),
+        X.TickerElement(EUI),
     }, "KitnUI_EUI")
 end
 
@@ -588,6 +678,7 @@ local function RegisterAccent()
     local EUI = _G.EllesmereUI
     if not (EUI and EUI.RegAccent) then return end
     EUI.RegAccent({ type = "callback", fn = function()
+        X.TickerAccent()
         if Get("xpFillStyle") ~= "accent" then return end
         if active and X.XPEnabled() then RefreshXP() end
         if X.PreviewRefresh then X.PreviewRefresh() end
@@ -604,11 +695,22 @@ local function VisUpdater()
     DropTooltips()
 end
 
+local function OnUnlockMode(on)
+    X.UnlockActive = on == true
+    for _, w in pairs(widgets) do X.StopEffects(w) end
+    if not X.UnlockActive and active then
+        RefreshXP()
+        RefreshFaction()
+    end
+end
+
 local function OnLoginKnown(kind)
     X.SessionStart(kind)
     if active then ReconcileEvents() end
     if active and X.XPEnabled() then
+        X.TickerApply()
         RefreshXP()
+        SeedEffects(true, X.FactionEnabled())
         X.RequestPlayed()
         X.ApplyVisibility()
     end
@@ -632,6 +734,7 @@ local function Ensure()
     end
     local EUI = _G.EllesmereUI
     if EUI and EUI.RegisterVisibilityUpdater then EUI.RegisterVisibilityUpdater(VisUpdater) end
+    if EUI and EUI.RegisterUnlockModeListener then EUI:RegisterUnlockModeListener(X, OnUnlockMode) end
     if not sessionQueued then
         sessionQueued = true
         if ns.EUIWhenLoginKnown then ns.EUIWhenLoginKnown(OnLoginKnown) else OnLoginKnown("login") end
@@ -645,6 +748,7 @@ local function Stop()
     X.SessionListen(false)
     X.SessionSave()
     X.SessionStop()
+    X.TickerStop()
     xpWasOn = false
     if questTimer then
         questTimer:Cancel()
@@ -662,11 +766,14 @@ local function Stop()
     end
     local EUI = _G.EllesmereUI
     if EUI and EUI.UnregisterVisibilityUpdater then EUI.UnregisterVisibilityUpdater(VisUpdater) end
+    if EUI and EUI.UnregisterUnlockModeListener then EUI:UnregisterUnlockModeListener(X) end
+    X.UnlockActive = false
     active = false
     questFresh = false
     for _, w in pairs(widgets) do
         if w.mouseover and EUI and EUI.UnregisterMouseoverTarget then EUI.UnregisterMouseoverTarget(w.frame) end
         w.mouseover = false
+        X.StopEffects(w)
         w.frame:Hide()
     end
     DropTooltips()
@@ -685,7 +792,10 @@ function X.Apply(claim)
     Ensure()
     if xpOn and not widgets.xp then MakeWidget("xp") end
     if fbOn and not widgets.fb then MakeWidget("fb") end
-    for _, w in pairs(widgets) do SetMouse(w.frame) end
+    for _, w in pairs(widgets) do
+        X.StopEffects(w)
+        SetMouse(w.frame)
+    end
     -- The XP bar going off while the faction bar stays: Stop does not run,
     -- so the session stops listening and is saved here.
     if xpWasOn and not xpOn then
@@ -694,6 +804,7 @@ function X.Apply(claim)
     end
     xpWasOn = xpOn
     ReconcileEvents()
+    X.TickerApply()
     if xpOn then
         X.SessionListen(true)
         X.SeedPosition()
@@ -704,6 +815,7 @@ function X.Apply(claim)
         X.RequestPlayed()
     end
     if fbOn then RefreshFaction() end
+    SeedEffects(xpOn, fbOn)
     X.ApplyVisibility()
     DropTooltips()
     X.SyncExisting(claim)

@@ -79,8 +79,9 @@ methods.EnableMouse = function(self, on) self.click, self.motion = on and true o
 methods.SetMouseClickEnabled = function(self, on) self.click = on and true or false end
 methods.SetMouseMotionEnabled = function(self, on) self.motion = on and true or false end
 
-_G.CreateFrame = function(kind)
+_G.CreateFrame = function(kind, _, parent)
     local f = Obj(kind)
+    f.parent = parent
     frames[#frames + 1] = f
     return f
 end
@@ -121,6 +122,7 @@ _G.GetMaxLevelForPlayerExpansion = function() return 90 end
 _G.GetMaxPlayerLevel = function() return 90 end
 
 local updaters, unlocks, accents = {}, 0, 0
+local accentFn
 local EUI = {
     Lite = { NewDB = function() return { profile = {} } end, _dbRegistry = {} },
     RegisterVisibilityUpdater = function(fn) updaters[fn] = true end,
@@ -129,7 +131,10 @@ local EUI = {
     UnregisterMouseoverTarget = NOOP,
     EvalVisibility = function() return true end,
     MakeUnlockElement = function(opts) return opts end,
-    RegAccent = function() accents = accents + 1 end,
+    RegAccent = function(entry)
+        accents = accents + 1
+        accentFn = entry.fn
+    end,
     GetFontPath = function() return "Fonts\\FRIZQT__.TTF" end,
     GetFontOutlineFlag = function() return "" end,
 }
@@ -344,7 +349,7 @@ check(page.rows.Bar ~= nil, "page, XP view: without the header's picker the page
 check(page.barValues ~= nil and page.barValues == X.BAR_V, "page, XP view: its picker reads the shared labels")
 eq(#page.hooks, 0, "page, XP view: no script hook")
 eq(#frames, previewFrames, "page, XP view: no frame beyond the preview's own")
-eq(#page.cogs, 5, "page, XP view: a cogwheel on the amount and on each around-text")
+eq(#page.cogs, 9, "page, XP view: a cogwheel on the amount, on each around-text and on the effects' four")
 local amountCog, levelCog = cogTitled("Amount Position"), cogTitled("Time This Level")
 check(amountCog ~= nil and amountCog.rgn == (page.rows["Amount Position"] or {})._leftRegion,
     "page, XP view: the amount's cogwheel sits on Amount Position")
@@ -370,7 +375,7 @@ if page.hooks[1] then
     ok, why = pcall(page.hooks[1].fn)
     check(ok, "page, faction view: a press on the Pinned dropdown runs", why)
 end
-eq(#page.cogs, 2, "page, faction view: a cogwheel on each text position")
+eq(#page.cogs, 5, "page, faction view: a cogwheel on each text position and on the effects' three")
 local nameCog = cogTitled("Name Position")
 check(nameCog ~= nil and nameCog.rgn == (page.rows["Name Position"] or {})._leftRegion,
     "page, faction view: the name's cogwheel sits on Name Position")
@@ -401,7 +406,7 @@ end
 
 EUI.IsSearchPrebuild = function() return true end
 buildPage("page, search prebuild")
-check(has("XP DISPLAY") and has("REPUTATION SOURCE"), "page, search prebuild: both bars' sections, so search finds every setting")
+check(has("XP DISPLAY") and has("REPUTATION SOURCE"), "page, search prebuild: both bars' sections, so search finds every row")
 eq(factionWord(), nil, "page, search prebuild: no word search lists reads faction")
 EUI.IsSearchPrebuild = nil
 X.SelectBar("xp")
@@ -774,7 +779,7 @@ do
         local before = #frames
         local pickHeight = X.BuildPreviewHeader(Obj("Frame"), 800)
         check(X.SelectorShown(), "the bar picker: the header holds it")
-        eq(picked and table.concat(picked.order, ","), "xp,fb", "the bar picker: the XP bar, then the faction bar")
+        eq(picked and table.concat(picked.order, ","), "xp,fb,tk", "the bar picker: the XP bar, the faction bar, then the card")
         eq(picked and picked.values.fb, "Reputation Bar", "the bar picker: names the reputation bar")
         check(picked ~= nil and picked.values == X.BAR_V and picked.order == X.BAR_O, "the bar picker: reads the shared labels")
         eq(picked and picked.get(), "xp", "the bar picker: reads the selection")
@@ -883,6 +888,855 @@ do
     _G.FACTION_BAR_COLORS, _G.FACTION_STANDING_LABEL7 = realColors, nil
     X.SelectBar("xp")
     X.Draw = drawBar
+end
+
+-- Each kind's rank and total, on the one reused record
+do
+    local kind
+    _G.C_Reputation = {
+        GetFactionDataByID = function()
+            return { name = "Test", reaction = 6, currentStanding = 4000, currentReactionThreshold = 3000, nextReactionThreshold = 9000 }
+        end,
+        IsFactionParagonForCurrentPlayer = function() return kind == "paragon" end,
+        GetFactionParagonInfo = function() return 25000, 10000, nil, false end,
+        IsMajorFaction = function() return kind == "renown" end,
+    }
+    _G.C_GossipInfo = {
+        GetFriendshipReputation = function()
+            if kind ~= "friendship" then return nil end
+            return { friendshipFactionID = 5, standing = 700, reactionThreshold = 500, nextThreshold = 900, reaction = "Buddy" }
+        end,
+        GetFriendshipReputationRanks = function() return { currentLevel = 3 } end,
+    }
+    _G.C_MajorFactions = {
+        GetMajorFactionData = function() return { renownLevel = 12, renownReputationEarned = 800, renownLevelThreshold = 2500 } end,
+        HasMaximumRenown = function() return false end,
+    }
+    local function read(name)
+        kind = name
+        local rec = X.ResolveFaction("pinned", 5) or {}
+        return rec.kind, rec.rank, rec.total
+    end
+    local k, rank, total = read("friendship")
+    eq(k, "friendship", "faction reading: a friendship")
+    eq(rank, 3, "faction reading: its rank is the friendship level")
+    eq(total, 700, "faction reading: its total is the standing")
+    k, rank, total = read("paragon")
+    eq(k, "paragon", "faction reading: a paragon track")
+    eq(rank, 2, "faction reading: its rank counts the rewards")
+    eq(total, 25000, "faction reading: its total runs on")
+    k, rank, total = read("renown")
+    eq(k, "renown", "faction reading: a renown track")
+    eq(rank, 12, "faction reading: its rank is the renown level")
+    eq(total, 800, "faction reading: its total is the XP into that level")
+    k, rank, total = read("standard")
+    eq(k, "standard", "faction reading: a plain reputation")
+    eq(rank, 6, "faction reading: its rank is the standing")
+    eq(total, 4000, "faction reading: its total is the standing's value")
+    _G.C_GossipInfo.GetFriendshipReputationRanks = function() return nil end
+    local _, fallback = read("friendship")
+    eq(fallback, 500, "faction reading: a friendship with no level falls back to its threshold")
+    _G.C_Reputation, _G.C_GossipInfo, _G.C_MajorFactions = nil, nil, nil
+end
+
+---------------------------------------------------------------------------------
+-- The effects on the live bars
+---------------------------------------------------------------------------------
+
+do
+    local listener
+    EUI.RegisterUnlockModeListener = function(_, _owner, fn) listener = fn end
+    EUI.UnregisterUnlockModeListener = function() listener = nil end
+    local xpNow = 100
+    _G.UnitXP = function() return xpNow end
+
+    local live
+    local drawReal = X.Draw
+    local liveDraws = 0
+    X.Draw = function(w, view, data)
+        if w.frame == xpFrame then
+            live = w
+            liveDraws = liveDraws + 1
+        end
+        return drawReal(w, view, data)
+    end
+    local levelPlays, gainPlays, passes, gainAmount = 0, 0, 0, nil
+    local levelReal, gainReal, passReal = X.PlayLevelEffect, X.PlayGainEffect, X.PlayGain
+    X.PlayLevelEffect = function(...)
+        levelPlays = levelPlays + 1
+        return levelReal(...)
+    end
+    X.PlayGainEffect = function(...)
+        gainPlays = gainPlays + 1
+        gainAmount = select(6, ...)
+        return gainReal(...)
+    end
+    X.PlayGain = function(...)
+        passes = passes + 1
+        return passReal(...)
+    end
+    local function send(name, ...)
+        ok, why = pcall(evFrame.scripts.OnEvent, evFrame, name, ...)
+        check(ok, name .. " runs without a Lua error", why)
+    end
+
+    settings.xpEnabled = true
+    ok, why = pcall(X.Apply)
+    check(ok, "effects: an apply with the XP bar on runs", why)
+    check(listener ~= nil, "effects: one Unlock Mode listener while a bar is on")
+    check(live ~= nil, "effects: the live bar draws")
+    eq(live and live.fxClip, nil, "effects: the first draw makes no effect frame while not ready")
+    eq(evFrame.events.QUEST_TURNED_IN, true, "effects: default settings register QUEST_TURNED_IN")
+
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: Quest Turn-Ins Only off does not")
+    settings.xpGainQuestsOnly = nil
+    settings.xpGainEffect = "off"
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: a gain effect off does not")
+    settings.xpGainEffect = nil
+    _G.UnitLevel = function() return 90 end
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: nor at max level when not already listening")
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    eq(evFrame.events.QUEST_TURNED_IN, true, "effects: back below max it does")
+
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 0, "effects: the first reading after an apply plays nothing")
+    xpNow = 150
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 0, "effects: a kill plays nothing with Quest Turn-Ins Only on")
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    eq(gainPlays, 1, "effects: a quest after its reading plays")
+    eq(gainAmount, 50, "effects: with the quest's amount")
+    check(live and live.fxQuest ~= nil, "effects: the effect is active")
+    eq(live and live.fxQuest == (live.fxSets and live.fxSets.wave), true, "effects: Energy Wave, the default")
+
+    X.Apply()
+    eq(live and live.fxQuest, nil, "effects: a settings apply stops it")
+
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    eq(gainPlays, 2, "effects: a quest before its reading plays at once")
+    xpNow = 200
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 2, "effects: and its reading plays nothing more")
+    X.Apply()
+    xpNow = 250
+    send("PLAYER_XP_UPDATE")
+    send("QUEST_TURNED_IN", 1234, 0, 0)
+    eq(gainPlays, 2, "effects: a quest with no XP plays nothing")
+
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    xpNow = 300
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 3, "effects: with the switch off every gain plays")
+    settings.xpGainQuestsOnly = nil
+
+    settings.xpGainEffect = "off"
+    X.Apply()
+    local before = passes
+    xpNow = 350
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, 3, "effects: a gain effect off plays none")
+    eq(passes, before + 1, "effects: the profession fill's pass runs on its own")
+    settings.xpGainEffect = nil
+
+    send("PLAYER_LEVEL_UP", 12)
+    eq(levelPlays, 1, "effects: a level-up plays its effect")
+    check(live and live.fxBusy ~= nil, "effects: and it runs")
+    eq(live and live.fxBusy == (live.fxSets and live.fxSets.sweep), true, "effects: Sweep, the default")
+    settings.xpLevelEffect = "off"
+    X.Apply()
+    send("PLAYER_LEVEL_UP", 13)
+    eq(live and live.fxBusy, nil, "effects: and none with it off")
+    settings.xpLevelEffect = nil
+
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    xpNow = 375
+    send("PLAYER_XP_UPDATE")
+    check(live and live.fxBusy ~= nil, "effects: a gain is playing when Unlock Mode opens")
+    if listener then listener(true) end
+    eq(live and live.fxBusy, nil, "effects: opening Unlock Mode stops it")
+    eq(X.UnlockActive, true, "effects: Unlock Mode is noted")
+    xpNow = 400
+    send("PLAYER_XP_UPDATE")
+    eq(live and live.fxBusy, nil, "effects: Unlock Mode blocks a play")
+    local drawsBefore = liveDraws
+    if listener then listener(false) end
+    eq(X.UnlockActive, false, "effects: leaving Unlock Mode is noted")
+    check(liveDraws > drawsBefore, "effects: and redraws, which brings Ready Glow back")
+    settings.xpGainQuestsOnly = nil
+
+    -- A level whose completed quests cover the rest, for Ready Glow alone.
+    local scan = X.ScanQuestXP
+    settings.xpTooltip, settings.xpShowQuest, settings.xpShowCompRested = false, false, false
+    X.Apply()
+    eq(evFrame.events.QUEST_LOG_UPDATE, true, "effects: Ready Glow alone keeps the quest totals current")
+    X.ScanQuestXP = function() return 5000, 0 end
+    send("QUEST_LOG_UPDATE")
+    fire()
+    eq(live and live.fxReady and live.fxReady.on, true, "effects: Ready Glow starts when quests cover the level")
+    X.ScanQuestXP = function() return 0, 0 end
+    send("QUEST_LOG_UPDATE")
+    fire()
+    eq(live and live.fxReady and live.fxReady.on, false, "effects: and stops when they no longer do")
+    X.ScanQuestXP = scan
+    settings.xpTooltip, settings.xpShowQuest, settings.xpShowCompRested = nil, nil, nil
+
+    -- Two turn-ins close together, with each side first, play both gains.
+    local gainsBefore = gainPlays
+    X.Apply()
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    send("QUEST_TURNED_IN", 1235, 50, 0)
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, gainsBefore + 2, "effects: two quests before their readings play both")
+    X.Apply()
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    send("QUEST_TURNED_IN", 1234, 50, 0)
+    send("QUEST_TURNED_IN", 1235, 50, 0)
+    eq(gainPlays, gainsBefore + 4, "effects: two readings before their quests play both")
+
+    -- A kill close to a turn-in, on either side, adds no play and no amount.
+    gainsBefore = gainPlays
+    X.Apply()
+    xpNow = xpNow + 10
+    send("PLAYER_XP_UPDATE")
+    send("QUEST_TURNED_IN", 1234, 77, 0)
+    xpNow = xpNow + 77
+    send("PLAYER_XP_UPDATE")
+    xpNow = xpNow + 10
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, gainsBefore + 1, "effects: one play for a quest between two kills")
+    eq(gainAmount, 77, "effects: with the quest's amount")
+
+    -- A turn-in that levels plays beside the level effect, with either first; a
+    -- level-up with no turn-in plays its effect alone.
+    gainsBefore = gainPlays
+    X.Apply()
+    send("PLAYER_LEVEL_UP", 12)
+    eq(gainPlays, gainsBefore, "effects: a level-up with no turn-in plays no gain")
+    eq(live and live.fxQuest, nil, "effects: so its effect runs alone")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 1, "effects: a turn-in after the level-up event plays")
+    eq(gainAmount, 5000, "effects: with its amount")
+    check(live and live.fxQuest ~= nil and live.fxBusy ~= nil, "effects: beside the level effect")
+    X.Apply()
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    send("PLAYER_LEVEL_UP", 12)
+    eq(gainPlays, gainsBefore + 2, "effects: a turn-in before the level-up event plays")
+    check(live and live.fxQuest ~= nil and live.fxBusy ~= nil, "effects: and the level effect leaves it running")
+
+    -- Reaching max leaves one turn-in to hear, with the bar kept there, in each
+    -- order of the level-up, the new level reading and the turn-in.
+    gainsBefore = gainPlays
+    X.Apply()
+    _G.UnitLevel = function() return 90 end
+    send("PLAYER_LEVEL_UP", 90)
+    eq(evFrame.events.QUEST_TURNED_IN, true, "max level: the level-up leaves one turn-in to hear")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 1, "max level: the quest that reached it plays")
+    eq(gainAmount, 5000, "max level: with its amount")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: and nothing after it is heard")
+
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    _G.UnitLevel = function() return 91 end
+    send("PLAYER_LEVEL_UP", 91)
+    send("QUEST_TURNED_IN", 1234, 0, 0)
+    eq(gainPlays, gainsBefore + 1, "max level: a turn-in with no XP plays nothing")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: and ends the listening too")
+
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    send("PLAYER_LEVEL_UP", 92)
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 2, "max level: a turn-in with the level still reading old plays")
+    _G.UnitLevel = function() return 92 end
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 2, "max level: and it spent the listening, so the next plays nothing")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: which ends it")
+
+    _G.UnitLevel = function() return 11 end
+    X.Apply()
+    _G.UnitLevel = function() return 93 end
+    send("UPDATE_EXHAUSTION")
+    eq(evFrame.events.QUEST_TURNED_IN, true, "max level: a new level reading before the level-up keeps listening")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore + 3, "max level: and a turn-in before the level-up plays")
+    send("PLAYER_LEVEL_UP", 93)
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "max level: and the level-up after it does not reopen")
+    _G.UnitLevel = function() return 11 end
+
+    -- With the switch off, a gain inside a level is its reading's, and any XP that
+    -- crosses a level, kill or quest, plays the level effect alone.
+    settings.xpGainQuestsOnly = false
+    gainsBefore = gainPlays
+    X.Apply()
+    xpNow = xpNow + 77
+    send("PLAYER_XP_UPDATE")
+    eq(gainPlays, gainsBefore + 1, "switch off: a reading inside a level plays once")
+    eq(gainAmount, 77, "switch off: with its rise")
+    send("QUEST_TURNED_IN", 1234, 77, 0)
+    eq(gainPlays, gainsBefore + 1, "switch off: and a stray quest event adds nothing")
+    local xpBefore = xpNow
+    X.Apply()
+    gainsBefore = gainPlays
+    xpNow = 60
+    _G.UnitLevel = function() return 12 end
+    send("PLAYER_XP_UPDATE")
+    send("PLAYER_LEVEL_UP", 12)
+    eq(gainPlays, gainsBefore, "switch off: XP across a level plays no gain")
+    check(live and live.fxBusy ~= nil, "switch off: and plays the level effect")
+    send("QUEST_TURNED_IN", 1234, 5000, 0)
+    eq(gainPlays, gainsBefore, "switch off: nor does a stray quest event add one")
+    eq(live and live.fxQuest, nil, "switch off: so the level effect runs alone")
+    xpNow = xpBefore
+    _G.UnitLevel = function() return 11 end
+    settings.xpGainQuestsOnly = nil
+
+    -- The reputation reading path
+    local renown, standing, missing = 5, 100, false
+    _G.C_Reputation = {
+        GetFactionDataByID = function()
+            if missing then return nil end
+            return { name = "Test", reaction = 5, currentStanding = standing, currentReactionThreshold = 0, nextReactionThreshold = 3000 }
+        end,
+        IsMajorFaction = function() return true end,
+        IsFactionParagonForCurrentPlayer = function() return false end,
+    }
+    _G.C_MajorFactions = {
+        GetMajorFactionData = function()
+            return { renownLevel = renown, renownReputationEarned = standing, renownLevelThreshold = 2500 }
+        end,
+        HasMaximumRenown = function() return false end,
+    }
+    settings.fbEnabled, settings.fbSource, settings.fbFactionID = true, "pinned", 5
+    X.Apply()
+    levelPlays, gainPlays = 0, 0
+    send("UPDATE_FACTION")
+    eq(levelPlays + gainPlays, 0, "reputation effects: the first reading after an apply plays nothing")
+    renown, standing = 6, 0
+    send("MAJOR_FACTION_RENOWN_LEVEL_CHANGED", 5, 6)
+    eq(levelPlays, 1, "reputation effects: the renown event first plays the rank")
+    send("UPDATE_FACTION")
+    eq(levelPlays, 1, "reputation effects: and UPDATE_FACTION after it plays nothing more")
+    renown = 7
+    send("UPDATE_FACTION")
+    eq(levelPlays, 2, "reputation effects: UPDATE_FACTION first plays the rank")
+    send("MAJOR_FACTION_RENOWN_LEVEL_CHANGED", 5, 7)
+    eq(levelPlays, 2, "reputation effects: and the renown event after it plays nothing more")
+    standing = 40
+    send("UPDATE_FACTION")
+    eq(gainPlays, 1, "reputation effects: a rise is a gain")
+    standing = 30
+    send("UPDATE_FACTION")
+    eq(gainPlays, 1, "reputation effects: a loss plays nothing")
+    missing = true
+    send("UPDATE_FACTION")
+    missing, renown = false, 9
+    send("UPDATE_FACTION")
+    eq(levelPlays, 2, "reputation effects: a reading after no reputation only seeds")
+
+    local fbFrame = unlockList[2].getFrame()
+    check(fbFrame ~= nil, "reputation effects: the reputation bar exists")
+
+    -- A hidden bar stops what it was playing.
+    settings.xpGainQuestsOnly = false
+    X.Apply()
+    xpNow = xpNow + 50
+    send("PLAYER_XP_UPDATE")
+    check(live and live.fxBusy ~= nil, "effects: playing before the hide")
+    xpFrame.scripts.OnHide(xpFrame)
+    eq(live and live.fxBusy, nil, "effects: a hidden bar stops its effects")
+    settings.xpGainQuestsOnly = nil
+
+    settings.xpEnabled, settings.fbEnabled, settings.fbSource, settings.fbFactionID = false, false, nil, nil
+    X.Apply()
+    eq(listener, nil, "effects: both bars off leaves Unlock Mode's listeners")
+    eq(X.UnlockActive, false, "effects: and clears its note")
+    eq(evFrame.events.QUEST_TURNED_IN, nil, "effects: and unregisters QUEST_TURNED_IN")
+    _G.C_Reputation, _G.C_MajorFactions = nil, nil
+    X.Draw, X.PlayLevelEffect, X.PlayGainEffect, X.PlayGain = drawReal, levelReal, gainReal, passReal
+    _G.UnitXP = function() return 100 end
+    EUI.RegisterUnlockModeListener, EUI.UnregisterUnlockModeListener = nil, nil
+end
+
+-- Every new setting's default
+for _, key in ipairs({
+    "xpTickerEnabled", "xpTickerVisibility", "xpTickerHideResting", "xpTickerShowCurrent", "xpTickerHistoryRows",
+    "xpTickerShowPlayed", "xpTickerShowPace", "xpTickerFont", "xpTickerOutline", "xpTickerFontSize", "xpTickerBackground",
+    "xpGainEffect", "fbGainEffect", "xpGainQuestsOnly", "xpGainShowAmount", "fbGainShowAmount", "xpGainTextSize",
+    "fbGainTextSize", "xpGainMatchBar", "fbGainMatchBar", "xpGainColorR", "xpGainColorG", "xpGainColorB", "fbGainColorR",
+    "fbGainColorG", "fbGainColorB", "xpLevelEffect", "fbLevelEffect", "xpGlowSize", "fbGlowSize", "xpReadyGlow",
+    "xpRestedStripes", "xpStripeSize",
+}) do
+    check(ns.EUI_DEFAULTS[key] ~= nil, "the default " .. key .. " exists")
+end
+eq(ns.EUI_DEFAULTS.xpStarSize, nil, "the star's size is not a setting")
+
+---------------------------------------------------------------------------------
+-- The card through the funnel
+---------------------------------------------------------------------------------
+
+do
+    settings.xpEnabled, settings.xpTickerEnabled = true, false
+    ok, why = pcall(X.Apply)
+    check(ok, "card off: an apply runs", why)
+    local element = unlockList[3]
+    eq(element and element.key, "KitnUI_XPTicker", "card: its Unlock element registers with the bars'")
+    eq(element and element.noResize, true, "card: with no resize controls")
+    eq(element and element.getFrame(), nil, "card off: no frame")
+    settings.xpTickerEnabled = true
+    ok, why = pcall(X.Apply)
+    check(ok, "card on: an apply runs", why)
+    local card = element and element.getFrame()
+    check(card ~= nil, "card on: the card exists")
+    eq(card and card.shown, true, "card on: and shows")
+    settings.xpVisibility = "never"
+    X.Apply()
+    eq(card and card.shown, true, "card on: the XP bar's Visibility of Never leaves it showing")
+    settings.xpVisibility = nil
+
+    X.SessionStart("login")
+    X.SessionPause(true)
+    settings.xpTickerEnabled = false
+    X.Apply()
+    eq(X.SessionPaused(), false, "card off: a pause with no Start ends")
+    eq(card and card.shown, false, "card off: and it hides")
+
+    settings.xpTickerEnabled = true
+    settings.xpEnabled, settings.fbEnabled = false, true
+    X.Apply()
+    eq(card and card.shown, false, "card: the XP bar off under the reputation bar hides it")
+    settings.xpEnabled, settings.fbEnabled = true, false
+    X.Apply()
+    eq(card and card.shown, true, "card: and it returns with the XP bar")
+    settings.xpEnabled = false
+    X.Apply()
+    eq(card and card.shown, false, "card: both bars off hides it")
+    local tickerAccent, accentCalls = X.TickerAccent, 0
+    X.TickerAccent = function() accentCalls = accentCalls + 1 end
+    settings.xpFillStyle = "solid"
+    if accentFn then accentFn() end
+    eq(accentCalls, 1, "card: a new accent reaches it whatever the bar's fill style")
+    X.TickerAccent, settings.xpFillStyle = tickerAccent, nil
+    settings.xpTickerEnabled = nil
+
+    local running, paused = {}, {}
+    local function withTime(key)
+        if key == "xpShowSessionTime" then return true end
+        return X.Get(key)
+    end
+    X.XPView({ level = 10, cur = 1, max = 10, elapsed = 120, gained = 1 }, withTime, running)
+    X.XPView({ level = 10, cur = 1, max = 10, elapsed = 120, gained = 1, paused = true }, withTime, paused)
+    check(running.sessionTime ~= nil and running.sessionTime ~= paused.sessionTime,
+        "paused: the session time carries a mark")
+
+    -- Reaching max level, with the real reader and the real event path.
+    local shownTime
+    local drawForTime = X.Draw
+    X.Draw = function(w, view, data)
+        shownTime = data.sessionTime
+        return drawForTime(w, view, data)
+    end
+    settings.xpEnabled, settings.xpShowSessionTime = true, true
+    X.Apply()
+    local onEvent = evFrame.scripts.OnEvent
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 12)
+    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "reaching max level: paused on the way")
+    local frozen = X.SessionGained()
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 90)
+    eq(X.SessionPaused(), true, "reaching max level: a level-up with the level still reading old waits for its reading")
+    _G.UnitLevel = function() return 90 end
+    onEvent(evFrame, "PLAYER_XP_UPDATE")
+    eq(X.SessionPaused(), false, "reaching max level: and its reading ends the pause")
+    eq(X.SessionGained(), frozen, "reaching max level: with the XP still frozen")
+    check(shownTime ~= nil and not shownTime:find("paused", 1, true),
+        "reaching max level: and the bar stops saying paused")
+
+    -- A level past the purchased limit that can still level, as a timerunner's.
+    _G.GameRulesUtil = {
+        IsPlayerAtEffectiveMaxLevel = function() return false end,
+        CanShowExperienceBar = function() return true end,
+    }
+    _G.UnitLevel = function() return 91 end
+    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "past the purchased limit: Pause works")
+    onEvent(evFrame, "PLAYER_LEVEL_UP", 92)
+    eq(X.SessionPaused(), true, "past the purchased limit: a level-up keeps the pause")
+    X.SessionPause(false)
+    X.SessionPause(true)
+    eq(X.SessionPaused(), true, "past the purchased limit: Pause works after that level-up too")
+    X.SessionPause(false)
+    _G.GameRulesUtil, _G.UnitLevel = nil, function() return 11 end
+    X.Draw = drawForTime
+    settings.xpEnabled, settings.xpShowSessionTime = false, nil
+    X.Apply()
+end
+
+---------------------------------------------------------------------------------
+-- The preview: the sample card and playback
+---------------------------------------------------------------------------------
+
+do
+    local cardShown, cardOut
+    local drawCardReal = X.DrawCard
+    X.DrawCard = function(card, view, data)
+        cardShown, cardOut = card, data
+        return drawCardReal(card, view, data)
+    end
+    local overlays = {}
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.PP = { CreateBorder = NOOP }
+    EUI.CreatePreviewHitOverlay = function(_element, navigate, key)
+        local btn = _G.CreateFrame("Button")
+        overlays[key] = { btn = btn, navigate = navigate }
+        return btn
+    end
+    local navTo
+    local navReal = X.NavigateToSetting
+    X.NavigateToSetting = function(key) navTo = key end
+
+    X.SelectBar("tk")
+    eq(X.SelectedBar(), "tk", "sample card: the card can be selected")
+    check(cardOut ~= nil, "sample card: it draws")
+    eq(cardOut and cardOut.rate, "90.0K xp/hr", "sample card: the XP bar's rate")
+    eq(cardOut and cardOut.ding, "Ding 1h 16m", "sample card: and its time to level")
+    eq(cardOut and cardOut.arrow, "up", "sample card: with an arrow")
+    eq(cardOut and cardOut.left[1], "Level 59", "sample card: the current level")
+    eq(cardOut and cardOut.right[1], "20:00  45%", "sample card: at 45%, with a 20-minute clock")
+    eq(cardOut and cardOut.n, 5, "sample card: three completed levels and Played, by default")
+    eq(cardOut and cardOut.left[2], "Level 58", "sample card: the newest completed level")
+    eq(cardOut and cardOut.left[5], "Played", "sample card: Played last")
+
+    settings.xpTickerShowPace = true
+    X.PreviewRefresh()
+    eq(cardOut and cardOut.n, 6, "sample card: Pace shows with its switch")
+    eq(cardOut and cardOut.left[6], "Pace", "sample card: on the last row")
+    check(cardOut and cardOut.right[6] ~= "--", "sample card: with a sample character")
+    eq(overlays.tkRow6 and overlays.tkRow6.btn.shown, true, "sample card: a shown row has its overlay")
+    eq(overlays.tkRow7 and overlays.tkRow7.btn.shown, false, "sample card: a row not shown does not")
+    settings.xpTickerShowPace = nil
+    X.PreviewRefresh()
+    eq(overlays.tkRow6 and overlays.tkRow6.btn.shown, false, "sample card: and its overlay goes with it")
+
+    if overlays.tkBack then overlays.tkBack.navigate("tkBack") end
+    eq(navTo, "tkBack", "sample card: the background leads to its own")
+    if overlays.tkRow1 then overlays.tkRow1.navigate() end
+    eq(navTo, "tkCurrent", "sample card: the first row leads to its own control")
+    if overlays.tkRow5 then overlays.tkRow5.navigate() end
+    eq(navTo, "tkPlayed", "sample card: a row leads to what it shows now")
+    if overlays.tkValue1 then overlays.tkValue1.navigate() end
+    eq(navTo, "tkCurrent", "sample card: a row's value leads where its label does")
+    if overlays.tkValue5 then overlays.tkValue5.navigate() end
+    eq(navTo, "tkPlayed", "sample card: on every row")
+    for _, part in ipairs({ "tkTop", "tkDing", "tkArrow" }) do
+        navTo = nil
+        if overlays[part] then overlays[part].navigate() end
+        eq(navTo, "tkTop", "sample card: the top line's " .. part .. " leads to the top line's control")
+    end
+
+    settings.xpTickerShowPace = true
+    X.PreviewRefresh()
+    eq(overlays.tkValue6 and overlays.tkValue6.btn.shown, true, "sample card: a shown row's value has its overlay")
+    eq(overlays.tkValue7 and overlays.tkValue7.btn.shown, false, "sample card: a row not shown has none for its value")
+    settings.xpTickerShowPace = nil
+    eq(overlays.tkArrow and overlays.tkArrow.btn.shown, true, "sample card: the arrow has its overlay")
+    local viewReal = X.TickerView
+    X.TickerView = function(r, view, out)
+        viewReal(r, view, out)
+        out.arrow = nil
+    end
+    X.PreviewRefresh()
+    eq(overlays.tkArrow and overlays.tkArrow.btn.shown, false, "sample card: an arrow not drawn has no overlay")
+    X.TickerView = viewReal
+    X.PreviewRefresh()
+
+    local cardCount = #frames
+    X.PreviewRefresh()
+    eq(#frames, cardCount, "sample card: a redraw makes no frame")
+    eq(X.PreviewPlay("gain"), nil, "sample card: a play with the card selected does nothing")
+    X.NavigateToSetting = navReal
+
+    local bar
+    local drawBar = X.Draw
+    X.Draw = function(w, view, data)
+        if w.kind == "xp" then bar = w end
+        return drawBar(w, view, data)
+    end
+    X.SelectBar("xp")
+    eq(cardShown and cardShown.shown, false, "playback: the card hides when a bar is selected")
+    check(bar ~= nil, "playback: the XP bar draws")
+    eq(bar and bar.fxReady and bar.fxReady.on, true, "playback: Ready Glow shows on the sample")
+    settings.xpReadyGlow = false
+    X.PreviewRefresh()
+    eq(bar and bar.fxReady and bar.fxReady.on, false, "playback: while its switch is on")
+    settings.xpReadyGlow = nil
+    X.PreviewRefresh()
+
+    X.PreviewPlay("gain")
+    check(bar and bar.fxBusy ~= nil, "playback: Play Gain plays on the sample")
+    X.SelectBar("fb")
+    eq(bar and bar.fxBusy, nil, "playback: selecting another item stops it")
+    eq(bar and bar.fxReady and bar.fxReady.on, false, "playback: and Ready Glow")
+    X.SelectBar("xp")
+    X.PreviewPlay("level")
+    check(bar and bar.fxBusy ~= nil and bar.fxBusy.isLevel == true, "playback: Play Level-Up plays on the sample")
+    local content = bar and bar.frame.parent
+    check(content and content.scripts.OnHide ~= nil, "playback: the preview's content stops what plays when it hides")
+    if content and content.scripts.OnHide then content.scripts.OnHide(content) end
+    eq(bar and bar.fxBusy, nil, "playback: nothing plays once it hides")
+    X.PreviewRestore()
+    eq(bar and bar.fxReady and bar.fxReady.on, true, "playback: a cached revisit brings Ready Glow back")
+
+    X.DrawCard, X.Draw = drawCardReal, drawBar
+    EUI.CreatePreviewHitOverlay, EUI.PP, EUI.ELLESMERE_GREEN = nil, nil, nil
+end
+
+---------------------------------------------------------------------------------
+-- The page's third view and the EFFECTS section
+---------------------------------------------------------------------------------
+
+do
+    local function indexOf(text)
+        for i, h in ipairs(page.headers) do
+            if h == text then return i end
+        end
+        return nil
+    end
+    local function before(a, b)
+        local ia, ib = indexOf(a), indexOf(b)
+        return ia ~= nil and ib ~= nil and ia < ib
+    end
+    local function lastIndexOf(text)
+        local last
+        for i, h in ipairs(page.headers) do
+            if h == text then last = i end
+        end
+        return last
+    end
+
+    buildPage("page, XP view with effects")
+    check(has("EFFECTS"), "effects: the XP bar's page has the section")
+    check(before("DIVIDERS", "EFFECTS"), "effects: after the appearance sections")
+    check(before("EFFECTS", "XP TOOLTIP"), "effects: before XP TOOLTIP")
+    check(page.rows["Gain Effect"] ~= nil and page.rows["Gain Effect"] == page.rows["Quest Turn-Ins Only"],
+        "effects: Gain Effect and Quest Turn-Ins Only share a row")
+    check(page.rows["Level-Up Effect"] ~= nil and page.rows["Level-Up Effect"] == page.rows["Show Amount Gained"],
+        "effects: Level-Up Effect and Show Amount Gained share a row")
+    check(page.rows["Ready Glow"] ~= nil and page.rows["Ready Glow"] == page.rows["Rested Stripes"],
+        "effects: Ready Glow and Rested Stripes share a row")
+    check(page.rows["Play Gain"] ~= nil and page.rows["Play Gain"] == page.rows["Play Level-Up"],
+        "effects: the two play buttons share a row")
+    for _, text in ipairs({ "Show +N", "+N Text Size", "Amount Text Size", "Match Bar Color", "Effect Color", "Glow Size",
+        "Star Size", "Stripe Size" }) do
+        eq(page.rows[text], nil, "effects: " .. text .. " has no row on the page")
+    end
+
+    local function wheel(title, rowText, side)
+        local cog = cogTitled(title)
+        local row = page.rows[rowText] or {}
+        check(cog ~= nil and cog.rgn == row[side], "effects: the " .. title .. " cogwheel sits on " .. rowText)
+        check(cog ~= nil and type(cog.opts.disabledTooltip) == "string" and cog.opts.rawTooltip == true,
+            "effects: the " .. title .. " cogwheel grays with its reason, shown as written")
+        return cog
+    end
+    local function grayed(cog)
+        return cog and cog.opts.disabled and cog.opts.disabled()
+    end
+    local function cogRow(cog, label)
+        for _, entry in ipairs(cog and cog.opts.rows or {}) do
+            if entry.label == label then return entry end
+        end
+        return nil
+    end
+    local function spans(cog, label)
+        local row = cogRow(cog, label)
+        return row and (row.min .. "-" .. row.max)
+    end
+    local function writes(cog, label, key, expected, ...)
+        local row = cogRow(cog, label)
+        local redrawn = false
+        local previewRefresh = X.PreviewRefresh
+        X.PreviewRefresh = function() redrawn = true end
+        if row then row.set(...) end
+        X.PreviewRefresh = previewRefresh
+        eq(settings[key], expected, "effects: " .. label .. " saves " .. key)
+        eq(redrawn, true, "effects: " .. label .. " redraws the preview, for " .. key)
+    end
+    local function checkWheels(p, levelName)
+        local gainWheel = wheel("Gain Effect", "Gain Effect", "_leftRegion")
+        local levelWheel = wheel(levelName, levelName, "_leftRegion")
+        local amountWheel = wheel("Show Amount Gained", "Show Amount Gained", "_rightRegion")
+        local color = cogRow(gainWheel, "Effect Color")
+
+        settings[p .. "GainEffect"], settings[p .. "GainMatchBar"], settings[p .. "GainShowAmount"] = "off", true, true
+        eq(grayed(gainWheel), true, p .. " effects: the gain cogwheel grays with no gain effect")
+        eq(grayed(amountWheel), true, p .. " effects: and the amount's")
+        settings[p .. "GainEffect"] = "pulse"
+        eq(grayed(gainWheel), false, p .. " effects: a gain effect opens the gain cogwheel")
+        eq(grayed(amountWheel), false, p .. " effects: and the amount's, with the amount on")
+        settings[p .. "GainShowAmount"] = false
+        eq(grayed(amountWheel), true, p .. " effects: the amount's grays with the amount off")
+
+        eq(color and color.disabled(), true, p .. " effects: Effect Color grays while it matches the bar")
+        check(color ~= nil and type(color.disabledTooltip) == "string" and color.rawTooltip == true,
+            p .. " effects: with its reason, shown as written")
+        writes(gainWheel, "Match Bar Color", p .. "GainMatchBar", false, false)
+        eq(color and color.disabled(), false, p .. " effects: Match Bar Color off opens Effect Color")
+        writes(gainWheel, "Effect Color", p .. "GainColorG", 0.2, 0.1, 0.2, 0.3)
+        eq(color and select(2, color.get()), 0.2, p .. " effects: Effect Color reads what it saved")
+
+        settings[p .. "LevelEffect"] = "flash"
+        eq(grayed(levelWheel), true, p .. " effects: Glow Size has nothing to offer unless the effect is Sweep")
+        settings[p .. "LevelEffect"] = "sweep"
+        eq(grayed(levelWheel), false, p .. " effects: Sweep opens its cogwheel")
+        eq(spans(levelWheel, "Glow Size"), "2-32", p .. " effects: Glow Size's range")
+        writes(levelWheel, "Glow Size", p .. "GlowSize", 20, 20)
+
+        eq(spans(amountWheel, "Amount Text Size"), "8-32", p .. " effects: Amount Text Size's range")
+        writes(amountWheel, "Amount Text Size", p .. "GainTextSize", 20, 20)
+
+        for _, key in ipairs({ "GainEffect", "GainMatchBar", "GainShowAmount", "GainColorR", "GainColorG", "GainColorB",
+            "LevelEffect", "GlowSize", "GainTextSize" }) do
+            settings[p .. key] = nil
+        end
+    end
+
+    checkWheels("xp", "Level-Up Effect")
+    eq(cogTitled("Ready Glow"), nil, "effects: Ready Glow has no cogwheel")
+    local stripeWheel = wheel("Rested Stripes", "Rested Stripes", "_rightRegion")
+    settings.xpRestedStripes = false
+    eq(grayed(stripeWheel), true, "effects: the stripes' cogwheel grays with the stripes off")
+    settings.xpRestedStripes = true
+    eq(grayed(stripeWheel), false, "effects: and opens with them on")
+    eq(spans(stripeWheel, "Stripe Size"), "4-32", "effects: Stripe Size's range")
+    writes(stripeWheel, "Stripe Size", "xpStripeSize", 20, 20)
+    settings.xpRestedStripes, settings.xpStripeSize = nil, nil
+    check(not has("XP TICKER"), "effects: the XP bar's page has no card section")
+
+    X.SelectBar("fb")
+    buildPage("page, reputation view with effects")
+    check(has("EFFECTS"), "effects: the reputation bar's page has the section")
+    check(before("DIVIDERS", "EFFECTS"), "effects: after its appearance sections")
+    check(page.rows["Rank-Up Effect"] ~= nil, "effects: the reputation bar's moment is a rank-up")
+    check(page.rows["Gain Effect"] ~= nil and page.rows["Gain Effect"] == page.rows["Show Amount Gained"],
+        "effects: Gain Effect and Show Amount Gained share a row")
+    eq(page.rows["Amount Text Size"], nil, "effects: Amount Text Size has no row on the page")
+    checkWheels("fb", "Rank-Up Effect")
+    check(page.rows["Play Gain"] ~= nil and page.rows["Play Gain"] == page.rows["Play Rank-Up"],
+        "effects: its two play buttons share a row")
+    eq(page.rows["Ready Glow"], nil, "effects: Ready Glow is the XP bar's")
+    eq(page.rows["Rested Stripes"], nil, "effects: and Rested Stripes")
+    eq(factionWord(), nil, "effects: every label reads reputation, none faction")
+
+    -- The third view
+    local enable
+    local dualRow = EUI.Widgets.DualRow
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        if type(left) == "table" and left.text == "Enable XP Ticker" then enable = left end
+        return dualRow(w, parent, y, left, right)
+    end
+    X.SelectBar("tk")
+    settings.xpEnabled = false
+    buildPage("page, card view")
+    EUI.Widgets.DualRow = dualRow
+    for _, text in ipairs({ "XP TICKER", "VISIBILITY", "ROWS", "TEXT", "BACKGROUND", "POSITION" }) do
+        check(has(text), "card view: its " .. text .. " section")
+    end
+    check(before("XP TICKER", "VISIBILITY") and before("VISIBILITY", "ROWS") and before("ROWS", "TEXT")
+        and before("TEXT", "BACKGROUND") and before("BACKGROUND", "POSITION"), "card view: in order")
+    check(not has("XP BAR") and not has("REPUTATION BAR") and not has("EFFECTS") and not has("FRAME"),
+        "card view: no bar's sections")
+    check(enable ~= nil, "card view: Enable XP Ticker is built")
+    eq(enable and enable.disabled(), true, "card view: grayed with the XP bar off")
+    check(enable and type(enable.disabledTooltip) == "string", "card view: with a reason")
+    eq(enable and enable.rawTooltip, true, "card view: shown as written, not wrapped")
+    settings.xpEnabled = true
+    eq(enable and enable.disabled(), false, "card view: usable with the XP bar on")
+    settings.xpEnabled = false
+    check(page.rows["Current Level"] ~= nil and page.rows["Current Level"] == page.rows["Level History Rows"],
+        "card view: Current Level and Level History Rows share a row")
+    check(page.rows.Played ~= nil and page.rows.Played == page.rows.Pace, "card view: Played and Pace share a row")
+    eq(page.full["Position: use EUI Unlock Mode"], true, "card view: the Unlock Mode line has a row of its own")
+    eq(factionWord(), nil, "card view: no word on the page reads faction")
+
+    -- A press on the sample card leads to its setting.
+    local scrolled, glowed
+    local realAfter = _G.C_Timer.After
+    EUI.SmoothScrollTo = function(v) scrolled = v end
+    EUI.ELLESMERE_GREEN = { r = 0, g = 1, b = 0 }
+    EUI.MakeSettingGlow = function() return function(target) glowed = target end end
+    _G.C_Timer.After = function(_, fn) fn() end
+    buildPage("page, card view, navigation")
+    for key, row in pairs({ tkCurrent = "Current Level", tkHistory = "Level History Rows", tkPlayed = "Played", tkPace = "Pace",
+        tkTop = "Font", tkBack = "Background" }) do
+        scrolled, glowed = nil, nil
+        X.NavigateToSetting(key)
+        check(scrolled ~= nil, "card view: " .. key .. " scrolls")
+        check(glowed ~= nil and (glowed == page.rows[row] or glowed == page.rows[row]._leftRegion
+            or glowed == page.rows[row]._rightRegion), "card view: " .. key .. " glows its row")
+    end
+    _G.C_Timer.After = realAfter
+    EUI.SmoothScrollTo, EUI.ELLESMERE_GREEN, EUI.MakeSettingGlow = nil, nil, nil
+
+    EUI.IsSearchPrebuild = function() return true end
+    buildPage("page, search prebuild with the card")
+    check(has("XP DISPLAY") and has("REPUTATION SOURCE") and has("XP TICKER") and has("ROWS"),
+        "search prebuild: all three views, so search finds every row")
+    check(lastIndexOf("EFFECTS") ~= indexOf("EFFECTS"), "search prebuild: both bars' EFFECTS")
+    EUI.IsSearchPrebuild = nil
+
+    -- The dropdowns and buttons play on the preview.
+    local played = {}
+    local previewPlay = X.PreviewPlay
+    X.PreviewPlay = function(moment) played[#played + 1] = moment end
+    local gainDrop, levelDrop, playGain
+    EUI.Widgets.DualRow = function(w, parent, y, left, right)
+        for _, cfg in ipairs({ left or false, right or false }) do
+            if cfg and cfg.text == "Gain Effect" then gainDrop = cfg end
+            if cfg and cfg.text == "Level-Up Effect" then levelDrop = cfg end
+            if cfg and cfg.text == "Play Gain" then playGain = cfg end
+        end
+        return dualRow(w, parent, y, left, right)
+    end
+    X.SelectBar("xp")
+    buildPage("page, XP view, playback")
+    EUI.Widgets.DualRow = dualRow
+    check(gainDrop ~= nil and levelDrop ~= nil and playGain ~= nil, "playback: the controls are built")
+    if gainDrop and levelDrop and playGain then
+        gainDrop.setValue("wave")
+        eq(settings.xpGainEffect, "wave", "playback: the dropdown saves")
+        eq(played[1], "gain", "playback: changing the gain effect plays it")
+        levelDrop.setValue("sweep")
+        eq(played[2], "level", "playback: changing the level effect plays it")
+        playGain.onClick()
+        eq(played[3], "gain", "playback: the button plays")
+        settings.xpGainEffect = "surge"
+        eq(gainDrop.getValue(), "surge", "playback: a style the client has shows as itself")
+        settings.xpGainEffect, settings.xpLevelEffect = nil, nil
+    end
+    X.PreviewPlay = previewPlay
+
+    -- A pick of the card rebuilds the page and goes to its top.
+    local calls = {}
+    EUI.RefreshPage = function() calls[#calls + 1] = "refresh" end
+    EUI.ScrollToTop = function() calls[#calls + 1] = "top" end
+    X.SelectBar("tk")
+    eq(table.concat(calls, ","), "refresh,top", "a pick of the card rebuilds the page, then scrolls it to the top")
+    EUI.RefreshPage, EUI.ScrollToTop = nil, nil
+    X.SelectBar("xp")
 end
 
 finish()

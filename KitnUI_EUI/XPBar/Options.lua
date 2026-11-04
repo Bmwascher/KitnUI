@@ -43,9 +43,13 @@ local OUTLINE_V, OUTLINE_O = Choices("", "EllesmereUI Outline", "NONE", "None", 
 local SOURCE_V, SOURCE_O = Choices("watched", "Watched Reputation", "companion", "Current Delve Companion",
     "pinned", "Pinned Reputation")
 local FBFILL_V, FBFILL_O = Choices("custom", "Custom Color", "standing", "Standing Color")
-X.BAR_V, X.BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar")
+X.BAR_V, X.BAR_O = Choices("xp", "XP Bar", "fb", "Reputation Bar", "tk", "XP Ticker")
 local STYLE_NAMES = { eui = "EUI Border", prof = "Profession Frame", classic = "Classic", forever = "Forever", blizzard = "Blizzard" }
 local STYLE_ORDER = { "eui", "prof", "classic", "forever", "blizzard" }
+local GAIN_NAMES = { pulse = "Pulse", wave = "Energy Wave", surge = "Spell Surge" }
+local GAIN_ORDER = { "pulse", "wave", "surge" }
+local LEVEL_V, LEVEL_O = Choices("off", "Off", "flash", "Flash", "sweep", "Sweep")
+local CARDBG_V, CARDBG_O = Choices("card", "Card", "soft", "Soft", "none", "None")
 
 local HIDE_TIPS = {
     xp = "Hides the XP bar you already had while this one is on: Blizzard's for the session, or EllesmereUI's by setting its Visibility to Never until this goes off.",
@@ -92,13 +96,14 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
     local W = EllesmereUI and EllesmereUI.Widgets
     if not W then return math.abs(yOffset) end
     local y = yOffset
-    -- One bar at a time; the search prebuild indexes both. The index keeps one
+    -- One view at a time; the search prebuild indexes all three. The index keeps one
     -- entry per label, so an appearance row both bars share lists once and lands
     -- in the selected bar's section. Per-bar names would add a result whose row
     -- is not built while the other bar is selected.
     local prebuild = EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild() == true
     local bar = X.SelectedBar and X.SelectedBar() or "xp"
     local showXP, showFB = prebuild or bar == "xp", prebuild or bar == "fb"
+    local showTK = prebuild or bar == "tk"
     local nav = {}
 
     local function Changed()
@@ -201,11 +206,32 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             disabledTooltip = reason, rawTooltip = reason and true or nil })
     end
 
-    local function CogSlider(label, key)
-        return { type = "slider", label = label, min = -OFFSET_MAX, max = OFFSET_MAX, step = 1,
+    local function CogSlider(label, key, lo, hi, tip)
+        return { type = "slider", label = label, min = lo or -OFFSET_MAX, max = hi or OFFSET_MAX, step = 1, tooltip = tip,
             get = function() return tonumber(X.Get(key)) or 0 end,
             set = function(v)
                 X.Set(key, v)
+                Changed()
+            end }
+    end
+
+    local function CogToggle(label, key, tip)
+        return { type = "toggle", label = label, tooltip = tip,
+            get = function() return X.Get(key) == true end,
+            set = function(v)
+                X.Set(key, v and true or false)
+                Changed()
+            end }
+    end
+
+    local function CogColor(label, stem, tip, disabled, reason)
+        return { type = "colorpicker", label = label, hasAlpha = false, tooltip = tip,
+            disabled = disabled, disabledTooltip = reason, rawTooltip = reason and true or nil,
+            get = function() return X.Get(stem .. "R"), X.Get(stem .. "G"), X.Get(stem .. "B") end,
+            set = function(r, g, b)
+                X.Set(stem .. "R", r)
+                X.Set(stem .. "G", g)
+                X.Set(stem .. "B", b)
                 Changed()
             end }
     end
@@ -362,6 +388,78 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         end
     end
 
+    local gainV, gainO = { off = "Off" }, { "off" }
+    for _, name in ipairs(GAIN_ORDER) do
+        if X.EffectAvailable(name) then
+            gainV[name] = GAIN_NAMES[name]
+            gainO[#gainO + 1] = name
+        end
+    end
+
+    -- What each moment plays on this bar. Changing an effect plays it once on
+    -- the preview, after the setter's own redraw.
+    local function Effects(p)
+        local function NoGain() return X.Get(p .. "GainEffect") == "off" end
+        local function NoAmount() return NoGain() or X.Get(p .. "GainShowAmount") ~= true end
+        local function NoCustom() return NoGain() or X.Get(p .. "GainMatchBar") == true end
+        local function NoSweep() return X.Get(p .. "LevelEffect") ~= "sweep" end
+        local function EffectDrop(text, key, values, order, tip, moment, resolve)
+            return { type = "dropdown", text = text, values = values, order = order, tooltip = tip,
+                getValue = function()
+                    local v = X.Get(key)
+                    return resolve and resolve(v) or v
+                end,
+                setValue = function(v)
+                    X.Set(key, v)
+                    Changed()
+                    RefreshWidgets()
+                    if X.PreviewPlay then X.PreviewPlay(moment) end
+                end }
+        end
+        local function PlayButton(text, moment, tip)
+            return { type = "labeledButton", text = text, buttonText = "Play", width = 80, tooltip = tip,
+                onClick = function()
+                    if X.PreviewPlay then X.PreviewPlay(moment) end
+                end }
+        end
+        local levelName = p == "xp" and "Level-Up" or "Rank-Up"
+        local gainDrop = EffectDrop("Gain Effect", p .. "GainEffect", gainV, gainO,
+            "What plays over the part of the bar a gain fills. Only effects this client has art for are listed.",
+            "gain", X.ResolveGainEffect)
+        local levelDrop = EffectDrop(levelName .. " Effect", p .. "LevelEffect", LEVEL_V, LEVEL_O,
+            "What plays across the whole bar at that moment.", "level")
+        local showAmount = Toggle("Show Amount Gained", p .. "GainShowAmount", "Floats the amount gained above the bar.", NoGain, true)
+        Header("EFFECTS")
+        local gainRow, levelRow, amountRow
+        if p == "xp" then
+            gainRow = Row(gainDrop, Toggle("Quest Turn-Ins Only", "xpGainQuestsOnly", "Plays the gain effect for a quest and not for a kill.", NoGain))
+            levelRow = Row(levelDrop, showAmount)
+            amountRow = levelRow
+            local stripesRow = Row(Toggle("Ready Glow", "xpReadyGlow", "Pulses the rest of the bar while completed quests cover the level."),
+                Toggle("Rested Stripes", "xpRestedStripes", "Draws still stripes on the rested part of the bar.", nil, true))
+            Cog(stripesRow, "right", "Rested Stripes", { CogSlider("Stripe Size", "xpStripeSize", 4, 32) },
+                Off("xpRestedStripes"), "Turn on Rested Stripes to size its stripes.")
+            Row(PlayButton("Play Gain", "gain", "Plays the gain effect on the preview."),
+                PlayButton("Play Level-Up", "level", "Plays the level-up effect on the preview."))
+        else
+            gainRow = Row(gainDrop, showAmount)
+            levelRow = Row(levelDrop, Spacer())
+            amountRow = gainRow
+            Row(PlayButton("Play Gain", "gain", "Plays the gain effect on the preview."),
+                PlayButton("Play Rank-Up", "level", "Plays the rank-up effect on the preview."))
+        end
+        Cog(gainRow, "left", "Gain Effect",
+            { CogToggle("Match Bar Color", p .. "GainMatchBar", "Tints the gain effect to the bar's fill."),
+              CogColor("Effect Color", p .. "GainColor", "The gain effect's color when it does not match the bar.",
+                  NoCustom, "Turn off Match Bar Color to choose a color.") },
+            NoGain, "Choose a gain effect to change its color.")
+        Cog(levelRow, "left", levelName .. " Effect",
+            { CogSlider("Glow Size", p .. "GlowSize", 2, 32, "How far the Sweep's glow reaches past the bar.") },
+            NoSweep, "Choose Sweep to size its glow.")
+        Cog(amountRow, "right", "Show Amount Gained", { CogSlider("Amount Text Size", p .. "GainTextSize", 8, 32) },
+            NoAmount, "Choose a gain effect and turn on Show Amount Gained to size its text.")
+    end
+
     -- Without the header's picker the page carries its own.
     if not prebuild and not (X.SelectorShown and X.SelectorShown()) then
         Row({ type = "dropdown", text = "Bar", values = X.BAR_V, order = X.BAR_O,
@@ -409,6 +507,7 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
         Nav("compRested", displayHdr, rateRow, "right")
 
         Appearance("xp")
+        Effects("xp")
 
         Header("XP TOOLTIP")
         Row(Toggle("Show Tooltip", "xpTooltip", "Shows the XP details when you hover the bar.", nil, true),
@@ -502,11 +601,44 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             Toggle("Hide Tooltip in Combat", "fbTooltipCombat", nil, Off("fbTooltip")))
 
         Appearance("fb")
+        Effects("fb")
+    end
+
+    if showTK then
+        Header("XP TICKER")
+        local enable = Toggle("Enable XP Ticker", "xpTickerEnabled", "Shows a small card with your XP per hour, time to level and completed levels.",
+            function() return not X.XPEnabled() end)
+        enable.disabledTooltip = "Turn on the XP bar first. To see only the card, set the XP bar's Visibility to Never."
+        enable.rawTooltip = true
+        Row(enable, Spacer())
+
+        Header("VISIBILITY")
+        Row(Drop("Visibility", "xpTickerVisibility", VIS_V, VIS_O, "When the card shows, with the same choices as EllesmereUI's own frames."),
+            Toggle("Hide While Resting", "xpTickerHideResting", "Hides the card in an inn or a city."))
+
+        local rowsHdr = Header("ROWS")
+        local levelRow = Row(Toggle("Current Level", "xpTickerShowCurrent", "The current level, with its clock and percent."),
+            Slider("Level History Rows", "xpTickerHistoryRows", 0, 10, "How many completed levels the card lists, newest first."))
+        local totalRow = Row(Toggle("Played", "xpTickerShowPlayed", "This character's total time played."),
+            Toggle("Pace", "xpTickerShowPace", "The gap to the closest of your other characters at this point in the level."))
+        Nav("tkCurrent", rowsHdr, levelRow, "left")
+        Nav("tkHistory", rowsHdr, levelRow, "right")
+        Nav("tkPlayed", rowsHdr, totalRow, "left")
+        Nav("tkPace", rowsHdr, totalRow, "right")
+
+        local cardTextHdr = Header("TEXT")
+        local cardFontRow = Row(Drop("Font", "xpTickerFont", fontV, fontO), Drop("Outline", "xpTickerOutline", OUTLINE_V, OUTLINE_O))
+        Row(Slider("Font Size", "xpTickerFontSize", 8, 32, "The card's width follows it."), Spacer())
+        Nav("tkTop", cardTextHdr, cardFontRow, "left")
+
+        local backHdr = Header("BACKGROUND")
+        Nav("tkBack", backHdr, Row(Drop("Background", "xpTickerBackground", CARDBG_V, CARDBG_O), Spacer()), "left")
     end
 
     Header("POSITION")
     Row({ type = "labeledButton", text = "Position: use EUI Unlock Mode", buttonText = "Unlock Mode", width = 120,
-          tooltip = "Both bars are moved and resized in EllesmereUI's Unlock Mode.",
+          tooltip = bar == "tk" and "The XP ticker is moved in EllesmereUI's Unlock Mode. Its size follows its font size."
+              or "Both bars are moved and resized in EllesmereUI's Unlock Mode.",
           onClick = function()
               if EllesmereUI and EllesmereUI.OpenUnlockMode then pcall(EllesmereUI.OpenUnlockMode, EllesmereUI) end
           end })
