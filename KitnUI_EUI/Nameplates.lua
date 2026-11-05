@@ -120,6 +120,9 @@ end
 -- Gameplay page's barVisibility the ordinary trio is exactly right here.
 local function ApplyEUIArrowSuppression(on, claiming)
     local prof = ns.EUIProfile(NAMEPLATES)
+    -- Giving the key back also reaches a switched-off nameplate module, so a
+    -- reset run while it is off does not lose the original with KitnUIDB.
+    if not prof and not on then prof = ns.EUIStoredProfile(NAMEPLATES) end
     if not prof then return end
 
     -- Peek on the off path, and on any path that is not a claim: EUISnap would
@@ -218,6 +221,7 @@ local function CurrentHeldSlot(prof)
     local slot = HeldLevelSlot()
     if slot and slot ~= NameSlot(prof) then
         ReleaseLevelSlot(prof, slot, false)
+        ns.EUIRebuildForOwnership("Nameplates")
         return nil
     end
     return slot
@@ -274,9 +278,11 @@ local function ApplyLevelName(claiming)
 end
 
 -- Called by the reset while the notes still exist: the switch's default is on
--- for Forever, so the reset's re-apply would otherwise write it again.
+-- for Forever, so the reset's re-apply would otherwise write it again. The
+-- stored profile covers a nameplate module that is switched off, whose notes
+-- would otherwise die with KitnUIDB.
 function ns.NameplateLevelNameTeardown()
-    local prof = ns.EUIProfile(NAMEPLATES)
+    local prof = ns.EUIProfile(NAMEPLATES) or ns.EUIStoredProfile(NAMEPLATES)
     local slot = prof and CurrentHeldSlot(prof)
     if slot then
         ReleaseLevelSlot(prof, slot, true)
@@ -695,7 +701,7 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
             ns.EUIRebuildForOwnership()
         end,
         ns.EUIOwnershipTip(
-            "Shows the enemy's level in front of its name, colored by how it compares with yours: grey and green are below you, yellow is about even, orange and red are above you.",
+            "Shows the enemy's level in front of its name, colored by how it compares with yours: gray and green are below you, yellow is about even, orange and red are above you.",
             "nameplates",
             function() return ns.NameplateLevelNameEnabled() end,
             "the nameplate's name text",

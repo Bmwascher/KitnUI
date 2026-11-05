@@ -216,5 +216,27 @@ ns.EUIQueueReapply()
 eq(prof.textSlotLeft, "enemyName", "reset: the reset's re-apply writes nothing")
 eq(ns.EUISettings().npLevelNameSeeded, nil, "reset: the reset's re-apply stamps nothing")
 
+---------------------------------------------------------------------------------
+-- The reset with the nameplate module switched off: both switches reach its
+-- stored profile and give their keys back
+---------------------------------------------------------------------------------
+
+local stored = { textSlotLeft = "levelName", textSlotLeftLevelDiffOn = true,
+    textSlotLeftLevelColorOn = false, showTargetArrows = false }
+_G.EllesmereUI.Lite._dbRegistry = {}
+_G.EllesmereUIDB = { profiles = { KitnUI = { addons = { EllesmereUINameplates = stored } } } }
+local off = load(false)
+core.db = { euiSnap = { nameplates = { KitnUI = {
+    ["levelName\31textSlotLeft"] = { prev = "enemyName" },
+    ["levelName\31textSlotLeftLevelDiffOn"] = { prev = "__kitnui_absent__" },
+    ["levelName\31textSlotLeftLevelColorOn"] = { prev = "__kitnui_absent__" },
+    euiArrows = { prev = true },
+} } } }
+off.NameplateLevelNameTeardown()
+eq(stored.textSlotLeft, "enemyName", "module off: the name slot is given back")
+eq(stored.textSlotLeftLevelDiffOn, nil, "module off: the difficulty key is unset again")
+off.EUIQueueReapply()
+eq(stored.showTargetArrows, true, "module off: EllesmereUI's own arrows are given back")
+
 realPrint(string.format("%d checks, %d failures", checks, failures))
 if failures > 0 then os.exit(1) end
