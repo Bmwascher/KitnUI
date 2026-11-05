@@ -1357,11 +1357,13 @@ for _, key in ipairs({
     "xpGainEffect", "fbGainEffect", "xpGainQuestsOnly", "xpGainShowAmount", "fbGainShowAmount", "xpGainTextSize",
     "fbGainTextSize", "xpGainMatchBar", "fbGainMatchBar", "xpGainColorR", "xpGainColorG", "xpGainColorB", "fbGainColorR",
     "fbGainColorG", "fbGainColorB", "xpLevelEffect", "fbLevelEffect", "xpGlowSize", "fbGlowSize", "xpReadyGlow",
-    "xpRestedStripes", "xpStripeSize",
+    "xpRestedStripes", "xpStripeSize", "xpTickerShowLine", "xpTickerGapBars",
 }) do
     check(ns.EUI_DEFAULTS[key] ~= nil, "the default " .. key .. " exists")
 end
 eq(ns.EUI_DEFAULTS.xpStarSize, nil, "the star's size is not a setting")
+eq(ns.EUI_DEFAULTS.xpTickerShowLine, true, "the ticker's XP Line is on by default")
+eq(ns.EUI_DEFAULTS.xpTickerGapBars, true, "and so are its Gap Bars")
 
 ---------------------------------------------------------------------------------
 -- The card through the funnel
@@ -1844,6 +1846,7 @@ do
     check(page.rows["Current Level"] ~= nil and page.rows["Current Level"] == page.rows["Level History Rows"],
         "card view: Current Level and Level History Rows share a row")
     check(page.rows.Played ~= nil and page.rows.Played == page.rows.Pace, "card view: Played and Pace share a row")
+    check(page.rows["XP Line"] ~= nil and page.rows["XP Line"] == page.rows["Gap Bars"], "card view: XP Line and Gap Bars share a row")
     eq(page.full["Position: use EUI Unlock Mode"], true, "card view: the Unlock Mode line has a row of its own")
     eq(factionWord(), nil, "card view: no word on the page reads faction")
 
@@ -1856,7 +1859,7 @@ do
     _G.C_Timer.After = function(_, fn) fn() end
     buildPage("page, card view, navigation")
     for key, row in pairs({ tkCurrent = "Current Level", tkHistory = "Level History Rows", tkPlayed = "Played", tkPace = "Pace",
-        tkTop = "Font", tkBack = "Background" }) do
+        tkTop = "Font", tkBack = "Background", tkLine = "XP Line", tkGapBars = "Gap Bars" }) do
         scrolled, glowed = nil, nil
         X.NavigateToSetting(key)
         check(scrolled ~= nil, "card view: " .. key .. " scrolls")

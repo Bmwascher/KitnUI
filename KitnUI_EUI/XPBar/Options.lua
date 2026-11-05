@@ -667,6 +667,10 @@ ns.EUIPages["XP Bar"] = function(parent, yOffset)
             Drop("Background", "xpTickerBackground", CARDBG_V, CARDBG_O))
         Nav("tkTop", tickerStyleHdr, cardFontRow, "left")
         Nav("tkBack", tickerStyleHdr, cardSizeRow, "right")
+        local cardPartsRow = Row(Toggle("XP Line", "xpTickerShowLine", "A thin XP line under the header, with completed-quest and rested XP."),
+            Toggle("Gap Bars", "xpTickerGapBars", "Compares each finished level with your other characters' time for it, else with this character's recent median from 3 levels."))
+        Nav("tkLine", tickerStyleHdr, cardPartsRow, "left")
+        Nav("tkGapBars", tickerStyleHdr, cardPartsRow, "right")
 
         local partyHdr = Header("PARTY CARD")
         Row(Drop("Party Visibility", "xpPartyVisibility", VIS_V, VIS_O, "When the card shows in a party, with the same choices as EllesmereUI's own frames.", NoCard),
