@@ -35,7 +35,6 @@ local CELL_SCALE, GAP_COL, COL_GAP, BAR_SCALE, GAP_FONT = 5, 4.2, 0.5, 0.5, 0.92
 local DIV_ABOVE, DIV_BELOW, VALUE_GAP = 0.2, 0.25, 0.25
 -- Pixels a tick reaches past its bar, above and below.
 local TICK_OVER = 2
--- The current level's projected finish is drawn faint.
 local PROJECTED_ALPHA = 0.45
 -- Faster and up are teal, slower and down amber; labels and even gaps are dim.
 local FAST_R, FAST_G, FAST_B = 0.3, 0.85, 0.75
