@@ -8,6 +8,12 @@
 > client: most features have been checked, but not all. Expect some bugs,
 > and please report any you find.
 
+#### Settings Tab
+
+- **NEW:** Show Level Before Name on the Nameplates page puts the enemy's
+  level in front of its name, colored by how it compares with yours; on by
+  default on WoW Forever
+
 #### XP Bar
 
 - **NEW:** The XP Ticker shows whether each level went faster or slower: a
