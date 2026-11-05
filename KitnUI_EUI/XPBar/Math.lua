@@ -434,3 +434,109 @@ function M.PaceText(gap)
     if type(gap) ~= "number" then return "--" end
     return M.TimeText(max(1, math.abs(gap))) .. (gap >= 0 and " ahead" or " behind")
 end
+
+-- A finished level's comparison: a recent median needs this many levels, a gap
+-- inside this share of its reference reads even, and a bar is full at this
+-- share past it.
+M.SPLIT_MIN_ROWS = 3
+M.SPLIT_EVEN_SHARE = 0.05
+M.SPLIT_FULL_SHARE = 0.5
+-- The contrast accent-colored text needs against the card.
+M.TEXT_CONTRAST = 4.5
+
+-- The median of list[1..n]. Sorts a copy in scratch, so the list keeps its
+-- order and no table is made.
+function M.Median(list, n, scratch)
+    n = tonumber(n) or 0
+    if n < 1 then return nil end
+    for i = 1, n do scratch[i] = list[i] end
+    for i = #scratch, n + 1, -1 do scratch[i] = nil end
+    table.sort(scratch)
+    if n % 2 == 1 then return scratch[(n + 1) / 2] end
+    return (scratch[n / 2] + scratch[n / 2 + 1]) / 2
+end
+
+-- A time against its reference: share is nil without one, 0 when even, else
+-- signed (negative is faster) and 1 at SPLIT_FULL_SHARE past it; gap is the
+-- difference in seconds.
+function M.SplitGap(secs, ref)
+    if type(secs) ~= "number" or type(ref) ~= "number" or ref <= 0 then return nil end
+    local gap = secs - ref
+    local size = math.abs(gap)
+    if size < ref * M.SPLIT_EVEN_SHARE then return 0, gap end
+    local share = min(1, size / (ref * M.SPLIT_FULL_SHARE))
+    return gap < 0 and -share or share, gap
+end
+
+function M.GapText(share, gap)
+    if type(share) ~= "number" or type(gap) ~= "number" then return nil end
+    if share == 0 then return "even" end
+    return (gap < 0 and "-" or "+") .. M.ClockText(math.abs(gap))
+end
+
+local function Source(acct, median)
+    if type(acct) == "number" and acct > 0 then return "account", acct end
+    if median then return "median", median end
+    return nil, nil
+end
+
+-- Each finished level takes the other characters' median for it, else the
+-- recent median. The main source is the one more finished levels use, account
+-- on a tie; the current level never votes, since its projection comes and goes,
+-- and a card that hides it (withCurrent false) leaves it out entirely.
+function M.SplitSummary(h, scratch, withCurrent)
+    local n = h.n or 0
+    local median = n >= M.SPLIT_MIN_ROWS and M.Median(h.secs, n, scratch) or nil
+    if median and median <= 0 then median = nil end
+    h.median = median
+    local account, recent = 0, 0
+    for i = 1, n do
+        local src, ref = Source(h.acct[i], median)
+        h.src[i], h.ref[i] = src, ref
+        h.share[i], h.gap[i] = M.SplitGap(h.secs[i], ref)
+        if src == "account" then
+            account = account + 1
+        elseif src == "median" then
+            recent = recent + 1
+        end
+    end
+    if withCurrent then
+        h.curSrc, h.curRef = Source(h.curAcct, median)
+    else
+        h.curSrc, h.curRef = nil, nil
+    end
+    local main = h.curSrc
+    if account + recent > 0 then main = account >= recent and "account" or "median" end
+    h.main = main
+    local mixed = false
+    for i = 1, n do
+        local star = h.src[i] ~= nil and h.src[i] ~= main
+        h.star[i] = star
+        if star then mixed = true end
+    end
+    h.curStar = h.curSrc ~= nil and h.curSrc ~= main
+    h.mixed = mixed or h.curStar
+end
+
+local function Linear(c)
+    if c <= 0.03928 then return c / 12.92 end
+    return ((c + 0.055) / 1.055) ^ 2.4
+end
+
+local function Luminance(r, g, b)
+    return 0.2126 * Linear(r) + 0.7152 * Linear(g) + 0.0722 * Linear(b)
+end
+
+-- The color mixed toward white in hundredths until text in it reaches
+-- TEXT_CONTRAST against the gray back (0 to 1).
+function M.AccentText(r, g, b, back)
+    if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return nil end
+    local lb = Luminance(back, back, back)
+    for step = 0, 100 do
+        local t = step / 100
+        local mr, mg, mb = r + (1 - r) * t, g + (1 - g) * t, b + (1 - b) * t
+        local l = Luminance(mr, mg, mb)
+        if (max(l, lb) + 0.05) / (min(l, lb) + 0.05) >= M.TEXT_CONTRAST then return mr, mg, mb end
+    end
+    return 1, 1, 1
+end

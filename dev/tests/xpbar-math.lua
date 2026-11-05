@@ -513,5 +513,105 @@ do
     eq(M.StoredSpot(nil), nil, "stored spot: nothing handed back stores nothing")
 end
 
+-- Median
+do
+    local scratch = {}
+    local values = { 30, 10, 20 }
+    eq(M.Median(values, 3, scratch), 20, "median: an odd count")
+    eq(values[1], 30, "median: the list keeps its order")
+    eq(M.Median({ 40, 10, 30, 20 }, 4, scratch), 25, "median: an even count")
+    eq(M.Median({ 5, 99 }, 1, scratch), 5, "median: only the first n count")
+    eq(scratch[2], nil, "median: the scratch past n is cleared")
+    eq(M.Median({}, 0, scratch), nil, "median: none of nothing")
+end
+
+-- SplitGap and GapText
+do
+    eq(M.SplitGap(100, nil), nil, "split gap: no reference")
+    eq(M.SplitGap(100, 0), nil, "split gap: a reference of 0")
+    eq(M.SplitGap(nil, 100), nil, "split gap: no time")
+    local share, gap = M.SplitGap(2000, 2000)
+    eq(share, 0, "split gap: equal reads even")
+    eq(gap, 0, "split gap: with no gap")
+    eq(M.SplitGap(2099, 2000), 0, "split gap: just inside 5% reads even")
+    eq(M.SplitGap(2100, 2000), 0.1, "split gap: exactly 5% does not")
+    eq(M.SplitGap(1500, 2000), -0.5, "split gap: faster is negative")
+    eq(M.SplitGap(5000, 2000), 1, "split gap: full at 1.5 times the reference")
+    local _, late = M.SplitGap(5000, 2000)
+    eq(late, 3000, "split gap: the gap is in seconds")
+    eq(M.GapText(nil, 10), nil, "gap text: none without a share")
+    eq(M.GapText(0, 30), "even", "gap text: even")
+    eq(M.GapText(-0.3, -42), "-0:42", "gap text: faster, with an ASCII minus")
+    eq(M.GapText(1, 4325), "+1:12:05", "gap text: slower, past an hour")
+end
+
+-- SplitSummary
+local function Summary(n, secs, acct, curAcct, withCurrent)
+    local h = { n = n, secs = secs, acct = acct, curAcct = curAcct, ref = {}, src = {}, share = {}, gap = {}, star = {} }
+    M.SplitSummary(h, {}, withCurrent ~= false)
+    return h
+end
+
+do
+    local h = Summary(2, { 100, 200 }, {}, nil)
+    eq(h.median, nil, "split summary: two levels give no recent median")
+    eq(h.src[1], nil, "split summary: and no comparison")
+    eq(h.main, nil, "split summary: and no main source")
+    eq(h.mixed, false, "split summary: and nothing is mixed")
+
+    h = Summary(3, { 0, 0, 5 }, {}, nil)
+    eq(h.median, nil, "split summary: a median of 0 is none")
+
+    h = Summary(3, { 4325, 3520, 2952 }, { 3900, 3900 }, 4800)
+    eq(h.median, 3520, "split summary: the recent median")
+    eq(h.src[1], "account", "split summary: account comes first")
+    eq(h.ref[1], 3900, "split summary: with the other characters' median")
+    eq(h.src[3], "median", "split summary: a level no other character has uses the recent median")
+    eq(h.ref[3], 3520, "split summary: as its reference")
+    eq(h.gap[3], -568, "split summary: and its gap")
+    eq(h.main, "account", "split summary: the majority is the main source")
+    eq(h.star[1], false, "split summary: a row on it has no star")
+    eq(h.star[3], true, "split summary: a row on the other source has one")
+    eq(h.curSrc, "account", "split summary: the current level by the same rule")
+    eq(h.curRef, 4800, "split summary: with its own reference")
+    eq(h.curStar, false, "split summary: on the main source")
+    eq(h.mixed, true, "split summary: sources are mixed")
+
+    h = Summary(4, { 100, 100, 100, 100 }, { 90, 90 }, nil)
+    eq(h.main, "account", "split summary: a tie goes to account")
+
+    h = Summary(3, { 100, 100, 100 }, { [3] = 90 }, 90)
+    eq(h.main, "median", "split summary: the current level does not vote")
+    eq(h.curStar, true, "split summary: so it can carry the star")
+
+    h = Summary(0, {}, {}, 4800)
+    eq(h.main, "account", "split summary: with no finished level, the current one sets the main source")
+    eq(h.curStar, false, "split summary: and carries no star")
+    eq(h.mixed, false, "split summary: and nothing is mixed")
+
+    h = Summary(3, { 100, 100, 100 }, {}, 90, false)
+    eq(h.curSrc, nil, "split summary: a hidden current level takes no source")
+    eq(h.main, "median", "split summary: the shown levels set the main source")
+    eq(h.mixed, false, "split summary: and nothing is starred")
+    h = Summary(0, {}, {}, 4800, false)
+    eq(h.main, nil, "split summary: with no level shown, no main source")
+end
+
+-- AccentText: lifted toward white until it reads on the Card backdrop
+do
+    local back = 0.05 * 0.85 + 0.15
+    local pr, pg, pb = M.AccentText(1, 0, 140 / 255, back)
+    eq(pr, 1, "accent text: Kitn pink keeps its red")
+    check(pg > 0.3 and pg < 0.4, "accent text: and is lifted about a third of the way", pg)
+    local r2, g2, b2 = M.AccentText(pr, pg, pb, back)
+    check(r2 == pr and g2 == pg and b2 == pb, "accent text: the result already passes")
+    local lower = pg - 0.01
+    local _, g3 = M.AccentText(1, lower, 140 / 255 + (1 - 140 / 255) * lower, back)
+    check(g3 ~= lower, "accent text: one step less does not")
+    local wr, wg, wb = M.AccentText(1, 1, 1, back)
+    check(wr == 1 and wg == 1 and wb == 1, "accent text: white comes back unchanged")
+    eq(M.AccentText(nil, 0, 0, back), nil, "accent text: no color, no tint")
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)

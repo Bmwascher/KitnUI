@@ -1357,11 +1357,13 @@ for _, key in ipairs({
     "xpGainEffect", "fbGainEffect", "xpGainQuestsOnly", "xpGainShowAmount", "fbGainShowAmount", "xpGainTextSize",
     "fbGainTextSize", "xpGainMatchBar", "fbGainMatchBar", "xpGainColorR", "xpGainColorG", "xpGainColorB", "fbGainColorR",
     "fbGainColorG", "fbGainColorB", "xpLevelEffect", "fbLevelEffect", "xpGlowSize", "fbGlowSize", "xpReadyGlow",
-    "xpRestedStripes", "xpStripeSize",
+    "xpRestedStripes", "xpStripeSize", "xpTickerShowLine", "xpTickerGapBars",
 }) do
     check(ns.EUI_DEFAULTS[key] ~= nil, "the default " .. key .. " exists")
 end
 eq(ns.EUI_DEFAULTS.xpStarSize, nil, "the star's size is not a setting")
+eq(ns.EUI_DEFAULTS.xpTickerShowLine, true, "the ticker's XP Line is on by default")
+eq(ns.EUI_DEFAULTS.xpTickerGapBars, true, "and so are its Gap Bars")
 
 ---------------------------------------------------------------------------------
 -- The card through the funnel
@@ -1494,21 +1496,41 @@ do
     eq(cardOut and cardOut.ding, "Ding 1h 16m", "sample card: and its time to level")
     eq(cardOut and cardOut.arrow, "up", "sample card: with an arrow")
     eq(cardOut and cardOut.left[1], "Level 59", "sample card: the current level")
-    eq(cardOut and cardOut.right[1], "20:00  45%", "sample card: at 45%, with a 20-minute clock")
-    eq(cardOut and cardOut.n, 5, "sample card: three completed levels and Played, by default")
+    eq(cardOut and cardOut.right[1], "20:00", "sample card: a 20-minute clock")
+    eq(cardOut and cardOut.extra[1], "45%", "sample card: at 45%")
+    eq(cardOut and cardOut.n, 6, "sample card: three completed levels, Played and the legend, by default")
     eq(cardOut and cardOut.left[2], "Level 58", "sample card: the newest completed level")
-    eq(cardOut and cardOut.left[5], "Played", "sample card: Played last")
+    eq(cardOut and cardOut.extra[2], "+7:05", "sample card: slower than the other characters")
+    eq(cardOut and cardOut.extra[3], "-6:20", "sample card: faster than them")
+    eq(cardOut and cardOut.extra[4], "-9:28|cffa8a8a8*|r", "sample card: a level only this character has, starred")
+    eq(cardOut and cardOut.left[5], "Played", "sample card: Played after the levels")
+    eq(cardOut and cardOut.extra[5], "vs account", "sample card: beside the main source")
+    eq(cardOut and cardOut.extra[6], "* recent median 58:40", "sample card: and the legend last")
+    check(cardOut and type(cardOut.share[1]) == "number", "sample card: the current level has its projected bar")
+    settings.xpTickerHistoryRows = 2
+    X.PreviewRefresh()
+    eq(cardOut and cardOut.n, 4, "sample card: two levels on the slider drop the third and the legend")
+    eq(cardOut and cardOut.extra[4], "vs account", "sample card: every shown level on account")
+    settings.xpTickerHistoryRows = nil
+    X.PreviewRefresh()
+    eq(cardOut and cardOut.n, 6, "sample card: back to three, the legend returns")
+    eq(cardOut and cardOut.extra[6], "* recent median 58:40", "sample card: naming the recent median again")
+    settings.xpTickerShowCurrent = false
+    X.PreviewRefresh()
+    eq(cardOut and cardOut.extra[4], "vs account", "sample card: Current Level off keeps the footer on the shown levels")
+    settings.xpTickerShowCurrent = nil
+    X.PreviewRefresh()
 
     settings.xpTickerShowPace = true
     X.PreviewRefresh()
-    eq(cardOut and cardOut.n, 6, "sample card: Pace shows with its switch")
-    eq(cardOut and cardOut.left[6], "Pace", "sample card: on the last row")
-    check(cardOut and cardOut.right[6] ~= "--", "sample card: with a sample character")
-    eq(overlays.tkRow6 and overlays.tkRow6.btn.shown, true, "sample card: a shown row has its overlay")
-    eq(overlays.tkRow7 and overlays.tkRow7.btn.shown, false, "sample card: a row not shown does not")
+    eq(cardOut and cardOut.n, 7, "sample card: Pace shows with its switch")
+    eq(cardOut and cardOut.left[7], "Pace", "sample card: on the last row")
+    check(cardOut and cardOut.right[7] ~= "--", "sample card: with a sample character")
+    eq(overlays.tkRow7 and overlays.tkRow7.btn.shown, true, "sample card: a shown row has its overlay")
+    eq(overlays.tkRow8 and overlays.tkRow8.btn.shown, false, "sample card: a row not shown does not")
     settings.xpTickerShowPace = nil
     X.PreviewRefresh()
-    eq(overlays.tkRow6 and overlays.tkRow6.btn.shown, false, "sample card: and its overlay goes with it")
+    eq(overlays.tkRow7 and overlays.tkRow7.btn.shown, false, "sample card: and its overlay goes with it")
 
     if overlays.tkBack then overlays.tkBack.navigate("tkBack") end
     eq(navTo, "tkBack", "sample card: the background leads to its own")
@@ -1528,8 +1550,8 @@ do
 
     settings.xpTickerShowPace = true
     X.PreviewRefresh()
-    eq(overlays.tkValue6 and overlays.tkValue6.btn.shown, true, "sample card: a shown row's value has its overlay")
-    eq(overlays.tkValue7 and overlays.tkValue7.btn.shown, false, "sample card: a row not shown has none for its value")
+    eq(overlays.tkValue7 and overlays.tkValue7.btn.shown, true, "sample card: a shown row's value has its overlay")
+    eq(overlays.tkValue8 and overlays.tkValue8.btn.shown, false, "sample card: a row not shown has none for its value")
     settings.xpTickerShowPace = nil
     eq(overlays.tkArrow and overlays.tkArrow.btn.shown, true, "sample card: the arrow has its overlay")
     local viewReal = X.TickerView
@@ -1540,6 +1562,26 @@ do
     X.PreviewRefresh()
     eq(overlays.tkArrow and overlays.tkArrow.btn.shown, false, "sample card: an arrow not drawn has no overlay")
     X.TickerView = viewReal
+    X.PreviewRefresh()
+    eq(overlays.tkExtra2 and overlays.tkExtra2.btn.shown, true, "sample card: a level's gap has its overlay")
+    navTo = nil
+    if overlays.tkExtra2 then overlays.tkExtra2.navigate() end
+    eq(navTo, "tkGapBars", "sample card: a gap leads to Gap Bars")
+    navTo = nil
+    if overlays.tkExtra5 then overlays.tkExtra5.navigate() end
+    eq(navTo, "tkGapBars", "sample card: and so does the footer's source")
+    navTo = nil
+    if overlays.tkExtra1 then overlays.tkExtra1.navigate() end
+    eq(navTo, "tkCurrent", "sample card: the current level's percent leads to Current Level")
+    eq(overlays.tkLine and overlays.tkLine.btn.shown, true, "sample card: the XP line has its overlay")
+    navTo = nil
+    if overlays.tkLine then overlays.tkLine.navigate() end
+    eq(navTo, "tkLine", "sample card: which leads to XP Line")
+    settings.xpTickerShowLine, settings.xpTickerGapBars = false, false
+    X.PreviewRefresh()
+    eq(overlays.tkLine and overlays.tkLine.btn.shown, false, "sample card: no line, no overlay")
+    eq(overlays.tkExtra2 and overlays.tkExtra2.btn.shown, false, "sample card: no gap, no overlay")
+    settings.xpTickerShowLine, settings.xpTickerGapBars = nil, nil
     X.PreviewRefresh()
 
     local cardCount = #frames
@@ -1844,6 +1886,7 @@ do
     check(page.rows["Current Level"] ~= nil and page.rows["Current Level"] == page.rows["Level History Rows"],
         "card view: Current Level and Level History Rows share a row")
     check(page.rows.Played ~= nil and page.rows.Played == page.rows.Pace, "card view: Played and Pace share a row")
+    check(page.rows["XP Line"] ~= nil and page.rows["XP Line"] == page.rows["Gap Bars"], "card view: XP Line and Gap Bars share a row")
     eq(page.full["Position: use EUI Unlock Mode"], true, "card view: the Unlock Mode line has a row of its own")
     eq(factionWord(), nil, "card view: no word on the page reads faction")
 
@@ -1856,7 +1899,7 @@ do
     _G.C_Timer.After = function(_, fn) fn() end
     buildPage("page, card view, navigation")
     for key, row in pairs({ tkCurrent = "Current Level", tkHistory = "Level History Rows", tkPlayed = "Played", tkPace = "Pace",
-        tkTop = "Font", tkBack = "Background" }) do
+        tkTop = "Font", tkBack = "Background", tkLine = "XP Line", tkGapBars = "Gap Bars" }) do
         scrolled, glowed = nil, nil
         X.NavigateToSetting(key)
         check(scrolled ~= nil, "card view: " .. key .. " scrolls")

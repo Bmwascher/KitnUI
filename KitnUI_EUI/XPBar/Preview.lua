@@ -39,7 +39,13 @@ local sampleXP = {
     atMax = false, xpOff = false, levelTime = 1200, elapsed = 3600, gained = 90000,
     -- The card's rows; the bars read none of these.
     trend = "up", played = 1468800, pace = 1500,
-    hist = { n = 3, levels = { 58, 57, 56 }, texts = { "1:12:05", "58:40", "49:12" } },
+    hist = {
+        n = 3, levels = { 58, 57, 56 }, texts = { "1:12:05", "58:40", "49:12" }, secs = { 4325, 3520, 2952 },
+        -- Other characters' times for two levels and the current one, so the sample
+        -- shows bars both ways, a starred row and the legend.
+        acct = { 3900, 3900 }, curAcct = 4800,
+        ref = {}, src = {}, share = {}, gap = {}, star = {}, gapText = {},
+    },
 }
 -- Argent Dawn at Revered: 13,020 of the 21,000 that reach Exalted.
 local REVERED = 7
@@ -47,6 +53,8 @@ local sampleFaction = {
     kind = "standard", name = "Argent Dawn", reaction = REVERED, cur = 13020, min = 0, max = 21000, isMax = false,
 }
 local xpOut, fbOut, cardOut = {}, {}, {}
+-- The sample's completed levels, of which the page's slider shows the newest.
+local SAMPLE_LEVELS = sampleXP.hist.n
 -- What Play Gain draws on the sample: a span in percent, and the amounts.
 local SAMPLE_SPAN, SAMPLE_XP, SAMPLE_REP = 10, 20980, 2100
 -- The party card's most rows, and the gap beside the cards and above the sample bar.
@@ -126,20 +134,24 @@ local function AddCardHit(w, key, element, isText, go)
 end
 
 local function GoToTop() Navigate("tkTop") end
+local function GoToLine() Navigate("tkLine") end
 
--- An overlay fits one text, so each part of the top line and both columns of a
--- row has its own. A row's overlays lead to whatever that row shows now, so
--- which rows are on never strands a press.
+-- An overlay fits one text, so each part of the top line and each text of a row
+-- has its own. A row's overlays lead to whatever that row shows now, so which
+-- rows are on never strands a press.
 local function BuildCardHits(w)
     local card = w.frame
     AddHit(w, "tkBack", card, false, HIT_FRAME)
     AddCardHit(w, "tkTop", card.top, true, GoToTop)
     AddCardHit(w, "tkDing", card.topR, true, GoToTop)
     AddCardHit(w, "tkArrow", card.arrow, false, GoToTop)
+    AddCardHit(w, "tkLine", card.lineTrack, false, GoToLine)
     for i = 1, #card.left do
         local function GoToRow() Navigate(cardOut.keys and cardOut.keys[i]) end
+        local function GoToExtra() Navigate(cardOut.extraKey and cardOut.extraKey[i]) end
         AddCardHit(w, "tkRow" .. i, card.left[i], true, GoToRow)
         AddCardHit(w, "tkValue" .. i, card.right[i], true, GoToRow)
+        AddCardHit(w, "tkExtra" .. i, card.extra[i], true, GoToExtra)
     end
 end
 
@@ -212,10 +224,12 @@ local function SyncCardHits()
     SyncCardHit(list.tkTop, true)
     SyncCardHit(list.tkDing, true)
     SyncCardHit(list.tkArrow, cardOut.arrow ~= nil)
+    SyncCardHit(list.tkLine, cardOut.line == true)
     for i = 1, #widgets.tk.frame.left do
         local on = i <= (cardOut.n or 0)
         SyncCardHit(list["tkRow" .. i], on)
         SyncCardHit(list["tkValue" .. i], on)
+        SyncCardHit(list["tkExtra" .. i], (on and cardOut.extra and cardOut.extra[i] ~= nil) or false)
     end
 end
 
@@ -317,6 +331,10 @@ local function Layout()
         end
     end
     if selected == "tk" then
+        -- The summary covers only the rows the page shows, as the live card's does.
+        local sample = sampleXP.hist
+        sample.n = math.min(SAMPLE_LEVELS, tonumber(X.Get("xpTickerHistoryRows")) or 0)
+        X.SummarizeHistory(sample, X.Get("xpTickerShowCurrent") == true)
         X.TickerView(sampleXP, X.Get, cardOut)
         w.frame.dirty = true
         X.DrawCard(w.frame, X.Get, cardOut)
