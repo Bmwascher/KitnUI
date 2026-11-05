@@ -1,6 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
-## v2.3.2
+## v2.4.0
 
 ### Both clients
 
