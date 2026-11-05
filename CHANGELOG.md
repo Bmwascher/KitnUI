@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.3.2
+
+### Both clients
+
+> **Beta:** WoW Forever support is new and has not been tested on the live
+> Forever client yet. Expect bugs, and please report any you find.
+
+#### XP Bar
+
+- **NEW:** The XP Ticker shows whether each level went faster or slower: a
+  bar and a teal or amber time compare it with your other characters' time
+  for that level, or with this character's recent levels when they have none
+- **NEW:** XP Line and Gap Bars switches on the ticker page; both are on,
+  and turning them off gives back a plainer card
+- The ticker's Ding is larger, labels are dimmed, and Pace hides when it has
+  nothing to compare instead of reading "--"
+
+---
+
 ## v2.3.1
 
 ### WoW Forever only
