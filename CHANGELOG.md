@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.3.1
+
+### WoW Forever only
+
+> **Beta:** WoW Forever support is new and has not been tested on the live
+> Forever client yet. Expect bugs, and please report any you find.
+
+#### XP Bar
+
+- Party XP now shows your party's level and XP on WoW Forever, where every
+  member read "no data" before
+
+---
+
 ## v2.3.0
 
 ### Both clients
