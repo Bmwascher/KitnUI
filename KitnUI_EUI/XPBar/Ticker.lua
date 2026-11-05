@@ -42,7 +42,7 @@ local SLOW_R, SLOW_G, SLOW_B = 1, 0.71, 0.33
 local DIM = 0.66
 local BACKGROUNDS = { card = { 0.05, 0.05, 0.05, 0.85 }, soft = { 0, 0, 0, 0.35 } }
 X.CARD_BACKGROUNDS = BACKGROUNDS
--- The Card backdrop over a white sky: the worst case accent text must read on.
+-- The Card backdrop over a white background: the worst case accent text must read on.
 local CARD_BACK = BACKGROUNDS.card[1] * BACKGROUNDS.card[4] + (1 - BACKGROUNDS.card[4])
 -- Marks a gap measured against the source the footer does not name.
 local STAR = "|cffa8a8a8*|r"
@@ -246,7 +246,8 @@ local function StyleCard(card, view)
     card.arrow:SetPoint("LEFT", card.top, "RIGHT", ceil(size * ARROW_GAP), 0)
     card.resetBtn:SetSize(size * BUTTON_W, rowH)
     card.resetBtn:ClearAllPoints()
-    card.resetBtn:SetPoint("TOPRIGHT", card, "TOPRIGHT", -pad, -pad)
+    -- Centered on Ding, which they replace: Ding is a larger font than theirs.
+    card.resetBtn:SetPoint("RIGHT", card.topR, "RIGHT", 0, 0)
     card.pauseBtn:SetSize(size * BUTTON_W, rowH)
     card.pauseBtn:ClearAllPoints()
     card.pauseBtn:SetPoint("RIGHT", card.resetBtn, "LEFT", -pad, 0)

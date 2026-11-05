@@ -915,7 +915,7 @@ do
         return realPairs(t)
     end
     local X, set = fresh({ db = { perChar = perChar },
-        settings = { xpTickerGapBars = true, xpTickerHistoryRows = 3, xpTickerShowPace = true } })
+        settings = { xpTickerGapBars = true, xpTickerShowLine = true, xpTickerHistoryRows = 3, xpTickerShowPace = true } })
     X.SessionStart("login")
     X.OnPlayed(1400)
     local raw = rawRecord()
