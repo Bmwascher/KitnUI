@@ -228,7 +228,10 @@ local DEFAULTS = {
         npArrowGlow             = true,
         npArrowCastNudge        = true,
         npArrowCastKick         = 8,
-        npLevelName             = false,
+        -- On by default on Forever only, as the XP bars below. The stamp marks
+        -- the profile's one claim without a click (Nameplates.lua).
+        npLevelName             = ns.IS_FOREVER and true or false,
+        npLevelNameSeeded       = false,
 
         -- Top Bar. tbOrder and tbOff are TABLES, and the rule above applies to
         -- them with force: every write replaces the whole table. Never index into

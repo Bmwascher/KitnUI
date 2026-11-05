@@ -194,11 +194,19 @@ local function NameSlot(prof)
     return nil
 end
 
--- False when switching on found no slot showing the name. A re-apply never
--- claims, so with no note in this profile it writes nothing.
+-- False when switching on found no slot showing the name. A re-apply claims
+-- only on a profile's first apply, because a switch that is on by default has
+-- no click to claim with. The stamp lives in the profile, so a copied profile
+-- carries it and is never claimed: its values may already be KitnUI's.
 local function ApplyLevelName(claiming)
     local prof = ns.EUIProfile(NAMEPLATES)
     if not prof then return true end
+
+    local s = ns.EUISettings()
+    if s and not s.npLevelNameSeeded then
+        s.npLevelNameSeeded = true
+        claiming = true
+    end
 
     local slot = HeldLevelSlot()
     if ns.NameplateLevelNameEnabled() then

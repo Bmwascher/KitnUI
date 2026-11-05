@@ -52,16 +52,25 @@ _G.EllesmereUI = {
     GetActiveProfileName = function() return "KitnUI" end,
     Lite = { _dbRegistry = { { folder = "EllesmereUINameplates", profile = prof } } },
 }
+_G.C_Timer = { After = function(_, fn) fn() end }
 
-local ns = {}
-for _, file in ipairs({ "KitnUI_EUI/Core.lua", "KitnUI_EUI/Nameplates.lua" }) do
-    local chunk, err = loadfile(file)
-    if not chunk then
-        realPrint("FAIL  could not load " .. file .. ": " .. tostring(err))
-        os.exit(1)
+local function load(isForever)
+    core.IS_FOREVER = isForever
+    local into = {}
+    for _, file in ipairs({ "KitnUI_EUI/Core.lua", "KitnUI_EUI/Nameplates.lua" }) do
+        local chunk, err = loadfile(file)
+        if not chunk then
+            realPrint("FAIL  could not load " .. file .. ": " .. tostring(err))
+            os.exit(1)
+        end
+        chunk("KitnUI_EUI", into)
     end
-    chunk("KitnUI_EUI", ns)
+    return into
 end
+
+eq(load(true).EUI_DEFAULTS.npLevelName, true, "Forever: the switch is on by default")
+local ns = load(false)
+eq(ns.EUI_DEFAULTS.npLevelName, false, "retail: the switch is off by default")
 
 -- The page builder hands back the toggle's setter by its label.
 local toggles = {}
@@ -85,6 +94,7 @@ local function reset(slots)
     core.db = {}
     printed = {}
     ns.EUISettings().npLevelName = false
+    ns.EUISettings().npLevelNameSeeded = nil
 end
 
 ---------------------------------------------------------------------------------
@@ -128,6 +138,31 @@ set(true)
 eq(ns.NameplateLevelNameEnabled(), false, "no name: the switch stays off")
 eq(prof.textSlotLeft, "level", "no name: nothing is written")
 check(#printed == 1, "no name: the refusal is printed once", #printed)
+
+---------------------------------------------------------------------------------
+-- On by default: the first re-apply claims once, a stamped profile never
+---------------------------------------------------------------------------------
+
+reset({ textSlotLeft = "enemyName" })
+ns.EUISettings().npLevelName = true
+ns.EUIQueueReapply()
+eq(prof.textSlotLeft, "levelName", "default on: the first re-apply writes Level | Name")
+eq(ns.EUISettings().npLevelNameSeeded, true, "default on: the profile is stamped")
+set(false)
+eq(prof.textSlotLeft, "enemyName", "default on: switching off gives the name slot back")
+
+reset({ textSlotLeft = "enemyName" })
+ns.EUISettings().npLevelName = false
+ns.EUIQueueReapply()
+eq(prof.textSlotLeft, "enemyName", "default off: the first re-apply writes nothing")
+eq(ns.EUISettings().npLevelNameSeeded, true, "default off: the profile is stamped all the same")
+
+reset({ textSlotLeft = "levelName", textSlotLeftLevelDiffOn = true })
+ns.EUISettings().npLevelName = true
+ns.EUISettings().npLevelNameSeeded = true
+ns.EUIQueueReapply()
+eq(ns.EUIPeekSnap("nameplates", "levelName\31textSlotLeft"), nil,
+    "copied profile: a stamped profile with no note records nothing")
 
 realPrint(string.format("%d checks, %d failures", checks, failures))
 if failures > 0 then os.exit(1) end
