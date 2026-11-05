@@ -1563,6 +1563,26 @@ do
     eq(overlays.tkArrow and overlays.tkArrow.btn.shown, false, "sample card: an arrow not drawn has no overlay")
     X.TickerView = viewReal
     X.PreviewRefresh()
+    eq(overlays.tkExtra2 and overlays.tkExtra2.btn.shown, true, "sample card: a level's gap has its overlay")
+    navTo = nil
+    if overlays.tkExtra2 then overlays.tkExtra2.navigate() end
+    eq(navTo, "tkGapBars", "sample card: a gap leads to Gap Bars")
+    navTo = nil
+    if overlays.tkExtra5 then overlays.tkExtra5.navigate() end
+    eq(navTo, "tkGapBars", "sample card: and so does the footer's source")
+    navTo = nil
+    if overlays.tkExtra1 then overlays.tkExtra1.navigate() end
+    eq(navTo, "tkCurrent", "sample card: the current level's percent leads to Current Level")
+    eq(overlays.tkLine and overlays.tkLine.btn.shown, true, "sample card: the XP line has its overlay")
+    navTo = nil
+    if overlays.tkLine then overlays.tkLine.navigate() end
+    eq(navTo, "tkLine", "sample card: which leads to XP Line")
+    settings.xpTickerShowLine, settings.xpTickerGapBars = false, false
+    X.PreviewRefresh()
+    eq(overlays.tkLine and overlays.tkLine.btn.shown, false, "sample card: no line, no overlay")
+    eq(overlays.tkExtra2 and overlays.tkExtra2.btn.shown, false, "sample card: no gap, no overlay")
+    settings.xpTickerShowLine, settings.xpTickerGapBars = nil, nil
+    X.PreviewRefresh()
 
     local cardCount = #frames
     X.PreviewRefresh()
