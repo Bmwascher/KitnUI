@@ -228,6 +228,10 @@ local DEFAULTS = {
         npArrowGlow             = true,
         npArrowCastNudge        = true,
         npArrowCastKick         = 8,
+        -- On by default on Forever only, as the XP bars below. The stamp marks
+        -- the profile's one claim without a click (Nameplates.lua).
+        npLevelName             = ns.IS_FOREVER and true or false,
+        npLevelNameSeeded       = false,
 
         -- Top Bar. tbOrder and tbOff are TABLES, and the rule above applies to
         -- them with force: every write replaces the whole table. Never index into
@@ -1048,6 +1052,13 @@ function ns.EUIResetAll()
     -- while they exist; that clears the records and leaves the re-apply inert.
     -- The session refusal above is what lets this write land.
     if ns.ApplyResourceGap then pcall(ns.ApplyResourceGap, false, false) end
+
+    -- Both nameplate switches give their keys back here while the notes exist,
+    -- even with the nameplate module switched off, which the re-applies below
+    -- cannot reach. The level switch is on by default on Forever, so those
+    -- re-applies would otherwise claim it again with the notes about to go.
+    if ns.NameplateLevelNameTeardown then pcall(ns.NameplateLevelNameTeardown) end
+    if ns.NameplateArrowsTeardown then pcall(ns.NameplateArrowsTeardown) end
 
     -- The ACTIVE profile is cleared through the db object so the live
     -- db.profile reference stays valid: ResetProfile wipes in place and
