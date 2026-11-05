@@ -120,9 +120,6 @@ end
 -- Gameplay page's barVisibility the ordinary trio is exactly right here.
 local function ApplyEUIArrowSuppression(on, claiming)
     local prof = ns.EUIProfile(NAMEPLATES)
-    -- Giving the key back also reaches a switched-off nameplate module, so a
-    -- reset run while it is off does not lose the original with KitnUIDB.
-    if not prof and not on then prof = ns.EUIStoredProfile(NAMEPLATES) end
     if not prof then return end
 
     -- Peek on the off path, and on any path that is not a claim: EUISnap would
@@ -289,6 +286,14 @@ function ns.NameplateLevelNameTeardown()
         RefreshPlates()
     end
     levelNameReleased = true
+end
+
+-- Called by the reset while the note still exists. The stored profile covers a
+-- nameplate module that is switched off: only the reset may give the key back
+-- there, because the note dies with KitnUIDB; any other pass keeps the hold.
+function ns.NameplateArrowsTeardown()
+    local prof = ns.EUIProfile(NAMEPLATES) or ns.EUIStoredProfile(NAMEPLATES)
+    ns.EUIRestore(prof, ns.EUIPeekSnap("nameplates", "euiArrows"), "showTargetArrows")
 end
 
 ns.EUIRegisterHeld("nameplates", function(noteKey, _, add)

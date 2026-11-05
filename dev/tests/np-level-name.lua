@@ -232,11 +232,14 @@ core.db = { euiSnap = { nameplates = { KitnUI = {
     ["levelName\31textSlotLeftLevelColorOn"] = { prev = "__kitnui_absent__" },
     euiArrows = { prev = true },
 } } } }
-off.NameplateLevelNameTeardown()
-eq(stored.textSlotLeft, "enemyName", "module off: the name slot is given back")
-eq(stored.textSlotLeftLevelDiffOn, nil, "module off: the difficulty key is unset again")
 off.EUIQueueReapply()
-eq(stored.showTargetArrows, true, "module off: EllesmereUI's own arrows are given back")
+eq(stored.showTargetArrows, false, "module off: an ordinary re-apply keeps the arrows held")
+eq(stored.textSlotLeft, "levelName", "module off: an ordinary re-apply keeps the name slot held")
+off.NameplateLevelNameTeardown()
+off.NameplateArrowsTeardown()
+eq(stored.textSlotLeft, "enemyName", "module off: the reset gives the name slot back")
+eq(stored.textSlotLeftLevelDiffOn, nil, "module off: the difficulty key is unset again")
+eq(stored.showTargetArrows, true, "module off: the reset gives EllesmereUI's own arrows back")
 
 realPrint(string.format("%d checks, %d failures", checks, failures))
 if failures > 0 then os.exit(1) end
