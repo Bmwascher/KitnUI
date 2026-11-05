@@ -4,9 +4,9 @@
 
 ### Both clients
 
-> **Beta:** WoW Forever support is new and lightly tested on the live
-> Forever client: most features have been checked, but not all. Expect some
-> bugs, and please report any you find.
+> **WoW Forever:** support is new and lightly tested on the live Forever
+> client: most features have been checked, but not all. Expect some bugs,
+> and please report any you find.
 
 #### XP Bar
 

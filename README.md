@@ -11,7 +11,7 @@ KitnUI walks you through configuring EllesmereUI and its companion addons with a
 - **Top bar** — KitnUI's own bar across the top of the screen: clock, FPS and latency, friend and guild counts, Great Vault progress, a hearthstone roller, a Mythic+ portal flyout, and one-click launchers for the panels you open most
 - **XP and Reputation bars** — KitnUI's own bars with an XP Ticker card, bar effects and Party XP; off by default on retail and on by default on WoW Forever
 - **Settings tab** — a KitnUI tab inside EllesmereUI's config panel with five pages: General, Gameplay, Nameplates, Top Bar and XP Bar
-- **WoW Forever (beta)** — KitnUI loads on WoW Forever and installs copies of the retail profiles until Forever ones are ready
+- **WoW Forever** — KitnUI loads on WoW Forever and installs copies of the retail profiles until Forever ones are ready
 - **Lulu Mode** — an alternate layout with a round minimap, Blizzard's own action bars, and its own Edit Mode layout
 - **One-click loading** — apply every installed profile to a new character with `/kitn load`
 - **Smart updates** — reimport only the profiles that have changed
