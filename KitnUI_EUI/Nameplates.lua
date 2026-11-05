@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════════╗
 -- ║  KitnUI_EUI/Nameplates.lua                                   ║
 -- ║  Purpose: KitnUI's own target arrows, replacing EllesmereUI's ║
--- ║           while switched on.                                 ║
+-- ║           while switched on, and the enemy level shown in    ║
+-- ║           front of the name.                                 ║
 -- ╚══════════════════════════════════════════════════════════════╝
 --
 -- EllesmereUI's own target arrows already have 16 styles, a scale, a colour
@@ -140,9 +141,111 @@ local function ApplyEUIArrowSuppression(on, claiming)
     if _G._ENP_RefreshAllSettings then pcall(_G._ENP_RefreshAllSettings) end
 end
 
+---------------------------------------------------------------------------------
+-- Level before the name
+---------------------------------------------------------------------------------
+
+-- EllesmereUI already draws "Level | Name" with the level in its difficulty
+-- colour; this switch only sets those keys on whichever text slot shows the
+-- enemy name. Each EllesmereUI key gets its own note, keyed LEVEL_NOTE .. key.
+local LEVEL_NOTE = "levelName\31"
+
+-- EllesmereUI renders at most one of these per plate.
+local NAME_FAMILY = { enemyName = true, levelName = true, nameLevel = true }
+
+local TEXT_SLOTS = {
+    "textSlotTop", "textSlotRight", "textSlotLeft",
+    "textSlotCenter", "textSlotBottomLeft", "textSlotBottomRight",
+}
+
+-- LevelColorOn is forced off because a custom level colour beats the
+-- difficulty colour; EllesmereUI's own toggle clears it the same way.
+local LEVEL_WRITES = {
+    { suffix = "",             value = "levelName" },
+    { suffix = "LevelDiffOn",  value = true },
+    { suffix = "LevelColorOn", value = false },
+}
+
+function ns.NameplateLevelNameEnabled()
+    local s = ns.EUISettings()
+    return s and s.npLevelName and true or false
+end
+
+local function HeldLevelSlot()
+    for _, slot in ipairs(TEXT_SLOTS) do
+        local rec = ns.EUIPeekSnap("nameplates", LEVEL_NOTE .. slot)
+        if rec and rec.prev ~= nil then return slot end
+    end
+    return nil
+end
+
+-- EllesmereUI's own lookup first, because an unset slot reads its default
+-- (textSlotTop is the name by default) and only it knows the defaults.
+local function NameSlot(prof)
+    local NS = _G.EllesmereNameplates_NS
+    if type(NS) == "table" and type(NS.FindNameSlot) == "function" then
+        local ok, slot = pcall(NS.FindNameSlot, prof)
+        if ok and type(slot) == "string" then return slot end
+        return nil
+    end
+    for _, slot in ipairs(TEXT_SLOTS) do
+        if NAME_FAMILY[prof[slot]] then return slot end
+    end
+    return nil
+end
+
+-- False when switching on found no slot showing the name. A re-apply never
+-- claims, so with no note in this profile it writes nothing.
+local function ApplyLevelName(claiming)
+    local prof = ns.EUIProfile(NAMEPLATES)
+    if not prof then return true end
+
+    local slot = HeldLevelSlot()
+    if ns.NameplateLevelNameEnabled() then
+        if not slot then
+            if not claiming then return true end
+            slot = NameSlot(prof)
+            if not slot then return false end
+        end
+        for _, w in ipairs(LEVEL_WRITES) do
+            local key = slot .. w.suffix
+            local rec
+            if claiming then
+                rec = ns.EUISnap("nameplates", LEVEL_NOTE .. key)
+            else
+                rec = ns.EUIPeekSnap("nameplates", LEVEL_NOTE .. key)
+            end
+            if rec then ns.EUIOverride(prof, rec, key, w.value, claiming) end
+        end
+    elseif slot then
+        for _, w in ipairs(LEVEL_WRITES) do
+            local key = slot .. w.suffix
+            ns.EUIRestore(prof, ns.EUIPeekSnap("nameplates", LEVEL_NOTE .. key), key)
+        end
+    end
+
+    if _G._ENP_RefreshAllSettings then pcall(_G._ENP_RefreshAllSettings) end
+    return true
+end
+
 ns.EUIRegisterHeld("nameplates", function(noteKey, _, add)
-    if noteKey == "euiArrows" then add("addons." .. NAMEPLATES .. ".showTargetArrows") end
+    if noteKey == "euiArrows" then
+        add("addons." .. NAMEPLATES .. ".showTargetArrows")
+    elseif noteKey:sub(1, #LEVEL_NOTE) == LEVEL_NOTE then
+        add("addons." .. NAMEPLATES .. "." .. noteKey:sub(#LEVEL_NOTE + 1))
+    end
 end)
+
+-- Both switches share the "nameplates" section, so each tooltip asks after its
+-- own note rather than the whole section.
+local function ArrowsHeld()
+    local rec = ns.EUIPeekSnap("nameplates", "euiArrows")
+    return rec and rec.prev ~= nil or false
+end
+
+local function LevelNameHeld()
+    return HeldLevelSlot() ~= nil
+end
 
 ---------------------------------------------------------------------------------
 -- The arrows
@@ -353,7 +456,10 @@ end
 
 -- Both arguments explicit: the first is `announce`, the second the claim. A
 -- re-apply is never a claim.
-ns.EUIRegisterReapply(function() ApplyArrows(false, false) end)
+ns.EUIRegisterReapply(function()
+    ApplyArrows(false, false)
+    ApplyLevelName(false)
+end)
 
 ---------------------------------------------------------------------------------
 -- Events
@@ -441,7 +547,8 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
               "Draws KitnUI's own chevrons around your target's nameplate. EllesmereUI's have 16 styles and dodge auras automatically; these do not.",
               "nameplates",
               function() return ns.NameplateArrowsEnabled() end,
-              "EllesmereUI's own target arrows"),
+              "EllesmereUI's own target arrows",
+              ArrowsHeld),
           getValue = function() return ns.NameplateArrowsEnabled() end,
           setValue = function(v)
               local s = ns.EUISettings()
@@ -514,6 +621,28 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
           getValue = function() return GetNum("npArrowCastKick") end,
           setValue = function(v) SetNum("npArrowCastKick", v) end }
     );                                                                             y = y - h
+
+    _, h = W:SectionHeader(parent, "ENEMY LEVEL", y);                              y = y - h
+
+    _, h = W:Toggle(parent, "Show Level Before Name", y,
+        function() return ns.NameplateLevelNameEnabled() end,
+        function(v)
+            local s = ns.EUISettings()
+            if s then s.npLevelName = v and true or false end
+            if not ApplyLevelName(true) then
+                if s then s.npLevelName = false end
+                ns.EUIRefuse("none of your nameplate texts shows the enemy's name, so there is no name to put the level in front of.", true)
+                return
+            end
+            ns.EUIRebuildForOwnership()
+        end,
+        ns.EUIOwnershipTip(
+            "Shows the enemy's level in front of its name, colored by how it compares with yours: grey and green are below you, yellow is about even, orange and red are above you.",
+            "nameplates",
+            function() return ns.NameplateLevelNameEnabled() end,
+            "the nameplate's name text",
+            LevelNameHeld));
+                                                                                   y = y - h
 
     return math.abs(y)
 end

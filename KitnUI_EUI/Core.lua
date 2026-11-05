@@ -228,6 +228,7 @@ local DEFAULTS = {
         npArrowGlow             = true,
         npArrowCastNudge        = true,
         npArrowCastKick         = 8,
+        npLevelName             = false,
 
         -- Top Bar. tbOrder and tbOff are TABLES, and the rule above applies to
         -- them with force: every write replaces the whole table. Never index into

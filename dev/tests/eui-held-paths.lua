@@ -148,6 +148,15 @@ sameSet(heldFor("lulu", "KitnUI", { minimapShape = { prev = "square" }, clockOff
     { "addons.EllesmereUIMinimap.minimap.shape", "addons.EllesmereUIMinimap.minimap.clockOffsetY" }, "lulu minimap")
 sameSet(heldFor("nameplates", "KitnUI", { euiArrows = { prev = true } }),
     { "addons.EllesmereUINameplates.showTargetArrows" }, "target arrows")
+sameSet(heldFor("nameplates", "KitnUI", {
+    ["levelName\31textSlotLeft"] = { prev = "enemyName" },
+    ["levelName\31textSlotLeftLevelDiffOn"] = { prev = "__kitnui_absent__" },
+    ["levelName\31textSlotLeftLevelColorOn"] = { prev = "__kitnui_absent__" },
+}), {
+    "addons.EllesmereUINameplates.textSlotLeft",
+    "addons.EllesmereUINameplates.textSlotLeftLevelDiffOn",
+    "addons.EllesmereUINameplates.textSlotLeftLevelColorOn",
+}, "level before name")
 sameSet(heldFor("xpbar", "KitnUI", { xp = { prev = { mouseover = true } } }), {
     "addons.EllesmereUIActionBars.bars.XPBar.barVisibility",
     "addons.EllesmereUIActionBars.bars.XPBar.alwaysHidden",
