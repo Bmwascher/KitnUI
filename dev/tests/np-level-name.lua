@@ -153,9 +153,11 @@ eq(prof.textSlotLeft, "enemyName", "default on: switching off gives the name slo
 
 reset({ textSlotLeft = "enemyName" })
 ns.EUISettings().npLevelName = false
+before = refreshes
 ns.EUIQueueReapply()
 eq(prof.textSlotLeft, "enemyName", "default off: the first re-apply writes nothing")
-eq(ns.EUISettings().npLevelNameSeeded, true, "default off: the profile is stamped all the same")
+eq(ns.EUISettings().npLevelNameSeeded, nil, "default off: the profile is not stamped")
+eq(refreshes, before, "default off: the plates are not refreshed")
 
 reset({ textSlotLeft = "levelName", textSlotLeftLevelDiffOn = true })
 ns.EUISettings().npLevelName = true
@@ -163,6 +165,56 @@ ns.EUISettings().npLevelNameSeeded = true
 ns.EUIQueueReapply()
 eq(ns.EUIPeekSnap("nameplates", "levelName\31textSlotLeft"), nil,
     "copied profile: a stamped profile with no note records nothing")
+
+reset({ textSlotLeft = "levelName", textSlotLeftLevelDiffOn = true })
+ns.EUISettings().npLevelName = true
+ns.EUIQueueReapply()
+eq(ns.EUIPeekSnap("nameplates", "levelName\31textSlotLeft"), nil,
+    "already Level | Name: the unclicked claim records nothing")
+
+---------------------------------------------------------------------------------
+-- The name moved in EllesmereUI: the notes are dropped, nothing is written
+---------------------------------------------------------------------------------
+
+reset({ textSlotLeft = "enemyName", textSlotTop = "none" })
+set(true)
+prof.textSlotLeft, prof.textSlotTop = "none", "enemyName"
+ns.EUIQueueReapply()
+eq(prof.textSlotLeft, "none", "moved name: the old slot is not written again")
+eq(prof.textSlotTop, "enemyName", "moved name: the new name slot is left as the user set it")
+local rec = ns.EUIPeekSnap("nameplates", "levelName\31textSlotLeft")
+check(not (rec and rec.prev ~= nil), "moved name: the note is dropped")
+set(false)
+eq(prof.textSlotLeft, "none", "moved name: off writes nothing into the old slot")
+
+---------------------------------------------------------------------------------
+-- EllesmereUI's own lookup, which knows an unset slot's default
+---------------------------------------------------------------------------------
+
+reset({})
+_G.EllesmereNameplates_NS = { FindNameSlot = function(db)
+    if (db.textSlotTop or "enemyName") ~= "none" then return "textSlotTop" end
+    return nil
+end }
+set(true)
+eq(prof.textSlotTop, "levelName", "lookup: an unset Top slot, the name by default, is the one written")
+set(false)
+eq(prof.textSlotTop, nil, "lookup: off unsets it again")
+_G.EllesmereNameplates_NS = nil
+
+---------------------------------------------------------------------------------
+-- The reset gives the keys back and stops its own re-apply from claiming
+---------------------------------------------------------------------------------
+
+reset({ textSlotLeft = "enemyName" })
+set(true)
+ns.NameplateLevelNameTeardown()
+eq(prof.textSlotLeft, "enemyName", "reset: the name slot is given back")
+ns.EUISettings().npLevelName = true
+ns.EUISettings().npLevelNameSeeded = nil
+ns.EUIQueueReapply()
+eq(prof.textSlotLeft, "enemyName", "reset: the reset's re-apply writes nothing")
+eq(ns.EUISettings().npLevelNameSeeded, nil, "reset: the reset's re-apply stamps nothing")
 
 realPrint(string.format("%d checks, %d failures", checks, failures))
 if failures > 0 then os.exit(1) end

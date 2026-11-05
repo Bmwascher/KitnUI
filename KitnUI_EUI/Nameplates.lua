@@ -146,7 +146,7 @@ end
 ---------------------------------------------------------------------------------
 
 -- EllesmereUI already draws "Level | Name" with the level in its difficulty
--- colour; this switch only sets those keys on whichever text slot shows the
+-- color; this switch only sets those keys on whichever text slot shows the
 -- enemy name. Each EllesmereUI key gets its own note, keyed LEVEL_NOTE .. key.
 local LEVEL_NOTE = "levelName\31"
 
@@ -158,8 +158,8 @@ local TEXT_SLOTS = {
     "textSlotCenter", "textSlotBottomLeft", "textSlotBottomRight",
 }
 
--- LevelColorOn is forced off because a custom level colour beats the
--- difficulty colour; EllesmereUI's own toggle clears it the same way.
+-- LevelColorOn is forced off because a custom level color beats the
+-- difficulty color; EllesmereUI's own toggle clears it the same way.
 local LEVEL_WRITES = {
     { suffix = "",             value = "levelName" },
     { suffix = "LevelDiffOn",  value = true },
@@ -194,26 +194,66 @@ local function NameSlot(prof)
     return nil
 end
 
+-- Set once the reset has given the held keys back, so the reset's own re-apply
+-- pass neither claims nor stamps before KitnUIDB and its notes are wiped.
+local levelNameReleased = false
+
+-- write = false drops the notes without touching the profile.
+local function ReleaseLevelSlot(prof, slot, write)
+    for _, w in ipairs(LEVEL_WRITES) do
+        local key = slot .. w.suffix
+        local rec = ns.EUIPeekSnap("nameplates", LEVEL_NOTE .. key)
+        if write then
+            ns.EUIRestore(prof, rec, key)
+        elseif rec then
+            rec.prev = nil
+        end
+    end
+end
+
+-- The held slot, unless the name has since moved in EllesmereUI. Its slot
+-- picker clears the old name slot, so writing it again would make a second
+-- name slot; the layout is the user's now, and the notes are dropped unwritten.
+local function CurrentHeldSlot(prof)
+    local slot = HeldLevelSlot()
+    if slot and slot ~= NameSlot(prof) then
+        ReleaseLevelSlot(prof, slot, false)
+        return nil
+    end
+    return slot
+end
+
+local function RefreshPlates()
+    if _G._ENP_RefreshAllSettings then pcall(_G._ENP_RefreshAllSettings) end
+end
+
 -- False when switching on found no slot showing the name. A re-apply claims
--- only on a profile's first apply, because a switch that is on by default has
--- no click to claim with. The stamp lives in the profile, so a copied profile
--- carries it and is never claimed: its values may already be KitnUI's.
+-- only on a profile's first apply with the switch on, because a switch that is
+-- on by default has no click to claim with. The stamp lives in the profile, so
+-- a copied profile carries it and is never claimed.
 local function ApplyLevelName(claiming)
+    if levelNameReleased then return true end
     local prof = ns.EUIProfile(NAMEPLATES)
     if not prof then return true end
 
+    local on = ns.NameplateLevelNameEnabled()
+    local unclicked = false
     local s = ns.EUISettings()
-    if s and not s.npLevelNameSeeded then
+    if on and s and not s.npLevelNameSeeded then
         s.npLevelNameSeeded = true
+        unclicked = not claiming
         claiming = true
     end
 
-    local slot = HeldLevelSlot()
-    if ns.NameplateLevelNameEnabled() then
+    local slot = CurrentHeldSlot(prof)
+    if on then
         if not slot then
             if not claiming then return true end
             slot = NameSlot(prof)
             if not slot then return false end
+            -- A slot already showing Level | Name may hold KitnUI's own write
+            -- from before a reset; recording it would make off give it back.
+            if unclicked and prof[slot] == "levelName" then return true end
         end
         for _, w in ipairs(LEVEL_WRITES) do
             local key = slot .. w.suffix
@@ -225,15 +265,24 @@ local function ApplyLevelName(claiming)
             end
             if rec then ns.EUIOverride(prof, rec, key, w.value, claiming) end
         end
+        RefreshPlates()
     elseif slot then
-        for _, w in ipairs(LEVEL_WRITES) do
-            local key = slot .. w.suffix
-            ns.EUIRestore(prof, ns.EUIPeekSnap("nameplates", LEVEL_NOTE .. key), key)
-        end
+        ReleaseLevelSlot(prof, slot, true)
+        RefreshPlates()
     end
-
-    if _G._ENP_RefreshAllSettings then pcall(_G._ENP_RefreshAllSettings) end
     return true
+end
+
+-- Called by the reset while the notes still exist: the switch's default is on
+-- for Forever, so the reset's re-apply would otherwise write it again.
+function ns.NameplateLevelNameTeardown()
+    local prof = ns.EUIProfile(NAMEPLATES)
+    local slot = prof and CurrentHeldSlot(prof)
+    if slot then
+        ReleaseLevelSlot(prof, slot, true)
+        RefreshPlates()
+    end
+    levelNameReleased = true
 end
 
 ns.EUIRegisterHeld("nameplates", function(noteKey, _, add)
@@ -635,6 +684,7 @@ ns.EUIPages["Nameplates"] = function(parent, yOffset)
     _, h = W:Toggle(parent, "Show Level Before Name", y,
         function() return ns.NameplateLevelNameEnabled() end,
         function(v)
+            if ns.EUIRefuseIfEditSession and ns.EUIRefuseIfEditSession() then return end
             local s = ns.EUISettings()
             if s then s.npLevelName = v and true or false end
             if not ApplyLevelName(true) then

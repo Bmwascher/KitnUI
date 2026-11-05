@@ -1053,6 +1053,10 @@ function ns.EUIResetAll()
     -- The session refusal above is what lets this write land.
     if ns.ApplyResourceGap then pcall(ns.ApplyResourceGap, false, false) end
 
+    -- On by default on Forever, so the re-applies below would claim it again
+    -- with the notes about to go. Released here while they exist.
+    if ns.NameplateLevelNameTeardown then pcall(ns.NameplateLevelNameTeardown) end
+
     -- The ACTIVE profile is cleared through the db object so the live
     -- db.profile reference stays valid: ResetProfile wipes in place and
     -- re-merges the registered defaults.
