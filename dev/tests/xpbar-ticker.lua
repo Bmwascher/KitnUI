@@ -192,6 +192,7 @@ do
     eq(out.rate, "90.0K xp/hr", "view: XP per hour")
     eq(out.ding, "Ding 1h 16m", "view: time to level")
     eq(out.urgent, false, "view: over 10 minutes is not urgent")
+    eq(out.dingTone, nil, "view: and Ding is plain")
     eq(out.n, 2, "view: the current level and Played, with nothing else known")
     eq(out.left[1], "Level 59", "view: the current level")
     eq(out.right[1], "20:00  45%", "view: with its clock and percent")
@@ -205,12 +206,14 @@ do
     r.cur = 209000
     X.TickerView(r, view, out)
     eq(out.urgent, true, "view: under 10 minutes is urgent")
+    eq(out.dingTone, "urgent", "view: and Ding takes the tint")
 
     r = rawRecord()
     r.trend, r.paused = "up", true
     X.TickerView(r, view, out)
     eq(out.rate, "90.0K xp/hr", "view, paused: the rate holds")
-    eq(out.ding, "paused", "view, paused: the right slot says so")
+    eq(out.ding, "Paused", "view, paused: the right slot says so")
+    eq(out.dingTone, "dim", "view, paused: dimmed")
     eq(out.arrow, nil, "view, paused: no arrow")
     eq(out.pauseText, "Start", "view, paused: the button reads Start")
 
@@ -219,6 +222,8 @@ do
     X.TickerView(r, view, out)
     eq(out.rate, "no XP yet", "view, no XP: the left says so")
     eq(out.ding, "Ding --", "view, no XP: no time to level")
+    eq(out.dingTone, "dim", "view, no XP: dimmed")
+    eq(out.rateDim, true, "view, no XP: and the rate too")
     eq(out.arrow, nil, "view, no XP: no arrow")
     eq(out.pauseText, "Pause", "view: the button reads Pause")
 
@@ -294,7 +299,7 @@ do
     raw.level = 60
     X.TickerRefresh(raw)
     eq(walks, 2, "peers: one walk when the level changes")
-    eq(card.right[3].text, "--", "peers: with no character at both ends of that level")
+    eq(card.right[3].shown, false, "peers: with no character at both ends of that level, Pace hides")
     raw.level = 59
     X.TickerRefresh(raw)
     eq(walks, 3, "peers: and one coming back")
@@ -700,13 +705,13 @@ do
     local card = showCard(X, raw)
     raw.gained, raw.elapsed, raw.cur = 90000, 3600, 209000
     X.TickerRefresh(raw)
-    eq(card.topR.colorG, 0, "accent: an urgent Ding takes the accent")
+    eq(card.topR.colorG, select(2, X.Math.AccentText(1, 0, 0, 0.05 * 0.85 + (1 - 0.85))), "accent: an urgent Ding takes the accent's text tint")
     X.AccentColor = function() return 0, 1, 0 end
     X.TickerAccent()
     eq(card.topR.colorG, 1, "accent: and follows a new one")
     card:Hide()
     X.TickerAccent()
-    eq(card.urgent, nil, "accent: a hidden card reads it at its next show")
+    eq(card.dirty, true, "accent: a hidden card reads it at its next show")
     X.TickerStop()
 end
 
@@ -771,6 +776,227 @@ do
     eq(M.Trend(state, -900, 0, 180), nil, "negative session XP: the trend seeds")
     eq(M.Trend(state, -800, 180, 180), nil, "negative session XP: and sets no arrow from one window")
     eq(M.Trend(state, -700, 360, 180), nil, "negative session XP: nor from a steady rate")
+end
+
+---------------------------------------------------------------------------------
+-- Gap bars, the line, the footer and Pace
+---------------------------------------------------------------------------------
+
+local GRID = { xpTickerGapBars = true, xpTickerShowLine = true, xpTickerShowPace = true }
+
+local function viewWith(over)
+    return function(key)
+        local v = over[key]
+        if v == nil then v = DEFAULTS[key] end
+        return v
+    end
+end
+
+local function sampleHist(X, acct, curAcct, current)
+    local h = { n = 3, levels = { 58, 57, 56 }, texts = { "1:12:05", "58:40", "49:12" }, secs = { 4325, 3520, 2952 },
+        acct = acct, curAcct = curAcct, ref = {}, src = {}, share = {}, gap = {}, star = {}, gapText = {} }
+    X.SummarizeHistory(h, current ~= false)
+    return h
+end
+
+do
+    local X = fresh()
+    local out = {}
+    local r = rawRecord()
+    r.hist = sampleHist(X, { 3900, 3900 }, 4800)
+    r.pace = -120
+    X.TickerView(r, viewWith(GRID), out)
+    eq(out.kind[1], "current", "grid: the current level first")
+    eq(out.right[1], "20:00", "grid: its clock")
+    eq(out.extra[1], "45%", "grid: and its percent apart")
+    check(type(out.share[1]) == "number" and out.share[1] > 0, "grid: its projected finish runs slower than the other characters'", out.share[1])
+    eq(out.extra[2], "+7:05", "grid: a slower level")
+    eq(out.cls[2], "slow", "grid: in amber")
+    eq(out.extra[3], "-6:20", "grid: a faster level")
+    eq(out.cls[3], "fast", "grid: in teal")
+    eq(out.extra[4], "-9:28|cffa8a8a8*|r", "grid: a level on the recent median carries the star")
+    eq(out.extraKey[2], "tkGapBars", "grid: a gap leads to Gap Bars")
+    eq(out.kind[5], "footer", "grid: the footer after the levels")
+    eq(out.left[5], "Played", "grid: with Played")
+    eq(out.extra[5], "vs account", "grid: and the main source")
+    eq(out.kind[6], "legend", "grid: the legend on its own row")
+    eq(out.extra[6], "* recent median 58:40", "grid: naming the other source")
+    eq(out.kind[7], "pace", "grid: Pace last")
+    eq(out.cls[7], "slow", "grid: behind reads amber")
+    eq(out.levelRows, 4, "grid: four level rows")
+    eq(out.n, 7, "grid: seven rows in all")
+
+    r.paused = true
+    X.TickerView(r, viewWith(GRID), out)
+    eq(out.share[1], nil, "grid, paused: no projected finish")
+    r.paused = nil
+
+    r.hist = sampleHist(X, {}, nil)
+    X.TickerView(r, viewWith(GRID), out)
+    eq(out.extra[2], "+13:25", "grid: a gap to the recent median")
+    eq(out.extra[3], "even", "grid: within 5% reads even")
+    eq(out.cls[3], "even", "grid: in dim gray")
+    eq(out.extra[5], "median 58:40", "grid: every level on the recent median names it in the footer")
+    eq(out.kind[6], "pace", "grid: with no legend")
+
+    r.pace = nil
+    X.TickerView(r, viewWith(GRID), out)
+    eq(out.n, 5, "grid: Pace with no value is left out")
+
+    X.TickerView(r, viewWith({ xpTickerGapBars = true, xpTickerShowPlayed = false }), out)
+    eq(out.left[5], "", "grid, Played off: the footer keeps only its source")
+    eq(out.extra[5], "median 58:40", "grid, Played off: which it still names")
+
+    r.hist = sampleHist(X, { 3900, 3900 }, 4800)
+    X.TickerView(r, viewWith({ xpTickerShowPace = true }), out)
+    eq(out.extra[2], nil, "bars off: no gap")
+    eq(out.share[2], nil, "bars off: no bar")
+    eq(out.right[1], "20:00  45%", "bars off: the current level as before")
+    eq(out.kind[5], "footer", "bars off: the footer")
+    eq(out.extra[5], nil, "bars off: names no source")
+    eq(out.n, 5, "bars off: and no legend")
+
+    r.hist = sampleHist(X, {}, 4800)
+    X.TickerView(r, viewWith(GRID), out)
+    eq(out.extra[1], "45%|cffa8a8a8*|r", "grid: a current level on the other source carries the star")
+    eq(out.extra[6], "* account", "grid: and the legend names that source")
+    r.hist = sampleHist(X, {}, 4800, false)
+    X.TickerView(r, viewWith({ xpTickerGapBars = true, xpTickerShowCurrent = false }), out)
+    eq(out.kind[4], "footer", "current off: the footer follows the levels")
+    eq(out.extra[4], "median 58:40", "current off: naming the shown rows' source")
+    eq(out.n, 4, "current off: with no legend for a row not shown")
+    r.hist.n = 0
+    X.SummarizeHistory(r.hist, false)
+    X.TickerView(r, viewWith({ xpTickerGapBars = true, xpTickerShowCurrent = false, xpTickerShowPlayed = false }), out)
+    eq(out.n, 0, "every row off: no footer from a current level not shown")
+
+    r.hist = sampleHist(X, { 3900, 3900 }, 4800)
+    local card = X.NewCard(_G.UIParent)
+    X.TickerView(r, viewWith(GRID), out)
+    X.DrawCard(card, viewWith(GRID), out)
+    eq(card.bar[2].shown, true, "draw: a slower level has its bar")
+    eq(card.tick[2].shown, true, "draw: and its tick")
+    eq(card.bar[1].shown, true, "draw: the current level its projected finish")
+    eq(card.extra[2].colorR, 1, "draw: the gap in amber")
+    eq(card.extra[2].colorG, 0.71, "draw: amber")
+    eq(card.left[2].colorR, 0.66, "draw: under a dim label")
+    eq(card.left[1].colorG, select(2, X.Math.AccentText(1, 0, 0, 0.05 * 0.85 + (1 - 0.85))), "draw: the current level in the accent tint")
+    eq(card.divider.shown, true, "draw: a divider over the footer")
+
+    r.hist = sampleHist(X, {}, nil)
+    X.TickerView(r, viewWith(GRID), out)
+    X.DrawCard(card, viewWith(GRID), out)
+    eq(card.extra[3].text, "even", "draw: an even level")
+    eq(card.tick[3].shown, true, "draw: keeps its tick")
+    eq(card.bar[3].shown, false, "draw: with no bar")
+    local tall = card.kuiH
+    local noLine = { xpTickerGapBars = true, xpTickerShowPace = true }
+    X.TickerView(r, viewWith(noLine), out)
+    X.DrawCard(card, viewWith(noLine), out)
+    eq(tall - card.kuiH, 8, "line off: the card loses the line and its margin")
+    eq(card.lineTrack.shown, false, "line off: the line hides")
+end
+
+---------------------------------------------------------------------------------
+-- Account medians on the live card, and their cost
+---------------------------------------------------------------------------------
+
+do
+    local perChar = {
+        ["Me-Realm"] = { xpHistory = { splits = { [58] = 4325, [57] = 3520, [56] = 2952 }, reached = {} } },
+        ["Alt-Realm"] = { xpHistory = { splits = { [59] = 4800, [58] = 3900, [57] = 3800 }, reached = { [59] = 1000, [60] = 2000 } } },
+        ["Alt2-Realm"] = { xpHistory = { splits = { [58] = 3900, [57] = 4000 } } },
+        ["Odd-Realm"] = { xpHistory = { splits = { [58] = "x" } } },
+    }
+    local walks = 0
+    local realPairs = pairs
+    _G.pairs = function(t)
+        if t == perChar then walks = walks + 1 end
+        return realPairs(t)
+    end
+    local X, set = fresh({ db = { perChar = perChar },
+        settings = { xpTickerGapBars = true, xpTickerHistoryRows = 3, xpTickerShowPace = true } })
+    X.SessionStart("login")
+    X.OnPlayed(1400)
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    eq(walks, 2, "account: one walk for the medians and one for Pace when the card first shows")
+    eq(raw.hist.acct[1], 3900, "account: the other characters' median for a level")
+    eq(raw.hist.acct[2], 3900, "account: for each level")
+    eq(raw.hist.acct[3], nil, "account: none for a level no other character has")
+    eq(raw.hist.curAcct, 4800, "account: and the current level's")
+    eq(card.extra[2].text, "+7:05", "account: the card shows the gap")
+    eq(card.extra[4].text, "-9:28|cffa8a8a8*|r", "account: and stars the level on the recent median")
+    eq(card.extra[5].text, "vs account", "account: the footer names the main source")
+    eq(card.extra[6].text, "* recent median 58:40", "account: and the legend the other")
+    eq(card.left[7].text, "Pace", "account: Pace last, with a value")
+    eq(card.right[7].colorG, 0.85, "account: ahead in teal")
+
+    local tick = tickers[#tickers].fn
+    tick()
+    tick()
+    eq(walks, 2, "account: no walk on a tick")
+    local texts = setTexts
+    for _ = 1, 5 do tick() end
+    eq(setTexts, texts, "account: no SetText for an unchanged text")
+    local height = card.kuiH
+    collectgarbage("collect")
+    collectgarbage("stop")
+    local before = collectgarbage("count")
+    for _ = 1, 200 do tick() end
+    local grown = collectgarbage("count") - before
+    collectgarbage("restart")
+    check(grown < 1, "account: a tick makes no table", grown)
+    eq(card.kuiH, height, "account: the height holds across ticks")
+
+    X.OnPlayed(5000, 1200)
+    tick()
+    eq(walks, 3, "account: a history write walks once more")
+    raw.level = 60
+    X.TickerRefresh(raw)
+    eq(walks, 5, "account: a level change walks for the medians and for Pace")
+    set.xpTickerShowCurrent = false
+    X.TickerApply()
+    tick()
+    eq(walks, 5, "account: hiding Current Level re-summarizes with no walk")
+    eq(card.extra[1].text, "+7:05", "account: and the newest level leads")
+    set.xpTickerShowCurrent = nil
+    set.xpTickerGapBars = false
+    X.TickerApply()
+    tick()
+    eq(walks, 5, "account: with Gap Bars off, no walk")
+    eq(card.extra[2].text, "", "account: and no gap")
+    _G.pairs = realPairs
+    X.TickerStop()
+end
+
+do
+    local perChar = { ["Alt-Realm"] = { xpHistory = { splits = { [58] = 3900 }, reached = { [59] = 1000, [60] = 2000 } } } }
+    local walks = 0
+    local realPairs = pairs
+    _G.pairs = function(t)
+        if t == perChar then walks = walks + 1 end
+        return realPairs(t)
+    end
+    local X = fresh({ db = { perChar = perChar } })
+    X.SessionStart("login")
+    showCard(X, rawRecord())
+    tickers[#tickers].fn()
+    eq(walks, 0, "both off: with Gap Bars and Pace off, no save is walked")
+    _G.pairs = realPairs
+    X.TickerStop()
+end
+
+do
+    local perChar = { ["Alt-Realm"] = { xpHistory = { splits = { [59] = 4800, [58] = 3900 } } } }
+    local X = fresh({ noKey = true, db = { perChar = perChar }, settings = { xpTickerGapBars = true } })
+    X.SessionStart("login")
+    local raw = rawRecord()
+    local card = showCard(X, raw)
+    eq(raw.hist.curAcct, nil, "no key: no account median, since the player's own entry cannot be told apart")
+    eq(card.left[2].text, "Played", "no key: the footer follows the current level")
+    eq(card.extra[2].text, "", "no key: and names no source, with nothing to compare")
+    X.TickerStop()
 end
 
 print(string.format("%d checks, %d failures", checks, failures))

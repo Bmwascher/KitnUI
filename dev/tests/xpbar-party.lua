@@ -553,7 +553,7 @@ do
     X.PartyCardApply()
     eq(card.look.nameW, 90, "at the defaults the name column is its multiple of the font size")
     local tickerCard = X.NewCard(_G.UIParent)
-    X.DrawCard(tickerCard, X.Get, { rate = "", ding = "", pauseText = "", n = 0, keys = {} })
+    X.DrawCard(tickerCard, X.Get, { rate = "", ding = "", pauseText = "", n = 0, levelRows = 0, keys = {}, kind = {} })
     eq(card.look.pad, tickerCard.pad, "at the defaults its pad is the ticker's, so their text lines up")
 
     -- Visibility
