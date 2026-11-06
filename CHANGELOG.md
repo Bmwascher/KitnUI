@@ -13,6 +13,8 @@
 - Accent Source and Accent Color on the General page now fade like
   EllesmereUI's own switched-off settings while they do not apply, and
   hovering one says what turns it on
+- After a profile switch, those two rows follow the new profile at once
+  instead of keeping the old profile's state until a reload
 
 ---
 
