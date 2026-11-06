@@ -810,6 +810,10 @@ end)
 -- changes them without a click; the re-apply above catches that through
 -- builtVeilState. The options page pool resets a row's alpha when it hands
 -- the row out again.
+--
+-- The catcher comes from that pool when it exists, so a rebuild reuses the
+-- previous build's catcher instead of leaving it behind; elsewhere the pool's
+-- CreateFrame is the plain one.
 local DISABLED_ALPHA = 0.3
 
 local function Veil(row, reason)
@@ -820,7 +824,11 @@ local function Veil(row, reason)
 
     row:SetAlpha(DISABLED_ALPHA)
 
-    local veil = CreateFrame("Frame", nil, row)
+    local pool = EllesmereUI._Pool
+    local make = (type(pool) == "table" and type(pool.CreateFrame) == "function")
+        and pool.CreateFrame or CreateFrame
+    local veil = make("Frame", nil, row)
+    veil:Show()
     veil:SetAllPoints(row)
     veil:SetFrameLevel(row:GetFrameLevel() + 20)
     veil:EnableMouse(true)
