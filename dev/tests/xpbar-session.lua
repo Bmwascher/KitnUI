@@ -805,5 +805,45 @@ X.SessionStart("login")
 X.RequestPlayed()
 eq(played, 0, "card ask: with the card off and the level-time line off, nothing asks")
 
+-- Chat frames the mute cannot read or change. Only the frames it took the
+-- event off are given it back, and a frame that refuses it does not stop
+-- the rest.
+do
+    local SECRET_ON = {}
+    local function frame(on, isReg, unreg, reg)
+        local f = { on = on, regs = 0 }
+        f.IsEventRegistered = isReg or function(self) return self.on end
+        f.UnregisterEvent = unreg or function(self) self.on = false end
+        f.RegisterEvent = reg or function(self) self.regs, self.on = self.regs + 1, true end
+        return f
+    end
+    local function refuse() error("forbidden") end
+    local secret = frame(true, function() return SECRET_ON end)
+    local plain = frame(true)
+    local noBack = frame(true, nil, nil, refuse)
+    local stuck = frame(true, nil, refuse)
+    local raises = frame(true, refuse)
+    _G.issecretvalue = function(v) return v == SECRET_ON end
+    _G.ChatFrame1, _G.ChatFrame2, _G.ChatFrame3, _G.ChatFrame4, _G.ChatFrame5 = secret, plain, noBack, stuck, raises
+    _G.Constants.ChatFrameConstants.MaxChatWindows = 5
+    played = 0
+    X = load({ settings = { xpMutePlayed = true }, xp = XP(600, 1000, 10) })
+    X.SessionStart("login")
+    eq(pcall(X.RequestPlayed), true, "unreadable chat: a frame that raises does not raise the request")
+    eq(played, 1, "unreadable chat: the request is sent")
+    eq(secret.on, true, "unreadable chat: a secret answer reads as not registered")
+    eq(plain.on, false, "unreadable chat: a readable frame is still muted")
+    eq(noBack.on, false, "unreadable chat: a frame that later refuses the event back is muted")
+    eq(stuck.on, true, "unreadable chat: a frame that refuses the mute keeps the event")
+    X.OnPlayed(5000, 300)
+    eq(pcall(flush), true, "unreadable chat: giving chat back does not raise")
+    eq(plain.on, true, "unreadable chat: the muted frame gets the event back")
+    eq(plain.regs, 1, "unreadable chat: once")
+    eq(raises.regs + secret.regs + stuck.regs, 0, "unreadable chat: frames it did not mute are not given the event")
+    _G.issecretvalue = nil
+    _G.ChatFrame1, _G.ChatFrame2, _G.ChatFrame3, _G.ChatFrame4, _G.ChatFrame5 = chat, nil, nil, nil, nil
+    _G.Constants.ChatFrameConstants.MaxChatWindows = 1
+end
+
 print(string.format("%d checks, %d failures", checks, failures))
 os.exit(failures == 0 and 0 or 1)
