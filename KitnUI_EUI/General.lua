@@ -945,14 +945,15 @@ ns.EUIPages["General"] = function(parent, yOffset)
         end)
                                                                                    y = y - h
 
-    -- The colour choice is meaningless until the master is on, so it is dimmed
-    -- and made dead rather than hidden: a user who has not turned the master on
-    -- should still see that a colour choice exists. With the master on, the
-    -- swatch takes input only on Custom and otherwise just shows the colour.
     -- The search's hidden build makes no page anyone sees, so it records nothing.
     if not (EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild()) then
         builtVeilState = VeilState()
     end
+
+    -- The colour choice is meaningless until the master is on, so it is dimmed
+    -- and made dead rather than hidden: a user who has not turned the master on
+    -- should still see that a colour choice exists. With the master on, the
+    -- swatch takes input only on Custom and otherwise just shows the colour.
     if not AccentEnabled() then
         Veil(sourceRow, "Turn on KitnUI Accent Coloring to choose where the accent color comes from.")
         Veil(colorRow, "Turn on KitnUI Accent Coloring to pick an accent color.")
