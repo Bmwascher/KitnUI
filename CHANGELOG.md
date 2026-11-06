@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnUI/blob/main/CHANGELOG.md)
 
+## v2.4.1
+
+### Both clients
+
+> **WoW Forever:** support is new and lightly tested on the live Forever
+> client: most features have been checked, but not all. Expect some bugs,
+> and please report any you find.
+
+#### Settings Tab
+
+- Accent Source and Accent Color on the General page now fade like
+  EllesmereUI's own switched-off settings while they do not apply, and
+  hovering one says what turns it on
+
+---
+
 ## v2.4.0
 
 ### Both clients
