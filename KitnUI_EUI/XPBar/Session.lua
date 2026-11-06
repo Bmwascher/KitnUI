@@ -308,6 +308,18 @@ function X.SessionListen(on)
     pending = nil
 end
 
+-- Run through pcall: the check can raise on a frame with the
+-- EventRegistrations forbidden aspect, or answer in secret, which an if
+-- cannot test. Both read as not registered.
+local function HearsPlayed(frame)
+    local on = frame:IsEventRegistered("TIME_PLAYED_MSG")
+    if issecretvalue and issecretvalue(on) then return false end
+    return on == true
+end
+
+local function Unhear(frame) frame:UnregisterEvent("TIME_PLAYED_MSG") end
+local function Rehear(frame) frame:RegisterEvent("TIME_PLAYED_MSG") end
+
 local function Unmute()
     if muteTimer then
         muteTimer:Cancel()
@@ -316,7 +328,7 @@ local function Unmute()
     for i = #muted, 1, -1 do
         local frame = muted[i]
         muted[i] = nil
-        if frame.RegisterEvent then frame:RegisterEvent("TIME_PLAYED_MSG") end
+        pcall(Rehear, frame)
     end
 end
 
@@ -331,9 +343,9 @@ local function Mute()
     local constants = _G.Constants and _G.Constants.ChatFrameConstants
     for i = 1, tonumber(constants and constants.MaxChatWindows) or 10 do
         local frame = _G["ChatFrame" .. i]
-        if frame and frame.IsEventRegistered and frame:IsEventRegistered("TIME_PLAYED_MSG") then
-            frame:UnregisterEvent("TIME_PLAYED_MSG")
-            muted[#muted + 1] = frame
+        if frame then
+            local ok, on = pcall(HearsPlayed, frame)
+            if ok and on and pcall(Unhear, frame) then muted[#muted + 1] = frame end
         end
     end
     if #muted > 0 and C_Timer and C_Timer.NewTimer then
