@@ -308,8 +308,9 @@ function X.SessionListen(on)
     pending = nil
 end
 
--- Run through pcall: on some chat frames the check raises, and on others its
--- answer is secret, which an if cannot test. Both read as not registered.
+-- Run through pcall: the check can raise on a frame with the
+-- EventRegistrations forbidden aspect, or answer in secret, which an if
+-- cannot test. Both read as not registered.
 local function HearsPlayed(frame)
     local on = frame:IsEventRegistered("TIME_PLAYED_MSG")
     if issecretvalue and issecretvalue(on) then return false end
