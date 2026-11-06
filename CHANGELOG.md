@@ -16,6 +16,10 @@
 - After a profile switch, those two rows follow the new profile at once
   instead of keeping the old profile's state until a reload
 
+#### XP Bar
+
+- Fixed a possible error when the bar hides its /played request from chat
+
 ---
 
 ## v2.4.0
