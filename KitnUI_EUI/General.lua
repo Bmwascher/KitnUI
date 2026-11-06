@@ -755,6 +755,25 @@ local function FollowKE()
     keFollowing = pcall(KE.RegisterThemeCallback, KE, OnKEThemeChanged)
 end
 
+-- Which accent rows the General page was last built with switched off. The
+-- page is cached between visits, and a profile switch can change the master
+-- switch or Accent Source without a click, so the re-apply below compares this
+-- with the live settings and rebuilds only when they differ.
+local builtVeilState
+
+local function VeilState()
+    if not AccentEnabled() then return "off" end
+    return AccentSource() == "custom" and "custom" or "named"
+end
+
+local function RebuildStaleVeils()
+    if builtVeilState == nil or builtVeilState == VeilState() then return end
+    -- Cleared before the rebuild: a rebuild of the open page runs the builder,
+    -- which records the new state; a closed page records it on its next build.
+    builtVeilState = nil
+    ns.EUIRebuildForOwnership("General")
+end
+
 -- Wrapped rather than registered bare. A bare registration would hand the
 -- registry's own arguments straight through as the claim, so the day the
 -- registry starts passing one, every re-apply silently becomes a claim.
@@ -769,6 +788,7 @@ ns.EUIRegisterReapply(function()
     warnedUnheld = false
     FollowKE()
     ApplyAccent(false)
+    RebuildStaleVeils()
 end)
 
 ---------------------------------------------------------------------------------
@@ -786,8 +806,14 @@ end)
 -- re-evaluated. That is safe here: the accent rows are the only caller, and
 -- both settings they depend on, the master accent switch and Accent Source,
 -- force a full page rebuild through ns.EUIRebuildForOwnership (Core.lua), so
--- the accent rows are rebuilt every time either changes. The options page
--- pool resets a row's alpha when it hands the row out again.
+-- the accent rows are rebuilt every time either changes. A profile switch
+-- changes them without a click; the re-apply above catches that through
+-- builtVeilState. The options page pool resets a row's alpha when it hands
+-- the row out again.
+--
+-- The catcher comes from that pool when it exists, so a rebuild reuses the
+-- previous build's catcher instead of leaving it behind; elsewhere the pool's
+-- CreateFrame is the plain one.
 local DISABLED_ALPHA = 0.3
 
 local function Veil(row, reason)
@@ -798,7 +824,11 @@ local function Veil(row, reason)
 
     row:SetAlpha(DISABLED_ALPHA)
 
-    local veil = CreateFrame("Frame", nil, row)
+    local pool = EllesmereUI._Pool
+    local make = (type(pool) == "table" and type(pool.CreateFrame) == "function")
+        and pool.CreateFrame or CreateFrame
+    local veil = make("Frame", nil, row)
+    veil:Show()
     veil:SetAllPoints(row)
     veil:SetFrameLevel(row:GetFrameLevel() + 20)
     veil:EnableMouse(true)
@@ -914,6 +944,11 @@ ns.EUIPages["General"] = function(parent, yOffset)
             end
         end)
                                                                                    y = y - h
+
+    -- The search's hidden build makes no page anyone sees, so it records nothing.
+    if not (EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild()) then
+        builtVeilState = VeilState()
+    end
 
     -- The colour choice is meaningless until the master is on, so it is dimmed
     -- and made dead rather than hidden: a user who has not turned the master on
