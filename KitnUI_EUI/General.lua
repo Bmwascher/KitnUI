@@ -775,65 +775,39 @@ end)
 -- Row veil
 ---------------------------------------------------------------------------------
 
--- Lays a dead pane over a finished row. EnableMouse(true) on the veil is what makes
--- it work: the veil swallows the click, so the control underneath cannot fire and
--- needs no disabled state of its own. W:Toggle and W:ColorPicker take no disabled
--- argument (EllesmereUI_Widgets.lua:1715-1738, :2725-2747) -- only the multi-part
--- rows do, through a per-half cfg.disabled (:2904-2950) -- so this is how a plain
--- row is switched off here.
---
--- `text` is optional. With it the veil carries a labelled box and means "not built
--- yet"; without it the veil is a plain dim and means "not applicable right now".
+-- Switches a plain row off the way EllesmereUI's own disabled rows look: label
+-- and control at DISABLED_ALPHA, row stripe untouched (the stripe ignores its
+-- parent's alpha), and hovering explains why. W:Dropdown and W:ColorPicker take
+-- no disabled argument; only the multi-part rows do, through a per-half
+-- cfg.disabled. The mouse-catching frame on top swallows the click, so the
+-- control underneath needs no disabled state of its own.
 --
 -- A veil is STATIC: it is built or not built at page build time and never
--- re-evaluated. That is safe here: the accent rows are the only caller, and the
--- master accent switch forces a full page rebuild through
--- ns.EUIRebuildForOwnership (Core.lua), so the accent rows are rebuilt
--- every time the thing they depend on changes.
---
--- The veil marks an unfinished row, in KitnUI pink, and covers the
--- unlabelled case as well.
---
--- PanelPP rather than PP: both carry CreateBorder, but the settings panel
--- runs at its own scale and PanelPP is the one that snaps to it. Guarded
--- anyway: losing the border must cost a border, not the page.
-local function Veil(row, text)
+-- re-evaluated. That is safe here: the accent rows are the only caller, and
+-- both settings they depend on, the master accent switch and Accent Source,
+-- force a full page rebuild through ns.EUIRebuildForOwnership (Core.lua), so
+-- the accent rows are rebuilt every time either changes. The options page
+-- pool resets a row's alpha when it hands the row out again.
+local DISABLED_ALPHA = 0.3
+
+local function Veil(row, reason)
     if not row then return end
     -- The search's hidden build hands back stand-in rows that cannot parent a
     -- frame, and a veil holds nothing to index.
     if EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild() then return end
+
+    row:SetAlpha(DISABLED_ALPHA)
 
     local veil = CreateFrame("Frame", nil, row)
     veil:SetAllPoints(row)
     veil:SetFrameLevel(row:GetFrameLevel() + 20)
     veil:EnableMouse(true)
 
-    local grey = veil:CreateTexture(nil, "BACKGROUND")
-    grey:SetAllPoints()
-    grey:SetColorTexture(0.04, 0.04, 0.05, text and 0.72 or 0.6)
-
-    if not text then return end
-
-    local box = CreateFrame("Frame", nil, veil)
-    box:SetSize(130, 26)
-    box:SetPoint("CENTER")
-
-    local boxBg = box:CreateTexture(nil, "ARTWORK")
-    boxBg:SetAllPoints()
-    boxBg:SetColorTexture(0.08, 0.08, 0.10, 0.95)
-
-    local PP = _G.EllesmereUI and EllesmereUI.PanelPP
-    if PP and PP.CreateBorder then
-        PP.CreateBorder(box, ACCENT_R, ACCENT_G, ACCENT_B, 0.55, 1, "OVERLAY", 7)
+    local show, hide = EllesmereUI.ShowWidgetTooltip, EllesmereUI.HideWidgetTooltip
+    if reason and show and hide then
+        veil:SetScript("OnEnter", function(self) show(self, reason) end)
+        veil:SetScript("OnLeave", function() hide() end)
     end
-
-    local label = box:CreateFontString(nil, "OVERLAY")
-    local font = (EllesmereUI.GetFontPath and EllesmereUI.GetFontPath())
-        or STANDARD_TEXT_FONT
-    label:SetFont(font, 12, "")
-    label:SetPoint("CENTER")
-    label:SetText(text)
-    label:SetTextColor(ACCENT_R, ACCENT_G, ACCENT_B, 0.95)
 end
 
 ---------------------------------------------------------------------------------
@@ -946,10 +920,10 @@ ns.EUIPages["General"] = function(parent, yOffset)
     -- should still see that a colour choice exists. With the master on, the
     -- swatch takes input only on Custom and otherwise just shows the colour.
     if not AccentEnabled() then
-        Veil(sourceRow)
-        Veil(colorRow)
+        Veil(sourceRow, "Turn on KitnUI Accent Coloring to choose where the accent color comes from.")
+        Veil(colorRow, "Turn on KitnUI Accent Coloring to pick an accent color.")
     elseif AccentSource() ~= "custom" then
-        Veil(colorRow)
+        Veil(colorRow, "Set Accent Source to Custom to pick your own color.")
     end
 
     _, h = W:Spacer(parent, y, 20);                                                y = y - h
