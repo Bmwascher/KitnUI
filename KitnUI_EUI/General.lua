@@ -783,11 +783,11 @@ end)
 -- control underneath needs no disabled state of its own.
 --
 -- A veil is STATIC: it is built or not built at page build time and never
--- re-evaluated. That is safe here: the accent rows are the only caller, and the
--- master accent switch forces a full page rebuild through
--- ns.EUIRebuildForOwnership (Core.lua), so the accent rows are rebuilt
--- every time the thing they depend on changes. The options page pool resets a
--- row's alpha when it hands the row out again.
+-- re-evaluated. That is safe here: the accent rows are the only caller, and
+-- both settings they depend on, the master accent switch and Accent Source,
+-- force a full page rebuild through ns.EUIRebuildForOwnership (Core.lua), so
+-- the accent rows are rebuilt every time either changes. The options page
+-- pool resets a row's alpha when it hands the row out again.
 local DISABLED_ALPHA = 0.3
 
 local function Veil(row, reason)
